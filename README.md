@@ -4,10 +4,10 @@ An R package for high-performance linear model projection, non-negative least sq
 
 ## Why fastlm?
 * Simple and well-documented suite of R (and C++) functions
-* Fastest non-negative least squares solver
-* Exhaustively microbenchmarked and templated C++ implementations using very fast Eigen solvers
-* Exact and approximate L0-regularized least squares solutions
-* Support for extremely large sparse matrices
+* **Non-negative least squares**: Fastest NNLS solver by far
+* **Fast**: Everything is exhaustively microbenchmarked and written in templated C++ using the Eigen library.
+* **Sparse matrix support**: Any sparse matrix that fits in memory can be used. Specialized support for in-place operations.
+* **L0 regularization**: computationally tractable near-exact and approximate methods
 
 ## R package
 Install fastlm:
