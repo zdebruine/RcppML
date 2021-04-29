@@ -40,6 +40,7 @@ fastlm is under non-breaking active development. Functionality to be released in
 ### FastLM::CoeffMatrix class
 
 **Definition**
+
 The `CoeffMatrix` class holds the symmetric positive definite matrix `a` that gives coefficients of the linear system, and it's `.llt()` decomposition. The class makes use of metaprogramming templates for compile-time optimization:
 
 ```{Cpp}
@@ -55,7 +56,9 @@ public:
 * _L0_: maximum cardinality of the solution to be returnd (default 0 for no regularization)
 * _L0_path_: algorithm for finding the L0 solution, one of "exact", "appx", "ecd", or "convex".
 
+
 **Constructor**
+
 _CoeffMatrix(a, L0, L1, L2, iL2, L0_path)_
 * _a_ is a symmetric positive definite matrix giving the coefficients of the linear system
 * _L1_ gives the Lasso regularization to be subtracted from _b_ (default 0)
@@ -64,12 +67,16 @@ _CoeffMatrix(a, L0, L1, L2, iL2, L0_path)_
 
 At the time of construction, a reference to _a_ is stored in the class, _L2_ and _iL2_ regularizations are applied, and the _.llt()_ decomposition is computed and stored. _L1_ regularization is applied to _b_ when _.solve()_ is called.
 
+
 **Member functions**
+
 There are only two member functions:
 * _.solve(b)_ returns an object of the same class as _b_, where _b_ is a vector or column/row subview of the same length as the edge length of `a`.
 * _.solveInPlace(b)_ updates _b_ with the solution, and is only faster than _.solve(b)_ for 2-variable solutions.
 
+
 **Example**
+
 ```{Cpp}
 Matrix3f  mat; mat << 1, 2, 3,
                       2, 4, 5,
