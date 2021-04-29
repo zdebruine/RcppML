@@ -26,6 +26,9 @@ The public development branch `zdebruine/fastlm-dev` is unstable and undocumente
 * Most `fastlm` functions are simple wrappers of the Eigen header library contained in the `inst/include` directory.
 * Functions in this header library are separately documented and may be used in C++ applications.
 
+## Solving linear systems
+Unconstrained or non-negative solutions to linear systems are found quickly by LLT decomposition/substitution followed by refinement by coordinate descent. Prior to solving, regularizations may also be applied.
+
 ## Active development
 fastlm is under non-breaking active development. Functionality to be released in the next few months will build off the current library and includes:
 * Unconstrained or non-negative diagonalized matrix factorization by alternating least squares with convex L1 regularization
@@ -33,3 +36,46 @@ fastlm is under non-breaking active development. Functionality to be released in
 * Extremely fast rank-1 factorization
 * Extremely fast exact rank-2 matrix factorizations (faster than _irlba_ rank-2 SVD)
 * Divisive clustering using recursive bipartitioning by rank-2 matrix factorizations
+
+### FastLM::CoeffMatrix class
+
+**Definition**
+The `CoeffMatrix` class holds the symmetric positive definite matrix `a` that gives coefficients of the linear system, and it's `.llt()` decomposition. The class makes use of metaprogramming templates for compile-time optimization:
+
+```{Cpp}
+template <typename T, bool nonneg = false, int SizeAtCompileTime = -1, double tol = 1e-8, int L0 = -1, std::string L0_path = "ecd"> class CoeffMatrix {
+public:
+    Eigen::Matrix<T, SizeAtCompileTime, SizeAtCompileTime> a;
+    Eigen::LLT <Eigen::Matrix<T, SizeAtCompileTime, SizeAtCompileTime>> a_llt;
+}
+```
+* _SizeAtCompileTime_: `-1` indicates that the size of a default coefficient matrix `a` is dynamic. There is a special solver for 2x2 matrices, and Eigen can optimize computation for other small fixed sizes.
+* _nonneg_: Apply non-negativity constraints
+* _tol_: tolerance of coordinate descent refinement
+* _L0_: maximum cardinality of the solution to be returnd (default 0 for no regularization)
+* _L0_path_: algorithm for finding the L0 solution, one of "exact", "appx", "ecd", or "convex".
+
+**Constructor**
+_CoeffMatrix(a, L0, L1, L2, iL2, L0_path)_
+* _a_ is a symmetric positive definite matrix giving the coefficients of the linear system
+* _L1_ gives the Lasso regularization to be subtracted from _b_ (default 0)
+* _L2_ gives the Ridge regularization to be added to the diagonal elements of _a_ (default 0)
+* _iL2_ (inverse L2) gives the "angular" or "pattern extraction" regularization to be added to the off-diagonal elements of _a_ (default 0)
+
+At the time of construction, a reference to _a_ is stored in the class, _L2_ and _iL2_ regularizations are applied, and the _.llt()_ decomposition is computed and stored. _L1_ regularization is applied to _b_ when _.solve()_ is called.
+
+**Member functions**
+There are only two member functions:
+* _.solve(b)_ returns an object of the same class as _b_, where _b_ is a vector or column/row subview of the same length as the edge length of `a`.
+* _.solveInPlace(b)_ updates _b_ with the solution, and is only faster than _.solve(b)_ for 2-variable solutions.
+
+**Example**
+```{Cpp}
+Matrix3f  mat; mat << 1, 2, 3,
+                      2, 4, 5,
+                      3, 5, 6;
+Vector3f vec;  vec << 1, 2, 3;
+
+FastLM::CoeffMatrix<mat, true, 3> a(mat);
+Vector3f x = a.solve(b);
+```
