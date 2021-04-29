@@ -44,16 +44,17 @@ fastlm is under non-breaking active development. Functionality to be released in
 The `CoeffMatrix` class makes use of metaprogramming templates for compile-time optimization:
 
 ```{Cpp}
-template <typename T, bool nonneg = false, int SizeAtCompileTime = -1, double tol = 1e-8, int L0 = -1, std::string L0_path = "ecd">
+template <typename T, bool nonneg = false, int SizeAtCompileTime = -1, double tol = 1e-8, int maxit = 100, int L0 = -1, std::string L0_path = "ecd">
 class CoeffMatrix {
 public:
     Eigen::Matrix<T, SizeAtCompileTime, SizeAtCompileTime> a;
     Eigen::LLT <Eigen::Matrix<T, SizeAtCompileTime, SizeAtCompileTime>> a_llt;
 }
 ```
-* _SizeAtCompileTime_: `-1` indicates that the size of a default coefficient matrix `a` is dynamic. There is a special solver for 2x2 matrices, and Eigen can optimize computation for other small fixed sizes.
+* _SizeAtCompileTime_: `-1` indicates that the size of a default coefficient matrix `a` is dynamic. There is a special solver for 2x2 matrices, and Eigen can optimize computation for other small fixed sizes
 * _nonneg_: Apply non-negativity constraints
 * _tol_: tolerance of coordinate descent refinement
+* _maxit_: maximum number of refinement iterations in coordinate descent
 * _L0_: maximum cardinality of the solution to be returnd (default 0 for no regularization)
 * _L0_path_: algorithm for finding the L0 solution, one of "exact", "appx", "ecd", or "convex".
 
