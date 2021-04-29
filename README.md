@@ -59,7 +59,7 @@ public:
 
 **Constructor**
 
-_CoeffMatrix(a, L0, L1, L2, iL2, L0_path)_
+_CoeffMatrix(a, L1, L2, iL2)_
 * _a_ is a symmetric positive definite matrix giving the coefficients of the linear system
 * _L1_ gives the Lasso regularization to be subtracted from _b_ (default 0)
 * _L2_ gives the Ridge regularization to be added to the diagonal elements of _a_ (default 0)
