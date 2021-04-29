@@ -41,10 +41,11 @@ fastlm is under non-breaking active development. Functionality to be released in
 
 **Definition**
 
-The `CoeffMatrix` class holds the symmetric positive definite matrix `a` that gives coefficients of the linear system, and it's `.llt()` decomposition. The class makes use of metaprogramming templates for compile-time optimization:
+The `CoeffMatrix` class makes use of metaprogramming templates for compile-time optimization:
 
 ```{Cpp}
-template <typename T, bool nonneg = false, int SizeAtCompileTime = -1, double tol = 1e-8, int L0 = -1, std::string L0_path = "ecd"> class CoeffMatrix {
+template <typename T, bool nonneg = false, int SizeAtCompileTime = -1, double tol = 1e-8, int L0 = -1, std::string L0_path = "ecd">
+class CoeffMatrix {
 public:
     Eigen::Matrix<T, SizeAtCompileTime, SizeAtCompileTime> a;
     Eigen::LLT <Eigen::Matrix<T, SizeAtCompileTime, SizeAtCompileTime>> a_llt;
