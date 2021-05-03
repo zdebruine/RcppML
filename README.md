@@ -1,43 +1,41 @@
-# fastlm
+# RcppML
 
 An R package for high-performance linear model projection, non-negative least squares, L0-regularized least squares, and more.
 
-## Why fastlm?
-* Simple and well-documented suite of R (and C++) functions
-* **Non-negative least squares**: Fastest NNLS solver by far
-* **Fast**: Everything is exhaustively microbenchmarked and written in templated C++ using the Eigen library.
+## Why RcppML?
+* Simple and well-documented suite of R and C++ functions
+* **Non-negative least squares**: Fastest NNLS solver
 * **Sparse matrix support**: Any sparse matrix that fits in memory can be used. Specialized support for in-place operations.
 * **L0 regularization**: computationally tractable near-exact and approximate methods
+* **Fast**: Everything is exhaustively microbenchmarked and written in templated C++ using the Eigen library.
 
 ## R package
-Install fastlm:
+Install RcppML:
 ```{R}
 library(devtools)
-install_github("zdebruine/fastlm")
+install_github("zdebruine/RcppML")
 ```
 
-The public development branch `zdebruine/fastlm-dev` is unstable and undocumented. 
-
 ## Documentation
-* Exhaustive documentation, examples, benchmarking, and developer guide in the pkgdown website
+* Exhaustive documentation, examples, benchmarking, and developer guide in the bookdown website
 * Get started with the package vignette
 
 ## C++ Header Library
-* Most `fastlm` functions are simple wrappers of the Eigen header library contained in the `inst/include` directory.
+* Most `RcppML` functions are simple wrappers of the Eigen header library contained in the `inst/include` directory.
 * Functions in this header library are separately documented and may be used in C++ applications.
 
 ## Solving linear systems
 Unconstrained or non-negative solutions to linear systems are found quickly by LLT decomposition/substitution followed by refinement by coordinate descent. Prior to solving, regularizations may also be applied.
 
 ## Active development
-fastlm is under non-breaking active development. Functionality to be released in the next few months will build off the current library and includes:
+RcppML is under non-breaking active development. Functionality to be released in the next few months will build off the current library and includes:
 * Unconstrained or non-negative diagonalized matrix factorization by alternating least squares with convex L1 regularization
 * Efficient and naturally robust solutions to large matrix factorizations
 * Extremely fast rank-1 factorization
 * Extremely fast exact rank-2 matrix factorizations (faster than _irlba_ rank-2 SVD)
 * Divisive clustering using recursive bipartitioning by rank-2 matrix factorizations
 
-### FastLM::CoeffMatrix class
+### RcppML::CoeffMatrix class
 
 **Definition**
 
@@ -85,6 +83,6 @@ Matrix3f  mat; mat << 1, 2, 3,
                       3, 5, 6;
 Vector3f vec;  vec << 1, 2, 3;
 
-FastLM::CoeffMatrix<mat, true, 3> a(mat);
+RcppML::CoeffMatrix<mat, true, 3> a(mat);
 Vector3f x = a.solve(b);
 ```
