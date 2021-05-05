@@ -1,5 +1,27 @@
 # RcppML
 
+Rcpp Math Library for high-performance dense and sparse matrix operations, linear algebra, and sparse machine learning.
+
+RcppML extends the Rcpp namespace:
+* Sparse matrix and vector classes derive from base **Rcpp classes** for zero-copy pointer-based object access
+* **Functional programming interface** with in-place operations where possible
+* Richly **overloaded operators** for dense, sparse, and sparse-dense vector and matrix operations
+* Iterator-based marginal, contiguous, and non-contiguous **dense and sparse subviews**
+* New solvers for non-negative least squares, matrix factorizations, and clustering
+* Exhaustive documentation
+
+## Classes
+
+## Parallelization
+Because R is designed as a single-thread language, all functions are available with a single-threaded backend. Where parallelization may provide performance gains, a corresponding function with a `_par` suffix is provided.
+
+RcppML uses RcppParallel for parallelization.
+
+All functions are available as single-thread
+Where parallelization may provide significant performance gains, functions 
+parallelizes several functions:
+* Crossproduct
+
 An R package for high-performance linear model projection, non-negative least squares, L0-regularized least squares, and more.
 
 ## Why RcppML?
