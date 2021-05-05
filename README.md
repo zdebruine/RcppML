@@ -20,6 +20,11 @@ src/
 -- mf_rank_update.h
 -- bipartition.h
 -- cluster.h
+R/
+-- solve.R
+-- project.R
+-- factorize.R
+-- cluster.R
 ```
 Major focus:  Eigen library for machine learning (EigenML)
 RcppML
