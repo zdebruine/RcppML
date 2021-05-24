@@ -1,6 +1,6 @@
 # RcppML
 
-High-performance parallelized machine learning toolkit for sparse non-negative matrices. Focus on exceptional speed and non-negative models.
+High-performance machine learning methods for large sparse matrices. Focus on non-negative models and speed in parallelized computing systems.
 
 ## R package
 
