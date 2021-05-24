@@ -1,5 +1,22 @@
 # RcppML
 
+High-performance parallelized machine learning toolkit for sparse non-negative matrices. Focus on exceptional speed and non-negative models.
+
+## R package
+
+High-level R functions:
+* `solve`: Solve linear systems of equations with regularization and/or non-negativity constraints
+* `project`: Project linear models given sparse data inputs and one side of the orthogonal factor model
+* `factorize`: Regularized and/or non-negative orthogonal matrix factorization (e.g. NMF)
+
+## C++ header library
+
+Low-level C++ OOP header library with classes:
+* `CoeffMatrix`: Solving linear systems
+* `FactorModel`: Matrix factorization models for large sparse inputs
+* `dgCMatrix`: Zero-copy access to an R dgCMatrix sparse matrix object using base Rcpp vectors
+
+High-level R functions and low-level C++ OOP header library.
 RcppEigen C++ header library and R package for solving regularized and constrained non-negative least squares, projecting linear models, matrix factorization, and divisive/agglomerative clustering.
 * The R package contains high-level functions that seamlessly and adaptively call C++ subroutines
 * The C++ header library contains low-level templated functional programming interfaces to subroutines written using Eigen
