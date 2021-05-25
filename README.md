@@ -15,7 +15,7 @@ High-level R functions in the RcppML package:
 Low-level C++ OOP header library written with Rcpp and Eigen. Contains classes:
 
 * `CoeffMatrix`: Solving linear systems
-* `SparseMatrix`: Rcpp equivalent of the `Matrix::dgCMatrix` S4 sparse matrix class in R, zero-copy pointer-based access. Methods for factorizing and clustering.
+* `SparseMatrix`: Rcpp equivalent of the `Matrix::dgCMatrix` S4 sparse matrix class in R, zero-copy pointer-based access. Methods for factorization, among other common linear algebra operations.
 * `FactorModel`: Matrix factorization models for large sparse inputs, constructed from `dgCMatrix`.
 
 ## Vignettes
