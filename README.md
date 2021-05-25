@@ -37,3 +37,7 @@ RcppML is under non-breaking active development. Functionality to be released in
 * Extremely fast exact rank-2 matrix factorizations (faster than _irlba_ rank-2 SVD)
 * Divisive clustering using recursive bipartitioning by rank-2 matrix factorizations
 * Efficient and naturally robust solutions to large matrix factorizations
+
+To Do:
+1. Write R functions to wrap "solve", "project", and "factorize" including 2-variable solutions
+2. Clean up C++ classes for solving, projection, and factorization
