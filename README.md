@@ -15,29 +15,23 @@ High-level R functions in the RcppML package:
 Low-level C++ OOP header library written with Rcpp and Eigen. Contains classes:
 
 * `CoeffMatrix`: Solving linear systems
-* `SparseMatrix`: Rcpp equivalent of the `Matrix::dgCMatrix` S4 sparse matrix class in R, zero-copy pointer-based access. Methods for factorization, among other common linear algebra operations.
-* `FactorModel`: Matrix factorization models for large sparse inputs, constructed from `dgCMatrix`.
+* `MatrixFactorization`: Matrix factorization models for large sparse inputs, constructed from `dgCMatrix`.
+* `CoeffMatrix2` and `MatrixFactorization2` specializations for 2-variable or rank-2 cases.
 
-## Vignettes
+Classes, public methods, and basic Rcpp usage are documented in the RcppML bookdown.
 
-* R package: Getting Started
-* Using the Rcpp Header Library
-* Using the dgCMatrix class
+## Vignettes and Documentation
+
+All package documentation is provided in a bookdown with chapters on:
 * Solving systems of equations
 * Projecting linear models
-* Non-negative matrix factorization
-
-## Documentation
-Bookdown documentation for R package and C++ header library
+* Matrix factorization
+* Rank-2 matrix factorization
 
 ## Ongoing development
-RcppML is under non-breaking active development. Functionality to be released in the future includes:
+RcppML is under non-breaking active development. Functionality in development includes:
 * Unconstrained or non-negative diagonalized matrix factorization by alternating least squares with convex L1 regularization
 * Extremely fast rank-1 factorization
 * Extremely fast exact rank-2 matrix factorizations (faster than _irlba_ rank-2 SVD)
 * Divisive clustering using recursive bipartitioning by rank-2 matrix factorizations
 * Efficient and naturally robust solutions to large matrix factorizations
-
-To Do:
-1. Write R functions to wrap "solve", "project", and "factorize" including 2-variable solutions
-2. Clean up C++ classes for solving, projection, and factorization
