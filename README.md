@@ -8,7 +8,6 @@ High-level R functions in the RcppML package:
 
 * `solve`: Solve linear systems of equations with regularization and/or non-negativity constraints
 * `project`: Project linear models given sparse data inputs and one side of the orthogonal factor model
-* `factorize`: Regularized and/or non-negative orthogonal matrix factorization (e.g. NMF)
 
 ## RcppEigen header library
 
