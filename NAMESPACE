@@ -1,4 +1,6 @@
 useDynLib(RcppML)
 import(RcppEigen)
+import(Matrix)
 importFrom(Rcpp, evalCpp)
-export("Rcpp.fake.fun")
+importFrom(methods, as)
+export(solve)
