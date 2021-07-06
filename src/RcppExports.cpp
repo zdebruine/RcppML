@@ -6,55 +6,272 @@
 
 using namespace Rcpp;
 
-// rcppeigen_hello_world
-Eigen::MatrixXd rcppeigen_hello_world();
-RcppExport SEXP _RcppML_rcppeigen_hello_world() {
+// Rcpp_solve_vector_double
+Eigen::VectorXd Rcpp_solve_vector_double(Eigen::MatrixXd& a, Eigen::VectorXd& b, bool nonneg, int L0, double L1, double L2, double RL2, int maxit, double tol, std::string L0_method);
+RcppExport SEXP _RcppML_Rcpp_solve_vector_double(SEXP aSEXP, SEXP bSEXP, SEXP nonnegSEXP, SEXP L0SEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP RL2SEXP, SEXP maxitSEXP, SEXP tolSEXP, SEXP L0_methodSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    rcpp_result_gen = Rcpp::wrap(rcppeigen_hello_world());
+    Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type a(aSEXP);
+    Rcpp::traits::input_parameter< Eigen::VectorXd& >::type b(bSEXP);
+    Rcpp::traits::input_parameter< bool >::type nonneg(nonnegSEXP);
+    Rcpp::traits::input_parameter< int >::type L0(L0SEXP);
+    Rcpp::traits::input_parameter< double >::type L1(L1SEXP);
+    Rcpp::traits::input_parameter< double >::type L2(L2SEXP);
+    Rcpp::traits::input_parameter< double >::type RL2(RL2SEXP);
+    Rcpp::traits::input_parameter< int >::type maxit(maxitSEXP);
+    Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
+    Rcpp::traits::input_parameter< std::string >::type L0_method(L0_methodSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_solve_vector_double(a, b, nonneg, L0, L1, L2, RL2, maxit, tol, L0_method));
     return rcpp_result_gen;
 END_RCPP
 }
-// rcppeigen_outerproduct
-Eigen::MatrixXd rcppeigen_outerproduct(const Eigen::VectorXd& x);
-RcppExport SEXP _RcppML_rcppeigen_outerproduct(SEXP xSEXP) {
+// Rcpp_solve_matrix_double
+Eigen::MatrixXd Rcpp_solve_matrix_double(Eigen::MatrixXd& a, Eigen::MatrixXd& b, bool nonneg, int L0, double L1, double L2, double RL2, int maxit, double tol, std::string L0_method, const int threads);
+RcppExport SEXP _RcppML_Rcpp_solve_matrix_double(SEXP aSEXP, SEXP bSEXP, SEXP nonnegSEXP, SEXP L0SEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP RL2SEXP, SEXP maxitSEXP, SEXP tolSEXP, SEXP L0_methodSEXP, SEXP threadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type x(xSEXP);
-    rcpp_result_gen = Rcpp::wrap(rcppeigen_outerproduct(x));
+    Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type a(aSEXP);
+    Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type b(bSEXP);
+    Rcpp::traits::input_parameter< bool >::type nonneg(nonnegSEXP);
+    Rcpp::traits::input_parameter< int >::type L0(L0SEXP);
+    Rcpp::traits::input_parameter< double >::type L1(L1SEXP);
+    Rcpp::traits::input_parameter< double >::type L2(L2SEXP);
+    Rcpp::traits::input_parameter< double >::type RL2(RL2SEXP);
+    Rcpp::traits::input_parameter< int >::type maxit(maxitSEXP);
+    Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
+    Rcpp::traits::input_parameter< std::string >::type L0_method(L0_methodSEXP);
+    Rcpp::traits::input_parameter< const int >::type threads(threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_solve_matrix_double(a, b, nonneg, L0, L1, L2, RL2, maxit, tol, L0_method, threads));
     return rcpp_result_gen;
 END_RCPP
 }
-// rcppeigen_innerproduct
-double rcppeigen_innerproduct(const Eigen::VectorXd& x);
-RcppExport SEXP _RcppML_rcppeigen_innerproduct(SEXP xSEXP) {
+// Rcpp_solve_cd_vector_double
+Eigen::VectorXd Rcpp_solve_cd_vector_double(Eigen::MatrixXd& a, Eigen::VectorXd& b, Eigen::VectorXd x, bool nonneg, int L0, double L1, double L2, double RL2, int maxit, double tol, std::string L0_method);
+RcppExport SEXP _RcppML_Rcpp_solve_cd_vector_double(SEXP aSEXP, SEXP bSEXP, SEXP xSEXP, SEXP nonnegSEXP, SEXP L0SEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP RL2SEXP, SEXP maxitSEXP, SEXP tolSEXP, SEXP L0_methodSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type x(xSEXP);
-    rcpp_result_gen = Rcpp::wrap(rcppeigen_innerproduct(x));
+    Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type a(aSEXP);
+    Rcpp::traits::input_parameter< Eigen::VectorXd& >::type b(bSEXP);
+    Rcpp::traits::input_parameter< Eigen::VectorXd >::type x(xSEXP);
+    Rcpp::traits::input_parameter< bool >::type nonneg(nonnegSEXP);
+    Rcpp::traits::input_parameter< int >::type L0(L0SEXP);
+    Rcpp::traits::input_parameter< double >::type L1(L1SEXP);
+    Rcpp::traits::input_parameter< double >::type L2(L2SEXP);
+    Rcpp::traits::input_parameter< double >::type RL2(RL2SEXP);
+    Rcpp::traits::input_parameter< int >::type maxit(maxitSEXP);
+    Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
+    Rcpp::traits::input_parameter< std::string >::type L0_method(L0_methodSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_solve_cd_vector_double(a, b, x, nonneg, L0, L1, L2, RL2, maxit, tol, L0_method));
     return rcpp_result_gen;
 END_RCPP
 }
-// rcppeigen_bothproducts
-Rcpp::List rcppeigen_bothproducts(const Eigen::VectorXd& x);
-RcppExport SEXP _RcppML_rcppeigen_bothproducts(SEXP xSEXP) {
+// Rcpp_solve_cd_matrix_double
+Eigen::MatrixXd Rcpp_solve_cd_matrix_double(Eigen::MatrixXd& a, Eigen::MatrixXd& b, Eigen::MatrixXd x, bool nonneg, int L0, double L1, double L2, double RL2, int maxit, double tol, std::string L0_method, const int threads);
+RcppExport SEXP _RcppML_Rcpp_solve_cd_matrix_double(SEXP aSEXP, SEXP bSEXP, SEXP xSEXP, SEXP nonnegSEXP, SEXP L0SEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP RL2SEXP, SEXP maxitSEXP, SEXP tolSEXP, SEXP L0_methodSEXP, SEXP threadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type x(xSEXP);
-    rcpp_result_gen = Rcpp::wrap(rcppeigen_bothproducts(x));
+    Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type a(aSEXP);
+    Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type b(bSEXP);
+    Rcpp::traits::input_parameter< Eigen::MatrixXd >::type x(xSEXP);
+    Rcpp::traits::input_parameter< bool >::type nonneg(nonnegSEXP);
+    Rcpp::traits::input_parameter< int >::type L0(L0SEXP);
+    Rcpp::traits::input_parameter< double >::type L1(L1SEXP);
+    Rcpp::traits::input_parameter< double >::type L2(L2SEXP);
+    Rcpp::traits::input_parameter< double >::type RL2(RL2SEXP);
+    Rcpp::traits::input_parameter< int >::type maxit(maxitSEXP);
+    Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
+    Rcpp::traits::input_parameter< std::string >::type L0_method(L0_methodSEXP);
+    Rcpp::traits::input_parameter< const int >::type threads(threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_solve_cd_matrix_double(a, b, x, nonneg, L0, L1, L2, RL2, maxit, tol, L0_method, threads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// Rcpp_projectW_double
+Eigen::MatrixXd Rcpp_projectW_double(Eigen::SparseMatrix<double>& A, Eigen::MatrixXd& W, bool nonneg, int L0, double L1, double L2, double RL2, int maxit, double tol, std::string L0_method, const int threads);
+RcppExport SEXP _RcppML_Rcpp_projectW_double(SEXP ASEXP, SEXP WSEXP, SEXP nonnegSEXP, SEXP L0SEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP RL2SEXP, SEXP maxitSEXP, SEXP tolSEXP, SEXP L0_methodSEXP, SEXP threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::SparseMatrix<double>& >::type A(ASEXP);
+    Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type W(WSEXP);
+    Rcpp::traits::input_parameter< bool >::type nonneg(nonnegSEXP);
+    Rcpp::traits::input_parameter< int >::type L0(L0SEXP);
+    Rcpp::traits::input_parameter< double >::type L1(L1SEXP);
+    Rcpp::traits::input_parameter< double >::type L2(L2SEXP);
+    Rcpp::traits::input_parameter< double >::type RL2(RL2SEXP);
+    Rcpp::traits::input_parameter< int >::type maxit(maxitSEXP);
+    Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
+    Rcpp::traits::input_parameter< std::string >::type L0_method(L0_methodSEXP);
+    Rcpp::traits::input_parameter< const int >::type threads(threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_projectW_double(A, W, nonneg, L0, L1, L2, RL2, maxit, tol, L0_method, threads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// Rcpp_projectH_double
+Eigen::MatrixXd Rcpp_projectH_double(Eigen::SparseMatrix<double>& A, Eigen::MatrixXd& H, bool nonneg, int L0, double L1, double L2, double RL2, int maxit, double tol, std::string L0_method, const int threads);
+RcppExport SEXP _RcppML_Rcpp_projectH_double(SEXP ASEXP, SEXP HSEXP, SEXP nonnegSEXP, SEXP L0SEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP RL2SEXP, SEXP maxitSEXP, SEXP tolSEXP, SEXP L0_methodSEXP, SEXP threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::SparseMatrix<double>& >::type A(ASEXP);
+    Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type H(HSEXP);
+    Rcpp::traits::input_parameter< bool >::type nonneg(nonnegSEXP);
+    Rcpp::traits::input_parameter< int >::type L0(L0SEXP);
+    Rcpp::traits::input_parameter< double >::type L1(L1SEXP);
+    Rcpp::traits::input_parameter< double >::type L2(L2SEXP);
+    Rcpp::traits::input_parameter< double >::type RL2(RL2SEXP);
+    Rcpp::traits::input_parameter< int >::type maxit(maxitSEXP);
+    Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
+    Rcpp::traits::input_parameter< std::string >::type L0_method(L0_methodSEXP);
+    Rcpp::traits::input_parameter< const int >::type threads(threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_projectH_double(A, H, nonneg, L0, L1, L2, RL2, maxit, tol, L0_method, threads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// Rcpp_solve_vector_float
+Eigen::VectorXf Rcpp_solve_vector_float(Eigen::MatrixXf& a, Eigen::VectorXf& b, bool nonneg, int L0, float L1, float L2, float RL2, int maxit, float tol, std::string L0_method);
+RcppExport SEXP _RcppML_Rcpp_solve_vector_float(SEXP aSEXP, SEXP bSEXP, SEXP nonnegSEXP, SEXP L0SEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP RL2SEXP, SEXP maxitSEXP, SEXP tolSEXP, SEXP L0_methodSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::MatrixXf& >::type a(aSEXP);
+    Rcpp::traits::input_parameter< Eigen::VectorXf& >::type b(bSEXP);
+    Rcpp::traits::input_parameter< bool >::type nonneg(nonnegSEXP);
+    Rcpp::traits::input_parameter< int >::type L0(L0SEXP);
+    Rcpp::traits::input_parameter< float >::type L1(L1SEXP);
+    Rcpp::traits::input_parameter< float >::type L2(L2SEXP);
+    Rcpp::traits::input_parameter< float >::type RL2(RL2SEXP);
+    Rcpp::traits::input_parameter< int >::type maxit(maxitSEXP);
+    Rcpp::traits::input_parameter< float >::type tol(tolSEXP);
+    Rcpp::traits::input_parameter< std::string >::type L0_method(L0_methodSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_solve_vector_float(a, b, nonneg, L0, L1, L2, RL2, maxit, tol, L0_method));
+    return rcpp_result_gen;
+END_RCPP
+}
+// Rcpp_solve_cd_vector_float
+Eigen::VectorXf Rcpp_solve_cd_vector_float(Eigen::MatrixXf& a, Eigen::VectorXf& b, Eigen::VectorXf x, bool nonneg, int L0, float L1, float L2, float RL2, int maxit, float tol, std::string L0_method);
+RcppExport SEXP _RcppML_Rcpp_solve_cd_vector_float(SEXP aSEXP, SEXP bSEXP, SEXP xSEXP, SEXP nonnegSEXP, SEXP L0SEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP RL2SEXP, SEXP maxitSEXP, SEXP tolSEXP, SEXP L0_methodSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::MatrixXf& >::type a(aSEXP);
+    Rcpp::traits::input_parameter< Eigen::VectorXf& >::type b(bSEXP);
+    Rcpp::traits::input_parameter< Eigen::VectorXf >::type x(xSEXP);
+    Rcpp::traits::input_parameter< bool >::type nonneg(nonnegSEXP);
+    Rcpp::traits::input_parameter< int >::type L0(L0SEXP);
+    Rcpp::traits::input_parameter< float >::type L1(L1SEXP);
+    Rcpp::traits::input_parameter< float >::type L2(L2SEXP);
+    Rcpp::traits::input_parameter< float >::type RL2(RL2SEXP);
+    Rcpp::traits::input_parameter< int >::type maxit(maxitSEXP);
+    Rcpp::traits::input_parameter< float >::type tol(tolSEXP);
+    Rcpp::traits::input_parameter< std::string >::type L0_method(L0_methodSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_solve_cd_vector_float(a, b, x, nonneg, L0, L1, L2, RL2, maxit, tol, L0_method));
+    return rcpp_result_gen;
+END_RCPP
+}
+// Rcpp_solve_matrix_float
+Eigen::MatrixXf Rcpp_solve_matrix_float(Eigen::MatrixXf& a, Eigen::MatrixXf& b, bool nonneg, int L0, float L1, float L2, float RL2, int maxit, float tol, std::string L0_method, const int threads);
+RcppExport SEXP _RcppML_Rcpp_solve_matrix_float(SEXP aSEXP, SEXP bSEXP, SEXP nonnegSEXP, SEXP L0SEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP RL2SEXP, SEXP maxitSEXP, SEXP tolSEXP, SEXP L0_methodSEXP, SEXP threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::MatrixXf& >::type a(aSEXP);
+    Rcpp::traits::input_parameter< Eigen::MatrixXf& >::type b(bSEXP);
+    Rcpp::traits::input_parameter< bool >::type nonneg(nonnegSEXP);
+    Rcpp::traits::input_parameter< int >::type L0(L0SEXP);
+    Rcpp::traits::input_parameter< float >::type L1(L1SEXP);
+    Rcpp::traits::input_parameter< float >::type L2(L2SEXP);
+    Rcpp::traits::input_parameter< float >::type RL2(RL2SEXP);
+    Rcpp::traits::input_parameter< int >::type maxit(maxitSEXP);
+    Rcpp::traits::input_parameter< float >::type tol(tolSEXP);
+    Rcpp::traits::input_parameter< std::string >::type L0_method(L0_methodSEXP);
+    Rcpp::traits::input_parameter< const int >::type threads(threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_solve_matrix_float(a, b, nonneg, L0, L1, L2, RL2, maxit, tol, L0_method, threads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// Rcpp_solve_cd_matrix_float
+Eigen::MatrixXf Rcpp_solve_cd_matrix_float(Eigen::MatrixXf& a, Eigen::MatrixXf& b, Eigen::MatrixXf x, bool nonneg, int L0, float L1, float L2, float RL2, int maxit, float tol, std::string L0_method, const int threads);
+RcppExport SEXP _RcppML_Rcpp_solve_cd_matrix_float(SEXP aSEXP, SEXP bSEXP, SEXP xSEXP, SEXP nonnegSEXP, SEXP L0SEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP RL2SEXP, SEXP maxitSEXP, SEXP tolSEXP, SEXP L0_methodSEXP, SEXP threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::MatrixXf& >::type a(aSEXP);
+    Rcpp::traits::input_parameter< Eigen::MatrixXf& >::type b(bSEXP);
+    Rcpp::traits::input_parameter< Eigen::MatrixXf >::type x(xSEXP);
+    Rcpp::traits::input_parameter< bool >::type nonneg(nonnegSEXP);
+    Rcpp::traits::input_parameter< int >::type L0(L0SEXP);
+    Rcpp::traits::input_parameter< float >::type L1(L1SEXP);
+    Rcpp::traits::input_parameter< float >::type L2(L2SEXP);
+    Rcpp::traits::input_parameter< float >::type RL2(RL2SEXP);
+    Rcpp::traits::input_parameter< int >::type maxit(maxitSEXP);
+    Rcpp::traits::input_parameter< float >::type tol(tolSEXP);
+    Rcpp::traits::input_parameter< std::string >::type L0_method(L0_methodSEXP);
+    Rcpp::traits::input_parameter< const int >::type threads(threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_solve_cd_matrix_float(a, b, x, nonneg, L0, L1, L2, RL2, maxit, tol, L0_method, threads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// Rcpp_projectW_float
+Eigen::MatrixXf Rcpp_projectW_float(Eigen::SparseMatrix<float>& A, Eigen::MatrixXf& W, bool nonneg, int L0, float L1, float L2, float RL2, int maxit, float tol, std::string L0_method, const int threads);
+RcppExport SEXP _RcppML_Rcpp_projectW_float(SEXP ASEXP, SEXP WSEXP, SEXP nonnegSEXP, SEXP L0SEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP RL2SEXP, SEXP maxitSEXP, SEXP tolSEXP, SEXP L0_methodSEXP, SEXP threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::SparseMatrix<float>& >::type A(ASEXP);
+    Rcpp::traits::input_parameter< Eigen::MatrixXf& >::type W(WSEXP);
+    Rcpp::traits::input_parameter< bool >::type nonneg(nonnegSEXP);
+    Rcpp::traits::input_parameter< int >::type L0(L0SEXP);
+    Rcpp::traits::input_parameter< float >::type L1(L1SEXP);
+    Rcpp::traits::input_parameter< float >::type L2(L2SEXP);
+    Rcpp::traits::input_parameter< float >::type RL2(RL2SEXP);
+    Rcpp::traits::input_parameter< int >::type maxit(maxitSEXP);
+    Rcpp::traits::input_parameter< float >::type tol(tolSEXP);
+    Rcpp::traits::input_parameter< std::string >::type L0_method(L0_methodSEXP);
+    Rcpp::traits::input_parameter< const int >::type threads(threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_projectW_float(A, W, nonneg, L0, L1, L2, RL2, maxit, tol, L0_method, threads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// Rcpp_projectH_float
+Eigen::MatrixXf Rcpp_projectH_float(Eigen::SparseMatrix<float>& A, Eigen::MatrixXf& H, bool nonneg, int L0, float L1, float L2, float RL2, int maxit, float tol, std::string L0_method, const int threads);
+RcppExport SEXP _RcppML_Rcpp_projectH_float(SEXP ASEXP, SEXP HSEXP, SEXP nonnegSEXP, SEXP L0SEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP RL2SEXP, SEXP maxitSEXP, SEXP tolSEXP, SEXP L0_methodSEXP, SEXP threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::SparseMatrix<float>& >::type A(ASEXP);
+    Rcpp::traits::input_parameter< Eigen::MatrixXf& >::type H(HSEXP);
+    Rcpp::traits::input_parameter< bool >::type nonneg(nonnegSEXP);
+    Rcpp::traits::input_parameter< int >::type L0(L0SEXP);
+    Rcpp::traits::input_parameter< float >::type L1(L1SEXP);
+    Rcpp::traits::input_parameter< float >::type L2(L2SEXP);
+    Rcpp::traits::input_parameter< float >::type RL2(RL2SEXP);
+    Rcpp::traits::input_parameter< int >::type maxit(maxitSEXP);
+    Rcpp::traits::input_parameter< float >::type tol(tolSEXP);
+    Rcpp::traits::input_parameter< std::string >::type L0_method(L0_methodSEXP);
+    Rcpp::traits::input_parameter< const int >::type threads(threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_projectH_float(A, H, nonneg, L0, L1, L2, RL2, maxit, tol, L0_method, threads));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_RcppML_rcppeigen_hello_world", (DL_FUNC) &_RcppML_rcppeigen_hello_world, 0},
-    {"_RcppML_rcppeigen_outerproduct", (DL_FUNC) &_RcppML_rcppeigen_outerproduct, 1},
-    {"_RcppML_rcppeigen_innerproduct", (DL_FUNC) &_RcppML_rcppeigen_innerproduct, 1},
-    {"_RcppML_rcppeigen_bothproducts", (DL_FUNC) &_RcppML_rcppeigen_bothproducts, 1},
+    {"_RcppML_Rcpp_solve_vector_double", (DL_FUNC) &_RcppML_Rcpp_solve_vector_double, 10},
+    {"_RcppML_Rcpp_solve_matrix_double", (DL_FUNC) &_RcppML_Rcpp_solve_matrix_double, 11},
+    {"_RcppML_Rcpp_solve_cd_vector_double", (DL_FUNC) &_RcppML_Rcpp_solve_cd_vector_double, 11},
+    {"_RcppML_Rcpp_solve_cd_matrix_double", (DL_FUNC) &_RcppML_Rcpp_solve_cd_matrix_double, 12},
+    {"_RcppML_Rcpp_projectW_double", (DL_FUNC) &_RcppML_Rcpp_projectW_double, 11},
+    {"_RcppML_Rcpp_projectH_double", (DL_FUNC) &_RcppML_Rcpp_projectH_double, 11},
+    {"_RcppML_Rcpp_solve_vector_float", (DL_FUNC) &_RcppML_Rcpp_solve_vector_float, 10},
+    {"_RcppML_Rcpp_solve_cd_vector_float", (DL_FUNC) &_RcppML_Rcpp_solve_cd_vector_float, 11},
+    {"_RcppML_Rcpp_solve_matrix_float", (DL_FUNC) &_RcppML_Rcpp_solve_matrix_float, 11},
+    {"_RcppML_Rcpp_solve_cd_matrix_float", (DL_FUNC) &_RcppML_Rcpp_solve_cd_matrix_float, 12},
+    {"_RcppML_Rcpp_projectW_float", (DL_FUNC) &_RcppML_Rcpp_projectW_float, 11},
+    {"_RcppML_Rcpp_projectH_float", (DL_FUNC) &_RcppML_Rcpp_projectH_float, 11},
     {NULL, NULL, 0}
 };
 
