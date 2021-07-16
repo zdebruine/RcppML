@@ -6,52 +6,40 @@
 \usage{
 project(
   A,
-  W = NULL,
-  H = NULL,
-  nonneg = FALSE,
-  L0 = 0,
+  w,
+  nonneg = TRUE,
   L1 = 0,
-  L2 = 0,
-  RL2 = 0,
-  maxit = 100,
-  tol = 1e-09,
-  L0_method = "eperm",
-  precision = "double",
-  threads = 0
+  fast_maxit = 10,
+  cd_maxit = 100,
+  cd_tol = 1e-08,
+  threads = 0,
+  precision = "double"
 )
 }
 \arguments{
 \item{A}{square numeric matrix containing the coefficients of the linear system}
 
-\item{W}{numeric vector or matrix giving the right-hand side(s) of the linear system}
-
-\item{H}{optional initial numeric vector for x (if using exclusively coordinate descent)}
+\item{w}{numeric vector or matrix giving the right-hand side(s) of the linear system}
 
 \item{nonneg}{apply non-negativity constraints}
 
-\item{L0}{L0 truncation to be incrementally enforced for each column in b. Use 0 or -1 to apply no penalty.}
-
 \item{L1}{L1/LASSO regularization to be subtracted from \eqn{b}. Generally this should be scaled to \code{max(b)}}
 
-\item{L2}{L2/Ridge regression to be added to the diagonal of \eqn{a}. Generally this should be scaled to \code{mean(diag(a))} or similar.}
+\item{fast_maxit}{maximum number of iterations of pre-conditioning in NNLS solver prior to coordinate descent, see \code{\link{nnls}}}
 
-\item{RL2}{Reciprocal L2/angular/Pattern Extraction penalty to be added to off-diagonal of \eqn{a}. Generally this should be scaled as in \eqn{L2}.}
+\item{cd_maxit}{maximum number of iterations of coordinate descent NNLS solver, see \code{\link{nnls}}}
 
-\item{maxit}{maximum number of iterations for least squares sequential coordinate descent}
+\item{cd_tol}{tolerance for convergence of the least squares sequential coordinate descent solver}
 
-\item{tol}{tolerance for convergence of the least squares sequential coordinate descent solver}
-
-\item{L0_method}{algorithm for solving L0-regularized solution, one of "convex", "ggperm", "eperm", or "exact". See details.}
+\item{threads}{number of CPU threads to use for parallelization. Default is "0" to let OpenMP decide and use all available threads.}
 
 \item{precision}{"float" or "double"}
-
-\item{threads}{number of cPU threads to use for parallelization when \eqn{b} is a matrix. Default is "0" to let OpenMP decide and use all available threads.}
 }
 \value{
-matrix giving either \eqn{W} or \eqn{H}
+matrix giving \eqn{h}
 }
 \description{
-Solves the equation \eqn{A = WH} for either \eqn{W} or \eqn{H}
+Solves the equation \eqn{A = WH} for \eqn{H}
 }
 \details{
 For the classical alternating matrix factorization update problem \eqn{A = WH}, the updates
@@ -64,5 +52,5 @@ Given \eqn{A} and \eqn{w}, \code{RcppML::project} solves for \eqn{H} using the a
 
 The corresponding equation for updating \eqn{W} in block-pivoting is: \deqn{HH^TW^T = HA^T_j}
 
-See \code{\link{solve}} for details on NNLS and L0 regularization.
+One may also solve for \eqn{W} by inputting the transpose of \eqn{A} and \eqn{H} in place of \eqn{W}.
 }
