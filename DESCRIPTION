@@ -6,10 +6,10 @@ Date: 2021-06-29
 Author: Zach DeBruine
 Maintainer: Zach DeBruine <zacharydebruine@gmail.com>
 Description: Fast non-negative least squares and projection of linear factor models onto sparse matrices.
-License: >= GPL-2
+License: GPL (>= 2)
 Imports: Rcpp, RcppEigen, Matrix, methods
 LinkingTo: Rcpp, RcppEigen
+VignetteBuilder: knitr
 RoxygenNote: 7.1.1
-Suggests: 
-    testthat (>= 3.0.0)
+Suggests: knitr, rmarkdown, testthat (>= 3.0.0)
 Config/testthat/edition: 3
