@@ -15,6 +15,13 @@ R functions in the RcppML package:
 
 See the package vignette in the `/vignettes` directory for a basic introduction to each function listed above.
 
+Install the development version of `RcppML`:
+
+```{R}
+library(devtools)
+install_github("zdebruine/RcppML")
+```
+
 ## Ongoing development
 
 RcppML is under non-breaking active development. Functionality in development includes:
