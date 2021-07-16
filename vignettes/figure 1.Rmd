@@ -1,0 +1,321 @@
+---
+title: "Figure 1"
+author: "Zach DeBruine"
+date: "7/9/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Reproducing Figure 1
+
+This vignette contains code necessary to reproduce figure 1 of the RcppML manuscript.
+
+```{R}
+library(RcppML)
+library(reshape2)
+library(ggplot2)
+library(microbenchmark)
+```
+
+## Towards fast NNLS for matrix factorization
+
+Towards fast NNLS for matrix factorization by alternating least squares
+Our objective is to develop an implementation of non-negative least squares that enables exceptionally fast NMF.
+
+Systems of equations that appear in NMF differ from those that might appear as one-off problems (i.e. model projection) in that they are well-conditioned and unconstrained solutions tend to give non-negative results. Furthermore, solutions between consecutive iterations are very similar, suggesting that an algorithm which can make use of the previous solution as a starting point will have a benefit.
+
+## Benchmarking CD-NNLS and FAST-NNLS
+
+* Coordinate descent is the best-performing algorithm for solving non-negative least squares problems
+* Choice of initialization does not significantly affect coordinate descent convergence speed
+* Fast active set tuning is an attractive alternative to coordinate descent least squares, but does not outperform it and requires a positive definite \eqn{a}.
+* RcppML \code{nnls} implementation is faster than the Lawson-Hanson fortran77 implementation, and competes well with unconstrained least squares solutions (compared to Eigen Cholesky solver).
+
+## Initializations for Coordinate Descent Least Squares
+
+Coordinate descent algorithms require a starting point, or an initial solution "suggestion", from which to descend down the gradient of residuals towards the true solution. Some obvious initializations might include a random or zero-filled vector, or an unconstrained least squares solution.
+
+Coordinate descent might also be primed with a sparse solution . This methodology is similar to the concept presented by Myre et al. in the "TNT-NN" least squares algorithm, but uses only the first step of their proposed method, avoiding the hyperparameters and heuristics in the second step.
+
+Finally, and quite simply, we might initialize coordinate descent with a vector filled with a random uniform distribution or zeros.
+
+In the case of matrix factorization where solutions tend to be similar to one another across consecutive iterations, an obvious initialization for coordinate descent is the previous solution.
+
+```{R}
+random_system <- function(m, seed){
+  set.seed(seed)
+  X <- abs(matrix(rnorm(100*m),100, m))
+  btrue <- runif(m)
+  y <- X %*% btrue + rnorm(100)
+  return(list("a" = crossprod(X), "b" = crossprod(X, y), "X" = X, "y" = y))
+}
+```
+
+Coordinate descent least squares are attractive because \eqn{a} need not be positive definite. Different initializations for the coordinate descent solver might affect the number of iterations required for convergence. We examined whether initialization with a zero-filled vector, an appropriately-scaled uniform random distribution, or an unconstrained solution affected runtime.
+
+For random systems of equations between 10 and 100 variables in size, there were no differences in runtime between zero or random initializations. For initialization with unconstrained solutions, smaller systems (<50 variables) had a small advantage while larger systems (>50 variables) surprisingly had a slight disadvantage. Note that the time required to calculate the unconstrained solution was not included in the benchmark. Thus, zero-initialization is a satisfactory method for coordinate descent least squares.
+
+In the ultimate test of NNLS, we simulated random systems of equations in which there are no intentional relationships between variables. Simply, a random matrix "X" and vector "y" is constructed, and "a" is the crossproduct of "X" and "b" is the crossproduct of "X" and "y".
+
+```{R}
+results <- data.frame()
+for(size in seq(from = 10, to = 100, by = 10)){
+  cat("Calculating runtime for size: ", size, "\n")
+  df <- list()
+  for(replicate in 1:3){
+    ab <- random_system(size, replicate)
+    solution <- RcppML::nnls(ab$a, ab$b)
+    x_zero <- as.matrix(rep(0, size))
+    x_rand <- as.matrix(runif(length(ab$b))) * mean(solution)
+    x_solve <- base::solve(ab$a, ab$b)
+    df[[replicate]] <- summary(microbenchmark(
+      RcppML::nnls(ab$a, ab$b, x = x_zero, cd_maxit = 100000),
+      RcppML::nnls(ab$a, ab$b, x = x_rand, cd_maxit = 100000),
+      RcppML::nnls(ab$a, ab$b, fast_maxit = 0, cd_maxit = 100000),
+      RcppML::nnls(ab$a, ab$b, fast_maxit = 100, cd_maxit = 100000),
+      times = 3, unit = 's'
+    ))$mean
+  }
+  df <- do.call(rbind, df)
+  time <- colMeans(df)
+  err <- apply(df, 2, sd) / time[1]
+  time <- time / time[1]
+  df <- data.frame(cbind(time, err))
+  df$size <- size
+  df$method <- c("zero", "random", "unconstrained", "FAST")
+  ifelse(nrow(results) == 0, results <- df, results <- rbind(results, df))
+}
+
+ggplot(results, aes(x = size, y = time, color = method, group = method)) +
+    geom_point() +
+    geom_line(size = 1) +
+    geom_errorbar(aes(ymin = time - err/2, ymax = time + err/2), width = 0.1) +
+    theme_classic() +
+    scale_y_continuous(expand = c(0.01, 0)) +
+    theme(aspect.ratio = 1) +
+    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+    labs(x = "number of variables in system", y = "runtime relative to zero-initialized")
+```
+
+For well-conditioned systems, however, we might expect different behavior. Here we examine the runtime of 10 alternating least squares iterations using zero-initialized coordinate descent least squares or FAST-CD least squares.
+
+```{R}
+results <- data.frame()
+for(size in seq(from = 10, to = 100, by = 10)){
+  cat("Calculating runtime for size: ", size, "\n")
+  df <- list()
+  for(replicate in 1:3){
+    ab <- random_system(size, replicate)
+    solution <- RcppML::nnls(ab$a, ab$b)
+    x_zero <- as.matrix(rep(0, size))
+    x_rand <- as.matrix(runif(length(ab$b))) * mean(solution)
+    x_solve <- base::solve(ab$a, ab$b)
+    df[[replicate]] <- summary(microbenchmark(
+      RcppML::nnls(ab$a, ab$b, x = x_zero, cd_maxit = 100000),
+      RcppML::nnls(ab$a, ab$b, fast_maxit = 100, cd_maxit = 100000),
+      times = 3, unit = 's'
+    ))$mean
+  }
+  df <- do.call(rbind, df)
+  time <- colMeans(df)
+  err <- apply(df, 2, sd) / time[1]
+  time <- time / time[1]
+  df <- data.frame(cbind(time, err))
+  df$size <- size
+  df$method <- c("zero", "random", "unconstrained", "FAST")
+  ifelse(nrow(results) == 0, results <- df, results <- rbind(results, df))
+}
+
+ggplot(results, aes(x = size, y = time, color = method, group = method)) +
+    geom_point() +
+    geom_line(size = 1) +
+    geom_errorbar(aes(ymin = time - err/2, ymax = time + err/2), width = 0.1) +
+    theme_classic() +
+    scale_y_continuous(expand = c(0.01, 0)) +
+    theme(aspect.ratio = 1) +
+    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+    labs(x = "number of variables in system", y = "runtime relative to zero-initialized")
+```
+
+## Runtime of Active Set Methods vs. Coordinate Descent
+
+It is very clear that the Lawson-Hanson family of algorithms is inefficient for large solutions, that coordinate descent solvers are not particularly fast, and that feasible set methods such as TNT-NN suffer from dependence on heuristics and hyperparameters.
+
+We propose to serialize the first step of the TNT-NN algorithm and the coordinate descent algorithm. This will take advantage of fast Cholesky decompositions and provide the coordinate descent solver with a very good, if not exact, starting point.
+
+For instance, consider the runtime of unconstrained least squares, the initial phase of the TNT-NN algorithm, a coordinate descent algorithm, and a hybrid FAST-CD algorithm:
+
+```{R}
+results <- data.frame()
+for(size in seq(from = 10, to = 100, by = 10)){
+  cat("Calculating runtime for size: ", size, "\n")
+  df <- list()
+  for(replicate in 1:5){
+    ab <- random_system(size, replicate)
+    solution <- RcppML::nnls(ab$a, ab$b)
+    x_zero <- as.matrix(rep(0, size))
+    df[[replicate]] <- summary(microbenchmark(
+      RcppML::nnls(ab$a, ab$b, fast_maxit = 0, cd_maxit = 0),
+      RcppML::nnls(ab$a, ab$b, fast_maxit = 100, cd_maxit = 0),
+      RcppML::nnls(ab$a, ab$b, x = x_zero, fast_maxit = 0, cd_maxit = 10000),
+      RcppML::nnls(ab$a, ab$b, fast_maxit = 100, cd_maxit = 10000),
+      times = 5
+    ))$median
+  }
+  df <- do.call(rbind, df)
+  time <- colMeans(df)
+  err <- apply(df, 2, sd) / time[1]
+  time <- time / time[1]
+  df <- data.frame(cbind(time, err))
+  df$size <- size
+  df$method <- c("LLT", "FAST", "CD", "FAST-CD")
+  ifelse(nrow(results) == 0, results <- df, results <- rbind(results, df))
+}
+
+ggplot(results, aes(x = size, y = time, color = method, group = method)) +
+    geom_point() +
+    geom_line(size = 1) +
+    geom_errorbar(aes(ymin = time - err/2, ymax = time + err/2), width = 0.1) +
+    theme_classic() +
+    scale_y_continuous(expand = c(0.01, 0), trans = 'log') + 
+    theme(aspect.ratio = 1) +
+    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+    labs(x = "number of variables in system", y = "runtime relative to\nunconstrained solution")
+```
+
+Note that FAST-CD converges very quickly compared to coordinate descent, and that the hybrid FAST-CD algorithm is always faster than Coordinate Descent alone. However, the advantage is not very great, which is due to simulating extremely ill-conditioned systems at random.
+
+We can simulate well-conditioned systems by running matrix factorization, in this case to a tolerance of 0.001, and then examine runtime for each method:
+
+```{R}
+results <- data.frame()
+for(size in seq(from = 10, to = 60, by = 10)){
+  cat("Calculating runtime for size: ", size, "\n")
+  df <- list()
+  for(replicate in 1:5){
+    set.seed(replicate)
+    A <- rsparsematrix(500, 1000, 0.25)
+    w <- nmf(A, size, verbose = FALSE, maxit = 1)$w
+    df[[replicate]] <- summary(microbenchmark(
+      RcppML::project(A, w, fast_maxit = 0, cd_maxit = 0),
+      RcppML::project(A, w, fast_maxit = 100, cd_maxit = 0),
+      RcppML::project(A, w, fast_maxit = 0, cd_maxit = 10000),
+      RcppML::project(A, w, fast_maxit = 100, cd_maxit = 10000),
+      times = 5
+    ))$median
+  }
+  df <- do.call(rbind, df)
+  time <- colMeans(df)
+  err <- apply(df, 2, sd) / time[1]
+  time <- time / time[1]
+  df <- data.frame(cbind(time, err))
+  df$size <- size
+  df$method <- c("LLT", "FAST", "CD", "FAST-CD")
+  ifelse(nrow(results) == 0, results <- df, results <- rbind(results, df))
+}
+
+ggplot(results, aes(x = size, y = time, color = method, group = method)) +
+    geom_point() +
+    geom_line(size = 1) +
+    geom_errorbar(aes(ymin = time - err/2, ymax = time + err/2), width = 0.1) +
+    theme_classic() +
+    scale_y_continuous(expand = c(0.01, 0), trans = 'log') + 
+    theme(aspect.ratio = 1) +
+    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+    labs(x = "number of variables in system", y = "runtime relative to\nunconstrained solution")
+```
+
+```{R}
+A <- rsparsematrix(1000, 10000, 0.1)
+autoplot(microbenchmark(
+  "cd only" = nmf(A, 10, fast_maxit = 0, cd_maxit = 1000, verbose = F, maxit = 1000),
+  "fast only" = nmf(A, 10, fast_maxit = 1000, cd_maxit = 0, verbose = F, maxit = 1000),
+  "fast-cd" = nmf(A, 10, fast_maxit = 1000, cd_maxit = 1000, verbose = F, maxit = 1000),
+  "svd" = irlba(A, 10),
+  times = 20
+))
+```
+
+## Panel C. Runtime of Coordinate Descent with varying initializations
+
+```{R}
+size <- 50
+ab <- random_system(50, 123)
+autoplot(microbenchmark(
+    "zero-init CD" = RcppML::nnls(ab$a, ab$b, x = as.matrix(rep(0, 50)), cd_maxit = 1000),
+    "FAST only" = RcppML::nnls(ab$a, ab$b, cd_maxit = 0),
+    "CD after LLT" = RcppML::nnls(ab$a, ab$b, fast_maxit = 0, cd_maxit = 1000),
+    "base-solve" = base::solve(ab$a, ab$b),
+    "crossprod(X)" = crossprod(ab$X),
+    "nnls::nnls" = nnls::nnls(ab$X, ab$y),
+    "fnnls" = multiway::fnnls(ab$a, ab$b),
+    "fast-cd" = RcppML::nnls(ab$a, ab$b),
+    times = 100
+))
+```
+
+## Full Solution Path for FAST + CD NNLS
+
+We will put all solutions for each iteration in the `solutions` list. Iterations begin with unconstrained solution, then an iteration for each FAST step.
+
+For the FAST iterations, we will use the above R function.
+
+```{R}
+set.seed(2)
+m <- 10
+X <- abs(matrix(rnorm(100*m),100, m))
+a <- crossprod(X)
+b <- runif(m)
+solutions <- list()
+solutions[[1]] <- fast_nnls(a, b, maxit = 0)
+solutions[[2]] <- fast_nnls(a, b, maxit = 1)
+solutions[[3]] <- fast_nnls(a, b, maxit = 2)
+solutions[[4]] <- fast_nnls(a, b, maxit = 3)
+solutions <- as.data.frame(solutions)
+colnames(solutions) <- c("LS", "FAST 1", "FAST 2", "FAST 3")
+
+rownames(solutions) <- paste0("var.", 1:nrow(solutions))
+solutions <- reshape2::melt(as.matrix(solutions))
+colnames(solutions) <- c("variable", "iter", "coef")
+
+ggplot(solutions, aes(x = iter, y = coef, color = variable, group = variable)) +
+        geom_point() +
+        geom_line(size = 1) +
+        theme_classic() +
+        scale_y_continuous(expand = c(0.01, 0)) +
+        theme(aspect.ratio = 1) +
+        theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+        labs(x = "iteration", y = "variable coefficient")
+```
+
+We might also solve the same solution using coordinate descent:
+
+```{R}
+solutions <- list()
+set.seed(1)
+x <- rep(0, 10)
+solutions[[1]] <- x
+for(i in seq(1, 15, 1)){
+  solutions[[i + 1]] <- RcppML::solve(a, b, x = x, maxit = i, nonneg = TRUE)
+}
+solutions <- as.data.frame(solutions)
+colnames(solutions) <- 0:15
+
+rownames(solutions) <- paste0("var.", 1:nrow(solutions))
+solutions <- reshape2::melt(as.matrix(solutions))
+colnames(solutions) <- c("variable", "iter", "coef")
+
+ggplot(solutions, aes(x = iter, y = coef, color = variable, group = variable)) +
+        geom_point() +
+        geom_line(size = 1) +
+        theme_classic() +
+        scale_y_continuous(expand = c(0.01, 0)) +
+        theme(aspect.ratio = 1) +
+        theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+        labs(x = "iteration", y = "variable coefficient")
+
+```
+

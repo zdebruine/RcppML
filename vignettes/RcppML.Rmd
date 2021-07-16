@@ -1,0 +1,52 @@
+---
+title: "Solving Systems of Equations with Constrained and Regularized Least Squares"
+author: "Zach DeBruine"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Intro to RcppML}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+This vignette covers theory and usage of the `solve` and `project` R functions in the `RcppML` package.
+
+## Introduction and Installation
+
+You may install the latest stable development version of RcppML from github:
+
+```{R, eval = FALSE}
+library(devtools)
+install_github("zdebruine/RcppML")
+```
+
+RcppML currently offers the fastest NNLS solvers in the R community. It is being actively extended to offer high-performance machine learning algorithms, such as exceptionally fast and robust matrix factorization, and sensitive clustering.
+
+## Solving Systems of Equations
+
+The `RcppML::solve` function solves the equation \eqn{ax = b} for \eqn{x} where \eqn{a} is symmetric positive definite matrix of dimensions \eqn{m x m} and \eqn{b} is a vector of length \eqn{m} or a matrix of dimensions \eqn{m x n}.
+
+Unlike `base::solve`, `RcppML::solve` requires symmetric positive definite \eqn{a}. Complex numbers in \eqn{b} are also not supported, and \eqn{b} is required.
+
+Why use `RcppML::solve`?
+
+* Extremely fast Cholesky decomposition (using the Eigen C++ library)
+* Refinement of solutions by gradient descent
+* Fastest algorithm for Non-Negative Least Squares (NNLS)
+* Tractable methods for approximate and near-exact L0 regularization
+* Support for convex L1, L2, and PE regularizations on \eqn{a} and/or \eqn{b}
+* OpenMP parallelization across samples when \eqn{b} is a matrix
+* Support for "float" (faster) and "double" (slower) precision
+
+## Projecting Linear Models
+
+* `RcppML::solve` masks `base::solve` to provide a faster solver for systems of equations using the Eigen cholesky module.
+
+## Unconstrained Least Squares
