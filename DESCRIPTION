@@ -7,6 +7,7 @@ Author: Zach DeBruine
 Maintainer: Zach DeBruine <zacharydebruine@gmail.com>
 Description: Fast non-negative least squares and projection of linear factor models onto sparse matrices.
 License: GPL (>= 2)
+LazyData: true
 Imports: Rcpp, RcppEigen, Matrix, methods
 LinkingTo: Rcpp, RcppEigen
 VignetteBuilder: knitr
