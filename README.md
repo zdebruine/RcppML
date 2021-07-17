@@ -1,6 +1,6 @@
 # RcppML
 
-High-performance machine learning methods for large sparse matrices. Focus on non-negative models and speed in parallelized computing systems.
+Rcpp Machine Learning library for high-performance matrix factorization, linear model projection, non-negative least squares, and more.
 
 ## R package
 
