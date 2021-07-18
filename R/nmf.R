@@ -26,7 +26,7 @@
 #'
 nmf <- function(A, k, nonneg = c(TRUE, TRUE), tol = 1e-3, L1 = c(0, 0), seed = NULL, maxit = 100,
                 threads = 0, verbose = TRUE, diag = TRUE, symmetric = FALSE, 
-                fast_maxit = 10, cd_maxit = 100, cd_tol = 1e-8, calc_mse = FALSE, precision = "double") {
+                fast_maxit = 0, cd_maxit = 1000, cd_tol = 1e-8, calc_mse = FALSE, precision = "double") {
   
   if(symmetric && nrow(A) != ncol(A)) stop("'symmetric = TRUE' but 'A' is not square")
   if (length(L1) == 1) L1 <- rep(L1, 2)
