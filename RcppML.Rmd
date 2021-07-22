@@ -1,0 +1,273 @@
+---
+title: "Introduction to the RcppML package"
+author: "Zach DeBruine"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to the RcppML package}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+The 'RcppML' package provides high-performance machine learning algorithms using Rcpp with a focus on matrix factorization.
+
+## Installation
+
+Install the latest development version of RcppML from github:
+
+```{R, eval = FALSE}
+library(devtools)
+install_github("zdebruine/RcppML")
+```
+
+```{R}
+library(RcppML)
+library(ggplot2)
+library(Matrix)
+library(Seurat)
+library(viridis)
+library(reshape2)
+```
+
+## Non-Negative Least Squares
+
+RcppML contains extremely fast NNLS solvers. Use the `nnls` function to solve systems of equations subject to non-negativity constraints.
+
+The `RcppML::solve` function solves the equation \eqn{ax = b} for \eqn{x} where \eqn{a} is symmetric positive definite matrix of dimensions \eqn{m x m} and \eqn{b} is a vector of length \eqn{m} or a matrix of dimensions \eqn{m x n}.
+
+```{R}
+# construct a system of equations
+X <- matrix(rnorm(2000),100,20)
+btrue <- runif(20)
+y <- X %*% btrue + rnorm(100)
+a <- crossprod(X)
+b <- crossprod(X, y)
+
+# solve the system of equations
+x <- RcppML::nnls(a, b)
+
+# solve an unconstrained system of equations
+all.equal(base::solve(a, b), RcppML::nnls(a, b, nonneg = FALSE))
+
+# use only coordinate descent
+x <- RcppML::nnls(a, b, fast_maxit = 0, cd_maxit = 1000, tol = 1e-8)
+```
+
+`RcppML::solve` implements a new and fastest-in-class algorithm for non-negative least squares:
+
+1. *initialization* is done by solving for the unconstrained least squares solution.
+2. *forward active set tuning* (FAST) provides a near-exact solution (often exact for well-conditioned systems) by setting all negative values in the unconstrained solution to zero, re-solving the system for only positive values, and repeating the process until the solution for values not constrained to zero is strictly positive. Set `cd_maxit = 0` to use only the FAST solver.
+3. *Coordinate descent* refines the FAST solution and finds the best solution discoverable by gradient descent. The coordinate descent solution is only used if it gives a better error than the FAST solution. Generally, coordinate descent re-introduces variables constrained to zero by FAST back into the feasible set, but does not dramatically change the solution.
+
+## Projecting Linear Models
+
+Project dense linear factor models onto real-valued sparse matrices (or any matrix coercible to `Matrix::dgCMatrix`) using `RcppML::project`. 
+
+`RcppML::project` solves the equation \eqn{A = WH} for \eqn{H}.
+
+```{R}
+# simulate a sparse matrix
+A <- rsparsematrix(1000, 100, 0.1)
+
+# simulate a linear factor model
+w <- matrix(runif(1000 * 10), 1000, 10)
+
+# project the model
+h <- RcppML::project(A, w)
+```
+
+## Non-negative Matrix Factorization
+
+`RcppML::nmf` finds a non-negative matrix factorization by alternating least squares (alternating projections of linear models \eqn{w} and \eqn{h}).
+
+There are several ways in which the NMF algorithm differs from other currently available methods:
+
+* Diagonalized scaling of factors to sum to 1, permitting convex L1 regularization along the entire solution path
+* Fast stopping criteria, based on correlation between models across consecutive iterations
+* Extremely fast algorithms using the Eigen C++ library, optimized for matrices that are >90% sparse
+* Specialization for symmetric factorizations, with optimized updating and correlation measure for convergence
+* Support for NMF, OSNMF/R, OSNMF/L, or unconstrained matrix factorization
+* Parallelized using OpenMP multithreading
+* Support for double and float precision, if performance is a significant concern
+* Control over least squares solver to be used, i.e. FAST and coordinate descent methods, see \code{\link{nnls}}
+
+The following example runs rank-10 NMF on counts of 11,000 RNA transcripts across 7500 cells from the Mouse Organogenesis Cell Atlas:
+
+```{R}
+data(moca7k)
+model <- RcppML::nmf(moca7k, 10, verbose = F)
+
+w <- model$w
+d <- model$d
+h <- model$h
+model_tolerance <- tail(model$tol, 1)
+```
+
+Tolerance is simply a measure of the average correlation between \eqn{w_{i-1} and \eqn{w_i} and \eqn{h_{i-1}} and \eqn{h_i} for a given iteration \eqn{i}.
+
+For symmetric factorizations (when \code{symmetric = TRUE}), tolerance becomes a measure of the correlation between \eqn{w_i} and \eqn{h_i}, and diagonalization is automatically performed to enforce symmetry:
+
+```{R}
+A <- rsparsematrix(1000, 1000, 0.1)
+A_sym <- as(crossprod(A), "dgCMatrix")
+
+model <- RcppML::nmf(A_sym, 10, symmetric = TRUE, verbose = F)
+```
+
+To calculate the mean squared error of the factorization at each iteration, use \code{calc_mse = TRUE}. Note that mean squared error is given by \deqn{\sum{(A - WH)^2}}, and thus is closely related to the correlation between consecutive models. However, mean squared error takes much longer to compute despite optimization for sparsity and massive parallelization, and therefore is disabled by default and not used as a stopping criteria.
+
+```{R}
+model <- RcppML::nmf(A_sym, 10, symmetric = TRUE, calc_mse = TRUE, verbose = F)
+```
+
+Mean squared error can also be calculated for a given model just once using the `RcppML::mse` function:
+
+```{R}
+mse <- RcppML::mse(A_sym, model$w, model$d, model$h)
+all.equal(mean((A_sym - model$w %*% Diagonal(x = model$d) %*% model$h)^2), mse, tolerance = 1e-5)
+```
+
+## Rank determination using MSE
+
+Much like an "elbow plot" of standard deviation vs. number of components in PCA can be used to determine rank, we can use MSE vs. factorization rank to find an inflection point at which the factorization captures most of the signal in a dataset:
+
+```{R}
+ranks <- c(seq(1,20, 1), seq(25, 50, 5), seq(60, 100, 10))
+MSE <- c()
+cat("factorizing rank: ")
+for(rank in ranks){
+  cat(rank, " ")
+  model <- RcppML::nmf(moca7k, rank, tol = 1e-2, verbose = F)
+  MSE <- c(MSE, RcppML::mse(moca7k, model$w, model$d, model$h))
+}
+plot_data <- data.frame("rank" = ranks, "MSE" = MSE)
+ggplot(plot_data, aes(x = rank, y = MSE)) + 
+  geom_point() + 
+  theme_classic() +
+  geom_smooth()
+```
+
+This takes some time, but fortunately we can use very low-tolerance NMF.
+
+An inflection point is established around rank 25, suggesting this is the optimal rank. Let's learn a higher tolerance model with k = 25:
+
+```{R}
+model <- RcppML::nmf(moca7k, 25, tol = 1e-4, verbose = F)
+```
+
+NMF can be useful for visualizing single cells on UMAP coordinates. We will use Seurat.
+
+```{R}
+moca <- CreateSeuratObject(moca7k)
+
+# format the NMF model for Seurat
+colnames(model$h) <- colnames(moca7k)
+rownames(model$h) <- paste0("nmf_", 1:25)
+
+# add NMF model to Seurat object as a a reduction
+moca@reductions$nmf <- CreateDimReducObject(
+  embeddings = t(model$h), 
+  loadings = model$w, 
+  key = "nmf_", 
+  assay = "RNA"
+)
+
+# find k-nearest neighbors 
+moca <- FindNeighbors(
+  moca, dims = 1:25, annoy.metric = "cosine", reduction = "nmf")
+
+# run UMAP using knn graph 
+moca <- RunUMAP(
+  moca, dims = 1:25, reduction = "nmf", n.neighbors = 50)
+```
+
+Let's visualize some factors on UMAP coordinates:
+
+```{R}
+plot_factor <- function(nmf_w_model, umap_coords, factor){
+  df <- data.frame(
+    "loadings" = nmf_w_model[,factor], 
+    "umap1" = umap_coords[,1],
+    "umap2" = umap_coords[,2]
+  )
+  plot <- ggplot(df, aes(x = umap1, y = umap2, color = loadings)) +
+    geom_point(size = 0.7) + 
+    theme_classic() + 
+    theme(
+      aspect.ratio = 1,
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank(),
+      legend.position = "none",
+      plot.title = element_text(hjust = 0.5, size = 10),
+      panel.background = element_blank(),
+      panel.grid.major = element_blank(), 
+      panel.grid.minor = element_blank(),
+      axis.line = element_blank(),
+      panel.border = element_rect(color = "black", fill = NA, size = 1)
+    ) + 
+    scale_color_viridis(option = "B") +
+    ggtitle(paste0("factor ", factor))
+  return(plot)  
+}
+```
+
+```{R}
+plot_factor(sqrt(t(model$h)), moca@reductions$umap@cell.embeddings, 1)
+```
+
+```{R}
+plot_factor(sqrt(t(model$h)), moca@reductions$umap@cell.embeddings, 5)
+```
+
+```{R}
+plot_factor(sqrt(t(model$h)), moca@reductions$umap@cell.embeddings, 10)
+```
+
+```{R}
+plot_factor(sqrt(t(model$h)), moca@reductions$umap@cell.embeddings, 25)
+```
+
+We might also be interested in which genes are up in certain factors. For example, here are the top genes up in factor 10:
+
+```{R}
+rownames(model$w) <- rownames(moca7k)
+head(sort(model$w[,10], decreasing = TRUE), n = 20)
+```
+
+We can also look at gene expression across all factors using a heatmap. We will consider only the top 5000 genes as ranked by maximum loading value across all factors. Then we will normalize each gene to sum to 1 for visualization purposes.
+
+```{R}
+genes_cutoff <- sort(apply(model$w, 1, max), decreasing = TRUE)[5000]
+w <- model$w[apply(model$w, 1, max) >= genes_cutoff, ]
+colnames(w) <- paste0("nmf_", 1:25)
+for(i in 1:nrow(w)){
+  w[i,] <- w[i,] / sum(w[i,])
+}
+w <- w[hclust(dist(w))$order, hclust(dist(t(w)))$order]
+w <- reshape2::melt(w)
+colnames(w) <- c("gene", "factor", "value")
+
+ggplot(w, aes(x = gene, y = factor, fill = sqrt(value))) +
+    geom_tile() +
+    theme_classic() +
+    scale_x_discrete(expand = c(0, 0), position = "top") +
+    scale_y_discrete(expand = c(0, 0)) +
+    theme(axis.ticks.x = element_blank(),
+          axis.ticks.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.text.x = element_blank(),
+          axis.line = element_blank(),
+          plot.title = element_text(hjust = 0.5),
+          legend.position = "none",
+          aspect.ratio = 1) +
+    scale_fill_viridis(option = "B") +
+    labs(x = "5000 genes", y = "25 NMF factors")
+```
