@@ -1,10 +1,8 @@
 # RcppML
 
-Rcpp Machine Learning library for high-performance matrix factorization, linear model projection, non-negative least squares, and more.
+The Rcpp Machine Learning (RcppML) library R package offers high-performance non-negative matrix factorization (NMF), linear model projection, and non-negative least squares (NNLS).
 
-## R package
-
-R functions in the RcppML package:
+Key functions:
 
 * `nnls`: High-performance solver for non-negative least squares 
 * `project`: Project linear models given sparse data inputs and one side of the orthogonal factor model
@@ -13,7 +11,7 @@ R functions in the RcppML package:
 
 ## Getting Started
 
-See the package vignette in the `/vignettes` directory for a basic introduction to each function listed above.
+See the package vignette in the `/vignettes` directory for a basic introduction to each function listed above and a brief application of NMF to single-cell analysis.
 
 Install the development version of `RcppML`:
 
@@ -26,8 +24,7 @@ install_github("zdebruine/RcppML")
 
 RcppML is under non-breaking active development. Functionality in development includes:
 
-* Extremely fast rank-1 factorization
-* Extremely fast exact rank-2 matrix factorizations (faster than _irlba_ rank-2 SVD)
+* Rank-1 factorization
+* Rank-2 matrix factorizations (faster than _irlba_ rank-2 SVD)
 * Divisive clustering using recursive bipartitioning by rank-2 matrix factorizations
 * Efficient and robust solutions to large matrix factorizations
-* Tractable and near-exact L0-regularized non-negative least squares
