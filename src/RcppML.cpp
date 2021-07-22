@@ -1,5 +1,4 @@
-// This file is part of RcppML, an Rcpp template library
-//  for high-performance machine learning.
+// This file is part of RcppML, an Rcpp Machine Learning library
 //
 // Copyright (C) 2021 Zach DeBruine <zacharydebruine@gmail.com>
 // github.com/zdebruine/RcppML
