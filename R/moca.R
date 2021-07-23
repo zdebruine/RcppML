@@ -1,6 +1,6 @@
 #' 7500 cells from mouse embryos
 #'
-#' @description This dataset is ~95% sparse and is constituted of a large number of mixed signals with significant signal dropout and technical noise.
+#' @description This dataset is ~95 percent sparse and is constituted of a large number of mixed signals with significant signal dropout and technical noise.
 #'
 #' @details
 #' The dataset was obtained as follows:
