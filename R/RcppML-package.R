@@ -1,10 +1,7 @@
-#' RcppML: Machine Learning in Rcpp
+#' RcppML: Rcpp Machine Learning Library
 #'
 #' @description
-#' Constrained and regularized least squares and matrix factorization model projection for dense and sparse matrices.
-#'
-#' @details 
-#' A library of machine learning methods in Rcpp being actively developed using a very fast active-set/coordinate descent constrained least squares algorithm with optional L0 regularization.
+#' High-performance non-negative matrix factorization and linear model projection for sparse matrices, and fast non-negative least squares implementations
 #'
 #' @import knitr Matrix RcppEigen
 #' @importFrom Rcpp evalCpp
