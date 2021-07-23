@@ -7,7 +7,7 @@
 #'
 #' @param A matrix of features x samples, of or coercible to sparse matrix \code{dgCMatrix} format
 #' @param k rank of factorization
-#' @param nonneg apply non-negativity constraints to \code{c(w, h)}, specify \code{TRUE} for NMF, \code{c(TRUE, FALSE)} for OSNMF/L or \code{c(FALSE, TRUE)} for OSNMF/R.
+#' @param nonneg apply non-negativity constraints?
 #' @param tol stopping criterion for alternating least squares iterations, measuring mean correlation distance between \eqn{w} and \eqn{h} in consecutive iterations.
 #' @param L1 L1 ("lasso") regularization to apply to either 'w' or 'h', recommended only to use with diagonalization. Specify array of two for \code{c(w, h)}
 #' @param seed random seed for initialization of \eqn{w}, uses C++ \code{srand} RNG.
@@ -24,22 +24,21 @@
 #' @returns list of "w", "d", "h" giving matrices and diagonal vector of the learned factor model, and "tol", and "mse" giving the tolerances and loss (if calculated) of the model at each iteration
 #' @export
 #'
-nmf <- function(A, k, nonneg = c(TRUE, TRUE), tol = 1e-3, L1 = c(0, 0), seed = NULL, maxit = 100,
+nmf <- function(A, k, nonneg = TRUE, tol = 1e-3, L1 = c(0, 0), seed = NULL, maxit = 100,
                 threads = 0, verbose = TRUE, diag = TRUE, symmetric = FALSE, 
                 fast_maxit = 0, cd_maxit = 1000, cd_tol = 1e-8, calc_mse = FALSE, precision = "double") {
   
   if(symmetric && nrow(A) != ncol(A)) stop("'symmetric = TRUE' but 'A' is not square")
   if (length(L1) == 1) L1 <- rep(L1, 2)
-  if (length(nonneg) == 1) nonneg <- rep(nonneg, 2)
   if (!is.logical(verbose)) ifelse(as.numeric(verbose) > 0, verbose <- TRUE, verbose <- FALSE)
   if (is.null(seed) || is.na(seed) || !is.finite(seed)) seed <- 0
   if(class(A) != "dgCMatrix") as(A, "dgCMatrix")
   
   if (precision == "float") {
-    return(Rcpp_nmf_float(A, k, seed, tol, nonneg[1], nonneg[2], L1[1], L1[2], maxit,
+    return(Rcpp_nmf_float(A, k, seed, tol, nonneg, nonneg, L1[1], L1[2], maxit,
                           threads, verbose, calc_mse, symmetric, diag, fast_maxit, cd_maxit, cd_tol))
   } else {
-    return(Rcpp_nmf_double(A, k, seed, tol, nonneg[1], nonneg[2], L1[1], L1[2], maxit,
+    return(Rcpp_nmf_double(A, k, seed, tol, nonneg, nonneg, L1[1], L1[2], maxit,
                            threads, verbose, calc_mse, symmetric, diag, fast_maxit, cd_maxit, cd_tol))
   }
 }
