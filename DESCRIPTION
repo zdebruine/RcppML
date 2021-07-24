@@ -1,14 +1,14 @@
 Package: RcppML
 Type: Package
-Title: High-performance machine learning methods in Rcpp
+Title: Rcpp Machine Learning Library
 Version: 1.0
 Date: 2021-06-29
 Author: Zach DeBruine
 Maintainer: Zach DeBruine <zacharydebruine@gmail.com>
-Description: Fast non-negative least squares and projection of linear factor models onto sparse matrices.
+Description: High-performance machine learning algorithms implemented in Rcpp and RcppEigen, including non-negative matrix factorization of sparse matrices (NMF), projection of linear factor models, and non-negative least squares (NNLS).
 License: GPL (>= 2)
 LazyData: true
-Imports: Rcpp, RcppEigen, Matrix, methods
+Imports: Rcpp, Matrix, methods
 LinkingTo: Rcpp, RcppEigen
 VignetteBuilder: knitr
 RoxygenNote: 7.1.1
