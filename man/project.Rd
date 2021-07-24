@@ -4,53 +4,51 @@
 \alias{project}
 \title{Project a linear factor model}
 \usage{
-project(
-  A,
-  w,
-  nonneg = TRUE,
-  L1 = 0,
-  fast_maxit = 10,
-  cd_maxit = 100,
-  cd_tol = 1e-08,
-  threads = 0,
-  precision = "double"
-)
+project(A, w, nonneg = TRUE, L1 = 0, threads = 0, ...)
 }
 \arguments{
-\item{A}{square numeric matrix containing the coefficients of the linear system}
+\item{A}{sparse matrix of features x samples, of or coercible to class \code{Matrix::dgCMatrix}}
 
-\item{w}{numeric vector or matrix giving the right-hand side(s) of the linear system}
+\item{w}{dense matrix of features x factors giving the linear model to be projected}
 
 \item{nonneg}{apply non-negativity constraints}
 
-\item{L1}{L1/LASSO regularization to be subtracted from \eqn{b}. Generally this should be scaled to \code{max(b)}}
+\item{L1}{L1/LASSO penalty to be applied to \eqn{h}. Generally should be scaled to \code{max(b)} where \eqn{b = WA_j} for all columns \eqn{j} in \eqn{A}}
 
-\item{fast_maxit}{maximum number of iterations of pre-conditioning in NNLS solver prior to coordinate descent, see \code{\link{nnls}}}
+\item{threads}{number of CPU threads for parallelization, default \code{0} for all available threads.}
 
-\item{cd_maxit}{maximum number of iterations of coordinate descent NNLS solver, see \code{\link{nnls}}}
-
-\item{cd_tol}{tolerance for convergence of the least squares sequential coordinate descent solver}
-
-\item{threads}{number of CPU threads to use for parallelization. Default is "0" to let OpenMP decide and use all available threads.}
-
-\item{precision}{"float" or "double"}
+\item{...}{expert parameters that shouldn't need to be changed (cd_maxit = 1000, fast_maxit = 10, cd_tol = 1e-8)}
 }
 \value{
-matrix giving \eqn{h}
+matrix \eqn{h}
 }
 \description{
-Solves the equation \eqn{A = WH} for \eqn{H}
+Solves the equation \eqn{A = wh} for \eqn{h}
 }
 \details{
-For the classical alternating matrix factorization update problem \eqn{A = WH}, the updates
-(or projection) of \eqn{H} is given by the systems of equations: \deqn{W^TWH = WA_j}
-\deqn{a = W^TW} \deqn{x = H} \deqn{b = WA_j} for all columns \eqn{j} in \eqn{A}.
+For the classical alternating matrix factorization update problem \eqn{A = wh}, the updates
+(or projection) of \eqn{h} is given by the equations: \deqn{w^Twh = wA_j}
+in the form \eqn{ax = b} where \eqn{a = w^Tw} \eqn{x = h} and \eqn{b = wA_j} for all columns \eqn{j} in \eqn{A}.
 
-Given \eqn{A} and \eqn{w}, \code{RcppML::project} solves for \eqn{H} using the above formulas and
-\code{RcppML::solve}, applying regularizations up-front and parallelizing solutions across columns in
-\eqn{A}.
+Given \eqn{A} and \eqn{w}, \code{RcppML::project} solves for \eqn{h} using the above formulas and
+\code{RcppML::nnls}.
 
-The corresponding equation for updating \eqn{W} in block-pivoting is: \deqn{HH^TW^T = HA^T_j}
+The corresponding equation for updating \eqn{w} in block-pivoting is: \deqn{hh^Tw^T = hA^T_j}
 
-One may also solve for \eqn{W} by inputting the transpose of \eqn{A} and \eqn{H} in place of \eqn{W}.
+One may also solve for \eqn{w} by inputting the transpose of \eqn{A} and \eqn{h} in place of \eqn{w}.
+}
+\examples{
+\dontrun{
+w <- matrix(runif(1000 * 10), 1000, 10)
+h_true <- matrix(runif(10 * 100), 10, 100)
+A <- (w \%*\% h_true) * (rsparsematrix(1000, 100, 0.5) > 0)
+h <- project(A, w)
+cor(as.vector(h_true), as.vector(h))
+}
+}
+\seealso{
+\code{\link{nnls}}, \code{\link{nmf}}
+}
+\author{
+Zach DeBruine
 }

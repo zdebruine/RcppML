@@ -2,24 +2,42 @@
 % Please edit documentation in R/mse.R
 \name{mse}
 \alias{mse}
-\title{Mean Squared Error (MSE) loss of a factor model}
+\title{Mean Squared Error loss of a factor model}
 \usage{
-mse(A, w, d = NULL, h, precision = "float")
+mse(A, w, d = NULL, h, threads = 0)
 }
 \arguments{
 \item{A}{sparse matrix (of or coercible to \code{dgCMatrix}) of samples (columns) by features (rows)}
 
 \item{w}{dense matrix of class \code{matrix} with factors (columns) by features (rows)}
 
-\item{d}{vector (if applicable) giving giving coefficients of the diagonal}
+\item{d}{optional diagonal scaling vector (if other than 1's) of rank length}
 
 \item{h}{dense matrix of class \code{matrix} with samples (columns) by factors (rows)}
 
-\item{precision}{"float" or "double" precision}
+\item{threads}{number of CPU threads for parallelization, default \code{0} for all available threads.}
 }
 \value{
-mean squared error of the factorization
+scalar, MSE of the factorization
 }
 \description{
-Mean squared error of factor models \eqn{W} and \eqn{H} given sparse matrix \eqn{A}
+MSE of factor models \code{w} and \code{h} given sparse matrix \eqn{A}
+}
+\details{
+Calculates the cross-product of \eqn{wh} or \eqn{wdh} (if \eqn{d} is specified), 
+subtracts that from \eqn{A}, squares the result, and calculates the mean of all values. 
+
+Parallelization is used across all available threads as determined by OpenMP. 
+
+Sparse matrix iterators are used in a C++ backend for high performance.
+}
+\examples{
+\dontrun{
+  A <- Matrix::rsparsematrix(1000, 1000, 0.1)
+  model <- nmf(A, k = 10)
+  mse(A, model$w, model$d, model$h)
+}
+}
+\author{
+Zach DeBruine
 }

@@ -2,66 +2,137 @@
 % Please edit documentation in R/nmf.R
 \name{nmf}
 \alias{nmf}
-\title{Matrix factorization by alternating least squares}
+\title{Non-negative matrix factorization}
 \usage{
 nmf(
   A,
   k,
-  nonneg = c(TRUE, TRUE),
   tol = 0.001,
+  maxit = 100,
+  verbose = TRUE,
+  nonneg = TRUE,
   L1 = c(0, 0),
   seed = NULL,
-  maxit = 100,
   threads = 0,
-  verbose = TRUE,
-  diag = TRUE,
-  symmetric = FALSE,
-  fast_maxit = 10,
-  cd_maxit = 100,
-  cd_tol = 1e-08,
-  calc_mse = FALSE,
-  precision = "double"
+  ...
 )
 }
 \arguments{
-\item{A}{matrix of features x samples, of or coercible to sparse matrix \code{dgCMatrix} format}
+\item{A}{sparse matrix of features x samples, of or coercible to class \code{Matrix::dgCMatrix}}
 
-\item{k}{rank of factorization}
+\item{k}{rank}
 
-\item{nonneg}{apply non-negativity constraints to \code{c(w, h)}, specify \code{TRUE} for NMF, \code{c(TRUE, FALSE)} for OSNMF/L or \code{c(FALSE, TRUE)} for OSNMF/R.}
+\item{tol}{correlation distance between \eqn{w} across consecutive iterations at which to stop factorization}
 
-\item{tol}{stopping criterion for alternating least squares iterations, measuring mean correlation distance between \eqn{w} and \eqn{h} in consecutive iterations.}
+\item{maxit}{maximum number of alternating updates of \eqn{w} and \eqn{h}}
 
-\item{L1}{L1 ("lasso") regularization to apply to either 'w' or 'h', recommended only to use with diagonalization. Specify array of two for \code{c(w, h)}}
+\item{verbose}{print tolerances after each iteration to the console}
 
-\item{seed}{random seed for initialization of \eqn{w}, uses C++ \code{srand} RNG.}
+\item{nonneg}{apply non-negativity constraints}
 
-\item{maxit}{maximum number of alternating least squares iterations (updates of \eqn{w} and \eqn{h})}
+\item{L1}{L1/LASSO penalty, generally between 0 and 1. Specify array of length two for \code{c(w, h)} or a single value to apply equally on \code{w} and \code{h}.}
 
-\item{threads}{number of CPU threads to use for parallelization. Default is "0" to let OpenMP decide and use all available threads.}
+\item{seed}{random seed for initializing \eqn{w}, sets C++ \code{srand} RNG seed}
 
-\item{verbose}{print tolerances for each iteration to the console}
+\item{threads}{number of CPU threads for parallelization, default \code{0} for all available threads}
 
-\item{diag}{introduce a scaling diagonal by normalizing rows in \eqn{h} and columns in \eqn{w} to sum to 1, and sorting factors in the final model by decreasing diagonal values.}
-
-\item{symmetric}{indicate whether \eqn{A} is a symmetric matrix, so \eqn{A} will not be transposed during alternating least squares and tolerance will measure correlation between \eqn{w} and \eqn{h} with each iteration rather than \eqn{h} between consecutive iterations. Diagonalization will also be applied to ensure convergence of \eqn{w} and \eqn{h}.}
-
-\item{fast_maxit}{maximum number of iterations of pre-conditioning in NNLS solver prior to coordinate descent, see \code{\link{nnls}}}
-
-\item{cd_maxit}{maximum number of iterations of coordinate descent NNLS solver, see \code{\link{nnls}}}
-
-\item{cd_tol}{tolerance of NNLS coordinate descent solver, see \code{\link{nnls}}}
-
-\item{calc_mse}{calculate mean squared error loss of the factorization at each iteration. This is computationally intensive.}
-
-\item{precision}{"double" or "float", note that "float" will limit the tolerance of most models at convergence to around 1e-6.}
+\item{...}{advanced parameters, see details}
 }
 \value{
-list of "w", "d", "h" giving matrices and diagonal vector of the learned factor model, and "tol", and "mse" giving the tolerances and loss (if calculated) of the model at each iteration
+A list giving the factorization model:
+	\itemize{
+   \item w   : feature factor matrix model
+   \item d   : scaling diagonal vector (if \code{diag = TRUE})
+   \item h   : sample factor matrix model
+ }
 }
 \description{
-High-performance Non-Negative Matrix Factorization (NMF), one-sided NMF, or unconstrained matrix factorization with optional diagonalization and L1 regularization.
+High-performance matrix factorization with optional non-negativity constraints and L1 regularization.
 }
 \details{
-TBD
+This fast non-negative matrix factorization (NMF) implementation decomposes a sparse matrix \eqn{A} into orthogonal lower-rank
+ non-negative matrices \eqn{w} and \eqn{h}, with factors scaled to sum to 1 by a diagonal, \eqn{d}:
+\deqn{A = wdh}
+
+For theoretical details, please see our manuscript: "DeBruine ZJ, Melcher K, Triche TJ (2021) 
+High-performance non-negative matrix factorization for large single cell data." on BioRXiv.
+}
+\section{Stopping criteria}{
+
+Use the \code{tol} parameter to control the stopping criteria for alternating updates
+* \code{tol = 1e-2} is appropriate for crude mean squared error determination, for example in rank determination
+* \code{tol = 1e-3} to \code{1e-4} are suitable for rapid expermentation and preliminary analysis
+* \code{tol = 1e-5} and smaller for publication-quality runs
+
+The \code{maxit} parameter is a secondary stopping criterion that takes effect only if \code{tol} is not satisfied 
+by the maximum number of specified iterations.
+}
+
+\section{L1 regularization}{
+
+L1 penalization introduces sparsity into all factors. Because RcppML NMF models are diagonalized, sparsity is enforced
+ equally across all factors regardless of initialization and iteration. Use the \code{L1} parameter to set any desired
+ L1/LASSO penalty on the right-hand side of systems of equations during updates of \eqn{w} or \eqn{h}. Typical values 
+ range between 0 and 1, where 1 is extremely or entirely sparse (this may lead to numericalissues).
+}
+
+\section{Reproducibility}{
+
+The optional \code{seed} parameter may be specified to guarantee absolute reproducibility between restarts. 
+The seed is set on the C++ end and will not affect the RNG in the R environment. Note that only random initialization 
+is supported, as other initializations do not show better performance and can trap the updates into local minima.
+
+Because random initializations are used, the resulting model may be slightly different, especially for factors with lower 
+diagonal weights. The same information is explained by all models, but in slightly different splits across less robust factors.
+Use of cross-validation can help optimize rank and L1 regularization to improve robustness if needed.
+}
+
+\section{Rank determination}{
+
+Like any clustering algorithm or dimensional reduction, finding the optimal rank can be a subjective process. An easy way to 
+estimate rank uses the "elbow method", where the inflection point on a plot of Mean Squared Error loss (MSE) vs. rank 
+gives a good idea of the rank at which most of the signal has been captured in the model. Unfortunately, this inflection point
+is not often as obvious for NMF as it is for SVD or PCA, for example.
+
+Better methods involve cross-validation against robustness objectives, such as k-fold test-training splits. Missing value of 
+imputation has previously been proposed, but is arguably no less subjective than test-training splits and requires computationally
+slower factorization updates.
+}
+
+\section{Advanced parameters}{
+
+Several parameters may be adjusted (although defaults should entirely satisfy) in addition to those documented explicitly below, using \code{...}:
+* \code{cd_maxit}, default 1000. Maximum number of coordinate descent iterations for solution refinement after initialization with solution from previous iteration. Only used as stopping criterion if \code{cd_tol} is not satisfied previously. See \code{\link{nnls}}.
+* \code{fast_maxit}, default 10. Maximum number of FAST iterations for finding an approximate solution to initialize coordinate descent. See \code{\link{nnls}}.
+* \code{cd_tol}, default 1e-8. Stopping criterion for coordinate descent iterations given by the maximum relative change in any coefficient between consecutive solutions. See \code{\link{nnls}}.
+* \code{diag}, default TRUE. Enable model diagonalization to normalize factors to sum to 1, guarantee symmetry for symmetric factorizations, and distribute L1 penalties consistently and equally across all factors.
+}
+
+\examples{
+\dontrun{
+# basic NMF
+model <- nmf(rsparsematrix(1000, 100, 0.1), k = 10)
+
+# symmetric NMF
+A <- crossprod(rsparsematrix(100, 100, 0.02))
+model <- nmf(A, 10, tol = 1e-5, maxit = 1000)
+plot(model$w, t(model$h))
+# see package vignette for more examples
+}
+
+}
+\references{
+DeBruine, ZJ, Melcher, K, and Triche, TJ. (2021). "High-performance non-negative matrix factorization for large single-cell data." BioRXiv.
+
+Lin, X, and Boutros, PC (2020). "Optimization and expansion of non-negative matrix factorization." BMC Bioinformatics.
+
+Lee, D, and Seung, HS (1999). "Learning the parts of objects by non-negative matrix factorization." Nature.
+
+Franc, VC, Hlavac, VC, Navara, M. (2005). "Sequential Coordinate-Wise Algorithm for the Non-negative Least Squares Problem". Proc. Int'l Conf. Computer Analysis of Images and Patterns. Lecture Notes in Computer Science.
+}
+\seealso{
+\code{\link{nnls}}, \code{\link{project}}, \code{\link{mse}}
+}
+\author{
+Zach DeBruine
 }
