@@ -1,41 +1,51 @@
 #' @title Project a linear factor model
 #'
-#' @description Solves the equation \eqn{A = WH} for \eqn{H}
+#' @description Solves the equation \eqn{A = wh} for \eqn{h}
 #'
 #' @details
-#' For the classical alternating matrix factorization update problem \eqn{A = WH}, the updates 
-#' (or projection) of \eqn{H} is given by the systems of equations: \deqn{W^TWH = WA_j}
-#' \deqn{a = W^TW} \deqn{x = H} \deqn{b = WA_j} for all columns \eqn{j} in \eqn{A}.
+#' For the classical alternating matrix factorization update problem \eqn{A = wh}, the updates 
+#' (or projection) of \eqn{h} is given by the equations: \deqn{w^Twh = wA_j} 
+#' in the form \eqn{ax = b} where \eqn{a = w^Tw} \eqn{x = h} and \eqn{b = wA_j} for all columns \eqn{j} in \eqn{A}.
 #'
-#' Given \eqn{A} and \eqn{w}, \code{RcppML::project} solves for \eqn{H} using the above formulas and 
-#' \code{RcppML::solve}, applying regularizations up-front and parallelizing solutions across columns in 
-#' \eqn{A}.
+#' Given \eqn{A} and \eqn{w}, \code{RcppML::project} solves for \eqn{h} using the above formulas and 
+#' \code{RcppML::nnls}.
+#' 
+#' The corresponding equation for updating \eqn{w} in block-pivoting is: \deqn{hh^Tw^T = hA^T_j}
 #'
-#' The corresponding equation for updating \eqn{W} in block-pivoting is: \deqn{HH^TW^T = HA^T_j}
+#' One may also solve for \eqn{w} by inputting the transpose of \eqn{A} and \eqn{h} in place of \eqn{w}.
 #'
-#' One may also solve for \eqn{W} by inputting the transpose of \eqn{A} and \eqn{H} in place of \eqn{W}.
-#'
-#' @param A square numeric matrix containing the coefficients of the linear system
-#' @param w numeric vector or matrix giving the right-hand side(s) of the linear system
+#' @param A sparse matrix of features x samples, of or coercible to class \code{Matrix::dgCMatrix}
+#' @param w dense matrix of features x factors giving the linear model to be projected
 #' @param nonneg apply non-negativity constraints
-#' @param cd_tol tolerance for convergence of the least squares sequential coordinate descent solver
-#' @param fast_maxit maximum number of iterations of pre-conditioning in NNLS solver prior to coordinate descent, see \code{\link{nnls}}
-#' @param cd_maxit maximum number of iterations of coordinate descent NNLS solver, see \code{\link{nnls}}
-#' @param L1 L1/LASSO regularization to be subtracted from \eqn{b}. Generally this should be scaled to \code{max(b)}
-#' @param precision "float" or "double"
-#' @param threads number of CPU threads to use for parallelization. Default is "0" to let OpenMP decide and use all available threads.
-#' @returns matrix giving \eqn{h}
+#' @param L1 L1/LASSO penalty to be applied to \eqn{h}. Generally should be scaled to \code{max(b)} where \eqn{b = WA_j} for all columns \eqn{j} in \eqn{A}
+#' @param threads number of CPU threads for parallelization, default \code{0} for all available threads.
+#' @param ... expert parameters that shouldn't need to be changed (cd_maxit = 1000, fast_maxit = 10, cd_tol = 1e-8)
+#' @returns matrix \eqn{h}
+#' @author Zach DeBruine
 #' @export
+#' @seealso \code{\link{nnls}}, \code{\link{nmf}}
 #' @md
-#'
-project <- function(A, w, nonneg = TRUE, L1 = 0, fast_maxit = 10, cd_maxit = 100, cd_tol = 1e-8, threads = 0, precision = "double") {
-  if(class(A) != "dgCMatrix") as(A, "dgCMatrix")
+#' @examples
+#' \dontrun{
+#' w <- matrix(runif(1000 * 10), 1000, 10)
+#' h_true <- matrix(runif(10 * 100), 10, 100)
+#' A <- (w %*% h_true) * (rsparsematrix(1000, 100, 0.5) > 0)
+#' h <- project(A, w)
+#' cor(as.vector(h_true), as.vector(h))
+#' }
+project <- function(A, w, nonneg = TRUE, L1 = 0, threads = 0, ...) {
+  
+  fast_maxit <- 10
+  cd_maxit <- 1000
+  cd_tol <- 1e-8
+  params <- list(...)
+  if(!is.null(params$fast_maxit)) fast_maxit <- params$fast_maxit
+  if(!is.null(params$cd_maxit)) fast_maxit <- params$cd_maxit
+  if(!is.null(params$cd_tol)) cd_tol <- params$cd_tol
+  
+  A <- as(A, "dgCMatrix")
   if(nrow(A) == nrow(w)) w <- t(w)
   if(nrow(A) != ncol(w)) stop("dimensions of 'A' and 'w' are incompatible!")
 
-  if (precision == "float") {
-    return(Rcpp_project_float(A, w, nonneg, fast_maxit, cd_maxit, cd_tol, L1, threads))
-  } else {
-    return(Rcpp_project_double(A, w, nonneg, fast_maxit, cd_maxit, cd_tol, L1, threads))
-  }
+  Rcpp_project(A, w, nonneg, fast_maxit, cd_maxit, cd_tol, L1, threads)
 }
