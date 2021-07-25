@@ -24,10 +24,10 @@ scalar, MSE of the factorization
 MSE of factor models \code{w} and \code{h} given sparse matrix \eqn{A}
 }
 \details{
-Calculates the cross-product of \eqn{wh} or \eqn{wdh} (if \eqn{d} is specified), 
-subtracts that from \eqn{A}, squares the result, and calculates the mean of all values. 
+Calculates the cross-product of \eqn{wh} or \eqn{wdh} (if \eqn{d} is specified),
+subtracts that from \eqn{A}, squares the result, and calculates the mean of all values.
 
-Parallelization is used across all available threads as determined by OpenMP. 
+Parallelization is used across all available threads as determined by OpenMP.
 
 Sparse matrix iterators are used in a C++ backend for high performance.
 }
