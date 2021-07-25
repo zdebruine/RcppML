@@ -16,6 +16,7 @@
 #' @param threads number of CPU threads for parallelization, default \code{0} for all available threads.
 #' @return scalar, MSE of the factorization
 #' @export
+#' @md
 #' @author Zach DeBruine
 #' @examples
 #' \dontrun{

@@ -9,8 +9,8 @@
 #' This is a very fast implementation of non-negative least squares that outperforms Lawson-Hanson NNLS in our benchmarks 
 #' for most applications, particularly for systems >25 variables in size.
 #' 
-#' If \code{nonneg = FALSE}, the very fast Eigen Cholesky module is used to quickly solve the system of equations, and is usually
-#' be faster than \code{base::solve}
+#' If \code{nonneg = FALSE}, the Eigen Cholesky module is used to solve the system of equations, and is usually
+#' faster than \code{base::solve}
 #'
 #' NNLS solutions will be found quickly using default parameters. If \code{x} is provided, only sequential coordinate descent
 #'  least squares will be run. If \code{x = NULL}, solutions will be initialized with "FAST" if \code{nonneg = TRUE} or solved
@@ -24,11 +24,11 @@
 #' introduced by Franc et al. (2005), and our implementation is adapted from the NNLM R package by Lin and Boutros (2020). 
 #' There are two ways to initialize the coordinate descent solver:
 #' 1. Specify a value for `x`, either a random or zero-filled vector, or an approximate solution.
-#' 2. Leave \code{x = NULL} and use the built-in initialization method, which we refer to as "forward active set tuning".
+#' 2. Leave \code{x = NULL} and use FAST initialization.
 #' 
 #' @section FAST NNLS:
 #' **Forward active set tuning (FAST)** is an exact or near-exact NNLS approximation initialized by an unconstrained 
-#' least squares solution. Negative values in this unconstrained solution are set to zero (an "active set"), and all 
+#' least squares solution. Negative values in this unconstrained solution are set to zero (the "active set"), and all 
 #' other values are added  to a "feasible set". An unconstrained least squares solution is then solved for the 
 #' "feasible set", any negative values in the resulting solution are set to zero, and the process is repeated until 
 #' the feasible set solution is strictly positive. 
@@ -40,7 +40,7 @@
 #'  but the latter half of that method relies heavily on heuristics to find the true active set, which we avoid by using 
 #'  coordinate descent instead.
 #'
-#' See our BioRXiv manuscript for a more technical introduction to these various methods and benchmarking against Lawson-Hanson NNLS.
+#' See our BioRXiv manuscript for benchmarking against Lawson-Hanson NNLS and for a more technical introduction to these methods.
 #' 
 #' @param a symmetric positive definite matrix giving coefficients of linear system
 #' @param b vector or matrix giving right-hand side(s) of linear system
