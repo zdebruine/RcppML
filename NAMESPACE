@@ -1,4 +1,4 @@
-useDynLib(RcppML, .registration = TRUE)
+useDynLib(RcppML)
 import(Rcpp)
 import(Matrix)
 importFrom(methods, as)
