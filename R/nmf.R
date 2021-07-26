@@ -111,7 +111,7 @@ nmf <- function(A, k, tol = 1e-3, maxit = 100, verbose = TRUE, nonneg = TRUE,
   if (length(L1) == 1) L1 <- rep(L1, 2)
   if (is.null(seed) || is.na(seed) || !is.finite(seed)) seed <- 0
   A <- as(A, "dgCMatrix")
-  
+
   Rcpp_nmf(A, t(A), k, tol, nonneg, L1[1], L1[2], maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, seed, threads)
   
 }

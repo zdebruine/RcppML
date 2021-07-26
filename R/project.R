@@ -51,7 +51,7 @@
 #' 
 #' }
 project <- function(A, w, nonneg = TRUE, L1 = 0, threads = 0, ...) {
-  
+
   fast_maxit <- 10
   cd_maxit <- 1000
   cd_tol <- 1e-8
@@ -61,8 +61,8 @@ project <- function(A, w, nonneg = TRUE, L1 = 0, threads = 0, ...) {
   if(!is.null(params$cd_tol)) cd_tol <- params$cd_tol
   
   A <- as(A, "dgCMatrix")
-  if(nrow(A) == nrow(w)) w <- t(w)
-  if(nrow(A) != ncol(w)) stop("dimensions of 'A' and 'w' are incompatible!")
+  if(A@Dim[1] == nrow(w)) w <- t(w)
+  if(A@Dim[1] != ncol(w)) stop("dimensions of 'A' and 'w' are incompatible!")
 
   Rcpp_project(A, w, nonneg, fast_maxit, cd_maxit, cd_tol, L1, threads)
 }
