@@ -1,16 +1,32 @@
 Package: RcppML
 Type: Package
 Title: Rcpp Machine Learning Library
-Version: 1.0
+Version: 0.1.0
 Date: 2021-06-29
-Author: Zach DeBruine
+Authors@R: person("Zach", "DeBruine", 
+    email = "zacharydebruine@gmail.com", 
+    role = c("aut", "cre"), 
+    comment = c(ORCID = "0000-0003-2234-4827"))
 Maintainer: Zach DeBruine <zacharydebruine@gmail.com>
-Description: High-performance machine learning algorithms implemented in Rcpp and RcppEigen, including non-negative factorization of sparse matrices (NMF), projection of linear factor models, and non-negative least squares (NNLS).
+Description: High-performance machine learning algorithms 
+    implemented in Rcpp and RcppEigen, including non-negative 
+    factorization of sparse matrices (NMF), projection of linear 
+    factor models, and non-negative least squares (NNLS).
 License: GPL (>= 2)
 LazyData: true
-Imports: Rcpp, Matrix, methods
-LinkingTo: Rcpp, RcppEigen
+Imports: 
+    Rcpp, 
+    Matrix, 
+    methods
+LinkingTo: 
+    Rcpp, 
+    RcppEigen
 VignetteBuilder: knitr
 RoxygenNote: 7.1.1
-Suggests: knitr, rmarkdown, testthat (>= 3.0.0)
+Suggests: 
+    knitr, 
+    rmarkdown, 
+    testthat (>= 3.0.0) 
 Config/testthat/edition: 3
+URL: https://github.com/zdebruine/RcppML
+BugReports: https://github.com/zdebruine/RcppML/issues
