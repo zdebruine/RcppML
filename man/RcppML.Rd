@@ -9,6 +9,14 @@
 \description{
 High-performance non-negative matrix factorization and linear model projection for sparse matrices, and fast non-negative least squares implementations
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/zdebruine/RcppML}
+  \item Report bugs at \url{https://github.com/zdebruine/RcppML/issues}
+}
+
+}
 \author{
 Zach DeBruine
 }
