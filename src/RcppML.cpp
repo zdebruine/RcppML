@@ -417,3 +417,4 @@ Eigen::MatrixXd Rcpp_project(
   Rcpp::dgCMatrix A(A_S4);
   return c_project(A, w, nonneg, fast_maxit, cd_maxit, cd_tol, L1, threads);
 }
+
