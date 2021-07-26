@@ -11,14 +11,14 @@ Key functions:
 
 ## Getting Started
 
-See the package vignette in the `/vignettes` directory for a basic introduction to each function listed above.
-
 Install the development version of `RcppML`:
 
 ```{R}
 library(devtools)
 install_github("zdebruine/RcppML")
 ```
+
+See the package vignette for an introduction to each function listed above.
 
 ## Ongoing development
 
