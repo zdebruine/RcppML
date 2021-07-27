@@ -27,7 +27,7 @@
 #'
 #' @section Reproducibility:
 #' The optional \code{seed} parameter may be specified to guarantee absolute reproducibility between restarts. 
-#' The seed is set on the C++ end and will not affect the RNG in the R environment. Note that only random initialization 
+#' The seed is set on the R end. Note that only random initialization 
 #' is supported, as other initializations do not show better performance and can trap the updates into local minima.
 #' 
 #' Because random initializations are used, the resulting model may be slightly different, especially for factors with lower 
@@ -109,9 +109,11 @@ nmf <- function(A, k, tol = 1e-3, maxit = 100, verbose = TRUE, nonneg = TRUE,
   if(!is.null(params$cd_tol)) cd_tol <- params$cd_tol
 
   if (length(L1) == 1) L1 <- rep(L1, 2)
-  if (is.null(seed) || is.na(seed) || !is.finite(seed)) seed <- 0
+  
+  if (!is.null(seed)) set.seed(seed)
+  w <- matrix(runif(A@Dim[1] * k), nrow = k, ncol = A@Dim[1])
   A <- as(A, "dgCMatrix")
 
-  Rcpp_nmf(A, t(A), k, tol, nonneg, L1[1], L1[2], maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, seed, threads)
+  Rcpp_nmf(A, t(A), w, tol, nonneg, L1[1], L1[2], maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
   
 }

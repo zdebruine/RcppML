@@ -5,8 +5,8 @@ Rcpp_mse <- function(A_S4, w, d, h, threads) {
     .Call('_RcppML_Rcpp_mse', PACKAGE = 'RcppML', A_S4, w, d, h, threads)
 }
 
-Rcpp_nmf <- function(A_S4, At_S4, k, tol = 1e-3, nonneg = TRUE, L1_w = 0, L1_h = 0, maxit = 100L, diag = TRUE, fast_maxit = 10L, cd_maxit = 100L, cd_tol = 1e-8, verbose = FALSE, seed = 0L, threads = 0L) {
-    .Call('_RcppML_Rcpp_nmf', PACKAGE = 'RcppML', A_S4, At_S4, k, tol, nonneg, L1_w, L1_h, maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, seed, threads)
+Rcpp_nmf <- function(A_S4, At_S4, w, tol = 1e-3, nonneg = TRUE, L1_w = 0, L1_h = 0, maxit = 100L, diag = TRUE, fast_maxit = 10L, cd_maxit = 100L, cd_tol = 1e-8, verbose = FALSE, threads = 0L) {
+    .Call('_RcppML_Rcpp_nmf', PACKAGE = 'RcppML', A_S4, At_S4, w, tol, nonneg, L1_w, L1_h, maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
 }
 
 Rcpp_nnls <- function(a, b, fast_maxit = 10L, cd_maxit = 100L, cd_tol = 1e-8, nonneg = TRUE) {
