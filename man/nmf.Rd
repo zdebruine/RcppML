@@ -81,7 +81,7 @@ range between 0 and 1, where 1 is extremely or entirely sparse (this may lead to
 \section{Reproducibility}{
 
 The optional \code{seed} parameter may be specified to guarantee absolute reproducibility between restarts.
-The seed is set on the C++ end and will not affect the RNG in the R environment. Note that only random initialization
+The seed is set on the R end. Note that only random initialization
 is supported, as other initializations do not show better performance and can trap the updates into local minima.
 
 Because random initializations are used, the resulting model may be slightly different, especially for factors with lower
