@@ -13,7 +13,6 @@ Description: High-performance machine learning algorithms
     factorization of sparse matrices (NMF), projection of linear 
     factor models, and non-negative least squares (NNLS).
 License: GPL (>= 2)
-LazyData: true
 Imports: 
     Rcpp, 
     Matrix, 
