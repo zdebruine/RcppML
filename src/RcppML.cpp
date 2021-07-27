@@ -298,7 +298,7 @@ double Rcpp_mse(
 Rcpp::List Rcpp_nmf(
   const Rcpp::S4& A_S4,
   const Rcpp::S4& At_S4,
-  unsigned int k,
+  Eigen::MatrixXd w,
   const double tol = 1e-3,
   const bool nonneg = true,
   const double L1_w = 0,
@@ -309,19 +309,12 @@ Rcpp::List Rcpp_nmf(
   const unsigned int cd_maxit = 100,
   const double cd_tol = 1e-8,
   const bool verbose = false,
-  const unsigned int seed = 0,
   const unsigned int threads = 0) {
 
+  unsigned int k = w.rows();
   Rcpp::dgCMatrix A(A_S4), At(At_S4);
-
-  (seed == 0) ? srand((unsigned int)time(0)) : srand(seed);
-
-  Eigen::MatrixXd h(k, A.cols()), w(k, A.rows());
+  Eigen::MatrixXd h(k, A.cols());
   Eigen::VectorXd d(k);
-
-  // randomly initialize w
-  w = w.setRandom();
-  w = w.cwiseAbs();
   d = d.setOnes();
 
   if (verbose) Rprintf("\n%4s | %8s \n---------------\n", "iter", "tol");
