@@ -13,13 +13,13 @@ See the package vignette for a basic introduction to these functions.
 
 ## Getting Started
 
-Install RcppML v.0.1.0 from CRAN:
+Install RcppML v.0.1.0 from [CRAN](https://cran.r-project.org/web/packages/RcppML/index.html) ([manual](https://cran.r-project.org/web/packages/RcppML/RcppML.pdf))
 
 ```{R}
 install.packages("RcppML")
 ```
 
-For the most recent development version, install this repository using `devtools`:
+For the development version, install this repository using `devtools::install_github()`:
 
 ```{R}
 library(devtools)
@@ -37,3 +37,4 @@ Anticipated functionality under active development includes:
 * Specializations for rank-1 and rank-2 factorizations (faster than _irlba_ SVD counterparts)
 * Efficient and robust solutions to large matrix factorizations
 * Divisive clustering using recursive bipartitioning by rank-2 matrix factorizations
+* Fast initializations for NMF from unconstrained solutions
