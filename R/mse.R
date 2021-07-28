@@ -19,11 +19,11 @@
 #' @md
 #' @author Zach DeBruine
 #' @examples
-#' \dontrun{
-#'   A <- Matrix::rsparsematrix(1000, 1000, 0.1)
-#'   model <- nmf(A, k = 10)
-#'   mse(A, model$w, model$d, model$h)
-#' }
+#' library(Matrix)
+#' A <- Matrix::rsparsematrix(1000, 1000, 0.1)
+#' model <- nmf(A, k = 10)
+#' mse(A, model$w, model$d, model$h)
+#'
 mse <- function(A, w, d = NULL, h, threads = 0) {
   if (is.null(d)) d <- rep(1, ncol(w))
   if (ncol(w) != nrow(h)) stop("number of columns in w are not equal to number of rows in h!")

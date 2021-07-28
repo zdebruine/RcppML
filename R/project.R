@@ -32,7 +32,7 @@
 #' @seealso \code{\link{nnls}}, \code{\link{nmf}}
 #' @md
 #' @examples
-#' \dontrun{
+#' library(Matrix)
 #' w <- matrix(runif(1000 * 10), 1000, 10)
 #' h_true <- matrix(runif(10 * 100), 10, 100)
 #' A <- (w %*% h_true) * (rsparsematrix(1000, 100, 0.5) > 0)
@@ -40,16 +40,15 @@
 #' cor(as.vector(h_true), as.vector(h))
 #' 
 #' # alternating projections refine solution (like NMF)
-#' mse_before_alternating_updates <- mse(A, w, h = h)
+#' mse(A, w, h = h) # mse before alternating updates
 #' h <- project(A, w)
 #' w <- project(t(A), t(h))
 #' h <- project(A, w)
 #' w <- project(t(A), t(h))
 #' h <- project(A, w)
-#' w <- project(t(A), t(h))
-#' mse_after_alternating_updates <- mse(A, w, h = h)
-#' 
-#' }
+#' w <- t(project(t(A), t(h)))
+#' mse(A, w, h = h) # mse after alternating updates
+#'
 project <- function(A, w, nonneg = TRUE, L1 = 0, threads = 0, ...) {
 
   fast_maxit <- 10

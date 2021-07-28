@@ -84,7 +84,7 @@
 #' @seealso \code{\link{nnls}}, \code{\link{project}}, \code{\link{mse}}
 #' @md
 #' @examples 
-#' \dontrun{
+#' library(Matrix)
 #' # basic NMF
 #' model <- nmf(rsparsematrix(1000, 100, 0.1), k = 10)
 #' 
@@ -93,7 +93,6 @@
 #' model <- nmf(A, 10, tol = 1e-5, maxit = 1000)
 #' plot(model$w, t(model$h))
 #' # see package vignette for more examples
-#' }
 #'
 nmf <- function(A, k, tol = 1e-3, maxit = 100, verbose = TRUE, nonneg = TRUE, 
                 L1 = c(0, 0), seed = NULL, threads = 0, ...) {
