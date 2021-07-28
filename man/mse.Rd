@@ -32,11 +32,11 @@ Parallelization is used across all available threads as determined by OpenMP.
 Sparse matrix iterators are used in a C++ backend for high performance.
 }
 \examples{
-\dontrun{
-  A <- Matrix::rsparsematrix(1000, 1000, 0.1)
-  model <- nmf(A, k = 10)
-  mse(A, model$w, model$d, model$h)
-}
+library(Matrix)
+A <- Matrix::rsparsematrix(1000, 1000, 0.1)
+model <- nmf(A, k = 10)
+mse(A, model$w, model$d, model$h)
+
 }
 \author{
 Zach DeBruine

@@ -113,7 +113,7 @@ Several parameters hidden in the \code{...} argument may be adjusted (although d
 }
 
 \examples{
-\dontrun{
+library(Matrix)
 # basic NMF
 model <- nmf(rsparsematrix(1000, 100, 0.1), k = 10)
 
@@ -122,7 +122,6 @@ A <- crossprod(rsparsematrix(100, 100, 0.02))
 model <- nmf(A, 10, tol = 1e-5, maxit = 1000)
 plot(model$w, t(model$h))
 # see package vignette for more examples
-}
 
 }
 \references{
