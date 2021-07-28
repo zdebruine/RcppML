@@ -9,23 +9,31 @@ Key functions:
 * `nnls`: High-performance solver for non-negative least squares 
 * `mse`: Mean squared error of a linear factor model for a sparse matrix
 
+See the package vignette for a basic introduction to these functions.
+
 ## Getting Started
 
-Install the development version of `RcppML`:
+Install RcppML v.0.1.0 from CRAN:
+
+```{R}
+install.packages("RcppML")
+```
+
+For the most recent development version, install this repository using `devtools`:
 
 ```{R}
 library(devtools)
 install_github("zdebruine/RcppML")
 ```
 
-See the package vignette for an introduction to each function listed above.
+## Development News
 
-## Ongoing development
+The CRAN version is current with the development version.
 
-RcppML is under non-breaking active development. Functionality in development includes:
+Anticipated functionality under active development includes:
 
-* Specializations for factorization of dense matrices
+* Dense matrix factorization
 * Optimizations for symmetric factorization
 * Specializations for rank-1 and rank-2 factorizations (faster than _irlba_ SVD counterparts)
-* Divisive clustering using recursive bipartitioning by rank-2 matrix factorizations
 * Efficient and robust solutions to large matrix factorizations
+* Divisive clustering using recursive bipartitioning by rank-2 matrix factorizations
