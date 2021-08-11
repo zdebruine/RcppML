@@ -29,11 +29,12 @@ To use the development version of the R package, use `devtools`:
 devtools::install_github('zdebruine/RcppML')
 ```
 
+Updates:
 8-11-2021 The CRAN version is current with the development version.
 
-New functionality is under active development and will be released sometime in late 2021:
-* v0.2.0: Specializations for dense, sparse-symmetric, and dense-symmetric factorization
-* v0.3.0: Specializations for rank-1 and rank-2 factorizations (faster than _irlba_ SVD counterparts)
+Planned releases (late 2021):
+v0.2.0: Specializations for dense, sparse-symmetric, and dense-symmetric factorization
+v0.3.0: Specializations for rank-1 and rank-2 factorizations (faster than _irlba_ SVD counterparts)
 
 Other planned development:
 * Robust solutions to large matrix factorizations
