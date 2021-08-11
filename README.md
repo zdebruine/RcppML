@@ -11,7 +11,7 @@ Key functions:
 * `nnls`: High-performance solver for non-negative least squares
 * `mse`: Mean squared error of a linear factor model for a sparse matrix
 
-See the package vignette for a basic introduction to these functions.
+See the [package vignette](https://cran.r-project.org/web/packages/RcppML/vignettes/RcppML.html) for a basic introduction to these functions.
 
 ## Getting Started
 
