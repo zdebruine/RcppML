@@ -19,7 +19,7 @@ RcppML is a [CRAN package](https://cran.r-project.org/web/packages/RcppML/index.
 install.packages('RcppML')
 ```
 
-See the ([CRAN manual](https://cran.r-project.org/web/packages/RcppML/RcppML.pdf)) for details.
+See the [CRAN manual](https://cran.r-project.org/web/packages/RcppML/RcppML.pdf) for details.
 
 ## Development News
 
