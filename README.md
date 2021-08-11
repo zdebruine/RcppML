@@ -26,11 +26,9 @@ devtools::install_github("zdebruine/RcppML")
 
 The CRAN version is current with the development version.
 
-Anticipated functionality under active development includes:
+Functionality to be released in the near future includes:
 
-* Dense matrix factorization
-* Optimizations for symmetric factorization
+* Specializations for dense and/or symmetric factorization
 * Specializations for rank-1 and rank-2 factorizations (faster than _irlba_ SVD counterparts)
-* Efficient and robust solutions to large matrix factorizations
+* Robust solutions to large matrix factorizations
 * Divisive clustering using recursive bipartitioning by rank-2 matrix factorizations
-* Fast initializations for NMF from unconstrained solutions
