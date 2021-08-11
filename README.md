@@ -11,20 +11,27 @@ The RcppML package offers high-performance non-negative matrix factorization (NM
 
 See the [package vignette](https://cran.r-project.org/web/packages/RcppML/vignettes/RcppML.html) for a basic introduction to these functions.
 
-## Getting Started
+## Installation
 
-Install RcppML v.0.1.0 from [CRAN](https://cran.r-project.org/web/packages/RcppML/index.html) ([manual](https://cran.r-project.org/web/packages/RcppML/RcppML.pdf)) or the development version from GitHub:
+RcppML is a [CRAN package](https://cran.r-project.org/web/packages/RcppML/index.html) so you can use `install.packages`.
 
-```{R}
-install.packages("RcppML")
-devtools::install_github("zdebruine/RcppML")
 ```
+install.packages('RcppML')
+```
+
+See the ([CRAN manual](https://cran.r-project.org/web/packages/RcppML/RcppML.pdf)) for details.
 
 ## Development News
 
-The CRAN version is current with the development version.
+8-11-2021 The CRAN version is current with the development version.
 
-New functionality is under active development and will be released soon:
+To use the development version, use `devtools`:
+
+```
+devtools::install_github('zdebruine/RcppML')
+```
+
+New functionality is under active development and will be released sometime in late 2021:
 * v0.2.0: Specializations for dense, sparse-symmetric, and dense-symmetric factorization
 * v0.3.0: Specializations for rank-1 and rank-2 factorizations (faster than _irlba_ SVD counterparts)
 
