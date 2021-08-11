@@ -29,7 +29,6 @@ To use the development version of the R package, use `devtools`:
 devtools::install_github('zdebruine/RcppML')
 ```
 
-Updates:
 8-11-2021 The CRAN version is current with the development version.
 
 Planned releases (late 2021):
