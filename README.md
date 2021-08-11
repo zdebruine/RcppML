@@ -19,7 +19,7 @@ Install RcppML v.0.1.0 from [CRAN](https://cran.r-project.org/web/packages/RcppM
 install.packages("RcppML")
 ```
 
-<img src = "https://cranlogs.r-pkg.org/badges/grand-total/mltools" />
+[![](https://cranlogs.r-pkg.org/badges/RcppML)](https://cran.r-project.org/package=RcppML)
 
 For the development version, install this repository using `devtools::install_github()`:
 
