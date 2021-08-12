@@ -14,13 +14,15 @@
 #'
 #' Thus, one may also solve for \eqn{w} by inputting the transpose of \eqn{A} and \eqn{h} in place of \eqn{w}.
 #'
+#' There are specialized solvers for sparse and dense input matrices.
+#'
 #' @section Advanced parameters:
 #' Several parameters hidden in the \code{...} argument may be adjusted (although defaults should entirely satisfy) in addition to those documented explicitly:
 #' * \code{cd_maxit}, default 1000. Maximum number of coordinate descent iterations for solution refinement after initialization with solution from previous iteration. Only used as stopping criterion if \code{cd_tol} is not satisfied previously. See \code{\link{nnls}}.
 #' * \code{fast_maxit}, default 10. Maximum number of FAST iterations for finding an approximate solution to initialize coordinate descent. See \code{\link{nnls}}.
 #' * \code{cd_tol}, default 1e-8. Stopping criterion for coordinate descent iterations given by the maximum relative change in any coefficient between consecutive solutions. See \code{\link{nnls}}.
 #'
-#' @param A sparse matrix of features x samples, of or coercible to class \code{Matrix::dgCMatrix}
+#' @param A matrix of features x samples, may be dense or sparse (a class of the "Matrix" package coercible to \code{Matrix::dgCMatrix})
 #' @param w dense matrix of features x factors giving the linear model to be projected
 #' @param nonneg apply non-negativity constraints
 #' @param L1 L1/LASSO penalty to be applied to \eqn{h}. Generally should be scaled to \code{max(b)} where \eqn{b = WA_j} for all columns \eqn{j} in \eqn{A}
@@ -58,10 +60,19 @@ project <- function(A, w, nonneg = TRUE, L1 = 0, threads = 0, ...) {
   if(!is.null(params$fast_maxit)) fast_maxit <- params$fast_maxit
   if(!is.null(params$cd_maxit)) fast_maxit <- params$cd_maxit
   if(!is.null(params$cd_tol)) cd_tol <- params$cd_tol
-  
-  A <- as(A, "dgCMatrix")
-  if(A@Dim[1] == nrow(w)) w <- t(w)
-  if(A@Dim[1] != ncol(w)) stop("dimensions of 'A' and 'w' are incompatible!")
+  w <- as.matrix(w)
 
-  Rcpp_project(A, w, nonneg, fast_maxit, cd_maxit, cd_tol, L1, threads)
+  if(is(A, "sparseMatrix")) {
+    # input matrix "A" is sparse
+    A <- as(A, "dgCMatrix")
+    if(A@Dim[1] == nrow(w)) w <- t(w)
+    if(A@Dim[1] != ncol(w)) stop("dimensions of 'A' and 'w' are incompatible!")
+    Rcpp_project_sparse(A, w, nonneg, fast_maxit, cd_maxit, cd_tol, L1, threads)
+  } else {
+    # input matrix "A" is dense
+    A <- as.matrix(A)
+    if(nrow(A) == nrow(w)) w <- t(w)
+    if(nrow(A) != ncol(w)) stop("dimensions of 'A' and 'w' are incompatible!")
+    Rcpp_project_dense(A, w, nonneg, fast_maxit, cd_maxit, cd_tol, L1, threads)
+  }
 }
