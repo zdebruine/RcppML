@@ -7,7 +7,7 @@
 #' 
 #' Parallelization is used across all available threads as determined by OpenMP. 
 #' 
-#' Sparse matrix iterators are used in a C++ backend for high performance.
+#' If "A" is a sparse matrix, column-major iterators are used in a C++ backend for high performance. Dense "A" is also supported.
 #' 
 #' @param A sparse matrix (of or coercible to \code{dgCMatrix}) of samples (columns) by features (rows)
 #' @param w dense matrix of class \code{matrix} with factors (columns) by features (rows)
@@ -27,9 +27,19 @@
 mse <- function(A, w, d = NULL, h, threads = 0) {
   if (is.null(d)) d <- rep(1, ncol(w))
   if (ncol(w) != nrow(h)) stop("number of columns in w are not equal to number of rows in h!")
-  if (nrow(w) != A@Dim[1]) stop("number of rows in w are not equal to the number of rows in A")
-  if (ncol(h) != A@Dim[2]) stop("number of columns in h is not equal to the number of columns in A")
+  if (nrow(w) != nrow(A)) stop("number of rows in w are not equal to the number of rows in A")
+  if (ncol(h) != ncol(A)) stop("number of columns in h is not equal to the number of columns in A")
   if (length(d) != ncol(w)) stop("length of 'd' is not equal to the rank of 'w' and 'h'")
-  A <- as(A, "dgCMatrix")
-  return(Rcpp_mse(A, w, d, h, threads))
+  w <- as.matrix(w)
+  h <- as.matrix(h)
+
+  if(is(A, "sparseMatrix")) {
+    # input matrix "A" is sparse
+    A <- as(A, "dgCMatrix")
+    return(Rcpp_mse_sparse(A, w, d, h, threads))
+  } else{
+    # input matrix "A" is dense
+    A <- as.matrix(A)
+    return(Rcpp_mse_dense(A, w, d, h, threads))
+  }
 }
