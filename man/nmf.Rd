@@ -18,7 +18,7 @@ nmf(
 )
 }
 \arguments{
-\item{A}{sparse matrix of features x samples, of or coercible to class \code{Matrix::dgCMatrix}}
+\item{A}{matrix of features x samples, may be dense or sparse (a class of the "Matrix" package coercible to \code{Matrix::dgCMatrix})}
 
 \item{k}{rank}
 
@@ -41,21 +41,25 @@ nmf(
 \value{
 A list giving the factorization model:
 \itemize{
-\item w   : feature factor matrix
-\item d   : scaling diagonal vector
-\item h   : sample factor matrix
+\item w    : feature factor matrix
+\item d    : scaling diagonal vector
+\item h    : sample factor matrix
+\item tol  : tolerance between models after final update
+\item iter : number of alternating iterations completed
 }
 }
 \description{
 High-performance matrix factorization with optional non-negativity constraints and L1 regularization.
 }
 \details{
-This fast non-negative matrix factorization (NMF) implementation decomposes a sparse matrix \eqn{A} into orthogonal lower-rank
+This fast non-negative matrix factorization (NMF) implementation decomposes a matrix \eqn{A} into orthogonal lower-rank
 non-negative matrices \eqn{w} and \eqn{h}, with factors scaled to sum to 1 by a diagonal, \eqn{d}:
 \deqn{A = wdh}
 
 For theoretical details, please see our manuscript: "DeBruine ZJ, Melcher K, Triche TJ (2021)
 High-performance non-negative matrix factorization for large single cell data." on BioRXiv.
+
+There are specialized implementations for sparse and dense input matrices, and symmetric factorization.
 }
 \section{Stopping criteria}{
 

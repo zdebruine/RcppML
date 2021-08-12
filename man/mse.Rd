@@ -29,7 +29,7 @@ subtracts that from \eqn{A}, squares the result, and calculates the mean of all 
 
 Parallelization is used across all available threads as determined by OpenMP.
 
-Sparse matrix iterators are used in a C++ backend for high performance.
+If "A" is a sparse matrix, column-major iterators are used in a C++ backend for high performance. Dense "A" is also supported.
 }
 \examples{
 library(Matrix)

@@ -7,7 +7,7 @@
 project(A, w, nonneg = TRUE, L1 = 0, threads = 0, ...)
 }
 \arguments{
-\item{A}{sparse matrix of features x samples, of or coercible to class \code{Matrix::dgCMatrix}}
+\item{A}{matrix of features x samples, may be dense or sparse (a class of the "Matrix" package coercible to \code{Matrix::dgCMatrix})}
 
 \item{w}{dense matrix of features x factors giving the linear model to be projected}
 
@@ -36,6 +36,8 @@ Given \eqn{A} and \eqn{w}, \code{RcppML::project} solves for \eqn{h} using the a
 The corresponding equation for updating \eqn{w} in block-pivoting is: \deqn{hh^Tw^T = hA^T_j}
 
 Thus, one may also solve for \eqn{w} by inputting the transpose of \eqn{A} and \eqn{h} in place of \eqn{w}.
+
+There are specialized solvers for sparse and dense input matrices.
 }
 \section{Advanced parameters}{
 
