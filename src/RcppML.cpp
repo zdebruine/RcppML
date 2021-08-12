@@ -220,7 +220,7 @@ namespace Rcpp {
 
 // solve the least squares equation A = wh for h given A and w
 
-Eigen::MatrixXd c_project(
+Eigen::MatrixXd c_project_sparse(
   Rcpp::dgCMatrix& A,
   Eigen::MatrixXd& w,
   const bool nonneg,
@@ -253,12 +253,40 @@ Eigen::MatrixXd c_project(
   return h;
 }
 
+//[[Rcpp::export]]
+Eigen::MatrixXd Rcpp_project_dense(
+    const Rcpp::NumericMatrix& A,
+    Eigen::MatrixXd& w,
+    const bool nonneg,
+    const unsigned int fast_maxit,
+    const unsigned int cd_maxit,
+    const double cd_tol,
+    const double L1,
+    const unsigned int threads) {
+  
+  Eigen::MatrixXd a = w * w.transpose();
+  Eigen::LLT<Eigen::MatrixXd, 1> a_llt = a.llt();
+  unsigned int k = a.rows();
+  Eigen::MatrixXd h(k, A.cols());
+  
+  #pragma omp parallel for num_threads(threads) schedule(dynamic)
+  for (unsigned int i = 0; i < A.cols(); ++i) {
+    // compute right-hand side of linear system, "b", in-place in h
+    Eigen::VectorXd b = Eigen::VectorXd::Zero(k);
+    for (unsigned int it = 0; it < A.rows(); ++it)
+      b += A(it, i) * w.col(it);
+    if (L1 != 0) for (unsigned int j = 0; j < k; ++j) b(j) -= L1;
+    h.col(i) = c_nnls(a, b, a_llt, fast_maxit, cd_maxit, cd_tol, nonneg);
+  }
+  return h;
+}
+
 // ********************************************************************************
 // SECTION 5: Mean squared error loss of a matrix factorization model
 // ********************************************************************************
 
 //[[Rcpp::export]]
-double Rcpp_mse(
+double Rcpp_mse_sparse(
   const Rcpp::S4& A_S4,
   Eigen::MatrixXd w,
   const Eigen::VectorXd& d,
@@ -288,16 +316,45 @@ double Rcpp_mse(
   return losses.sum() / (A.cols() * A.rows());
 }
 
+//[[Rcpp::export]]
+double Rcpp_mse_dense(
+  const Rcpp::NumericMatrix& A,
+  Eigen::MatrixXd w,
+  const Eigen::VectorXd& d,
+  const Eigen::MatrixXd& h,
+  const unsigned int threads) {
+
+  if (w.rows() == h.rows()) w.transposeInPlace();
+
+  // multiply w by diagonal
+  #pragma omp parallel for num_threads(threads) schedule(dynamic)
+  for (unsigned int i = 0; i < w.cols(); ++i)
+    for (unsigned int j = 0; j < w.rows(); ++j)
+      w(j, i) *= d(i);
+
+  // calculate total loss with parallelization across samples
+  Eigen::VectorXd losses(A.cols());
+  losses.setZero();
+  #pragma omp parallel for num_threads(threads) schedule(dynamic)
+  for (unsigned int i = 0; i < A.cols(); ++i) {
+    Eigen::VectorXd wh_i = w * h.col(i);
+    for(unsigned int iter = 0; iter < A.rows(); ++iter)
+      wh_i(iter) -= A(iter, i);      
+    for (unsigned int j = 0; j < wh_i.size(); ++j)
+      losses(i) += std::pow(wh_i(j), 2);
+  }
+  return losses.sum() / (A.cols() * A.rows());
+}
+
 // ********************************************************************************
 // SECTION 6: Matrix Factorization by Alternating Least Squares
 // ********************************************************************************
 
-// structure returned in all ALSMF functions
-
 //[[Rcpp::export]]
-Rcpp::List Rcpp_nmf(
+Rcpp::List Rcpp_nmf_sparse(
   const Rcpp::S4& A_S4,
   const Rcpp::S4& At_S4,
+  const bool symmetric,
   Eigen::MatrixXd w,
   const double tol = 1e-3,
   const bool nonneg = true,
@@ -311,17 +368,21 @@ Rcpp::List Rcpp_nmf(
   const bool verbose = false,
   const unsigned int threads = 0) {
 
+  Rcpp::checkUserInterrupt();
   unsigned int k = w.rows();
   Rcpp::dgCMatrix A(A_S4), At(At_S4);
   Eigen::MatrixXd h(k, A.cols());
   Eigen::VectorXd d(k);
   d = d.setOnes();
+  double tol_ = 1;
+  unsigned int it;
 
   if (verbose) Rprintf("\n%4s | %8s \n---------------\n", "iter", "tol");
 
-  for (unsigned int it = 0; it < maxit; ++it) {
+  for (it = 0; it < maxit; ++it) {
     // update h
-    h = c_project(A, w, nonneg, fast_maxit, cd_maxit, cd_tol, L1_h, threads);
+    h = c_project_sparse(A, w, nonneg, fast_maxit, cd_maxit, cd_tol, L1_h, threads);
+    Rcpp::checkUserInterrupt();
 
     // reset diagonal and scale "h"
     for (unsigned int i = 0; diag && i < k; ++i) {
@@ -331,7 +392,9 @@ Rcpp::List Rcpp_nmf(
 
     // update w
     Eigen::MatrixXd w_it = w;
-    w = c_project(At, h, nonneg, fast_maxit, cd_maxit, cd_tol, L1_w, threads);
+    if (symmetric) w = c_project_sparse(A, h, nonneg, fast_maxit, cd_maxit, cd_tol, L1_w, threads);
+    else w = c_project_sparse(At, h, nonneg, fast_maxit, cd_maxit, cd_tol, L1_w, threads);
+    Rcpp::checkUserInterrupt();
 
     // reset diagonal and scale "w"
     for (unsigned int i = 0; diag && i < k; ++i) {
@@ -340,8 +403,7 @@ Rcpp::List Rcpp_nmf(
     }
 
     // calculate tolerance
-    double tol_ = cor(w, w_it);
-    Rcpp::checkUserInterrupt();
+    tol_ = cor(w, w_it);
     if (verbose) Rprintf("%4d | %8.2e\n", it + 1, tol_);
 
     // check for convergence
@@ -356,7 +418,78 @@ Rcpp::List Rcpp_nmf(
     h = reorder_rows(h, indx);
   }
 
-  return Rcpp::List::create(Rcpp::Named("w") = w.transpose(), Rcpp::Named("d") = d, Rcpp::Named("h") = h);
+  return Rcpp::List::create(Rcpp::Named("w") = w.transpose(), Rcpp::Named("d") = d, Rcpp::Named("h") = h, Rcpp::Named("tol") = tol_, Rcpp::Named("iter") = it);
+}
+
+//[[Rcpp::export]]
+Rcpp::List Rcpp_nmf_dense(
+  const Rcpp::NumericMatrix& A,
+  const bool symmetric,
+  Eigen::MatrixXd w,
+  const double tol = 1e-3,
+  const bool nonneg = true,
+  const double L1_w = 0,
+  const double L1_h = 0,
+  const unsigned int maxit = 100,
+  const bool diag = true,
+  const unsigned int fast_maxit = 10,
+  const unsigned int cd_maxit = 100,
+  const double cd_tol = 1e-8,
+  const bool verbose = false,
+  const unsigned int threads = 0) {
+
+  Rcpp::checkUserInterrupt();
+  unsigned int k = w.rows();
+  Rcpp::NumericMatrix At;
+  if(!symmetric) At = Rcpp::transpose(A);
+  Eigen::MatrixXd h(k, A.cols());
+  Eigen::VectorXd d(k);
+  d = d.setOnes();
+  double tol_ = 1;
+  unsigned int it;
+
+  if (verbose) Rprintf("\n%4s | %8s \n---------------\n", "iter", "tol");
+
+  for (it = 0; it < maxit; ++it) {
+    // update h
+    h = Rcpp_project_dense(A, w, nonneg, fast_maxit, cd_maxit, cd_tol, L1_h, threads);
+    Rcpp::checkUserInterrupt();
+
+    // reset diagonal and scale "h"
+    for (unsigned int i = 0; diag && i < k; ++i) {
+      d[i] = h.row(i).sum();
+      for (unsigned int j = 0; j < A.cols(); ++j) h(i, j) /= d(i);
+    }
+
+    // update w
+    Eigen::MatrixXd w_it = w;
+    if (symmetric) w = Rcpp_project_dense(A, h, nonneg, fast_maxit, cd_maxit, cd_tol, L1_w, threads);
+    else w = Rcpp_project_dense(At, h, nonneg, fast_maxit, cd_maxit, cd_tol, L1_w, threads);
+    Rcpp::checkUserInterrupt();
+
+    // reset diagonal and scale "w"
+    for (unsigned int i = 0; diag && i < k; ++i) {
+      d[i] = w.row(i).sum();
+      for (unsigned int j = 0; j < A.rows(); ++j) w(i, j) /= d(i);
+    }
+
+    // calculate tolerance
+    tol_ = cor(w, w_it);
+    if (verbose) Rprintf("%4d | %8.2e\n", it + 1, tol_);
+
+    // check for convergence
+    if (tol_ < tol) break;
+  }
+
+  // reorder factors by diagonal
+  if (diag) {
+    std::vector<int> indx = sort_index(d);
+    w = reorder_rows(w, indx);
+    d = reorder(d, indx);
+    h = reorder_rows(h, indx);
+  }
+
+  return Rcpp::List::create(Rcpp::Named("w") = w.transpose(), Rcpp::Named("d") = d, Rcpp::Named("h") = h, Rcpp::Named("tol") = tol_, Rcpp::Named("iter") = it);
 }
 
 // ********************************************************************************
@@ -397,7 +530,7 @@ Eigen::MatrixXd Rcpp_cdnnls(
 }
 
 //[[Rcpp::export]]
-Eigen::MatrixXd Rcpp_project(
+Eigen::MatrixXd Rcpp_project_sparse(
   const Rcpp::S4& A_S4,
   Eigen::MatrixXd& w,
   const bool nonneg,
@@ -406,8 +539,7 @@ Eigen::MatrixXd Rcpp_project(
   const double cd_tol,
   const double L1,
   const unsigned int threads) {
-    
-  Rcpp::dgCMatrix A(A_S4);
-  return c_project(A, w, nonneg, fast_maxit, cd_maxit, cd_tol, L1, threads);
-}
 
+  Rcpp::dgCMatrix A(A_S4);
+  return c_project_sparse(A, w, nonneg, fast_maxit, cd_maxit, cd_tol, L1, threads);
+}
