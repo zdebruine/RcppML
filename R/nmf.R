@@ -3,12 +3,14 @@
 #' @description High-performance matrix factorization with optional non-negativity constraints and L1 regularization.
 #'
 #' @details
-#' This fast non-negative matrix factorization (NMF) implementation decomposes a sparse matrix \eqn{A} into orthogonal lower-rank
+#' This fast non-negative matrix factorization (NMF) implementation decomposes a matrix \eqn{A} into orthogonal lower-rank
 #'  non-negative matrices \eqn{w} and \eqn{h}, with factors scaled to sum to 1 by a diagonal, \eqn{d}:
 #' \deqn{A = wdh}
 #' 
 #' For theoretical details, please see our manuscript: "DeBruine ZJ, Melcher K, Triche TJ (2021) 
 #' High-performance non-negative matrix factorization for large single cell data." on BioRXiv.
+#' 
+#' There are specialized implementations for sparse and dense input matrices, and symmetric factorization.
 #' 
 #' @section Stopping criteria:
 #' Use the \code{tol} parameter to control the stopping criteria for alternating updates
@@ -51,7 +53,7 @@
 #' * \code{cd_tol}, default 1e-8. Stopping criterion for coordinate descent iterations given by the maximum relative change in any coefficient between consecutive solutions. See \code{\link{nnls}}.
 #' * \code{diag}, default TRUE. Enable model diagonalization to normalize factors to sum to 1, guarantee symmetry for symmetric factorizations, and distribute L1 penalties consistently and equally across all factors. 
 #'
-#' @param A sparse matrix of features x samples, of or coercible to class \code{Matrix::dgCMatrix}
+#' @param A matrix of features x samples, may be dense or sparse (a class of the "Matrix" package coercible to \code{Matrix::dgCMatrix})
 #' @param k rank
 #' @param nonneg apply non-negativity constraints
 #' @param tol correlation distance between \eqn{w} across consecutive iterations at which to stop factorization
@@ -64,9 +66,11 @@
 #' @return
 #' A list giving the factorization model:
 #' 	\itemize{
-#'    \item w   : feature factor matrix
-#'    \item d   : scaling diagonal vector
-#'    \item h   : sample factor matrix
+#'    \item w    : feature factor matrix
+#'    \item d    : scaling diagonal vector
+#'    \item h    : sample factor matrix
+#'    \item tol  : tolerance between models after final update
+#'    \item iter : number of alternating iterations completed
 #'  }
 #' @references
 #' 
@@ -110,9 +114,25 @@ nmf <- function(A, k, tol = 1e-3, maxit = 100, verbose = TRUE, nonneg = TRUE,
   if (length(L1) == 1) L1 <- rep(L1, 2)
   
   if (!is.null(seed)) set.seed(seed)
-  w <- matrix(runif(A@Dim[1] * k), nrow = k, ncol = A@Dim[1])
-  A <- as(A, "dgCMatrix")
+  w <- matrix(runif(nrow(A) * k), nrow = k, ncol = nrow(A))
 
-  Rcpp_nmf(A, t(A), w, tol, nonneg, L1[1], L1[2], maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
-  
+  # check for symmetry (approximately)
+  is_symmetric <- dim(A)[1] == dim(A)[2]
+  if(is_symmetric) is_symmetric <- (all(A[1, ] == A[ ,1])) && all((A[nrow(A), ] == A[, ncol(A)]))
+
+  if(is(A, "sparseMatrix")) {
+    # input matrix "A" is sparse
+    A <- as(A, "dgCMatrix")
+    if(is_symmetric){
+      # just throw in a small random sparse matrix as a place-holder in the second argument, since Rcpp functions don't like NULL arguments
+      Rcpp_nmf_sparse(A, Matrix::rsparsematrix(10, 10, 0.1), is_symmetric, w, tol, nonneg, L1[1], L1[2], maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
+    } else {
+      # we want to use Matrix::t() because it's extremely optimized, rather than transposing on the C++ side of things with Rcpp::dgCMatrix
+      Rcpp_nmf_sparse(A, t(A), is_symmetric, w, tol, nonneg, L1[1], L1[2], maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
+    }
+  } else {
+    # input matrix "A" is dense
+    A <- as.matrix(A)
+    Rcpp_nmf_dense(A, is_symmetric, w, tol, nonneg, L1[1], L1[2], maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
+  }
 }
