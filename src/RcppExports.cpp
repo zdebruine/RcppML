@@ -6,9 +6,32 @@
 
 using namespace Rcpp;
 
-// Rcpp_mse
-double Rcpp_mse(const Rcpp::S4& A_S4, Eigen::MatrixXd w, const Eigen::VectorXd& d, const Eigen::MatrixXd& h, const unsigned int threads);
-RcppExport SEXP _RcppML_Rcpp_mse(SEXP A_S4SEXP, SEXP wSEXP, SEXP dSEXP, SEXP hSEXP, SEXP threadsSEXP) {
+#ifdef RCPP_USE_GLOBAL_ROSTREAM
+Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
+Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
+#endif
+
+// Rcpp_project_dense
+Eigen::MatrixXd Rcpp_project_dense(const Rcpp::NumericMatrix& A, Eigen::MatrixXd& w, const bool nonneg, const unsigned int fast_maxit, const unsigned int cd_maxit, const double cd_tol, const double L1, const unsigned int threads);
+RcppExport SEXP _RcppML_Rcpp_project_dense(SEXP ASEXP, SEXP wSEXP, SEXP nonnegSEXP, SEXP fast_maxitSEXP, SEXP cd_maxitSEXP, SEXP cd_tolSEXP, SEXP L1SEXP, SEXP threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Rcpp::NumericMatrix& >::type A(ASEXP);
+    Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type w(wSEXP);
+    Rcpp::traits::input_parameter< const bool >::type nonneg(nonnegSEXP);
+    Rcpp::traits::input_parameter< const unsigned int >::type fast_maxit(fast_maxitSEXP);
+    Rcpp::traits::input_parameter< const unsigned int >::type cd_maxit(cd_maxitSEXP);
+    Rcpp::traits::input_parameter< const double >::type cd_tol(cd_tolSEXP);
+    Rcpp::traits::input_parameter< const double >::type L1(L1SEXP);
+    Rcpp::traits::input_parameter< const unsigned int >::type threads(threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_project_dense(A, w, nonneg, fast_maxit, cd_maxit, cd_tol, L1, threads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// Rcpp_mse_sparse
+double Rcpp_mse_sparse(const Rcpp::S4& A_S4, Eigen::MatrixXd w, const Eigen::VectorXd& d, const Eigen::MatrixXd& h, const unsigned int threads);
+RcppExport SEXP _RcppML_Rcpp_mse_sparse(SEXP A_S4SEXP, SEXP wSEXP, SEXP dSEXP, SEXP hSEXP, SEXP threadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -17,18 +40,34 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type d(dSEXP);
     Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type h(hSEXP);
     Rcpp::traits::input_parameter< const unsigned int >::type threads(threadsSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_mse(A_S4, w, d, h, threads));
+    rcpp_result_gen = Rcpp::wrap(Rcpp_mse_sparse(A_S4, w, d, h, threads));
     return rcpp_result_gen;
 END_RCPP
 }
-// Rcpp_nmf
-Rcpp::List Rcpp_nmf(const Rcpp::S4& A_S4, const Rcpp::S4& At_S4, Eigen::MatrixXd w, const double tol, const bool nonneg, const double L1_w, const double L1_h, const unsigned int maxit, const bool diag, const unsigned int fast_maxit, const unsigned int cd_maxit, const double cd_tol, const bool verbose, const unsigned int threads);
-RcppExport SEXP _RcppML_Rcpp_nmf(SEXP A_S4SEXP, SEXP At_S4SEXP, SEXP wSEXP, SEXP tolSEXP, SEXP nonnegSEXP, SEXP L1_wSEXP, SEXP L1_hSEXP, SEXP maxitSEXP, SEXP diagSEXP, SEXP fast_maxitSEXP, SEXP cd_maxitSEXP, SEXP cd_tolSEXP, SEXP verboseSEXP, SEXP threadsSEXP) {
+// Rcpp_mse_dense
+double Rcpp_mse_dense(const Rcpp::NumericMatrix& A, Eigen::MatrixXd w, const Eigen::VectorXd& d, const Eigen::MatrixXd& h, const unsigned int threads);
+RcppExport SEXP _RcppML_Rcpp_mse_dense(SEXP ASEXP, SEXP wSEXP, SEXP dSEXP, SEXP hSEXP, SEXP threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Rcpp::NumericMatrix& >::type A(ASEXP);
+    Rcpp::traits::input_parameter< Eigen::MatrixXd >::type w(wSEXP);
+    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type d(dSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type h(hSEXP);
+    Rcpp::traits::input_parameter< const unsigned int >::type threads(threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_mse_dense(A, w, d, h, threads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// Rcpp_nmf_sparse
+Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A_S4, const Rcpp::S4& At_S4, const bool symmetric, Eigen::MatrixXd w, const double tol, const bool nonneg, const double L1_w, const double L1_h, const unsigned int maxit, const bool diag, const unsigned int fast_maxit, const unsigned int cd_maxit, const double cd_tol, const bool verbose, const unsigned int threads);
+RcppExport SEXP _RcppML_Rcpp_nmf_sparse(SEXP A_S4SEXP, SEXP At_S4SEXP, SEXP symmetricSEXP, SEXP wSEXP, SEXP tolSEXP, SEXP nonnegSEXP, SEXP L1_wSEXP, SEXP L1_hSEXP, SEXP maxitSEXP, SEXP diagSEXP, SEXP fast_maxitSEXP, SEXP cd_maxitSEXP, SEXP cd_tolSEXP, SEXP verboseSEXP, SEXP threadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< const Rcpp::S4& >::type A_S4(A_S4SEXP);
     Rcpp::traits::input_parameter< const Rcpp::S4& >::type At_S4(At_S4SEXP);
+    Rcpp::traits::input_parameter< const bool >::type symmetric(symmetricSEXP);
     Rcpp::traits::input_parameter< Eigen::MatrixXd >::type w(wSEXP);
     Rcpp::traits::input_parameter< const double >::type tol(tolSEXP);
     Rcpp::traits::input_parameter< const bool >::type nonneg(nonnegSEXP);
@@ -41,7 +80,31 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const double >::type cd_tol(cd_tolSEXP);
     Rcpp::traits::input_parameter< const bool >::type verbose(verboseSEXP);
     Rcpp::traits::input_parameter< const unsigned int >::type threads(threadsSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_nmf(A_S4, At_S4, w, tol, nonneg, L1_w, L1_h, maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads));
+    rcpp_result_gen = Rcpp::wrap(Rcpp_nmf_sparse(A_S4, At_S4, symmetric, w, tol, nonneg, L1_w, L1_h, maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// Rcpp_nmf_dense
+Rcpp::List Rcpp_nmf_dense(const Rcpp::NumericMatrix& A, const bool symmetric, Eigen::MatrixXd w, const double tol, const bool nonneg, const double L1_w, const double L1_h, const unsigned int maxit, const bool diag, const unsigned int fast_maxit, const unsigned int cd_maxit, const double cd_tol, const bool verbose, const unsigned int threads);
+RcppExport SEXP _RcppML_Rcpp_nmf_dense(SEXP ASEXP, SEXP symmetricSEXP, SEXP wSEXP, SEXP tolSEXP, SEXP nonnegSEXP, SEXP L1_wSEXP, SEXP L1_hSEXP, SEXP maxitSEXP, SEXP diagSEXP, SEXP fast_maxitSEXP, SEXP cd_maxitSEXP, SEXP cd_tolSEXP, SEXP verboseSEXP, SEXP threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Rcpp::NumericMatrix& >::type A(ASEXP);
+    Rcpp::traits::input_parameter< const bool >::type symmetric(symmetricSEXP);
+    Rcpp::traits::input_parameter< Eigen::MatrixXd >::type w(wSEXP);
+    Rcpp::traits::input_parameter< const double >::type tol(tolSEXP);
+    Rcpp::traits::input_parameter< const bool >::type nonneg(nonnegSEXP);
+    Rcpp::traits::input_parameter< const double >::type L1_w(L1_wSEXP);
+    Rcpp::traits::input_parameter< const double >::type L1_h(L1_hSEXP);
+    Rcpp::traits::input_parameter< const unsigned int >::type maxit(maxitSEXP);
+    Rcpp::traits::input_parameter< const bool >::type diag(diagSEXP);
+    Rcpp::traits::input_parameter< const unsigned int >::type fast_maxit(fast_maxitSEXP);
+    Rcpp::traits::input_parameter< const unsigned int >::type cd_maxit(cd_maxitSEXP);
+    Rcpp::traits::input_parameter< const double >::type cd_tol(cd_tolSEXP);
+    Rcpp::traits::input_parameter< const bool >::type verbose(verboseSEXP);
+    Rcpp::traits::input_parameter< const unsigned int >::type threads(threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_nmf_dense(A, symmetric, w, tol, nonneg, L1_w, L1_h, maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -77,9 +140,9 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// Rcpp_project
-Eigen::MatrixXd Rcpp_project(const Rcpp::S4& A_S4, Eigen::MatrixXd& w, const bool nonneg, const unsigned int fast_maxit, const unsigned int cd_maxit, const double cd_tol, const double L1, const unsigned int threads);
-RcppExport SEXP _RcppML_Rcpp_project(SEXP A_S4SEXP, SEXP wSEXP, SEXP nonnegSEXP, SEXP fast_maxitSEXP, SEXP cd_maxitSEXP, SEXP cd_tolSEXP, SEXP L1SEXP, SEXP threadsSEXP) {
+// Rcpp_project_sparse
+Eigen::MatrixXd Rcpp_project_sparse(const Rcpp::S4& A_S4, Eigen::MatrixXd& w, const bool nonneg, const unsigned int fast_maxit, const unsigned int cd_maxit, const double cd_tol, const double L1, const unsigned int threads);
+RcppExport SEXP _RcppML_Rcpp_project_sparse(SEXP A_S4SEXP, SEXP wSEXP, SEXP nonnegSEXP, SEXP fast_maxitSEXP, SEXP cd_maxitSEXP, SEXP cd_tolSEXP, SEXP L1SEXP, SEXP threadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -91,17 +154,20 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const double >::type cd_tol(cd_tolSEXP);
     Rcpp::traits::input_parameter< const double >::type L1(L1SEXP);
     Rcpp::traits::input_parameter< const unsigned int >::type threads(threadsSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_project(A_S4, w, nonneg, fast_maxit, cd_maxit, cd_tol, L1, threads));
+    rcpp_result_gen = Rcpp::wrap(Rcpp_project_sparse(A_S4, w, nonneg, fast_maxit, cd_maxit, cd_tol, L1, threads));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_RcppML_Rcpp_mse", (DL_FUNC) &_RcppML_Rcpp_mse, 5},
-    {"_RcppML_Rcpp_nmf", (DL_FUNC) &_RcppML_Rcpp_nmf, 14},
+    {"_RcppML_Rcpp_project_dense", (DL_FUNC) &_RcppML_Rcpp_project_dense, 8},
+    {"_RcppML_Rcpp_mse_sparse", (DL_FUNC) &_RcppML_Rcpp_mse_sparse, 5},
+    {"_RcppML_Rcpp_mse_dense", (DL_FUNC) &_RcppML_Rcpp_mse_dense, 5},
+    {"_RcppML_Rcpp_nmf_sparse", (DL_FUNC) &_RcppML_Rcpp_nmf_sparse, 15},
+    {"_RcppML_Rcpp_nmf_dense", (DL_FUNC) &_RcppML_Rcpp_nmf_dense, 14},
     {"_RcppML_Rcpp_nnls", (DL_FUNC) &_RcppML_Rcpp_nnls, 6},
     {"_RcppML_Rcpp_cdnnls", (DL_FUNC) &_RcppML_Rcpp_cdnnls, 6},
-    {"_RcppML_Rcpp_project", (DL_FUNC) &_RcppML_Rcpp_project, 8},
+    {"_RcppML_Rcpp_project_sparse", (DL_FUNC) &_RcppML_Rcpp_project_sparse, 8},
     {NULL, NULL, 0}
 };
 
