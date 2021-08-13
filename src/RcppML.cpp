@@ -234,6 +234,7 @@ Eigen::MatrixXd c_project_sparse(
 
   // compute left-hand side of linear system, "a"
   Eigen::MatrixXd a = w * w.transpose();
+  for(unsigned int i = 0; i < a.cols(); ++i) a(i, i) += 1e-15;
   Eigen::LLT<Eigen::MatrixXd, 1> a_llt = a.llt();
   unsigned int k = a.rows();
   Eigen::MatrixXd h(k, A.cols());
@@ -265,6 +266,7 @@ Eigen::MatrixXd Rcpp_project_dense(
     const unsigned int threads) {
   
   Eigen::MatrixXd a = w * w.transpose();
+  for(unsigned int i = 0; i < a.cols(); ++i) a(i, i) += 1e-15;
   Eigen::LLT<Eigen::MatrixXd, 1> a_llt = a.llt();
   unsigned int k = a.rows();
   Eigen::MatrixXd h(k, A.cols());
@@ -490,6 +492,47 @@ Rcpp::List Rcpp_nmf_dense(
   }
 
   return Rcpp::List::create(Rcpp::Named("w") = w.transpose(), Rcpp::Named("d") = d, Rcpp::Named("h") = h, Rcpp::Named("tol") = tol_, Rcpp::Named("iter") = it);
+}
+
+template<typename T>
+T cor(std::vector<T>& x, std::vector<T>& y) {
+  T sum_x = 0, sum_y = 0, sum_xy = 0, sum_x2 = 0, sum_y2 = 0;
+  for (unsigned int i = 0; i < x.size(); ++i) {
+    sum_x += x[i];
+    sum_y += y[i];
+    sum_xy += x[i] * y[i];
+    sum_x2 += x[i] * x[i];
+    sum_y2 += y[i] * y[i];
+  }
+  return 1 - (x.size() * sum_xy - sum_x * sum_y) / std::sqrt((x.size() * sum_x2 - sum_x * sum_x) * (x.size() * sum_y2 - sum_y * sum_y));
+}
+
+//[[Rcpp::export]]
+Eigen::MatrixXd nmf2(
+  const Rcpp::S4& A_S4, 
+  const Rcpp::S4& At_S4, 
+  Eigen::MatrixXd& w, 
+  const double tol = 1e-4, 
+  const bool nonneg = true,
+  unsigned int maxit = 100) {
+
+  Rcpp::dgCMatrix A(A_S4), At(At_S4);
+  Eigen::MatrixXd h(2, A.cols());
+  double tol_ = 1;
+  unsigned int it;
+
+  for (it = 0; it < maxit; ++it) {
+    Eigen::MatrixXd w_it = w;
+    h = c_project_sparse(A, w, nonneg, 1, 0, 1e-8, 0, 1);
+    w = c_project_sparse(At, h, nonneg, 1, 0, 1e-8, 0, 1);
+
+    tol_ = cor(w, w_it);
+    Rprintf("%4d | %8.2e\n", it + 1, tol_);
+    if (tol_ < tol) break;
+    Rcpp::checkUserInterrupt();
+  }
+
+  return h;
 }
 
 // ********************************************************************************
