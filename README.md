@@ -29,13 +29,12 @@ To use the development version of the R package, use `devtools`:
 devtools::install_github('zdebruine/RcppML')
 ```
 
-Features in the development version (v.0.2.0) not in the CRAN version (v.0.1.0):
-- Specialized NMF, projection, and MSE calculation for dense input matrices
-- Specialized NMF for symmetric input matrices
+8-13-2021 Development version v.0.2.0 released and submitted to CRAN.
+ - fix for numerical instability in high-rank factorizations
+ - specialization for fast rank-2 factorization
+ - specialization for dense, dense-symmetric, and sparse-symmetric input matrices in NMF, project, and MSE
 
-Next planned release (late 2021):
-* v0.3.0: Specializations for rank-2 factorization (faster than _irlba_ SVD counterparts)
-
-Other planned development:
+Planned development (late 2021):
 * Robust solutions to large matrix factorizations
 * Divisive clustering using recursive bipartitioning by rank-2 matrix factorizations
+* Alternating divisive and agglomerative clustering
