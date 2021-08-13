@@ -30,7 +30,7 @@ nmf(
 
 \item{nonneg}{apply non-negativity constraints}
 
-\item{L1}{L1/LASSO penalty, generally between 0 and 1, array of length two for \code{c(w, h)}}
+\item{L1}{L1/LASSO penalty, generally between 0 and 1, array of length two for \code{c(w, h)}. Not applicable when \eqn{k} <= 2.}
 
 \item{seed}{random seed for initializing \eqn{w} with C++ \code{srand} RNG}
 
@@ -80,6 +80,18 @@ L1 penalization introduces sparsity into all factors. Because RcppML NMF models 
 equally across all factors regardless of initialization and iteration. Use the \code{L1} parameter to set any desired
 L1/LASSO penalty on the right-hand side of systems of equations during updates of \eqn{w} or \eqn{h}. Typical values
 range between 0 and 1, where 1 is extremely or entirely sparse (this may lead to numerical issues).
+
+Note that L1 regularization on rank-1 or rank-2 factorization has no effect and is therefore not applied.
+}
+
+\section{Specializations}{
+
+The following cases are detected automatically and are supported by specialized backend implementation:
+\itemize{
+\item Symmetric factorization. When \eqn{A} is symmetric (such that \code{A = t(A)}), no up-front transposition of \eqn{A} is performed.
+\item Rank-2 factorization. Exact least squares solutions are found very quickly in rank-2 factorization. There is no need for Cholesky or coordinate descent solvers. The input matrix \eqn{A} is not transposed up-front since updates may be efficiently calculated in-place.
+\item Sparse vs. dense. If a sparse matrix class from the \code{Matrix} package is provided (of class coercible to \code{dgCMatrix}), sparse matrix iterators are used to calculate \eqn{b} during alternating least squares projections. If the input matrix is not sparse, it is coerced to base \code{matrix} class, and dense operations are performed. Typically, sparsity of >70\% is needed for sparse-optimized code to outperform dense-optimized code.
+}
 }
 
 \section{Reproducibility}{
