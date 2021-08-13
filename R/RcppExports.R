@@ -21,6 +21,14 @@ Rcpp_nmf_dense <- function(A, symmetric, w, tol = 1e-3, nonneg = TRUE, L1_w = 0,
     .Call('_RcppML_Rcpp_nmf_dense', PACKAGE = 'RcppML', A, symmetric, w, tol, nonneg, L1_w, L1_h, maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
 }
 
+Rcpp_nmf2_sparse <- function(A_S4, h, tol, nonneg, maxit, verbose, diag) {
+    .Call('_RcppML_Rcpp_nmf2_sparse', PACKAGE = 'RcppML', A_S4, h, tol, nonneg, maxit, verbose, diag)
+}
+
+Rcpp_nmf2_dense <- function(A, h, tol, nonneg, maxit, verbose, diag) {
+    .Call('_RcppML_Rcpp_nmf2_dense', PACKAGE = 'RcppML', A, h, tol, nonneg, maxit, verbose, diag)
+}
+
 Rcpp_nnls <- function(a, b, fast_maxit = 10L, cd_maxit = 100L, cd_tol = 1e-8, nonneg = TRUE) {
     .Call('_RcppML_Rcpp_nnls', PACKAGE = 'RcppML', a, b, fast_maxit, cd_maxit, cd_tol, nonneg)
 }
