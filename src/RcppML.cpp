@@ -389,7 +389,7 @@ Rcpp::List Rcpp_nmf_sparse(
     // reset diagonal and scale "h"
     for (unsigned int i = 0; diag && i < k; ++i) {
       d[i] = h.row(i).sum();
-      for (unsigned int j = 0; j < A.cols(); ++j) h(i, j) /= d(i);
+      for (unsigned int j = 0; j < A.cols(); ++j) h(i, j) /= d(i) + 1e-15;
     }
 
     // update w
@@ -401,7 +401,7 @@ Rcpp::List Rcpp_nmf_sparse(
     // reset diagonal and scale "w"
     for (unsigned int i = 0; diag && i < k; ++i) {
       d[i] = w.row(i).sum();
-      for (unsigned int j = 0; j < A.rows(); ++j) w(i, j) /= d(i);
+      for (unsigned int j = 0; j < A.rows(); ++j) w(i, j) /= d(i) + 1e-15;
     }
 
     // calculate tolerance
@@ -460,7 +460,7 @@ Rcpp::List Rcpp_nmf_dense(
     // reset diagonal and scale "h"
     for (unsigned int i = 0; diag && i < k; ++i) {
       d[i] = h.row(i).sum();
-      for (unsigned int j = 0; j < A.cols(); ++j) h(i, j) /= d(i);
+      for (unsigned int j = 0; j < A.cols(); ++j) h(i, j) /= d(i) + 1e-15;
     }
 
     // update w
@@ -472,7 +472,7 @@ Rcpp::List Rcpp_nmf_dense(
     // reset diagonal and scale "w"
     for (unsigned int i = 0; diag && i < k; ++i) {
       d[i] = w.row(i).sum();
-      for (unsigned int j = 0; j < A.rows(); ++j) w(i, j) /= d(i);
+      for (unsigned int j = 0; j < A.rows(); ++j) w(i, j) /= d(i) + 1e-15;
     }
 
     // calculate tolerance
