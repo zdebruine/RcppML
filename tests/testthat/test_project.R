@@ -6,7 +6,7 @@ test_that("Testing RcppML::project", {
   y <- x %*% beta + 0.1*matrix(runif(50*2), 50, 2);
   x <- as.matrix(x)
   
-  # expect taht two projections of y give approximately equal results (DENSE)
+  # expect that two projections of y give approximately equal results (DENSE)
   expect_equal(project(x, y, threads = 1), project(x, y, threads = 1))
   expect_equal(project(x, y, nonneg = FALSE, threads = 1), project(x, y, nonneg = FALSE, threads = 1))
 

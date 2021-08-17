@@ -16,7 +16,7 @@ test_that("Testing RcppML::nnls", {
   true_nnls_solution <- c(0.26332579, 0.61837006, 0.14175903, 0.00000000, 0.08079708) # results from multiway::fnnls(a, b)
 
   # unconstrained least squares solution should be equal to true solution
-  expect_equal(true_solution, as.vector(RcppML::nnls(a, b, nonneg = F)), tolerance = 1e-6)
+  expect_equal(true_solution, as.vector(nnls(a, b, nonneg = F)), tolerance = 1e-6)
 
   # nnls solution should be equal to true solution
   expect_equal(true_nnls_solution, as.vector(RcppML::nnls(a, b, nonneg = TRUE, cd_maxit = 1000, cd_tol = 1e-9)), tolerance = 1e-6)
