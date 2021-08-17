@@ -25,6 +25,8 @@ dclust(
 
 \item{verbose}{print number of divisions in each generation}
 
+\item{threads}{number of CPU threads, default \code{0} for all available threads}
+
 \item{tol}{in rank-2 NMF, the correlation distance (\eqn{1 - R^2}) between \eqn{w} across consecutive iterations at which to stop factorization}
 
 \item{nonneg}{in rank-2 NMF, enforce non-negativity}
