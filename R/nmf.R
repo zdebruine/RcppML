@@ -32,7 +32,6 @@
 #' @section Specializations:
 #' The following cases are detected automatically and are supported by specialized backend implementation:
 #' * Symmetric factorization. When \eqn{A} is symmetric (such that \code{A = t(A)}), no up-front transposition of \eqn{A} is performed.
-#' * Rank-2 factorization. Exact least squares solutions are found very quickly in rank-2 factorization. There is no need for Cholesky or coordinate descent solvers. The input matrix \eqn{A} is not transposed up-front since updates may be efficiently calculated in-place.
 #' * Sparse vs. dense. If a sparse matrix class from the \code{Matrix} package is provided (of class coercible to \code{dgCMatrix}), sparse matrix iterators are used to calculate \eqn{b} during alternating least squares projections. If the input matrix is not sparse, it is coerced to base \code{matrix} class, and dense operations are performed. Typically, sparsity of >70% is needed for sparse-optimized code to outperform dense-optimized code.
 #'
 #' @section Reproducibility:
@@ -66,7 +65,7 @@
 #' @param nonneg apply non-negativity constraints
 #' @param tol correlation distance between \eqn{w} across consecutive iterations at which to stop factorization
 #' @param L1 L1/LASSO penalty, generally between 0 and 1, array of length two for \code{c(w, h)}. Not applicable when \eqn{k} <= 2.
-#' @param seed random seed for initializing \eqn{w} with C++ \code{srand} RNG
+#' @param seed random seed for initializing \eqn{h} with R RNG. May also \code{set.seed()} prior to calling this function.
 #' @param maxit maximum number of alternating updates of \eqn{w} and \eqn{h}
 #' @param threads number of CPU threads for parallelization, default \code{0} for all available threads
 #' @param verbose print tolerances after each iteration to the console
@@ -91,11 +90,11 @@
 #' Franc, VC, Hlavac, VC, Navara, M. (2005). "Sequential Coordinate-Wise Algorithm for the Non-negative Least Squares Problem". Proc. Int'l Conf. Computer Analysis of Images and Patterns. Lecture Notes in Computer Science.
 #'
 #' @author Zach DeBruine
-#' 
+#'
 #' @export
-#' @seealso \code{\link{nnls}}, \code{\link{project}}, \code{\link{mse}}
+#' @seealso \code{\link{nnls}}, \code{\link{project}}, \code{\link{mse}}, \code{\link{nmf2}}
 #' @md
-#' @examples 
+#' @examples
 #' library(Matrix)
 #' # basic NMF
 #' model <- nmf(rsparsematrix(1000, 100, 0.1), k = 10)
@@ -106,9 +105,10 @@
 #' plot(model$w, t(model$h))
 #' # see package vignette for more examples
 #'
-nmf <- function(A, k, tol = 1e-3, maxit = 100, verbose = TRUE, nonneg = TRUE, 
-                L1 = c(0, 0), seed = NULL, threads = 0, ...) {
+nmf <- function(A, k, tol = 1e-3, maxit = 100, verbose = TRUE, nonneg = TRUE, L1 = c(0, 0), seed = NULL, threads = 0, ...) {
   
+  if(is.null(seed) || is.na(seed) || seed < 0) seed <- 0
+
   diag <- TRUE
   fast_maxit <- 10
   cd_maxit <- 1000
@@ -121,8 +121,6 @@ nmf <- function(A, k, tol = 1e-3, maxit = 100, verbose = TRUE, nonneg = TRUE,
 
   if (length(L1) == 1) L1 <- rep(L1, 2)
   
-  if (!is.null(seed)) set.seed(seed)
-
   # check for symmetry (approximately)
   is_symmetric <- dim(A)[1] == dim(A)[2]
   if(is_symmetric) is_symmetric <- (all(A[1, ] == A[ ,1])) && all((A[nrow(A), ] == A[, ncol(A)]))
@@ -130,29 +128,16 @@ nmf <- function(A, k, tol = 1e-3, maxit = 100, verbose = TRUE, nonneg = TRUE,
   if(is(A, "sparseMatrix")) {
     # input matrix "A" is sparse
     A <- as(A, "dgCMatrix")
-    if(k == 2){
-      # specialization for when k = 2
-      h <- matrix(runif(ncol(A) * 2), nrow = 2, ncol = ncol(A))
-      Rcpp_nmf2_sparse(A, h, tol, nonneg, maxit, verbose, diag);
+    if(is_symmetric){
+      # just throw in a small random sparse matrix as a place-holder in the second argument, since Rcpp functions don't like NULL arguments
+      Rcpp_nmf_sparse(A, Matrix::rsparsematrix(10, 10, 0.1), is_symmetric, k, seed, tol, nonneg, L1[1], L1[2], maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
     } else {
-      w <- matrix(runif(nrow(A) * k), nrow = k, ncol = nrow(A))
-      if(is_symmetric){
-        # just throw in a small random sparse matrix as a place-holder in the second argument, since Rcpp functions don't like NULL arguments
-        Rcpp_nmf_sparse(A, Matrix::rsparsematrix(10, 10, 0.1), is_symmetric, w, tol, nonneg, L1[1], L1[2], maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
-      } else {
-        # we want to use Matrix::t() because it's extremely optimized, rather than transposing on the C++ side of things with Rcpp::dgCMatrix
-        Rcpp_nmf_sparse(A, t(A), is_symmetric, w, tol, nonneg, L1[1], L1[2], maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
-      }
+      # we want to use Matrix::t() because it's extremely optimized, rather than transposing on the C++ side of things with Rcpp::dgCMatrix
+      Rcpp_nmf_sparse(A, t(A), is_symmetric, k, seed, tol, nonneg, L1[1], L1[2], maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
     }
   } else {
     # input matrix "A" is dense
     A <- as.matrix(A)
-    if(k == 2){
-      h <- matrix(runif(ncol(A) * 2), nrow = 2, ncol = ncol(A))
-      Rcpp_nmf2_dense(A, h, tol, nonneg, maxit, verbose, diag)
-    } else {
-      w <- matrix(runif(nrow(A) * k), nrow = k, ncol = nrow(A))
-      Rcpp_nmf_dense(A, is_symmetric, w, tol, nonneg, L1[1], L1[2], maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
-    }
+    Rcpp_nmf_dense(A, is_symmetric, k, seed, tol, nonneg, L1[1], L1[2], maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
   }
 }
