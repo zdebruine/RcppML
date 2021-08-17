@@ -3,11 +3,11 @@
 [![](https://cranlogs.r-pkg.org/badges/grand-total/RcppML)](https://cran.r-project.org/package=RcppML)
 [![](https://www.r-pkg.org/badges/version-last-release/RcppML)](https://cran.r-project.org/package=RcppML)
 
-The RcppML package offers high-performance non-negative matrix factorization (NMF), linear model projection, and non-negative least squares (NNLS):
-* `nmf`: Fast sparse matrix factorization by alternating least squares subject with support for non-negativity constraints and L1 regularization
-* `project`: Project linear models given sparse data inputs and one side of the orthogonal factor model
-* `nnls`: High-performance solver for non-negative least squares
-* `mse`: Mean squared error of a linear factor model for a sparse matrix
+The RcppML package offers several high-performance tools that use matrix factorization. Of note:
+* `nmf`: Matrix factorization by alternating least squares. Supports non-negativity constraints and L1 regularization. Specializations for dense/sparse asymmetric/symmetric inputs.
+* `nmf2`: Rank-2 matrix factorization that is faster than any rank-2 SVD. Useful for bipartitioning.
+* `dclust`: Divisive clustering by recursive bipartitioning of a sample set. Very fast.
+* `nnls`: Fastest-yet algorithm for non-negative least squares.
 
 See the [package vignette](https://cran.r-project.org/web/packages/RcppML/vignettes/RcppML.html) for a basic introduction to these functions.
 
@@ -21,6 +21,8 @@ install.packages('RcppML')
 
 See the [CRAN manual](https://cran.r-project.org/web/packages/RcppML/RcppML.pdf) for details.
 
+Note that the CRAN version is not up-to-date with the development version.
+
 ## Development News
 
 To use the development version of the R package, use `devtools`:
@@ -29,12 +31,7 @@ To use the development version of the R package, use `devtools`:
 devtools::install_github('zdebruine/RcppML')
 ```
 
-8-13-2021 Development version v.0.2.0 released and submitted to CRAN.
- - fix for numerical instability in high-rank factorizations
- - specialization for fast rank-2 factorization
- - specialization for dense, dense-symmetric, and sparse-symmetric input matrices in NMF, project, and MSE
+Current development version is v.0.3.0:
+ - added `dclust`, `bipartition`, `nmf2`, and performance updates to other functions
 
-Planned development (late 2021):
-* Robust solutions to large matrix factorizations
-* Divisive clustering using recursive bipartitioning by rank-2 matrix factorizations
-* Alternating divisive and agglomerative clustering
+The version on CRAN only supports `nmf`, `project`, `nnls`, and `mse`.
