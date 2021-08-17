@@ -32,7 +32,7 @@ nmf(
 
 \item{L1}{L1/LASSO penalty, generally between 0 and 1, array of length two for \code{c(w, h)}. Not applicable when \eqn{k} <= 2.}
 
-\item{seed}{random seed for initializing \eqn{w} with C++ \code{srand} RNG}
+\item{seed}{random seed for initializing \eqn{h} with R RNG. May also \code{set.seed()} prior to calling this function.}
 
 \item{threads}{number of CPU threads for parallelization, default \code{0} for all available threads}
 
@@ -89,7 +89,6 @@ Note that L1 regularization on rank-1 or rank-2 factorization has no effect and 
 The following cases are detected automatically and are supported by specialized backend implementation:
 \itemize{
 \item Symmetric factorization. When \eqn{A} is symmetric (such that \code{A = t(A)}), no up-front transposition of \eqn{A} is performed.
-\item Rank-2 factorization. Exact least squares solutions are found very quickly in rank-2 factorization. There is no need for Cholesky or coordinate descent solvers. The input matrix \eqn{A} is not transposed up-front since updates may be efficiently calculated in-place.
 \item Sparse vs. dense. If a sparse matrix class from the \code{Matrix} package is provided (of class coercible to \code{dgCMatrix}), sparse matrix iterators are used to calculate \eqn{b} during alternating least squares projections. If the input matrix is not sparse, it is coerced to base \code{matrix} class, and dense operations are performed. Typically, sparsity of >70\% is needed for sparse-optimized code to outperform dense-optimized code.
 }
 }
@@ -150,7 +149,7 @@ Lee, D, and Seung, HS (1999). "Learning the parts of objects by non-negative mat
 Franc, VC, Hlavac, VC, Navara, M. (2005). "Sequential Coordinate-Wise Algorithm for the Non-negative Least Squares Problem". Proc. Int'l Conf. Computer Analysis of Images and Patterns. Lecture Notes in Computer Science.
 }
 \seealso{
-\code{\link{nnls}}, \code{\link{project}}, \code{\link{mse}}
+\code{\link{nnls}}, \code{\link{project}}, \code{\link{mse}}, \code{\link{nmf2}}
 }
 \author{
 Zach DeBruine
