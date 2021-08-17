@@ -7,15 +7,15 @@
 project(A, w, nonneg = TRUE, L1 = 0, threads = 0, ...)
 }
 \arguments{
-\item{A}{matrix of features x samples, may be dense or sparse (a class of the "Matrix" package coercible to \code{Matrix::dgCMatrix})}
+\item{A}{dense or sparse matrix of features-by-samples}
 
 \item{w}{dense matrix of features x factors giving the linear model to be projected}
 
-\item{nonneg}{apply non-negativity constraints}
+\item{nonneg}{enforce non-negativity}
 
-\item{L1}{L1/LASSO penalty to be applied to \eqn{h}. Generally should be scaled to \code{max(b)} where \eqn{b = WA_j} for all columns \eqn{j} in \eqn{A}}
+\item{L1}{L1/LASSO penalty to be applied to \eqn{h}}
 
-\item{threads}{number of CPU threads for parallelization, default \code{0} for all available threads.}
+\item{threads}{number of CPU threads, default \code{0} for all available threads}
 
 \item{...}{advanced parameters, see details}
 }
@@ -30,22 +30,21 @@ For the classical alternating matrix factorization update problem \eqn{A = wh}, 
 (or projection) of \eqn{h} is given by the equations: \deqn{w^Twh = wA_j}
 in the form \eqn{ax = b} where \eqn{a = w^Tw} \eqn{x = h} and \eqn{b = wA_j} for all columns \eqn{j} in \eqn{A}.
 
-Given \eqn{A} and \eqn{w}, \code{RcppML::project} solves for \eqn{h} using the above formulas and
-\code{RcppML::nnls}.
+To solve \eqn{w} instead of \eqn{h}, input \code{t(A)} in place of \code{A} and \code{h} in place of \code{w}.
 
-The corresponding equation for updating \eqn{w} in block-pivoting is: \deqn{hh^Tw^T = hA^T_j}
+Sparse optimization is automatically applied if \code{A} is a \code{Matrix::dgCMatrix}, or inherits from the \code{Matrix::sparseMatrix} superclass.
 
-Thus, one may also solve for \eqn{w} by inputting the transpose of \eqn{A} and \eqn{h} in place of \eqn{w}.
+Parallelization is applied across columns of \eqn{A} using OpenMP.
 
-There are specialized solvers for sparse and dense input matrices.
+Any L1 penalty is subtracted from \eqn{b} and should generally be scaled to \code{max(b)}, where \eqn{b = WA_j} for all columns \eqn{j} in \eqn{A}. An easy way to properly scale an L1 penalty is to normalize all columns in \eqn{w} to sum to 1.
 }
 \section{Advanced parameters}{
 
-Several parameters hidden in the \code{...} argument may be adjusted (although defaults should entirely satisfy) in addition to those documented explicitly:
+The \code{...} argument hides several parameters that may be adjusted, although defaults should entirely satisfy:
 \itemize{
-\item \code{cd_maxit}, default 1000. Maximum number of coordinate descent iterations for solution refinement after initialization with solution from previous iteration. Only used as stopping criterion if \code{cd_tol} is not satisfied previously. See \code{\link{nnls}}.
-\item \code{fast_maxit}, default 10. Maximum number of FAST iterations for finding an approximate solution to initialize coordinate descent. See \code{\link{nnls}}.
-\item \code{cd_tol}, default 1e-8. Stopping criterion for coordinate descent iterations given by the maximum relative change in any coefficient between consecutive solutions. See \code{\link{nnls}}.
+\item \code{cd_maxit}, default 1000. See \code{\link{nnls}}.
+\item \code{fast_maxit}, default 10. See \code{\link{nnls}}.
+\item \code{cd_tol}, default 1e-8. See \code{\link{nnls}}.
 }
 }
 
@@ -67,6 +66,9 @@ h <- project(A, w)
 w <- t(project(t(A), t(h)))
 mse(A, w, h = h) # mse after alternating updates
 
+}
+\references{
+DeBruine, ZJ, Melcher, K, and Triche, TJ. (2021). "High-performance non-negative matrix factorization for large single-cell data." BioRXiv.
 }
 \seealso{
 \code{\link{nnls}}, \code{\link{nmf}}
