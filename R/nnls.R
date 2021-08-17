@@ -2,29 +2,29 @@
 #' Non-negative least squares
 #'
 #' @description 
-#' Solves the equation \code{a %*% x = b} for \code{x}, where \code{b} can be either a vector or a matrix, subject to 
-#' non-negativity constraints (if specified).
+#' Solves the equation \code{a %*% x = b} for \code{x}. \code{b} can be either a vector or a matrix. Non-negativity constraints are optional.
 #'
 #' @details 
-#' This is a very fast implementation of non-negative least squares that outperforms Lawson-Hanson NNLS in our benchmarks 
-#' for most applications, particularly for systems >25 variables in size.
+#' This is the fastest implementation of non-negative least squares (NNLS).
+#'
+#' When \code{nonneg = TRUE}, non-negative solutions are found by a two-step process:
+#'  1. **Approximation with FAST**: Forward active set tuning (FAST) uses Cholesky decomposition to find an approximate active set.
+#'  2. **Refinement by Coordinate Descent**: Sequential coordinate descent (CD) iteratively refines the solution to specified tolerances. 
+#'
+#' When \code{nonneg = FALSE}, no non-negativity constraints are enforced and the Eigen Cholesky solver is used to quickly find the unconstrained solution.
 #' 
-#' If \code{nonneg = FALSE}, the Eigen Cholesky module is used to solve the system of equations, and is usually
-#' faster than \code{base::solve}
+#' Default parameters will generally suffice. However, if an initial value for \code{x} is supplied, only coordinate descent will be run. This is generally only useful when a near-exact solution is available.
 #'
-#' NNLS solutions will be found quickly using default parameters. If \code{x} is provided, only sequential coordinate descent
-#'  least squares will be run. If \code{x = NULL}, solutions will be initialized with "FAST" if \code{nonneg = TRUE} or solved
-#'   using the Eigen Cholesky module if \code{nonneg = FALSE}. The \code{FAST} method also makes use of the Eigen Cholesky module.
-#'
-#' If \eqn{a} is not positive, coordinate descent least squares will always be used, and with zero-filled initialization
-#'  if \code{x = NULL}.
+#' If \code{a} is not positive, coordinate descent least squares will always be used, and with zero-filled initialization if \code{x = NULL}.
+#' 
+#' See our BioRXiv manuscript (references) for benchmarking against Lawson-Hanson NNLS and for a more technical introduction to these methods.
 #' 
 #' @section Coordinate Descent NNLS:
 #' Least squares by **sequential coordinate descent** is used to ensure the solution returned is exact. This algorithm was 
 #' introduced by Franc et al. (2005), and our implementation is adapted from the NNLM R package by Lin and Boutros (2020). 
 #' There are two ways to initialize the coordinate descent solver:
-#' 1. Specify a value for `x`, either a random or zero-filled vector, or an approximate solution.
-#' 2. Leave \code{x = NULL} and use FAST initialization.
+#' 1. Specify a value for \code{x}, either a random or zero-filled vector, or an approximate solution.
+#' 2. Leave \code{x = NULL} (recommended) and use FAST initialization.
 #' 
 #' @section FAST NNLS:
 #' **Forward active set tuning (FAST)** is an exact or near-exact NNLS approximation initialized by an unconstrained 
@@ -35,20 +35,19 @@
 #' 
 #' The FAST algorithm has a definite convergence guarantee because the 
 #' feasible set will either converge or become smaller with each iteration. The result is generally exact or nearly 
-#' exact for small well-conditioned systems (< 50 variables) within 2 iterations and thus quickly sets up coordinate
-#'  descent very well. The FAST method is similar to the first phase of the so-called "TNT-NN" algorithm (Myre et al., 2017), 
-#'  but the latter half of that method relies heavily on heuristics to find the true active set, which we avoid by using 
+#' exact for small well-conditioned systems (< 50 variables) within 2 iterations and thus sets up coordinate
+#'  descent for very rapid convergence. The FAST method is similar to the first phase of the so-called "TNT-NN" algorithm (Myre et al., 2017), 
+#'  but the latter half of that method relies heavily on heuristics to refine the approximate active set, which we avoid by using 
 #'  coordinate descent instead.
 #'
-#' See our BioRXiv manuscript for benchmarking against Lawson-Hanson NNLS and for a more technical introduction to these methods.
-#' 
-#' @param a symmetric positive definite matrix giving coefficients of linear system
-#' @param b vector or matrix giving right-hand side(s) of linear system
-#' @param x initial value for \eqn{x} if using only coordinate descent least squares
-#' @param fast_maxit maximum number of FAST iterations for finding an approximate solution to initialize coordinate descent
-#' @param cd_maxit maximum number of coordinate descent iterations for solution refinement after initialization (with either \code{x} or FAST if \code{x = NULL}). Only used as stopping criterion if \code{cd_tol} is not satisfied previously.
-#' @param cd_tol stopping criterion for coordinate descent iterations given by the maximum relative change in any coefficient between consecutive solutions
-#' @param nonneg enforce non-negativity of the solution
+#' @param a symmetric positive definite matrix giving coefficients of the linear system
+#' @param b vector or matrix giving the right-hand side(s) of the linear system
+#' @param x initial value for \code{x} of same dimensions as \code{b}. Leave \code{NULL} to use FAST initialization (default).
+#' @param fast_maxit maximum number of FAST iterations
+#' @param cd_maxit maximum number of coordinate descent iterations
+#' @param cd_tol maximum relative change for any coefficient between solutions across consecutive coordinate descent iterations at convergence
+#' @param nonneg enforce non-negativity
+#' @param L1 L1/LASSO penalty to be subtracted from \code{b}
 #' @return vector or matrix giving solution for \code{x}
 #' @export
 #' @author Zach DeBruine
@@ -59,10 +58,10 @@
 #' 
 #' DeBruine, ZJ, Melcher, K, and Triche, TJ. (2021). "High-performance non-negative matrix factorization for large single-cell data." BioRXiv.
 #' 
-#' Lin, X, and Boutros, PC (2020). "Optimization and expansion of non-negative matrix factorization." BMC Bioinformatics.
-#' 
 #' Franc, VC, Hlavac, VC, and Navara, M. (2005). "Sequential Coordinate-Wise Algorithm for the Non-negative Least Squares Problem. Proc. Int'l Conf. Computer Analysis of Images and Patterns."
 #'
+#' Lin, X, and Boutros, PC (2020). "Optimization and expansion of non-negative matrix factorization." BMC Bioinformatics.
+#' 
 #' Myre, JM, Frahm, E, Lilja DJ, and Saar, MO. (2017) "TNT-NN: A Fast Active Set Method for Solving Large Non-Negative Least Squares Problems". Proc. Computer Science.
 #'
 #' @examples 
@@ -92,12 +91,12 @@
 #' beta <- nnls(crossprod(X),crossprod(X,y))
 #' crossprod(btrue-beta)/20
 #' 
-nnls <- function(a, b, x = NULL, nonneg = TRUE, fast_maxit = 10, cd_maxit = 1000, cd_tol = 1e-8) {
+nnls <- function(a, b, x = NULL, nonneg = TRUE, fast_maxit = 10, cd_maxit = 1000, cd_tol = 1e-8, L1 = 0) {
   b <- as.matrix(b)
+  if(L1 != 0) b <- b - L1;
   if(nrow(a) != ncol(a)) stop("a is not symmetric")
   if(nrow(b) != nrow(a)) stop("number of rows in 'b' (or length of 'b') was not equal to the edge length of 'a'")
   if(is.null(x) && any(a < 0)) x <- matrix(0, nrow(b), ncol(b))
-  b <- as.matrix(b)
 
   if(!is.null(x)){
     x <- as.matrix(x)
