@@ -105,7 +105,7 @@ bipartitionModel c_bipartition_sparse(
   double dist = -1;
 
   Eigen::MatrixXd h = randomMatrix(2, samples.size(), random_values);
-  wdh2model m = c_nmf2_sparse(A, h, tol, nonneg, maxit, verbose, diag, samples);
+  wdhmodel m = c_nmf2_sparse(A, h, tol, nonneg, maxit, verbose, diag, samples);
   std::vector<double> v(samples.size());
   for (unsigned int j = 0; j < samples.size(); ++j){
     v[j] = m.h(0, j) - m.h(1, j);
@@ -150,7 +150,7 @@ bipartitionModel c_bipartition_dense(
   double dist = -1;
 
   Eigen::MatrixXd h = randomMatrix(2, samples.size(), random_values);
-  wdh2model m = c_nmf2_dense(A, h, tol, nonneg, maxit, verbose, diag, samples);
+  wdhmodel m = c_nmf2_dense(A, h, tol, nonneg, maxit, verbose, diag, samples);
   std::vector<double> v(samples.size());
   for (unsigned int j = 0; j < samples.size(); ++j){
     v[j] = m.h(0, j) - m.h(1, j);

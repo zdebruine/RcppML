@@ -22,9 +22,9 @@
 #endif
 
 // STRUCTURES
-struct wdh2model {
+struct wdhmodel {
     Eigen::MatrixXd w;
-    Eigen::Vector2d d;
+    Eigen::VectorXd d;
     Eigen::MatrixXd h;
     double tol;
     unsigned int it;
@@ -62,6 +62,7 @@ struct clusterModel {
 */
 
 // FUNCTION FORWARD DECLARATIONS
+// only functions that need to be called from separate files are included here
 
 // helpers.cpp
 // helper functions and subroutines
@@ -92,12 +93,24 @@ Eigen::MatrixXd Rcpp_project_dense(const Rcpp::NumericMatrix& A, Eigen::MatrixXd
     const unsigned int fast_maxit, const unsigned int cd_maxit, const double cd_tol, const double L1,
     const unsigned int threads);
 
+// nmf.cpp
+// non-negative matrix factorization
+wdhmodel c_nmf_sparse(Rcpp::dgCMatrix& A_S4, Rcpp::dgCMatrix& At_S4, const bool symmetric, Eigen::MatrixXd& w, 
+    const double tol, const bool nonneg, const double L1_w, const double L1_h, const unsigned int maxit,
+    const bool diag, const unsigned int fast_maxit, const unsigned int cd_maxit, const double cd_tol,
+    const bool verbose, const unsigned int threads);
+  
+wdhmodel c_nmf_dense(const Rcpp::NumericMatrix& A, const Rcpp::NumericMatrix& At, const bool symmetric, Eigen::MatrixXd& w, 
+    const double tol, const bool nonneg, const double L1_w, const double L1_h, const unsigned int maxit,
+    const bool diag, const unsigned int fast_maxit, const unsigned int cd_maxit, const double cd_tol,
+    const bool verbose, const unsigned int threads);
+
 // nmf2.cpp
 // rank-2 matrix factorization
-wdh2model c_nmf2_sparse(Rcpp::dgCMatrix& A, Eigen::MatrixXd h, const double tol, const bool nonneg, const unsigned int maxit,
+wdhmodel c_nmf2_sparse(Rcpp::dgCMatrix& A, Eigen::MatrixXd& h, const double tol, const bool nonneg, const unsigned int maxit,
     const bool verbose, const bool diag, const std::vector<unsigned int> samples);
 
-wdh2model c_nmf2_dense(const Rcpp::NumericMatrix& A, Eigen::MatrixXd h, const double tol, const bool nonneg,
+wdhmodel c_nmf2_dense(const Rcpp::NumericMatrix& A, Eigen::MatrixXd& h, const double tol, const bool nonneg,
     const unsigned int maxit, const bool verbose, const bool diag, const std::vector<unsigned int> samples);
 
 // bipartition.cpp

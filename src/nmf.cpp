@@ -5,30 +5,24 @@
 
 #include "RcppML.h"
 
-//[[Rcpp::export]]
-Rcpp::List Rcpp_nmf_sparse(
-  const Rcpp::S4& A_S4,
-  const Rcpp::S4& At_S4,
+wdhmodel c_nmf_sparse(
+  Rcpp::dgCMatrix& A,
+  Rcpp::dgCMatrix& At,
   const bool symmetric,
-  const unsigned int k,
-  const unsigned int seed,
-  const double tol = 1e-3,
-  const bool nonneg = true,
-  const double L1_w = 0,
-  const double L1_h = 0,
-  const unsigned int maxit = 100,
-  const bool diag = true,
-  const unsigned int fast_maxit = 10,
-  const unsigned int cd_maxit = 100,
-  const double cd_tol = 1e-8,
-  const bool verbose = false,
-  const unsigned int threads = 0) {
+  Eigen::MatrixXd& w,
+  const double tol,
+  const bool nonneg,
+  const double L1_w,
+  const double L1_h,
+  const unsigned int maxit,
+  const bool diag,
+  const unsigned int fast_maxit,
+  const unsigned int cd_maxit,
+  const double cd_tol,
+  const bool verbose,
+  const unsigned int threads) {
 
-  Rcpp::dgCMatrix A(A_S4), At(At_S4);
-
-  std::vector<double> random_values = getRandomValues(k * A.rows(), seed);
-  Eigen::MatrixXd w = randomMatrix(k, A.rows(), random_values);
-
+  const unsigned int k = w.rows();  
   Eigen::MatrixXd h(k, A.cols());
   Eigen::VectorXd d(k);
   d = d.setOnes();
@@ -76,32 +70,27 @@ Rcpp::List Rcpp_nmf_sparse(
     h = reorder_rows(h, indx);
   }
 
-  return Rcpp::List::create(Rcpp::Named("w") = w.transpose(), Rcpp::Named("d") = d, Rcpp::Named("h") = h, Rcpp::Named("tol") = tol_, Rcpp::Named("iter") = it);
+  return wdhmodel{w.transpose(), d, h, tol_, it};
 }
 
-//[[Rcpp::export]]
-Rcpp::List Rcpp_nmf_dense(
+wdhmodel c_nmf_dense(
   const Rcpp::NumericMatrix& A,
+  const Rcpp::NumericMatrix& At,
   const bool symmetric,
-  const unsigned int k,
-  const unsigned int seed = 0,
-  const double tol = 1e-3,
-  const bool nonneg = true,
-  const double L1_w = 0,
-  const double L1_h = 0,
-  const unsigned int maxit = 100,
-  const bool diag = true,
-  const unsigned int fast_maxit = 10,
-  const unsigned int cd_maxit = 100,
-  const double cd_tol = 1e-8,
-  const bool verbose = false,
-  const unsigned int threads = 0) {
+  Eigen::MatrixXd& w,
+  const double tol,
+  const bool nonneg,
+  const double L1_w,
+  const double L1_h,
+  const unsigned int maxit,
+  const bool diag,
+  const unsigned int fast_maxit,
+  const unsigned int cd_maxit,
+  const double cd_tol,
+  const bool verbose,
+  const unsigned int threads) {
 
-  Rcpp::NumericMatrix At;
-  if(!symmetric) At = Rcpp::transpose(A);
-
-  std::vector<double> random_values = getRandomValues(k * A.rows(), seed);
-  Eigen::MatrixXd w = randomMatrix(k, A.rows(), random_values);
+  const unsigned int k = w.rows();
 
   Eigen::MatrixXd h(k, A.cols());
   Eigen::VectorXd d(k);
@@ -150,6 +139,53 @@ Rcpp::List Rcpp_nmf_dense(
     h = reorder_rows(h, indx);
   }
 
-  return Rcpp::List::create(Rcpp::Named("w") = w.transpose(), Rcpp::Named("d") = d, Rcpp::Named("h") = h, Rcpp::Named("tol") = tol_, Rcpp::Named("iter") = it);
+  return wdhmodel{w.transpose(), d, h, tol_, it};
 }
 
+//[[Rcpp::export]]
+Rcpp::List Rcpp_nmf_sparse(
+  const Rcpp::S4& A_S4,
+  const Rcpp::S4& At_S4,
+  const bool symmetric,
+  Eigen::MatrixXd& w_init,
+  const double tol = 1e-3,
+  const bool nonneg = true,
+  const double L1_w = 0,
+  const double L1_h = 0,
+  const unsigned int maxit = 100,
+  const bool diag = true,
+  const unsigned int fast_maxit = 10,
+  const unsigned int cd_maxit = 100,
+  const double cd_tol = 1e-8,
+  const bool verbose = false,
+  const unsigned int threads = 0) {
+
+  Rcpp::dgCMatrix A(A_S4), At(At_S4);
+
+  wdhmodel m = c_nmf_sparse(A, At, symmetric, w_init, tol, nonneg, L1_w, L1_h, maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads);
+  return Rcpp::List::create(Rcpp::Named("w") = m.w, Rcpp::Named("d") = m.d, Rcpp::Named("h") = m.h, Rcpp::Named("tol") = m.tol, Rcpp::Named("iter") = m.it);
+}
+
+//[[Rcpp::export]]
+Rcpp::List Rcpp_nmf_dense(
+  const Rcpp::NumericMatrix& A,
+  const bool symmetric,
+  Eigen::MatrixXd& w_init,
+  const double tol = 1e-3,
+  const bool nonneg = true,
+  const double L1_w = 0,
+  const double L1_h = 0,
+  const unsigned int maxit = 100,
+  const bool diag = true,
+  const unsigned int fast_maxit = 10,
+  const unsigned int cd_maxit = 100,
+  const double cd_tol = 1e-8,
+  const bool verbose = false,
+  const unsigned int threads = 0) {
+
+  Rcpp::NumericMatrix At;
+  if(!symmetric) At = Rcpp::transpose(A);
+
+  wdhmodel m = c_nmf_dense(A, At, symmetric, w_init, tol, nonneg, L1_w, L1_h, maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads);
+  return Rcpp::List::create(Rcpp::Named("w") = m.w, Rcpp::Named("d") = m.d, Rcpp::Named("h") = m.h, Rcpp::Named("tol") = m.tol, Rcpp::Named("iter") = m.it);
+}
