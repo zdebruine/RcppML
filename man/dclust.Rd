@@ -51,7 +51,7 @@ Recursive bipartitioning by rank-2 matrix factorization with an efficient modula
 \details{
 Divisive clustering is a sensitive and fast method for sample classification. Samples are recursively partitioned into two groups until a stopping criteria is satisfied and prevents successful partitioning.
 
-See \code{\link{nmf2}} and \code{\link{bipartition}} for technical considerations and optimizations relevant to bipartitioning.
+See \code{\link{nmf}} and \code{\link{bipartition}} for technical considerations and optimizations relevant to bipartitioning.
 }
 \section{Stopping criteria}{
 
@@ -107,7 +107,7 @@ Newman, MEJ. "Modularity and community structure in networks". PNAS (2006)
 Kuang, D, Park, H. (2013). "Fast rank-2 nonnegative matrix factorization for hierarchical document clustering." Proc. 19th ACM SIGKDD intl. conf. on Knowledge discovery and data mining.
 }
 \seealso{
-\code{\link{bipartition}}, \code{\link{nmf2}}
+\code{\link{bipartition}}, \code{\link{nmf}}
 }
 \author{
 Zach DeBruine

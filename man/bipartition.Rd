@@ -54,7 +54,7 @@ gives a bipartition that is nearly identical to an SVD.
 
 Rank-2 matrix factorization by alternating least squares is faster than rank-2-truncated SVD (i.e. \emph{irlba}).
 
-This function is a wrapper of \code{\link{nmf2}}, with additional calculations on the factorization model relevant to bipartitioning. See \code{\link{nmf2}} for details.
+This function is a wrapper of rank-2 \code{\link{nmf}} with added support for factorization of only a subset of samples, and with additional calculations on the factorization model relevant to bipartitioning. See \code{\link{nmf}} for details regarding rank-2 factorization.
 }
 \section{Advanced parameters}{
 
@@ -75,7 +75,7 @@ bipartition(iris[,1:4])
 Kuang, D, Park, H. (2013). "Fast rank-2 nonnegative matrix factorization for hierarchical document clustering." Proc. 19th ACM SIGKDD intl. conf. on Knowledge discovery and data mining.
 }
 \seealso{
-\code{\link{nmf2}}, \code{\link{dclust}}
+\code{\link{nmf}}, \code{\link{dclust}}
 }
 \author{
 Zach DeBruine

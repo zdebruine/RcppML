@@ -20,7 +20,7 @@ nmf(
 \arguments{
 \item{A}{dense or sparse matrix of features-by-samples}
 
-\item{k}{rank}
+\item{k}{rank, or initial matrix for \eqn{w}}
 
 \item{tol}{correlation distance (\eqn{1 - R^2}) between \eqn{w} across consecutive iterations at which to stop factorization}
 
@@ -74,7 +74,7 @@ For theoretical and practical considerations, please see our manuscript: "DeBrui
 High-performance non-negative matrix factorization for large single cell data." on BioRXiv.
 
 The implementation is carefully optimized for parallelization in high-performance computing environments. There are specializations for dense and sparse, and symmetric
-input matrices.
+input matrices. Factorizations of rank-1 and -2 are not multithreaded due to excessive overhead.
 }
 \section{Stopping criteria}{
 
@@ -108,6 +108,37 @@ complete sparsity. Note that non-negativity constraints already introduce signif
 In this implementation of NMF, a scaling diagonal ensures that the L1 penalty is equally applied across all factors regardless
 of random initialization and the distribution of the model. Many other implementations of matrix factorization claim to apply L1, but
 the magnitude of the penalty is at the mercy of the random distribution and more significantly affects factors with lower overall contribution to the model.
+}
+
+\section{Rank-2 factorization}{
+
+When \eqn{k = 2}, a very fast optimized algorithm is used.
+
+Two-variable least squares solutions to the problem \eqn{ax = b} are found by direct substitution:
+\deqn{x_1 = \frac{a_{22}b_1 - a_{12}b_2}{a_{11}a_{22} - a_{12}^2}}
+\deqn{x_2 = \frac{a_{11}b_2 - a_{12}b_1}{a_{11}a_{22} - a_{12}^2}}
+
+In the above equations, the denominator is constant and thus needs to be calculated only once. Additionally, if non-negativity constraints are to be imposed, if \eqn{x_1 < 0} then \eqn{x_1 = 0} and \eqn{x_2 = \frac{b_1}{a_{11}}}.
+Similarly, if \eqn{x_2 < 0} then \eqn{x_2 = 0} and \eqn{x_1 = \frac{b_2}{a_{22}}}.
+
+\code{RcppML::nmf} also introduces improved vectorization, compile-time optimization, and performs no transposition of \code{A} for rank-2 factorizations.
+
+L1 regularization of a rank-2 factorization of the form \eqn{A = wdh} has no effect, and thus is not supported.
+
+Results of a rank-2 factorization should be reproducible regardless of random seed.
+
+Rank-2 NMF is useful for bipartitioning, and is a subroutine in \code{\link{bipartition}}, where the sign of the difference between sample loadings
+in both factors gives the partitioning.
+}
+
+\section{Rank-1 factorization}{
+
+Rank-1 factorization by alternating least squares gives vectors equivalent to the first singular vectors in an SVD. It is a normalization of the data to a middle point,
+and may be useful for ordering samples based on the most significant axis of variation (i.e. pseudotime trajectories).
+
+One-variable least squares solutions to the problem \eqn{ax = b} are directly available, thus the implementation can be highly optimized.
+
+Diagonal scaling is applied for consistent linear scaling of both factors across random restarts, and thus always converges to the same solution regardless of random seed.
 }
 
 \section{Symmetric factorization}{
@@ -156,6 +187,17 @@ and L1 regularization is not convex with respect to the factorization model.
 library(Matrix)
 # basic NMF
 model <- nmf(rsparsematrix(1000, 100, 0.1), k = 10)
+
+# compare rank-2 NMF to second left vector in an SVD
+A <- iris[,1:4]
+nmf_model <- nmf(A, 2, tol = 1e-5)
+bipartitioning_vector <- apply(nmf_model$w, 1, diff)
+second_left_svd_vector <- base::svd(A, 2)$u[,2]
+abs(cor(bipartitioning_vector, second_left_svd_vector))
+
+# compare rank-1 NMF with first singular vector in an SVD
+A <- iris[,1:4]
+abs(cor(nmf(A, 1)$w[,1], base::svd(A, 2)$u[,1]))
 
 # symmetric NMF
 A <- crossprod(rsparsematrix(100, 100, 0.02))
