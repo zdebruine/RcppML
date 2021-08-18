@@ -5,7 +5,6 @@
 
 The RcppML package offers several high-performance tools that use matrix factorization. Of note:
 * `nmf`: Matrix factorization by alternating least squares. Supports non-negativity constraints and L1 regularization. Specializations for dense/sparse asymmetric/symmetric inputs.
-* `nmf2`: Rank-2 matrix factorization that is faster than any rank-2 SVD. Useful for bipartitioning.
 * `dclust`: Divisive clustering by recursive bipartitioning of a sample set. Very fast.
 * `nnls`: Fastest-yet algorithm for non-negative least squares.
 
