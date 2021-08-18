@@ -25,7 +25,7 @@
 #' High-performance non-negative matrix factorization for large single cell data." on BioRXiv.
 #'
 #' The implementation is carefully optimized for parallelization in high-performance computing environments. There are specializations for dense and sparse, and symmetric
-#' input matrices.
+#' input matrices. Factorizations of rank-1 and -2 are not multithreaded due to excessive overhead.
 #' 
 #' @section Stopping criteria:
 #' Use the \code{tol} parameter to control the stopping criteria for alternating updates
@@ -52,6 +52,33 @@
 #' In this implementation of NMF, a scaling diagonal ensures that the L1 penalty is equally applied across all factors regardless 
 #' of random initialization and the distribution of the model. Many other implementations of matrix factorization claim to apply L1, but 
 #' the magnitude of the penalty is at the mercy of the random distribution and more significantly affects factors with lower overall contribution to the model.
+#'
+#' @section Rank-2 factorization:
+#' When \eqn{k = 2}, a very fast optimized algorithm is used. 
+#'
+#' Two-variable least squares solutions to the problem \eqn{ax = b} are found by direct substitution:
+#' \deqn{x_1 = \frac{a_{22}b_1 - a_{12}b_2}{a_{11}a_{22} - a_{12}^2}}
+#' \deqn{x_2 = \frac{a_{11}b_2 - a_{12}b_1}{a_{11}a_{22} - a_{12}^2}}
+#'
+#' In the above equations, the denominator is constant and thus needs to be calculated only once. Additionally, if non-negativity constraints are to be imposed, if \eqn{x_1 < 0} then \eqn{x_1 = 0} and \eqn{x_2 = \frac{b_1}{a_{11}}}. 
+#' Similarly, if \eqn{x_2 < 0} then \eqn{x_2 = 0} and \eqn{x_1 = \frac{b_2}{a_{22}}}.
+#'
+#' \code{RcppML::nmf} also introduces improved vectorization, compile-time optimization, and performs no transposition of \code{A} for rank-2 factorizations.
+#'
+#' L1 regularization of a rank-2 factorization of the form \eqn{A = wdh} has no effect, and thus is not supported.
+#'
+#' Results of a rank-2 factorization should be reproducible regardless of random seed.
+#'
+#' Rank-2 NMF is useful for bipartitioning, and is a subroutine in \code{\link{bipartition}}, where the sign of the difference between sample loadings
+#' in both factors gives the partitioning.
+#'
+#' @section Rank-1 factorization:
+#' Rank-1 factorization by alternating least squares gives vectors equivalent to the first singular vectors in an SVD. It is a normalization of the data to a middle point, 
+#' and may be useful for ordering samples based on the most significant axis of variation (i.e. pseudotime trajectories).
+#'
+#' One-variable least squares solutions to the problem \eqn{ax = b} are directly available, thus the implementation can be highly optimized.
+#'
+#' Diagonal scaling is applied for consistent linear scaling of both factors across random restarts, and thus always converges to the same solution regardless of random seed.
 #'
 #' @section Symmetric factorization:
 #' Special optimization for symmetric matrices is automatically applied. Specifically, alternating updates of \code{w} and \code{h} 
@@ -86,7 +113,7 @@
 #' and L1 regularization is not convex with respect to the factorization model.
 #'
 #' @inheritParams project
-#' @param k rank
+#' @param k rank, or initial matrix for \eqn{w}
 #' @param tol correlation distance (\eqn{1 - R^2}) between \eqn{w} across consecutive iterations at which to stop factorization
 #' @param L1 L1/LASSO penalties between 0 and 1, array of length two for \code{c(w, h)}
 #' @param seed random seed for model initialization
@@ -121,6 +148,17 @@
 #' # basic NMF
 #' model <- nmf(rsparsematrix(1000, 100, 0.1), k = 10)
 #' 
+#' # compare rank-2 NMF to second left vector in an SVD
+#' A <- iris[,1:4]
+#' nmf_model <- nmf(A, 2, tol = 1e-5)
+#' bipartitioning_vector <- apply(nmf_model$w, 1, diff)
+#' second_left_svd_vector <- base::svd(A, 2)$u[,2]
+#' abs(cor(bipartitioning_vector, second_left_svd_vector))
+#' 
+#' # compare rank-1 NMF with first singular vector in an SVD
+#' A <- iris[,1:4]
+#' abs(cor(nmf(A, 1)$w[,1], base::svd(A, 2)$u[,1]))
+#'
 #' # symmetric NMF
 #' A <- crossprod(rsparsematrix(100, 100, 0.02))
 #' model <- nmf(A, 10, tol = 1e-5, maxit = 1000)
@@ -128,38 +166,54 @@
 #' # see package vignette for more examples
 #'
 nmf <- function(A, k, tol = 1e-3, maxit = 100, verbose = TRUE, nonneg = TRUE, L1 = c(0, 0), seed = NULL, threads = 0, ...) {
-  
-  if(is.null(seed) || is.na(seed) || seed < 0) seed <- 0
 
-  diag <- TRUE
-  fast_maxit <- 10
-  cd_maxit <- 1000
-  cd_tol <- 1e-8
   params <- list(...)
-  if(!is.null(params$diag)) diag <- params$diag
-  if(!is.null(params$fast_maxit)) fast_maxit <- params$fast_maxit
-  if(!is.null(params$cd_maxit)) fast_maxit <- params$cd_maxit
-  if(!is.null(params$cd_tol)) cd_tol <- params$cd_tol
+  diag <- ifelse(!is.null(params$diag), params$diag, TRUE)
+  fast_maxit <- ifelse(!is.null(params$fast_maxit), params$fast_maxit, 10)
+  cd_maxit <- ifelse(!is.null(params$cd_maxit), params$cd_maxit, 1000)
+  cd_tol <- ifelse(!is.null(params$cd_tol), params$cd_tol, 1e-8)
+
+  if(!("matrix" %in% class(k))) {
+    if(!is.null(seed) && !is.na(seed) && seed > 0) set.seed(seed)
+    init <- matrix(runif(k * nrow(A)), k, nrow(A))
+  } else {
+    if(nrow(k) == nrow(A)) {
+      init <- t(k)
+      k <- ncol(init)
+    } else if(ncol(k) == nrow(A)){
+      init <- k 
+      k <- ncol(init)
+    } else stop("dimensions of initialization 'w' matrix are incompatible with dimensions of 'A'")
+  }
 
   if (length(L1) == 1) L1 <- rep(L1, 2)
-  
+  if((L1[1] > 0 || L1[2] > 0) && k < 3) warning("L1 regularization was applied to a factorization of rank-1 or rank-2. It will have no effect.")
+  if(L1[1] < 0 || L1[2] < 0) stop("negative values for L1 are not convex with respect to any matrix factorization")
+
   # check for symmetry (approximately)
   is_symmetric <- dim(A)[1] == dim(A)[2]
-  if(is_symmetric) is_symmetric <- (all(A[1, ] == A[ ,1])) && all((A[nrow(A), ] == A[, ncol(A)]))
+  if(is_symmetric && k > 2) is_symmetric <- (all(A[1, ] == A[ ,1])) && all((A[nrow(A), ] == A[, ncol(A)]))
 
-  if(is(A, "sparseMatrix")) {
+  if(is(A, "sparseMatrix") && canCoerce(A, "dgCMatrix")) {
     # input matrix "A" is sparse
     A <- as(A, "dgCMatrix")
-    if(is_symmetric){
-      # just throw in a small random sparse matrix as a place-holder in the second argument, since Rcpp functions don't like NULL arguments
-      Rcpp_nmf_sparse(A, Matrix::rsparsematrix(10, 10, 0.1), is_symmetric, k, seed, tol, nonneg, L1[1], L1[2], maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
+    if(k == 1){
+      Rcpp_nmf1_sparse(A, init, tol, nonneg, maxit, verbose, diag);
+    } else if(k == 2){
+      Rcpp_nmf2_sparse(A, init, tol, nonneg, maxit, verbose, diag, 0:(ncol(A) - 1));
     } else {
-      # we want to use Matrix::t() because it's extremely optimized, rather than transposing on the C++ side of things with Rcpp::dgCMatrix
-      Rcpp_nmf_sparse(A, t(A), is_symmetric, k, seed, tol, nonneg, L1[1], L1[2], maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
+      if(is_symmetric) tA <- new("dgCMatrix") else tA <- t(A)
+      Rcpp_nmf_sparse(A, tA, is_symmetric, init, tol, nonneg, L1[1], L1[2], maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
     }
-  } else {
+  } else if(canCoerce(A, "matrix")) {
     # input matrix "A" is dense
     A <- as.matrix(A)
-    Rcpp_nmf_dense(A, is_symmetric, k, seed, tol, nonneg, L1[1], L1[2], maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
-  }
+    if(k == 1){
+      Rcpp_nmf1_dense(A, init, tol, nonneg, maxit, verbose, diag);
+    } else if(k == 2){
+      Rcpp_nmf2_dense(A, init, tol, nonneg, maxit, verbose, diag, 0:(ncol(A) - 1));
+    } else{
+      Rcpp_nmf_dense(A, is_symmetric, init, tol, nonneg, L1[1], L1[2], maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
+    }
+  } else stop("'A' was not coercible to either class 'matrix' or 'dgCMatrix'")
 }

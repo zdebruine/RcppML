@@ -8,7 +8,7 @@
 #' 
 #' Rank-2 matrix factorization by alternating least squares is faster than rank-2-truncated SVD (i.e. _irlba_).
 #'
-#' This function is a wrapper of \code{\link{nmf2}}, with additional calculations on the factorization model relevant to bipartitioning. See \code{\link{nmf2}} for details.
+#' This function is a wrapper of rank-2 \code{\link{nmf}} with added support for factorization of only a subset of samples, and with additional calculations on the factorization model relevant to bipartitioning. See \code{\link{nmf}} for details regarding rank-2 factorization.
 #'
 #' @section Advanced parameters:
 #' The \code{...} argument hides several parameters that may be adjusted, although defaults should entirely satisfy:
@@ -16,7 +16,7 @@
 #' * \code{maxit}, default 100. Maximum number of alternating updates of \eqn{w} and \eqn{h}.
 #' * \code{calc_centers}, default TRUE. Calculate centroids for each cluster, giving mean feature loadings for all samples in each cluster. If \code{calc_centers = FALSE} and \code{calc_dist = TRUE}, then \code{calc_centers} will be set to \code{TRUE}.
 #'
-#' @inheritParams nmf2
+#' @inheritParams nmf
 #' @param samples samples to include in bipartition, numbered from 1 to \code{ncol(A)}. Default is \code{NULL} for all samples.
 #' @param calc_dist calculate the relative cosine distance of samples within a cluster to either cluster centroid. If \code{TRUE}, \code{calc_centers} will be set to \code{TRUE}.
 #' @return
@@ -39,7 +39,7 @@
 #' @author Zach DeBruine
 #' 
 #' @export
-#' @seealso \code{\link{nmf2}}, \code{\link{dclust}}
+#' @seealso \code{\link{nmf}}, \code{\link{dclust}}
 #' @md
 #' @examples
 #' data(iris)

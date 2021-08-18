@@ -25,20 +25,28 @@ Rcpp_mse_dense <- function(A, w, d, h, threads) {
     .Call('_RcppML_Rcpp_mse_dense', PACKAGE = 'RcppML', A, w, d, h, threads)
 }
 
-Rcpp_nmf_sparse <- function(A_S4, At_S4, symmetric, k, seed, tol = 1e-3, nonneg = TRUE, L1_w = 0, L1_h = 0, maxit = 100L, diag = TRUE, fast_maxit = 10L, cd_maxit = 100L, cd_tol = 1e-8, verbose = FALSE, threads = 0L) {
-    .Call('_RcppML_Rcpp_nmf_sparse', PACKAGE = 'RcppML', A_S4, At_S4, symmetric, k, seed, tol, nonneg, L1_w, L1_h, maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
+Rcpp_nmf_sparse <- function(A_S4, At_S4, symmetric, w_init, tol = 1e-3, nonneg = TRUE, L1_w = 0, L1_h = 0, maxit = 100L, diag = TRUE, fast_maxit = 10L, cd_maxit = 100L, cd_tol = 1e-8, verbose = FALSE, threads = 0L) {
+    .Call('_RcppML_Rcpp_nmf_sparse', PACKAGE = 'RcppML', A_S4, At_S4, symmetric, w_init, tol, nonneg, L1_w, L1_h, maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
 }
 
-Rcpp_nmf_dense <- function(A, symmetric, k, seed = 0L, tol = 1e-3, nonneg = TRUE, L1_w = 0, L1_h = 0, maxit = 100L, diag = TRUE, fast_maxit = 10L, cd_maxit = 100L, cd_tol = 1e-8, verbose = FALSE, threads = 0L) {
-    .Call('_RcppML_Rcpp_nmf_dense', PACKAGE = 'RcppML', A, symmetric, k, seed, tol, nonneg, L1_w, L1_h, maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
+Rcpp_nmf_dense <- function(A, symmetric, w_init, tol = 1e-3, nonneg = TRUE, L1_w = 0, L1_h = 0, maxit = 100L, diag = TRUE, fast_maxit = 10L, cd_maxit = 100L, cd_tol = 1e-8, verbose = FALSE, threads = 0L) {
+    .Call('_RcppML_Rcpp_nmf_dense', PACKAGE = 'RcppML', A, symmetric, w_init, tol, nonneg, L1_w, L1_h, maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
 }
 
-Rcpp_nmf2_sparse <- function(A_S4, seed, tol, nonneg, maxit, verbose, diag, samples) {
-    .Call('_RcppML_Rcpp_nmf2_sparse', PACKAGE = 'RcppML', A_S4, seed, tol, nonneg, maxit, verbose, diag, samples)
+Rcpp_nmf1_sparse <- function(A_S4, w_init, tol, nonneg, maxit, verbose, diag) {
+    .Call('_RcppML_Rcpp_nmf1_sparse', PACKAGE = 'RcppML', A_S4, w_init, tol, nonneg, maxit, verbose, diag)
 }
 
-Rcpp_nmf2_dense <- function(A, seed, tol, nonneg, maxit, verbose, diag, samples) {
-    .Call('_RcppML_Rcpp_nmf2_dense', PACKAGE = 'RcppML', A, seed, tol, nonneg, maxit, verbose, diag, samples)
+Rcpp_nmf1_dense <- function(A, w_init, tol, nonneg, maxit, verbose, diag) {
+    .Call('_RcppML_Rcpp_nmf1_dense', PACKAGE = 'RcppML', A, w_init, tol, nonneg, maxit, verbose, diag)
+}
+
+Rcpp_nmf2_sparse <- function(A_S4, w_init, tol, nonneg, maxit, verbose, diag, samples) {
+    .Call('_RcppML_Rcpp_nmf2_sparse', PACKAGE = 'RcppML', A_S4, w_init, tol, nonneg, maxit, verbose, diag, samples)
+}
+
+Rcpp_nmf2_dense <- function(A, w_init, tol, nonneg, maxit, verbose, diag, samples) {
+    .Call('_RcppML_Rcpp_nmf2_dense', PACKAGE = 'RcppML', A, w_init, tol, nonneg, maxit, verbose, diag, samples)
 }
 
 Rcpp_nnls <- function(a, b, fast_maxit = 10L, cd_maxit = 100L, cd_tol = 1e-8, nonneg = TRUE) {
@@ -55,5 +63,13 @@ Rcpp_project_sparse <- function(A_S4, w, nonneg, fast_maxit, cd_maxit, cd_tol, L
 
 Rcpp_project_dense <- function(A, w, nonneg, fast_maxit, cd_maxit, cd_tol, L1, threads) {
     .Call('_RcppML_Rcpp_project_dense', PACKAGE = 'RcppML', A, w, nonneg, fast_maxit, cd_maxit, cd_tol, L1, threads)
+}
+
+Rcpp_rnmf <- function(A_S4, At_S4, symmetric, k, seed, tol = 1e-3, nonneg = TRUE, L1_w = 0, L1_h = 0, maxit = 100L, diag = TRUE, fast_maxit = 10L, cd_maxit = 100L, cd_tol = 1e-8, verbose = FALSE, threads = 0L) {
+    .Call('_RcppML_Rcpp_rnmf', PACKAGE = 'RcppML', A_S4, At_S4, symmetric, k, seed, tol, nonneg, L1_w, L1_h, maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
+}
+
+Rcpp_addFactor_sparse <- function(A_S4, w, d, h, tol = 1e-4, seed = 0L, nonneg = TRUE, maxit = 100L, verbose = TRUE, threads = 0L, L1_w = 0, L1_h = 0) {
+    .Call('_RcppML_Rcpp_addFactor_sparse', PACKAGE = 'RcppML', A_S4, w, d, h, tol, seed, nonneg, maxit, verbose, threads, L1_w, L1_h)
 }
 

@@ -5,7 +5,7 @@
 #' @details
 #' Divisive clustering is a sensitive and fast method for sample classification. Samples are recursively partitioned into two groups until a stopping criteria is satisfied and prevents successful partitioning. 
 #'
-#' See \code{\link{nmf2}} and \code{\link{bipartition}} for technical considerations and optimizations relevant to bipartitioning.
+#' See \code{\link{nmf}} and \code{\link{bipartition}} for technical considerations and optimizations relevant to bipartitioning.
 #'
 #' @section Stopping criteria:
 #' Two stopping criteria are used to prevent indefinite division of clusters and tune the clustering resolution to a desirable range:
@@ -37,7 +37,7 @@
 #' * \code{maxit}, default 100. In rank-2 NMF, maximum number of alternating updates of \eqn{w} and \eqn{h}.
 #' * \code{calc_centers}, default TRUE. Calculate centroids for each cluster, giving mean feature loadings for all samples in each cluster. If \code{min_dist != 0}, then \code{calc_centers} will always be \code{TRUE}.
 #'
-#' @inheritParams nmf2
+#' @inheritParams nmf
 #' @param min_dist stopping criteria giving the minimum cosine distance of samples within a cluster to the center of their assigned vs. unassigned cluster
 #' @param min_samples stopping criteria giving the minimum number of samples permitted in a cluster
 #' @param verbose print number of divisions in each generation
@@ -66,7 +66,7 @@
 #' Kuang, D, Park, H. (2013). "Fast rank-2 nonnegative matrix factorization for hierarchical document clustering." Proc. 19th ACM SIGKDD intl. conf. on Knowledge discovery and data mining.
 #'
 #' @export
-#' @seealso \code{\link{bipartition}}, \code{\link{nmf2}}
+#' @seealso \code{\link{bipartition}}, \code{\link{nmf}}
 #' @md
 #' @examples
 #' clusters <- dclust(t(USArrests), min_samples = 2)
