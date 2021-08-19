@@ -118,7 +118,8 @@ Rcpp::List Rcpp_nmf_sparse(
   Rcpp::dgCMatrix A(A_S4), At(At_S4);
 
   wdhmodel m = c_nmf_sparse(A, At, symmetric, w_init, tol, nonneg, L1_w, L1_h, maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads);
-  return Rcpp::List::create(Rcpp::Named("w") = m.w, Rcpp::Named("d") = m.d, Rcpp::Named("h") = m.h, Rcpp::Named("tol") = m.tol, Rcpp::Named("iter") = m.it);
+  unsigned int it = m.it + 1;
+  return Rcpp::List::create(Rcpp::Named("w") = m.w, Rcpp::Named("d") = m.d, Rcpp::Named("h") = m.h, Rcpp::Named("tol") = m.tol, Rcpp::Named("iter") = it);
 }
 
 //[[Rcpp::export]]
@@ -142,7 +143,8 @@ Rcpp::List Rcpp_nmf_dense(
   if(!symmetric) At = Rcpp::transpose(A);
 
   wdhmodel m = c_nmf_dense(A, At, symmetric, w_init, tol, nonneg, L1_w, L1_h, maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads);
-  return Rcpp::List::create(Rcpp::Named("w") = m.w, Rcpp::Named("d") = m.d, Rcpp::Named("h") = m.h, Rcpp::Named("tol") = m.tol, Rcpp::Named("iter") = m.it);
+  unsigned int it = m.it + 1;
+  return Rcpp::List::create(Rcpp::Named("w") = m.w, Rcpp::Named("d") = m.d, Rcpp::Named("h") = m.h, Rcpp::Named("tol") = m.tol, Rcpp::Named("iter") = it);
 }
 
 //[[Rcpp::export]]
@@ -157,7 +159,8 @@ Rcpp::List Rcpp_nmf1_sparse(
 
   Rcpp::dgCMatrix A(A_S4);
   wdhmodel m = c_nmf1_sparse(A, w_init, tol, nonneg, maxit, verbose, diag);
-  return Rcpp::List::create(Rcpp::Named("w") = m.w, Rcpp::Named("d") = m.d, Rcpp::Named("h") = m.h, Rcpp::Named("tol") = m.tol, Rcpp::Named("iter") = m.it);
+  unsigned int it = m.it + 1;
+  return Rcpp::List::create(Rcpp::Named("w") = m.w, Rcpp::Named("d") = m.d, Rcpp::Named("h") = m.h, Rcpp::Named("tol") = m.tol, Rcpp::Named("iter") = it);
 }
 
 //[[Rcpp::export]]
@@ -171,7 +174,8 @@ Rcpp::List Rcpp_nmf1_dense(
   const bool diag){
 
   wdhmodel m = c_nmf1_dense(A, w_init, tol, nonneg, maxit, verbose, diag);
-  return Rcpp::List::create(Rcpp::Named("w") = m.w, Rcpp::Named("d") = m.d, Rcpp::Named("h") = m.h, Rcpp::Named("tol") = m.tol, Rcpp::Named("iter") = m.it);
+  unsigned int it = m.it + 1;
+  return Rcpp::List::create(Rcpp::Named("w") = m.w, Rcpp::Named("d") = m.d, Rcpp::Named("h") = m.h, Rcpp::Named("tol") = m.tol, Rcpp::Named("iter") = it);
 }
 
 //[[Rcpp::export]]
@@ -187,7 +191,8 @@ Rcpp::List Rcpp_nmf2_sparse(
 
   Rcpp::dgCMatrix A(A_S4);
   wdhmodel m = c_nmf2_sparse(A, w_init, tol, nonneg, maxit, verbose, diag, samples);
-  return Rcpp::List::create(Rcpp::Named("w") = m.w, Rcpp::Named("d") = m.d, Rcpp::Named("h") = m.h, Rcpp::Named("tol") = m.tol, Rcpp::Named("iter") = m.it);
+  unsigned int it = m.it + 1;
+  return Rcpp::List::create(Rcpp::Named("w") = m.w, Rcpp::Named("d") = m.d, Rcpp::Named("h") = m.h, Rcpp::Named("tol") = m.tol, Rcpp::Named("iter") = it);
 }
 
 //[[Rcpp::export]]
@@ -202,12 +207,14 @@ Rcpp::List Rcpp_nmf2_dense(
   const std::vector<unsigned int> samples){
 
   wdhmodel m = c_nmf2_dense(A, w_init, tol, nonneg, maxit, verbose, diag, samples);
-  return Rcpp::List::create(Rcpp::Named("w") = m.w, Rcpp::Named("d") = m.d, Rcpp::Named("h") = m.h, Rcpp::Named("tol") = m.tol, Rcpp::Named("iter") = m.it);
+  unsigned int it = m.it + 1;
+  return Rcpp::List::create(Rcpp::Named("w") = m.w, Rcpp::Named("d") = m.d, Rcpp::Named("h") = m.h, Rcpp::Named("tol") = m.tol, Rcpp::Named("iter") = it);
 }
 
 //[[Rcpp::export]]
 Rcpp::List Rcpp_bipartition_sparse(
   const Rcpp::S4& A_S4,
+  Eigen::MatrixXd& w,
   const std::vector<unsigned int>& samples,
   const double tol = 1e-4,
   const bool nonneg = true,
@@ -219,8 +226,7 @@ Rcpp::List Rcpp_bipartition_sparse(
   const unsigned int seed = 0){
 
   Rcpp::dgCMatrix A(A_S4);
-  std::vector<double> random_values = getRandomValues(A.rows() * 2, seed);
-  bipartitionModel m = c_bipartition_sparse(A, tol, nonneg, samples, calc_centers, calc_dist, maxit, verbose, diag, random_values);
+  bipartitionModel m = c_bipartition_sparse(A, w, tol, nonneg, samples, calc_centers, calc_dist, maxit, verbose, diag);
 
   for(unsigned int i = 0; i < m.samples1.size(); ++i) ++m.samples1[i];
   for(unsigned int i = 0; i < m.samples2.size(); ++i) ++m.samples2[i];
@@ -239,6 +245,7 @@ Rcpp::List Rcpp_bipartition_sparse(
 //[[Rcpp::export]]
 Rcpp::List Rcpp_bipartition_dense(
   const Rcpp::NumericMatrix& A,
+  Eigen::MatrixXd& w,
   const std::vector<unsigned int>& samples,
   const double tol = 1e-4,
   const bool nonneg = true,
@@ -246,11 +253,9 @@ Rcpp::List Rcpp_bipartition_dense(
   bool calc_dist = true,
   const unsigned int maxit = 100,
   const bool verbose = false,
-  const bool diag = true,
-  const unsigned int seed = 0){
+  const bool diag = true){
   
-  std::vector<double> random_values = getRandomValues(A.rows() * 2, seed);
-  bipartitionModel m = c_bipartition_dense(A, tol, nonneg, samples, calc_centers, calc_dist, maxit, verbose, diag, random_values);
+  bipartitionModel m = c_bipartition_dense(A, w, tol, nonneg, samples, calc_centers, calc_dist, maxit, verbose, diag);
 
   for(unsigned int i = 0; i < m.samples1.size(); ++i) ++m.samples1[i];
   for(unsigned int i = 0; i < m.samples2.size(); ++i) ++m.samples2[i];
@@ -269,6 +274,7 @@ Rcpp::List Rcpp_bipartition_dense(
 //[[Rcpp::export]]
 Rcpp::List Rcpp_dclust_sparse(
   const Rcpp::S4& A_S4, 
+  Eigen::MatrixXd& w,
   const double min_dist, 
   const unsigned int min_samples, 
   const bool verbose,
@@ -277,12 +283,11 @@ Rcpp::List Rcpp_dclust_sparse(
   const bool bipartition_nonneg,
   const unsigned int bipartition_maxit,
   const bool calc_centers,
-  const bool diag,
-  const unsigned int seed) {
+  const bool diag) {
 
   Rcpp::dgCMatrix A(A_S4);
 
-  std::vector<clusterModel> clusters = dclust(A, min_dist, min_samples, true, threads, bipartition_tol, bipartition_nonneg, bipartition_maxit, calc_centers, diag, seed);
+  std::vector<clusterModel> clusters = dclust(A, w, min_dist, min_samples, true, threads, bipartition_tol, bipartition_nonneg, bipartition_maxit, calc_centers, diag);
 
   Rcpp::List result(clusters.size());
   for (unsigned int i = 0; i < clusters.size(); ++i) {
@@ -299,6 +304,7 @@ Rcpp::List Rcpp_dclust_sparse(
 //[[Rcpp::export]]
 Rcpp::List Rcpp_dclust_dense(
   const Rcpp::NumericMatrix& A, 
+  Eigen::MatrixXd& w,
   const double min_dist, 
   const unsigned int min_samples, 
   const bool verbose,
@@ -310,7 +316,7 @@ Rcpp::List Rcpp_dclust_dense(
   const bool diag,
   const unsigned int seed) {
 
-  std::vector<clusterModel> clusters = dclust(A, min_dist, min_samples, true, threads, bipartition_tol, bipartition_nonneg, bipartition_maxit, calc_centers, diag, seed);
+  std::vector<clusterModel> clusters = dclust(A, w, min_dist, min_samples, true, threads, bipartition_tol, bipartition_nonneg, bipartition_maxit, calc_centers, diag);
 
   Rcpp::List result(clusters.size());
   for (unsigned int i = 0; i < clusters.size(); ++i) {
