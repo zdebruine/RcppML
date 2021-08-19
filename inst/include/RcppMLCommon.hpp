@@ -8,6 +8,7 @@
 #ifndef RcppML_common
 #define RcppML_common
 
+// [[Rcpp::plugins(openmp)]]
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -20,6 +21,7 @@
 #define EIGEN_INITIALIZE_MATRICES_BY_ZERO
 #endif
 
+//[[Rcpp::depends(RcppEigen)]]
 #ifndef RcppEigen__RcppEigen__h
 #include <RcppEigen.h>
 #endif
