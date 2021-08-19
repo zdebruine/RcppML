@@ -18,6 +18,7 @@
 
 std::vector<clusterModel> dclust(
   Rcpp::dgCMatrix& A_S4,
+  Eigen::MatrixXd& w,
   const double min_dist, 
   const unsigned int min_samples, 
   const bool verbose,
@@ -26,8 +27,7 @@ std::vector<clusterModel> dclust(
   const bool bipartition_nonneg,
   const unsigned int bipartition_maxit,
   const bool calc_centers,
-  const bool diag,
-  const unsigned int seed) {
+  const bool diag) {
 
   Rcpp::dgCMatrix A(A_S4);
 
@@ -35,11 +35,10 @@ std::vector<clusterModel> dclust(
   std::vector<clusterModel> clusters;
   std::vector<unsigned int> samples(A.cols());
   std::iota(samples.begin(), samples.end(), (int)0);
-  std::vector<double> random_values = getRandomValues(A.rows() * 2, seed);
   
   // initial bipartition
   if (verbose) Rprintf("\n# of divisions: ");
-  bipartitionModel p0 = c_bipartition_sparse(A, bipartition_tol, bipartition_nonneg, samples, calc_centers, calc_dist, bipartition_maxit, false, diag, random_values);
+  bipartitionModel p0 = c_bipartition_sparse(A, w, bipartition_tol, bipartition_nonneg, samples, calc_centers, calc_dist, bipartition_maxit, false, diag);
   clusters.push_back(clusterModel{ "0", p0.samples1, p0.center1, 0, p0.size1 < min_samples * 2, false });
   clusters.push_back(clusterModel{ "1", p0.samples2, p0.center2, 0, p0.size2 < min_samples * 2, false });
 
@@ -54,7 +53,7 @@ std::vector<clusterModel> dclust(
     #pragma omp parallel for num_threads(threads) schedule(dynamic)
     #endif
     for (unsigned int i = 0; i < to_split.size(); ++i) {
-      bipartitionModel p = c_bipartition_sparse(A, bipartition_tol, bipartition_nonneg, clusters[to_split[i]].samples, calc_centers, calc_dist, bipartition_maxit, false, diag, random_values);
+      bipartitionModel p = c_bipartition_sparse(A, w, bipartition_tol, bipartition_nonneg, clusters[to_split[i]].samples, calc_centers, calc_dist, bipartition_maxit, false, diag);
       bool successful_split = p.size1 > min_samples && p.size2 > min_samples;
       if(calc_dist && successful_split && p.dist < min_dist) successful_split = false;
       if (successful_split) { // bipartition was successful
@@ -77,6 +76,7 @@ std::vector<clusterModel> dclust(
 
 std::vector<clusterModel> dclust(
   const Rcpp::NumericMatrix& A, 
+  Eigen::MatrixXd& w,
   const double min_dist, 
   const unsigned int min_samples, 
   const bool verbose,
@@ -85,18 +85,16 @@ std::vector<clusterModel> dclust(
   const bool bipartition_nonneg,
   const unsigned int bipartition_maxit,
   const bool calc_centers,
-  const bool diag,
-  const unsigned int seed) {
+  const bool diag) {
 
   bool calc_dist = (min_dist > 0);
   std::vector<clusterModel> clusters;
   std::vector<unsigned int> samples(A.cols());
   std::iota(samples.begin(), samples.end(), (int)0);
-  std::vector<double> random_values = getRandomValues(A.cols() * 2, seed);
   
   // initial bipartition
   if (verbose) Rprintf("\n# of divisions: ");
-  bipartitionModel p0 = c_bipartition_dense(A, bipartition_tol, bipartition_nonneg, samples, calc_centers, calc_dist, bipartition_maxit, false, diag, random_values);
+  bipartitionModel p0 = c_bipartition_dense(A, w, bipartition_tol, bipartition_nonneg, samples, calc_centers, calc_dist, bipartition_maxit, false, diag);
   clusters.push_back(clusterModel{ "0", p0.samples1, p0.center1, 0, p0.size1 < min_samples * 2, false });
   clusters.push_back(clusterModel{ "1", p0.samples2, p0.center2, 0, p0.size2 < min_samples * 2, false });
 
@@ -111,7 +109,7 @@ std::vector<clusterModel> dclust(
     #pragma omp parallel for num_threads(threads) schedule(dynamic)
     #endif
     for (unsigned int i = 0; i < to_split.size(); ++i) {
-      bipartitionModel p = c_bipartition_dense(A, bipartition_tol, bipartition_nonneg, clusters[to_split[i]].samples, calc_centers, calc_dist, bipartition_maxit, false, diag, random_values);
+      bipartitionModel p = c_bipartition_dense(A, w, bipartition_tol, bipartition_nonneg, clusters[to_split[i]].samples, calc_centers, calc_dist, bipartition_maxit, false, diag);
       bool successful_split = p.size1 > min_samples && p.size2 > min_samples;
       if(calc_dist && successful_split && p.dist < min_dist) successful_split = false;
       if (successful_split) { // bipartition was successful

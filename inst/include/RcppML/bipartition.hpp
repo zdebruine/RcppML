@@ -101,6 +101,7 @@ double rel_cosine(const Rcpp::NumericMatrix& A, const std::vector<unsigned int>&
 
 bipartitionModel c_bipartition_sparse(
   Rcpp::dgCMatrix& A,
+  Eigen::MatrixXd& w,
   const double tol,
   const bool nonneg,
   const std::vector<unsigned int> samples,
@@ -108,14 +109,12 @@ bipartitionModel c_bipartition_sparse(
   bool calc_dist, 
   const unsigned int maxit,
   const bool verbose,
-  const bool diag, 
-  const std::vector<double>& random_values) {
+  const bool diag) {
 
   unsigned int size1 = 0, size2 = 0;
   std::vector<double> center1(A.rows()), center2(A.rows());
   double dist = -1;
 
-  Eigen::MatrixXd w = randomMatrix(2, A.rows(), random_values);
   wdhmodel m = c_nmf2_sparse(A, w, tol, nonneg, maxit, verbose, diag, samples);
   std::vector<double> v(samples.size());
   for (unsigned int j = 0; j < samples.size(); ++j){
@@ -146,6 +145,7 @@ bipartitionModel c_bipartition_sparse(
 
 bipartitionModel c_bipartition_dense(
   const Rcpp::NumericMatrix& A,
+  Eigen::MatrixXd& w,
   const double tol,
   const bool nonneg,
   const std::vector<unsigned int> samples,
@@ -153,14 +153,12 @@ bipartitionModel c_bipartition_dense(
   bool calc_dist, 
   const unsigned int maxit,
   const bool verbose,
-  const bool diag,
-  const std::vector<double>& random_values) {
+  const bool diag) {
 
   unsigned int size1 = 0, size2 = 0;
   std::vector<double> center1(A.rows()), center2(A.rows());
   double dist = -1;
 
-  Eigen::MatrixXd w = randomMatrix(2, A.rows(), random_values);
   wdhmodel m = c_nmf2_dense(A, w, tol, nonneg, maxit, verbose, diag, samples);
   std::vector<double> v(samples.size());
   for (unsigned int j = 0; j < samples.size(); ++j){
