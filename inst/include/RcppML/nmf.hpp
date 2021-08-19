@@ -48,9 +48,12 @@ wdhmodel c_nmf_sparse(
     Rcpp::checkUserInterrupt();
 
     // reset diagonal and scale "h"
-    for (unsigned int i = 0; diag && i < k; ++i) {
-      d[i] = h.row(i).sum() + 1e-15;
-      for (unsigned int j = 0; j < A.cols(); ++j) h(i, j) /= d(i);
+    if(diag){
+      #pragma omp simd
+      for (unsigned int i = 0; i < k; ++i) {
+        d[i] = h.row(i).sum() + 1e-15;
+        for (unsigned int j = 0; j < A.cols(); ++j) h(i, j) /= d(i);
+      }
     }
 
     // update w
@@ -60,9 +63,12 @@ wdhmodel c_nmf_sparse(
     Rcpp::checkUserInterrupt();
 
     // reset diagonal and scale "w"
-    for (unsigned int i = 0; diag && i < k; ++i) {
-      d[i] = w.row(i).sum() + 1e-15;
-      for (unsigned int j = 0; j < A.rows(); ++j) w(i, j) /= d(i);
+    if(diag){
+      #pragma omp simd
+      for (unsigned int i = 0; i < k; ++i) {
+        d[i] = w.row(i).sum() + 1e-15;
+        for (unsigned int j = 0; j < A.rows(); ++j) w(i, j) /= d(i);
+      }
     }
 
     // calculate tolerance
@@ -117,9 +123,12 @@ wdhmodel c_nmf_dense(
     Rcpp::checkUserInterrupt();
 
     // reset diagonal and scale "h"
-    for (unsigned int i = 0; diag && i < k; ++i) {
-      d[i] = h.row(i).sum() + 1e-15;
-      for (unsigned int j = 0; j < A.cols(); ++j) h(i, j) /= d(i);
+    if(diag){
+      #pragma omp simd
+      for (unsigned int i = 0; i < k; ++i) {
+        d[i] = h.row(i).sum() + 1e-15;
+        for (unsigned int j = 0; j < A.cols(); ++j) h(i, j) /= d(i);
+      }
     }
 
     // update w
@@ -129,9 +138,12 @@ wdhmodel c_nmf_dense(
     Rcpp::checkUserInterrupt();
 
     // reset diagonal and scale "w"
-    for (unsigned int i = 0; diag && i < k; ++i) {
-      d[i] = w.row(i).sum() + 1e-15;
-      for (unsigned int j = 0; j < A.rows(); ++j) w(i, j) /= d(i);
+    if(diag){
+      #pragma omp simd
+      for (unsigned int i = 0; i < k; ++i) {
+        d[i] = w.row(i).sum() + 1e-15;
+        for (unsigned int j = 0; j < A.rows(); ++j) w(i, j) /= d(i);
+      }
     }
 
     // calculate tolerance
