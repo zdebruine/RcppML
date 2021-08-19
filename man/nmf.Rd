@@ -216,7 +216,7 @@ Lee, D, and Seung, HS (1999). "Learning the parts of objects by non-negative mat
 Franc, VC, Hlavac, VC, Navara, M. (2005). "Sequential Coordinate-Wise Algorithm for the Non-negative Least Squares Problem". Proc. Int'l Conf. Computer Analysis of Images and Patterns. Lecture Notes in Computer Science.
 }
 \seealso{
-\code{\link{nnls}}, \code{\link{project}}, \code{\link{mse}}, \code{\link{nmf2}}
+\code{\link{nnls}}, \code{\link{project}}, \code{\link{mse}}
 }
 \author{
 Zach DeBruine
