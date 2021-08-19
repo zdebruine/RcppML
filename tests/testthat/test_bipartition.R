@@ -18,7 +18,7 @@ test_that("Testing RcppML::nmf", {
   center1 <- rowMeans(A[,samples1 + 1])
   center2 <- rowMeans(A[,samples2 + 1])
   
-  # test that bipartition is as expected (DENSE)
+  # test that the bipartition is as expected (DENSE)
   model <- bipartition(A)
   expect_equal(model$dist, -1)
   expect_equal(model$size1 == 4 || model$size1 == 6, TRUE)
@@ -32,7 +32,7 @@ test_that("Testing RcppML::nmf", {
     expect_equal(abs(sum(model$center2 - center1)) < 1e-5, TRUE)
   }
 
-  # test that bipartition is as expected (SPARSE)
+  # test that the bipartition is as expected (SPARSE)
   A <- as(A, "dgCMatrix")
   model <- bipartition(A)
   expect_equal(model$dist, -1)
