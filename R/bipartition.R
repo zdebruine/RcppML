@@ -58,15 +58,17 @@ bipartition <- function(A, tol = 1e-4, nonneg = TRUE, samples = NULL, seed = NUL
   if(calc_dist) calc_centers <- TRUE
   if(max(samples) > ncol(A) || min(samples) < 1) stop("'samples' were not strictly in the range 1 to ncol(A)")
   samples <- samples - 1
-  if(is.null(seed) || is.na(seed) || seed < 0) seed <- 0
+
+  if(!is.null(seed) && !is.na(seed) && seed > 0) set.seed(123)
+  w <- matrix(runif(nrow(A) * 2), 2, nrow(A))
 
   if(is(A, "sparseMatrix")) {
     # input matrix "A" is sparse
     A <- as(A, "dgCMatrix")
-    Rcpp_bipartition_sparse(A, samples, tol, nonneg, calc_centers, calc_dist, maxit, verbose, diag, seed)
+    Rcpp_bipartition_sparse(A, w, samples, tol, nonneg, calc_centers, calc_dist, maxit, verbose, diag)
   } else {
     # input matrix "A" is dense
     A <- as.matrix(A)
-    Rcpp_bipartition_dense(A, samples, tol, nonneg, calc_centers, calc_dist, maxit, verbose, diag, seed)
+    Rcpp_bipartition_dense(A, w, samples, tol, nonneg, calc_centers, calc_dist, maxit, verbose, diag)
   }
 }

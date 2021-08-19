@@ -73,7 +73,8 @@
 #'
 dclust <- function(A, min_dist = 0, min_samples = 100, verbose = TRUE, threads = 0, tol = 1e-4, nonneg = TRUE, seed = NULL, ...) {
 
-  if(is.null(seed) || is.na(seed) || seed < 0) seed <- 0
+  if(!is.null(seed) && !is.na(seed) && seed > 0) set.seed(seed)
+  w <- matrix(runif(2 * nrow(A)), 2, nrow(A))
 
   diag <- TRUE
   maxit <- 100
@@ -88,10 +89,10 @@ dclust <- function(A, min_dist = 0, min_samples = 100, verbose = TRUE, threads =
   if(is(A, "sparseMatrix")) {
     # input matrix "A" is sparse
     A <- as(A, "dgCMatrix")
-    Rcpp_dclust_sparse(A, min_dist, min_samples, verbose, threads, tol, nonneg, maxit, calc_centers, diag, seed)
+    Rcpp_dclust_sparse(A, w, min_dist, min_samples, verbose, threads, tol, nonneg, maxit, calc_centers, diag)
   } else {
     # input matrix "A" is dense
     A <- as.matrix(A)
-    Rcpp_dclust_dense(A, min_dist, min_samples, verbose, threads, tol, nonneg, maxit, calc_centers, diag, seed)
+    Rcpp_dclust_dense(A, w, min_dist, min_samples, verbose, threads, tol, nonneg, maxit, calc_centers, diag)
   }
 }

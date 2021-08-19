@@ -49,19 +49,19 @@ Rcpp_nmf2_dense <- function(A, w_init, tol, nonneg, maxit, verbose, diag, sample
     .Call('_RcppML_Rcpp_nmf2_dense', PACKAGE = 'RcppML', A, w_init, tol, nonneg, maxit, verbose, diag, samples)
 }
 
-Rcpp_bipartition_sparse <- function(A_S4, samples, tol = 1e-4, nonneg = TRUE, calc_centers = TRUE, calc_dist = TRUE, maxit = 100L, verbose = FALSE, diag = TRUE, seed = 0L) {
-    .Call('_RcppML_Rcpp_bipartition_sparse', PACKAGE = 'RcppML', A_S4, samples, tol, nonneg, calc_centers, calc_dist, maxit, verbose, diag, seed)
+Rcpp_bipartition_sparse <- function(A_S4, w, samples, tol = 1e-4, nonneg = TRUE, calc_centers = TRUE, calc_dist = TRUE, maxit = 100L, verbose = FALSE, diag = TRUE, seed = 0L) {
+    .Call('_RcppML_Rcpp_bipartition_sparse', PACKAGE = 'RcppML', A_S4, w, samples, tol, nonneg, calc_centers, calc_dist, maxit, verbose, diag, seed)
 }
 
-Rcpp_bipartition_dense <- function(A, samples, tol = 1e-4, nonneg = TRUE, calc_centers = TRUE, calc_dist = TRUE, maxit = 100L, verbose = FALSE, diag = TRUE, seed = 0L) {
-    .Call('_RcppML_Rcpp_bipartition_dense', PACKAGE = 'RcppML', A, samples, tol, nonneg, calc_centers, calc_dist, maxit, verbose, diag, seed)
+Rcpp_bipartition_dense <- function(A, w, samples, tol = 1e-4, nonneg = TRUE, calc_centers = TRUE, calc_dist = TRUE, maxit = 100L, verbose = FALSE, diag = TRUE) {
+    .Call('_RcppML_Rcpp_bipartition_dense', PACKAGE = 'RcppML', A, w, samples, tol, nonneg, calc_centers, calc_dist, maxit, verbose, diag)
 }
 
-Rcpp_dclust_sparse <- function(A_S4, min_dist, min_samples, verbose, threads, bipartition_tol, bipartition_nonneg, bipartition_maxit, calc_centers, diag, seed) {
-    .Call('_RcppML_Rcpp_dclust_sparse', PACKAGE = 'RcppML', A_S4, min_dist, min_samples, verbose, threads, bipartition_tol, bipartition_nonneg, bipartition_maxit, calc_centers, diag, seed)
+Rcpp_dclust_sparse <- function(A_S4, w, min_dist, min_samples, verbose, threads, bipartition_tol, bipartition_nonneg, bipartition_maxit, calc_centers, diag) {
+    .Call('_RcppML_Rcpp_dclust_sparse', PACKAGE = 'RcppML', A_S4, w, min_dist, min_samples, verbose, threads, bipartition_tol, bipartition_nonneg, bipartition_maxit, calc_centers, diag)
 }
 
-Rcpp_dclust_dense <- function(A, min_dist, min_samples, verbose, threads, bipartition_tol, bipartition_nonneg, bipartition_maxit, calc_centers, diag, seed) {
-    .Call('_RcppML_Rcpp_dclust_dense', PACKAGE = 'RcppML', A, min_dist, min_samples, verbose, threads, bipartition_tol, bipartition_nonneg, bipartition_maxit, calc_centers, diag, seed)
+Rcpp_dclust_dense <- function(A, w, min_dist, min_samples, verbose, threads, bipartition_tol, bipartition_nonneg, bipartition_maxit, calc_centers, diag, seed) {
+    .Call('_RcppML_Rcpp_dclust_dense', PACKAGE = 'RcppML', A, w, min_dist, min_samples, verbose, threads, bipartition_tol, bipartition_nonneg, bipartition_maxit, calc_centers, diag, seed)
 }
 
