@@ -12,8 +12,13 @@
 #include <omp.h>
 #endif
 
+#ifndef EIGEN_NO_DEBUG
 #define EIGEN_NO_DEBUG
+#endif
+
+#ifndef EIGEN_INITIALIZE_MATRICES_BY_ZERO
 #define EIGEN_INITIALIZE_MATRICES_BY_ZERO
+#endif
 
 #ifndef RcppEigen__RcppEigen__h
 #include <RcppEigen.h>
