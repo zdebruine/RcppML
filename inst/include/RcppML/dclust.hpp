@@ -35,7 +35,7 @@ std::vector<clusterModel> dclust(
   std::vector<clusterModel> clusters;
   std::vector<unsigned int> samples(A.cols());
   std::iota(samples.begin(), samples.end(), (int)0);
-  std::vector<double> random_values = getRandomValues(A.cols() * 2, seed);
+  std::vector<double> random_values = getRandomValues(A.rows() * 2, seed);
   
   // initial bipartition
   if (verbose) Rprintf("\n# of divisions: ");
