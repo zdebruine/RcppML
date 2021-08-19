@@ -141,7 +141,7 @@
 #' @author Zach DeBruine
 #'
 #' @export
-#' @seealso \code{\link{nnls}}, \code{\link{project}}, \code{\link{mse}}, \code{\link{nmf2}}
+#' @seealso \code{\link{nnls}}, \code{\link{project}}, \code{\link{mse}}
 #' @md
 #' @examples
 #' library(Matrix)
