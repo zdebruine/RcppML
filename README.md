@@ -30,7 +30,7 @@ To use the development version of the R package, use `devtools`:
 devtools::install_github('zdebruine/RcppML')
 ```
 
-Current development version is v.0.3.0:
- - added `dclust`, `bipartition`, `nmf2`, and performance updates to other functions
+Current development version is v.0.3.2:
+ - added `dclust`, `bipartition`, and performance updates to other functions.
 
 The version on CRAN only supports `nmf`, `project`, `nnls`, and `mse`.
