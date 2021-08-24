@@ -13,11 +13,8 @@
 #include <RcppML/bits.hpp>
 #include <RcppML/nnls.hpp>
 #include <RcppML/project.hpp>
-#include <RcppML/mse.hpp>
 #include <RcppML/nmf.hpp>
-#include <RcppML/nmf1.hpp>
-#include <RcppML/nmf2.hpp>
 #include <RcppML/bipartition.hpp>
-#include <RcppML/dclust.hpp>
+#include <RcppML/cluster.hpp>
 
 #endif
