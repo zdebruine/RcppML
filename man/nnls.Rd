@@ -7,12 +7,11 @@
 nnls(
   a,
   b,
-  x = NULL,
   nonneg = TRUE,
+  L1 = 0,
   fast_maxit = 10,
   cd_maxit = 1000,
-  cd_tol = 1e-08,
-  L1 = 0
+  cd_tol = 1e-08
 )
 }
 \arguments{
@@ -20,17 +19,15 @@ nnls(
 
 \item{b}{vector or matrix giving the right-hand side(s) of the linear system}
 
-\item{x}{initial value for \code{x} of same dimensions as \code{b}. Leave \code{NULL} to use FAST initialization (default).}
-
 \item{nonneg}{enforce non-negativity}
+
+\item{L1}{L1/LASSO penalty to be subtracted from \code{b}. Penalty should be between 0 and 1. It will be multiplied by \code{max(b)} to ensure proper scaling.}
 
 \item{fast_maxit}{maximum number of FAST iterations}
 
 \item{cd_maxit}{maximum number of coordinate descent iterations}
 
 \item{cd_tol}{maximum relative change for any coefficient between solutions across consecutive coordinate descent iterations at convergence}
-
-\item{L1}{L1/LASSO penalty to be subtracted from \code{b}}
 }
 \value{
 vector or matrix giving solution for \code{x}
@@ -39,7 +36,7 @@ vector or matrix giving solution for \code{x}
 Solves the equation \code{a \%*\% x = b} for \code{x}. \code{b} can be either a vector or a matrix. Non-negativity constraints are optional.
 }
 \details{
-This is the fastest implementation of non-negative least squares (NNLS).
+This is a very fast implementation of non-negative least squares (NNLS).
 
 When \code{nonneg = TRUE}, non-negative solutions are found by a two-step process:
 \enumerate{
@@ -49,21 +46,17 @@ When \code{nonneg = TRUE}, non-negative solutions are found by a two-step proces
 
 When \code{nonneg = FALSE}, no non-negativity constraints are enforced and the Eigen Cholesky solver is used to quickly find the unconstrained solution.
 
-Default parameters will generally suffice. However, if an initial value for \code{x} is supplied, only coordinate descent will be run. This is generally only useful when a near-exact solution is available.
+Default parameters will generally suffice. However, if coordinate descent should be initialized with a zero-filled vector (and not the FAST approximation), set \code{fast_maxit = 0}, and Cholesky decomposition will not be run.
+Similarly, if the system is well-conditioned and small (i.e. < 25 variables) there may be no need for coordinate descent, and one may set \code{cd_maxit = 0} to use only the FAST approximation.
 
-If \code{a} is not positive, coordinate descent least squares will always be used, and with zero-filled initialization if \code{x = NULL}.
+\code{a} must be symmetric positive definite if \code{fast_maxit != 0}, but this is not checked.
 
 See our BioRXiv manuscript (references) for benchmarking against Lawson-Hanson NNLS and for a more technical introduction to these methods.
 }
 \section{Coordinate Descent NNLS}{
 
 Least squares by \strong{sequential coordinate descent} is used to ensure the solution returned is exact. This algorithm was
-introduced by Franc et al. (2005), and our implementation is adapted from the NNLM R package by Lin and Boutros (2020).
-There are two ways to initialize the coordinate descent solver:
-\enumerate{
-\item Specify a value for \code{x}, either a random or zero-filled vector, or an approximate solution.
-\item Leave \code{x = NULL} (recommended) and use FAST initialization.
-}
+introduced by Franc et al. (2005), and our implementation is inspired by the NNLM R package by Lin and Boutros (2020).
 }
 
 \section{FAST NNLS}{
@@ -101,13 +94,6 @@ y <- matrix(101:150,50,1)
 beta <- solve(crossprod(X)) \%*\% crossprod(X, y)
 beta
 beta <- nnls(crossprod(X), crossprod(X, y))
-
-# example adapted from multiway::fnnls example 4
-X <- matrix(rnorm(2000),100,20)
-btrue <- runif(20)
-y <- X\%*\%btrue + rnorm(100)
-beta <- nnls(crossprod(X),crossprod(X,y))
-crossprod(btrue-beta)/20
 
 }
 \references{

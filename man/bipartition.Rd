@@ -18,7 +18,7 @@ bipartition(
 \arguments{
 \item{A}{dense or sparse matrix of features-by-samples}
 
-\item{tol}{correlation distance (\eqn{1 - R^2}) between \eqn{w} across consecutive iterations at which to stop factorization}
+\item{tol}{stopping criteria, correlation distance (\eqn{1 - cor(w_i, w_{i-1})}) between \eqn{w} across consecutive iterations at which to stop factorization}
 
 \item{nonneg}{enforce non-negativity}
 
@@ -60,15 +60,13 @@ This function is a wrapper of rank-2 \code{\link{nmf}} with added support for fa
 
 The \code{...} argument hides several parameters that may be adjusted, although defaults should entirely satisfy:
 \itemize{
-\item \code{diag}, set to \code{FALSE} to disable model scaling by the diagonal. When \code{diag = FALSE}, symmetric factorization cannot occur and the difference between factors may not be linear with the second-left vector of an SVD.
 \item \code{maxit}, default 100. Maximum number of alternating updates of \eqn{w} and \eqn{h}.
-\item \code{calc_centers}, default TRUE. Calculate centroids for each cluster, giving mean feature loadings for all samples in each cluster. If \code{calc_centers = FALSE} and \code{calc_dist = TRUE}, then \code{calc_centers} will be set to \code{TRUE}.
 }
 }
 
 \examples{
 data(iris)
-bipartition(iris[,1:4])
+bipartition(iris[,1:4], calc_dist = TRUE)
 
 }
 \references{

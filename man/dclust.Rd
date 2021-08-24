@@ -9,7 +9,6 @@ dclust(
   min_dist = 0,
   min_samples = 100,
   verbose = TRUE,
-  threads = 0,
   tol = 1e-04,
   nonneg = TRUE,
   seed = NULL,
@@ -19,13 +18,11 @@ dclust(
 \arguments{
 \item{A}{dense or sparse matrix of features-by-samples}
 
-\item{min_dist}{stopping criteria giving the minimum cosine distance of samples within a cluster to the center of their assigned vs. unassigned cluster}
+\item{min_dist}{stopping criteria giving the minimum cosine distance of samples within a cluster to the center of their assigned vs. unassigned cluster. If \code{0}, neither this distance nor cluster centroids will be calculated.}
 
 \item{min_samples}{stopping criteria giving the minimum number of samples permitted in a cluster}
 
 \item{verbose}{print number of divisions in each generation}
-
-\item{threads}{number of CPU threads, default \code{0} for all available threads}
 
 \item{tol}{in rank-2 NMF, the correlation distance (\eqn{1 - R^2}) between \eqn{w} across consecutive iterations at which to stop factorization}
 
@@ -89,9 +86,7 @@ Other than setting the seed, reproducibility may be improved by setting \code{to
 
 The \code{...} argument hides several parameters that may be adjusted, although defaults should entirely satisfy:
 \itemize{
-\item \code{diag}, set to \code{FALSE} to disable model scaling by the diagonal. When \code{diag = FALSE}, symmetric factorization cannot occur and the difference between factors may not be linear with the second-left vector of an SVD.
 \item \code{maxit}, default 100. In rank-2 NMF, maximum number of alternating updates of \eqn{w} and \eqn{h}.
-\item \code{calc_centers}, default TRUE. Calculate centroids for each cluster, giving mean feature loadings for all samples in each cluster. If \code{min_dist != 0}, then \code{calc_centers} will always be \code{TRUE}.
 }
 }
 

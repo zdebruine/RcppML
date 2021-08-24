@@ -4,7 +4,7 @@
 \alias{mse}
 \title{Mean Squared Error loss of a factor model}
 \usage{
-mse(A, w, d = NULL, h, threads = 0)
+mse(A, w, d = NULL, h)
 }
 \arguments{
 \item{A}{sparse matrix (of or coercible to \code{dgCMatrix}) of samples (columns) by features (rows)}
@@ -14,28 +14,31 @@ mse(A, w, d = NULL, h, threads = 0)
 \item{d}{optional diagonal scaling vector (if other than 1's) of rank length}
 
 \item{h}{dense matrix of class \code{matrix} with samples (columns) by factors (rows)}
-
-\item{threads}{number of CPU threads for parallelization, default \code{0} for all available threads.}
 }
 \value{
-scalar, MSE of the factorization
+mean squared error of the factorization model
 }
 \description{
 MSE of factor models \code{w} and \code{h} given sparse matrix \eqn{A}
 }
 \details{
-Calculates the cross-product of \eqn{wh} or \eqn{wdh} (if \eqn{d} is specified),
+Mean squared error of a matrix factorization of the form \eqn{A = wdh} is given by \deqn{\frac{(A - wdh)^2}{ij}} where \eqn{i} and \eqn{j} are the number of rows and columns in \eqn{A}.
+
+Thus, this function simply calculates the cross-product of \eqn{wh} or \eqn{wdh} (if \eqn{d} is specified),
 subtracts that from \eqn{A}, squares the result, and calculates the mean of all values.
 
-Parallelization is used across all available threads as determined by OpenMP.
+\strong{Parallelization.} Calculation of mean squared error is performed in parallel across columns in \code{A} using the number of threads set by \code{\link{setRcppMLthreads}}.
+By default, all available threads are used, see \code{\link{getRcppMLthreads}}.
 
-If "A" is a sparse matrix, column-major iterators are used in a C++ backend for high performance. Dense "A" is also supported.
+\strong{Specializations.} There are specializations for dense and sparse input matrices.
 }
 \examples{
 library(Matrix)
 A <- Matrix::rsparsematrix(1000, 1000, 0.1)
-model <- nmf(A, k = 10)
-mse(A, model$w, model$d, model$h)
+model <- nmf(A, k = 10, tol = 0.01)
+c_mse <- mse(A, model$w, model$d, model$h)
+R_mse <- mean((A - model$w \%*\% Diagonal(x = model$d) \%*\% model$h)^2)
+all.equal(c_mse, R_mse)
 
 }
 \author{
