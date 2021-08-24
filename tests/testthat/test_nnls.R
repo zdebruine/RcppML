@@ -1,4 +1,4 @@
-test_that("Testing RcppML::nnls", {
+test_that("Testing nnls", {
   
   # a system of equations where 'a' is a matrix and 'b' is either a vector or a matrix
   a <- matrix(c(5.905428, 5.085229, 4.762723, 4.777141, 3.675643,
@@ -19,14 +19,11 @@ test_that("Testing RcppML::nnls", {
   expect_equal(true_solution, as.vector(nnls(a, b, nonneg = F)), tolerance = 1e-6)
 
   # nnls solution should be equal to true solution
-  expect_equal(true_nnls_solution, as.vector(RcppML::nnls(a, b, nonneg = TRUE, cd_maxit = 1000, cd_tol = 1e-9)), tolerance = 1e-6)
+  expect_equal(true_nnls_solution, as.vector(nnls(a, b, nonneg = TRUE, cd_maxit = 1000, cd_tol = 1e-9)), tolerance = 1e-6)
 
   # solution from a parallelized matrix "b" should be the same as the unparallelized vector "b"
-  expect_equal(as.vector(RcppML::nnls(a, b_matrix[,2])), as.vector(RcppML::nnls(a, b_matrix)[,2]), tolerance = 1e-5)
-  
-  # check that coordinate descent only gives same solution as FAST + CD
-  expect_equal(RcppML::nnls(a, b, x = runif(5), cd_maxit = 1000), RcppML::nnls(a, b, cd_maxit = 1000))  
+  expect_equal(as.vector(nnls(a, b_matrix[,2])), as.vector(nnls(a, b_matrix)[,2]), tolerance = 1e-5)
 
-  # check that incompatible sizes give an error
-  expect_error(RcppML::nnls(a, as.vector(1:3)));
+    # check that incompatible sizes give an error
+  expect_error(nnls(a, as.vector(1:3)));
 })

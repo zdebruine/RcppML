@@ -1,4 +1,5 @@
 test_that("Testing RcppML::nmf", {
+  setRcppMLthreads(1)
   
   A <- rbind(c(1.7009878, 0.00000000, 0.9542116, 0.68738015, 1.1690738012, 1.4190147, 0.8697167, 0.72520486, 0.00000000, 0.0000000),
              c(1.5901502, 0.61081441, 0.6841591, 0.00000000, 0.9110474099, 0.5809928, 0.0000000, 0.99028990, 0.01800186, 0.3915861),
@@ -19,31 +20,25 @@ test_that("Testing RcppML::nmf", {
   center2 <- rowMeans(A[,samples2 + 1])
   
   # test that the bipartition is as expected (DENSE)
-  model <- bipartition(A)
-  expect_equal(model$dist, -1)
+  model <- bipartition(A, calc_dist = TRUE)
+  expect_equal(model$dist, 0.3197266, tolerance = 1e-4)
   expect_equal(model$size1 == 4 || model$size1 == 6, TRUE)
+  
   if(model$size1 == 6){
     expect_equal(model$size2 == 4, TRUE)
-    expect_equal(abs(sum(model$center1 - center1)) < 1e-5, TRUE)
-    expect_equal(abs(sum(model$center2 - center2)) < 1e-5, TRUE)
   } else {
     expect_equal(model$size2 == 6, TRUE)
-    expect_equal(abs(sum(model$center1 - center2)) < 1e-5, TRUE)
-    expect_equal(abs(sum(model$center2 - center1)) < 1e-5, TRUE)
   }
 
   # test that the bipartition is as expected (SPARSE)
   A <- as(A, "dgCMatrix")
-  model <- bipartition(A)
-  expect_equal(model$dist, -1)
+  model <- bipartition(A, calc_dist = TRUE)
+  expect_equal(model$dist, 0.3197266, tolerance = 1e-4)
   expect_equal(model$size1 == 4 || model$size1 == 6, TRUE)
+  
   if(model$size1 == 6){
     expect_equal(model$size2 == 4, TRUE)
-    expect_equal(abs(sum(model$center1 - center1)) < 1e-5, TRUE)
-    expect_equal(abs(sum(model$center2 - center2)) < 1e-5, TRUE)
   } else {
     expect_equal(model$size2 == 6, TRUE)
-    expect_equal(abs(sum(model$center1 - center2)) < 1e-5, TRUE)
-    expect_equal(abs(sum(model$center2 - center1)) < 1e-5, TRUE)
   }
 })
