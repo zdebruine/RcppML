@@ -12,9 +12,7 @@
 #'
 #' @section Advanced parameters:
 #' The \code{...} argument hides several parameters that may be adjusted, although defaults should entirely satisfy:
-#' * \code{diag}, set to \code{FALSE} to disable model scaling by the diagonal. When \code{diag = FALSE}, symmetric factorization cannot occur and the difference between factors may not be linear with the second-left vector of an SVD.
 #' * \code{maxit}, default 100. Maximum number of alternating updates of \eqn{w} and \eqn{h}.
-#' * \code{calc_centers}, default TRUE. Calculate centroids for each cluster, giving mean feature loadings for all samples in each cluster. If \code{calc_centers = FALSE} and \code{calc_dist = TRUE}, then \code{calc_centers} will be set to \code{TRUE}.
 #'
 #' @inheritParams nmf
 #' @param samples samples to include in bipartition, numbered from 1 to \code{ncol(A)}. Default is \code{NULL} for all samples.
@@ -43,7 +41,7 @@
 #' @md
 #' @examples
 #' data(iris)
-#' bipartition(iris[,1:4])
+#' bipartition(iris[,1:4], calc_dist = TRUE)
 #' 
 bipartition <- function(A, tol = 1e-4, nonneg = TRUE, samples = NULL, seed = NULL, verbose = FALSE, calc_dist = FALSE, ...) {
   
@@ -52,23 +50,20 @@ bipartition <- function(A, tol = 1e-4, nonneg = TRUE, samples = NULL, seed = NUL
   maxit <- 100
   params <- list(...)
   if(is.null(samples)) samples <- 1:ncol(A)
-  if(!is.null(params$diag)) diag <- params$diag
-  if(!is.null(params$calc_centers)) calc_centers <- params$calc_centers
   if(!is.null(params$maxit)) maxit <- params$maxit
   if(calc_dist) calc_centers <- TRUE
   if(max(samples) > ncol(A) || min(samples) < 1) stop("'samples' were not strictly in the range 1 to ncol(A)")
   samples <- samples - 1
 
-  if(!is.null(seed) && !is.na(seed) && seed > 0) set.seed(123)
-  w <- matrix(runif(nrow(A) * 2), 2, nrow(A))
+  if(is.null(seed)) seed <- 0
 
   if(is(A, "sparseMatrix")) {
     # input matrix "A" is sparse
     A <- as(A, "dgCMatrix")
-    Rcpp_bipartition_sparse(A, w, samples, tol, nonneg, calc_centers, calc_dist, maxit, verbose, diag)
+    Rcpp_bipartition_sparse(A, samples, tol, nonneg, calc_dist, maxit, verbose, seed)
   } else {
     # input matrix "A" is dense
     A <- as.matrix(A)
-    Rcpp_bipartition_dense(A, w, samples, tol, nonneg, calc_centers, calc_dist, maxit, verbose, diag)
+    Rcpp_bipartition_dense(A, samples, tol, nonneg, calc_dist, maxit, verbose, seed)
   }
 }

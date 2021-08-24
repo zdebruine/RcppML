@@ -4,120 +4,91 @@
 #'
 #' @details
 #' This fast non-negative matrix factorization (NMF) implementation decomposes a matrix \eqn{A} into lower-rank
-#'  non-negative matrices \eqn{w} and \eqn{h}, with factors scaled to sum to 1 via multiplication by a diagonal, \eqn{d}:
-#' \deqn{A = wdh}.
-#' 
+#'  non-negative matrices \eqn{w} and \eqn{h}, with factors scaled to sum to 1 via multiplication by a diagonal, \eqn{d}: \deqn{A = wdh}
+#'
 #' The scaling diagonal enables symmetric factorization, convex L1 regularization, and consistent factor scalings regardless of random initialization.
 #' 
 #' The factorization model is randomly initialized, and \eqn{w} and \eqn{h} are updated alternately using least squares. 
-#' Given \eqn{A} and \eqn{w}, \eqn{h} is updated according to the equation:
-#'
-#' \deqn{w^Twh = wA_j}
+#' Given \eqn{A} and \eqn{w}, \eqn{h} is updated according to the equation: \deqn{w^Twh = wA_j}
 #'
 #' This equation is in the form \eqn{ax = b} where \eqn{a = w^Tw} \eqn{x = h} and \eqn{b = wA_j} for all columns \eqn{j} in \eqn{A}.
 #'
-#' The corresponding update for \eqn{w} is \deqn{hh^Tw = hA^T_j}.
+#' The corresponding update for \eqn{w} is \deqn{hh^Tw = hA^T_j}
 #'
-#' The alternating least squares projections (see \code{\link{project}} subroutine) are repeated until a stopping criteria is satisfied, which in this implementation is either a maximum number of 
-#' iterations or based on the correlation of models between consecutive iterations.
-#'
-#' For theoretical and practical considerations, please see our manuscript: "DeBruine ZJ, Melcher K, Triche TJ (2021) 
-#' High-performance non-negative matrix factorization for large single cell data." on BioRXiv.
-#'
-#' The implementation is carefully optimized for parallelization in high-performance computing environments. There are specializations for dense and sparse, and symmetric
-#' input matrices. Factorizations of rank-1 and -2 are not multithreaded due to excessive overhead.
-#' 
-#' @section Stopping criteria:
-#' Use the \code{tol} parameter to control the stopping criteria for alternating updates
-#' * \code{tol = 1e-2} is appropriate for approximate mean squared error determination and coarse cross-validation, for example in rank determination
-#' * \code{tol = 1e-3} to \code{1e-4} are suitable for rapid expermentation, cross-validation, and preliminary analysis
+#' **Stopping criteria.** Alternating least squares projections (see \code{\link{project}} subroutine) are repeated until a stopping criteria is satisfied, which is either a maximum number of 
+#' iterations or a tolerance based on the correlation distance between models (\eqn{1 - cor(w_i, w_{i-1})}) across consecutive iterations. Use the \code{tol} parameter to control the stopping criteria for alternating updates:
+#' * \code{tol = 1e-2} is appropriate for approximate mean squared error determination and coarse cross-validation, useful for rank determination.
+#' * \code{tol = 1e-3} to \code{1e-4} are suitable for rapid expermentation, cross-validation, and preliminary analysis.
 #' * \code{tol = 1e-5} and smaller for publication-quality runs
+#' * \code{tol = 1e-10} and smaller for robust factorizations at or near machine-precision
+#'
+#' **Parallelization.** Least squares projections in factorizations of rank-3 and greater are parallelized using the number of threads set by \code{\link{setRcppMLthreads}}. 
+#' By default, all available threads are used, see \code{\link{getRcppMLthreads}}.
+#' The overhead of parallization is too great for rank-1 and -2 factorization.
+#'
+#' **Specializations.** There are specializations for dense and sparse, and symmetric input matrices, and for rank-1 and rank-2 factorization. Sparse optimization is automatically applied if \code{A} is a \code{Matrix::dgCMatrix}, or inherits from the \code{Matrix::sparseMatrix} superclass. 
+#' Generally, these optimizations are worthwhile if \code{A} is >70% sparse. When \code{A} is <70% sparse, it should be supplied as a dense matrix to avoid the unnecessary overhead of the sparse matrix format.
 #' 
-#' The \code{maxit} parameter is a secondary stopping criterion that takes effect only if \code{tol} is not satisfied 
-#' by the maximum number of specified iterations.
-#' 
-#' @section Sparse optimization:
-#' Sparse optimization is automatically applied if \code{A} is a \code{Matrix::dgCMatrix}, or inherits from the \code{Matrix::sparseMatrix} superclass. 
-#' Generally, these optimizations are worthwhile if \code{A} is >70% sparse.
+#' **L1 regularization**. L1 penalization increases the sparsity of factors, but does not change the information content of the model 
+#' or the relative contributions of the leading coefficients in each factor to the model. L1 regularization only slightly increases the error of a model. 
+#' L1 penalization should be used to aid interpretability. Penalty values should range from 0 to 1, where 1 gives complete sparsity. In this implementation of NMF, 
+#' a scaling diagonal ensures that the L1 penalty is equally applied across all factors regardless of random initialization and the distribution of the model. 
+#' Many other implementations of matrix factorization claim to apply L1, but the magnitude of the penalty is at the mercy of the random distribution and 
+#' more significantly affects factors with lower overall contribution to the model. L1 regularization of rank-1 and rank-2 factorizations has no effect.
 #'
-#' When \code{A} is <70% sparse, it should be supplied as a dense matrix to avoid the unnecessary overhead of the sparse matrix format.
-#'
-#' @section L1 regularization:
-#' L1 penalization increases the sparsity of factors, but does not change the information content of the model 
-#' or the relative contributions of the leading coefficients in each factor. L1 regularization only minorly increases the error of a model.
-#'
-#' L1 penalization should be used to aid interpretability as needed. Penalty values should range from 0 to 1, where 1 is 
-#' complete sparsity. Note that non-negativity constraints already introduce significant sparsity, so L1 regularization may not always be needed.
-#'
-#' In this implementation of NMF, a scaling diagonal ensures that the L1 penalty is equally applied across all factors regardless 
-#' of random initialization and the distribution of the model. Many other implementations of matrix factorization claim to apply L1, but 
-#' the magnitude of the penalty is at the mercy of the random distribution and more significantly affects factors with lower overall contribution to the model.
-#'
-#' @section Rank-2 factorization:
-#' When \eqn{k = 2}, a very fast optimized algorithm is used. 
-#'
-#' Two-variable least squares solutions to the problem \eqn{ax = b} are found by direct substitution:
+#' **Rank-2 factorization.** When \eqn{k = 2}, a very fast optimized algorithm is used. Two-variable least squares solutions to the problem \eqn{ax = b} are found by direct substitution:
 #' \deqn{x_1 = \frac{a_{22}b_1 - a_{12}b_2}{a_{11}a_{22} - a_{12}^2}}
 #' \deqn{x_2 = \frac{a_{11}b_2 - a_{12}b_1}{a_{11}a_{22} - a_{12}^2}}
 #'
-#' In the above equations, the denominator is constant and thus needs to be calculated only once. Additionally, if non-negativity constraints are to be imposed, if \eqn{x_1 < 0} then \eqn{x_1 = 0} and \eqn{x_2 = \frac{b_1}{a_{11}}}. 
+#' In the above equations, the denominator is constant and thus needs to be calculated only once. Additionally, if non-negativity constraints are to be imposed, 
+#' if \eqn{x_1 < 0} then \eqn{x_1 = 0} and \eqn{x_2 = \frac{b_1}{a_{11}}}. 
 #' Similarly, if \eqn{x_2 < 0} then \eqn{x_2 = 0} and \eqn{x_1 = \frac{b_2}{a_{22}}}.
-#'
-#' \code{RcppML::nmf} also introduces improved vectorization, compile-time optimization, and performs no transposition of \code{A} for rank-2 factorizations.
-#'
-#' L1 regularization of a rank-2 factorization of the form \eqn{A = wdh} has no effect, and thus is not supported.
-#'
-#' Results of a rank-2 factorization should be reproducible regardless of random seed.
 #'
 #' Rank-2 NMF is useful for bipartitioning, and is a subroutine in \code{\link{bipartition}}, where the sign of the difference between sample loadings
 #' in both factors gives the partitioning.
 #'
-#' @section Rank-1 factorization:
-#' Rank-1 factorization by alternating least squares gives vectors equivalent to the first singular vectors in an SVD. It is a normalization of the data to a middle point, 
-#' and may be useful for ordering samples based on the most significant axis of variation (i.e. pseudotime trajectories).
+#' **Rank-1 factorization.** Rank-1 factorization by alternating least squares gives vectors equivalent to the first singular vectors in an SVD. It is a normalization of the data to a middle point, 
+#' and may be useful for ordering samples based on the most significant axis of variation (i.e. pseudotime trajectories). Diagonal scaling guarantees consistent linear 
+#' scaling of the factor across random restarts.
 #'
-#' One-variable least squares solutions to the problem \eqn{ax = b} are directly available, thus the implementation can be highly optimized.
+#' **Random seed and reproducibility.** Results of a rank-1 and rank-2 factorizations should be reproducible regardless of random seed. For higher-rank models, 
+#' results across random restarts should, in theory, be comparable at very high tolerances (i.e. machine precision for _double_, corresponding to about \code{tol = 1e-10}). However, to guarantee
+#' reproducibility without such low tolerances, set the \code{seed} argument. Note that \code{set.seed()} will not work. Only random initialization is supported, as other methods 
+#' incur unnecessary overhead and sometimes trap updates into local minima.
 #'
-#' Diagonal scaling is applied for consistent linear scaling of both factors across random restarts, and thus always converges to the same solution regardless of random seed.
-#'
-#' @section Symmetric factorization:
-#' Special optimization for symmetric matrices is automatically applied. Specifically, alternating updates of \code{w} and \code{h} 
-#' require transposition of \code{A}, but \code{A == t(A)} when \code{A} is symmetric, thus no up-front transposition is performed.
-#'
-#' @section Reproducibility:
-#' Specify a \code{seed} to guarantee absolute reproducibility between restarts. Only random initialization is supported, as other 
-#' methods incur unnecessary overhead and sometimes trap updates into local minima.
-#' 
-#' Because random initializations are used, models may be different across restarts. Factors with lower diagonal weights tend to be most different. 
-#' Note that comparable loss values (mean squared error) are achieved even if these models may differ. Finding the exact solution is NP-hard.
-#'
-#' In ongoing work, we are exploring robust factorization solution paths using a novel algorithm similar to rank-truncated SVD.
-#' 
-#' @section Rank determination:
-#' This function does not attempt to suggest a mechanism for rank determination. Like any clustering algorithm or dimensional reduction, 
+#' **Rank determination.** This function does not attempt to provide a method for rank determination. Like any clustering algorithm or dimensional reduction,
 #' finding the optimal rank can be subjective. An easy way to 
 #' estimate rank uses the "elbow method", where the inflection point on a plot of Mean Squared Error loss (MSE) vs. rank 
 #' gives a good idea of the rank at which most of the signal has been captured in the model. Unfortunately, this inflection point
 #' is not often as obvious for NMF as it is for SVD or PCA.
 #' 
 #' k-fold cross-validation is a better method. Missing value of imputation has previously been proposed, but is arguably no less subjective 
-#' than test-training splits and requires computationally
-#' slower factorization updates using missing values, which are not supported here.
-#' 
-#' @section Advanced parameters:
-#' The \code{...} argument hides several parameters that may be adjusted, although defaults should entirely satisfy:
-#' * \code{cd_maxit}, default 1000. See \code{\link{nnls}}.
-#' * \code{fast_maxit}, default 10. See \code{\link{nnls}}.
-#' * \code{cd_tol}, default 1e-8. See \code{\link{nnls}}.
-#' * \code{diag}, set to \code{FALSE} to disable model scaling by the diagonal. When \code{diag = FALSE}, symmetric factorization cannot occur 
-#' and L1 regularization is not convex with respect to the factorization model.
+#' than test-training splits and requires computationally slower factorization updates using missing values, which are not supported here.
 #'
-#' @inheritParams project
-#' @param k rank, or initial matrix for \eqn{w}
-#' @param tol correlation distance (\eqn{1 - R^2}) between \eqn{w} across consecutive iterations at which to stop factorization
+#' **Symmetric factorization.** Special optimization for symmetric matrices is automatically applied. Specifically, alternating updates of \code{w} and \code{h} 
+#' require transposition of \code{A}, but \code{A == t(A)} when \code{A} is symmetric, thus no up-front transposition is performed.
+#'
+#' **Publication reference.** For theoretical and practical considerations, please see our manuscript: "DeBruine ZJ, Melcher K, Triche TJ (2021) 
+#' High-performance non-negative matrix factorization for large single cell data." on BioRXiv.
+#'
+#' @section Advanced parameters:
+#' The \code{...} argument holds several parameters that may be adjusted, although defaults should entirely satisfy:
+#' * \code{cd_maxit = 1000}. See \code{\link{nnls}}.
+#' * \code{fast_maxit = 10}. See \code{\link{nnls}}.
+#' * \code{cd_tol = 1e-8}. See \code{\link{nnls}}.
+#' * \code{diag = TRUE}. Set to \code{FALSE} to disable model scaling by the diagonal. When \code{diag = FALSE}, symmetric factorization cannot occur 
+#' and L1 regularization is not convex with respect to the factorization model.
+#' * \code{updateInPlace = FALSE}. Set to \code{TRUE} to avoid up-front transposition of \eqn{A} (thus saving memory, if that is a concern) and use a slower update method instead.
+#'
+#' If runtime is a major concern, it may be worthwhile to experiment with \code{fast_maxit = 0} or \code{cd_maxit = 0} to switch between an exclusively Cholesky-based or coordinate-descent-based solver
+#' in place of the hybrid solver. Generally, the hybrid solver is fastest, but there are many edge cases where dedicated solvers may perform marginally better.
+#'
+#' @inherit project
+#' @param k rank
+#' @param tol stopping criteria, correlation distance (\eqn{1 - cor(w_i, w_{i-1})}) between \eqn{w} across consecutive iterations at which to stop factorization
+#' @param maxit stopping criteria, maximum number of alternating updates of \eqn{w} and \eqn{h}
 #' @param L1 L1/LASSO penalties between 0 and 1, array of length two for \code{c(w, h)}
 #' @param seed random seed for model initialization
-#' @param maxit maximum number of alternating updates of \eqn{w} and \eqn{h}
 #' @param verbose print model tolerances between iterations
 #' @return
 #' A list giving the factorization model:
@@ -165,55 +136,20 @@
 #' plot(model$w, t(model$h))
 #' # see package vignette for more examples
 #'
-nmf <- function(A, k, tol = 1e-3, maxit = 100, verbose = TRUE, nonneg = TRUE, L1 = c(0, 0), seed = NULL, threads = 0, ...) {
-
-  params <- list(...)
-  diag <- ifelse(!is.null(params$diag), params$diag, TRUE)
-  fast_maxit <- ifelse(!is.null(params$fast_maxit), params$fast_maxit, 10)
-  cd_maxit <- ifelse(!is.null(params$cd_maxit), params$cd_maxit, 1000)
-  cd_tol <- ifelse(!is.null(params$cd_tol), params$cd_tol, 1e-8)
-
-  if(!("matrix" %in% class(k))) {
-    if(!is.null(seed) && !is.na(seed) && seed > 0) set.seed(seed)
-    init <- matrix(runif(k * nrow(A)), k, nrow(A))
-  } else {
-    if(nrow(k) == nrow(A)) {
-      init <- t(k)
-      k <- ncol(init)
-    } else if(ncol(k) == nrow(A)){
-      init <- k 
-      k <- ncol(init)
-    } else stop("dimensions of initialization 'w' matrix are incompatible with dimensions of 'A'")
-  }
-
+nmf <- function(A, k, tol = 1e-4, maxit = 100, verbose = TRUE, nonneg = TRUE, L1 = c(0, 0), seed = NULL, ...) {
+  p <- list(...)
+  if(is.null(p$diag)) p$diag <- TRUE
+  if(is.null(p$fast_maxit)) p$fast_maxit <- 10 
+  if(is.null(p$cd_maxit)) p$cd_maxit <- 100
+  if(is.null(p$cd_tol)) p$cd_tol <- 1e-8
+  if(is.null(p$updateInPlace)) p$updateInPlace <- FALSE
+  if(is.null(seed) || is.na(seed) || seed < 1) seed <- 0
   if (length(L1) == 1) L1 <- rep(L1, 2)
-  if((L1[1] > 0 || L1[2] > 0) && k < 3) warning("L1 regularization was applied to a factorization of rank-1 or rank-2. It will have no effect.")
-  if(L1[1] < 0 || L1[2] < 0) stop("negative values for L1 are not convex with respect to any matrix factorization")
+  threads <- getRcppMLthreads()
 
-  # check for symmetry (approximately)
-  is_symmetric <- dim(A)[1] == dim(A)[2]
-  if(is_symmetric && k > 2) is_symmetric <- (all(A[1, ] == A[ ,1])) && all((A[nrow(A), ] == A[, ncol(A)]))
-
-  if(is(A, "sparseMatrix") && canCoerce(A, "dgCMatrix")) {
-    # input matrix "A" is sparse
-    A <- as(A, "dgCMatrix")
-    if(k == 1){
-      Rcpp_nmf1_sparse(A, init, tol, nonneg, maxit, verbose, diag);
-    } else if(k == 2){
-      Rcpp_nmf2_sparse(A, init, tol, nonneg, maxit, verbose, diag, 0:(ncol(A) - 1));
-    } else {
-      if(is_symmetric) tA <- new("dgCMatrix") else tA <- t(A)
-      Rcpp_nmf_sparse(A, tA, is_symmetric, init, tol, nonneg, L1[1], L1[2], maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
-    }
-  } else if(canCoerce(A, "matrix")) {
-    # input matrix "A" is dense
-    A <- as.matrix(A)
-    if(k == 1){
-      Rcpp_nmf1_dense(A, init, tol, nonneg, maxit, verbose, diag);
-    } else if(k == 2){
-      Rcpp_nmf2_dense(A, init, tol, nonneg, maxit, verbose, diag, 0:(ncol(A) - 1));
-    } else{
-      Rcpp_nmf_dense(A, is_symmetric, init, tol, nonneg, L1[1], L1[2], maxit, diag, fast_maxit, cd_maxit, cd_tol, verbose, threads)
-    }
-  } else stop("'A' was not coercible to either class 'matrix' or 'dgCMatrix'")
+  if(is(A, "sparseMatrix") && canCoerce(A, "dgCMatrix")) { # input matrix "A" is sparse
+    Rcpp_nmf_sparse(as(A, "dgCMatrix"), k, seed, tol, nonneg, L1, maxit, p$updateInPlace, p$diag, verbose, p$cd_maxit, p$fast_maxit, p$cd_tol, threads)
+  } else if(canCoerce(A, "matrix")) { # input matrix "A" is dense
+    Rcpp_nmf_dense(as.matrix(A), k, seed, tol, nonneg, L1, maxit, p$updateInPlace, p$diag, verbose, p$cd_maxit, p$fast_maxit, p$cd_tol, threads)
+  } else stop("could not coerce 'A' to class 'matrix' or 'dgCMatrix'")
 }

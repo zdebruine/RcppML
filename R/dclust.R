@@ -33,18 +33,15 @@
 #'
 #' @section Advanced parameters:
 #' The \code{...} argument hides several parameters that may be adjusted, although defaults should entirely satisfy:
-#' * \code{diag}, set to \code{FALSE} to disable model scaling by the diagonal. When \code{diag = FALSE}, symmetric factorization cannot occur and the difference between factors may not be linear with the second-left vector of an SVD.
 #' * \code{maxit}, default 100. In rank-2 NMF, maximum number of alternating updates of \eqn{w} and \eqn{h}.
-#' * \code{calc_centers}, default TRUE. Calculate centroids for each cluster, giving mean feature loadings for all samples in each cluster. If \code{min_dist != 0}, then \code{calc_centers} will always be \code{TRUE}.
 #'
 #' @inheritParams nmf
-#' @param min_dist stopping criteria giving the minimum cosine distance of samples within a cluster to the center of their assigned vs. unassigned cluster
+#' @param min_dist stopping criteria giving the minimum cosine distance of samples within a cluster to the center of their assigned vs. unassigned cluster. If \code{0}, neither this distance nor cluster centroids will be calculated.
 #' @param min_samples stopping criteria giving the minimum number of samples permitted in a cluster
 #' @param verbose print number of divisions in each generation
 #' @param tol in rank-2 NMF, the correlation distance (\eqn{1 - R^2}) between \eqn{w} across consecutive iterations at which to stop factorization
 #' @param nonneg in rank-2 NMF, enforce non-negativity
 #' @param seed random seed for rank-2 NMF model initialization
-#' @param threads number of CPU threads, default \code{0} for all available threads
 #' @return
 #' A list of lists corresponding to individual clusters:
 #' 	\itemize{
@@ -71,28 +68,22 @@
 #' @examples
 #' clusters <- dclust(t(USArrests), min_samples = 2)
 #'
-dclust <- function(A, min_dist = 0, min_samples = 100, verbose = TRUE, threads = 0, tol = 1e-4, nonneg = TRUE, seed = NULL, ...) {
+dclust <- function(A, min_dist = 0, min_samples = 100, verbose = TRUE, tol = 1e-4, nonneg = TRUE, seed = NULL, ...) {
 
-  if(!is.null(seed) && !is.na(seed) && seed > 0) set.seed(seed)
-  w <- matrix(runif(2 * nrow(A)), 2, nrow(A))
-
-  diag <- TRUE
-  maxit <- 100
-  calc_centers <- TRUE
   params <- list(...)
-  if(!is.null(params$diag)) diag <- params$diag
-  if(!is.null(params$maxit)) maxit <- params$maxit
-  if(!is.null(params$calc_centers)) calc_centers <- params$calc_centers
+  maxit <- ifelse(!is.null(params$maxit), params$maxit, 100)
+  threads <- getRcppMLthreads()
+  if(is.null(seed) || is.na(seed) || seed < 1) seed <- 0
 
-  if(min_dist > 0) calc_centers <- TRUE
-
-  if(is(A, "sparseMatrix")) {
-    # input matrix "A" is sparse
-    A <- as(A, "dgCMatrix")
-    Rcpp_dclust_sparse(A, w, min_dist, min_samples, verbose, threads, tol, nonneg, maxit, calc_centers, diag)
-  } else {
-    # input matrix "A" is dense
-    A <- as.matrix(A)
-    Rcpp_dclust_dense(A, w, min_dist, min_samples, verbose, threads, tol, nonneg, maxit, calc_centers, diag)
-  }
+  A <- as(A, "dgCMatrix")
+  Rcpp_dclust_sparse(A, min_dist, min_samples, verbose, threads, tol, nonneg, maxit, seed)
+#  if (is(A, "sparseMatrix")) {
+#    # input matrix "A" is sparse
+#    A <- as(A, "dgCMatrix")
+#    Rcpp_dclust_sparse(A, min_dist, min_samples, verbose, threads, tol, nonneg, maxit, seed)
+#  } else {
+#    # input matrix "A" is dense
+#    A <- as.matrix(A)
+#    Rcpp_dclust_dense(A, min_dist, min_samples, verbose, threads, tol, nonneg, maxit, seed)
+#  }
 }
