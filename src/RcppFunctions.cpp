@@ -66,14 +66,14 @@ Eigen::MatrixXd Rcpp_projectInPlace_dense(const Rcpp::NumericMatrix& A, const Ei
 //[[Rcpp::export]]
 Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A_S4, const unsigned int k, const unsigned int seed, double tol, const bool nonneg,
                            const Rcpp::NumericVector L1, unsigned int maxit, const bool updateInPlace, const bool diag, const bool verbose,
-                           const unsigned int cd_maxit, const unsigned int fast_maxit, const double cd_tol, const unsigned int threads) {
+                           const Rcpp::IntegerVector cd_maxit, const Rcpp::IntegerVector fast_maxit, const double cd_tol, const unsigned int threads) {
 
   RcppML::SparseMatrix A(A_S4);
   RcppML::MatrixFactorization m(k, A.rows(), A.cols(), seed);
 
   // set model parameters
   m.tol = tol; m.updateInPlace = updateInPlace; m.nonneg = nonneg; m.L1_w = L1(0); m.L1_h = L1(1);
-  m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.cd_maxit = cd_maxit; m.fast_maxit = fast_maxit;
+  m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.cd_maxit_w = cd_maxit(0); m.fast_maxit_w = fast_maxit(0); m.cd_maxit_h = cd_maxit(1); m.fast_maxit_h = fast_maxit(1);
   m.cd_tol = cd_tol; m.threads = threads;
 
   // fit the model by lternating least squares
@@ -85,12 +85,12 @@ Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A_S4, const unsigned int k, const uns
 
 //[[Rcpp::export]]
 Rcpp::List Rcpp_nmf_dense(Rcpp::NumericMatrix& A, const unsigned int k, const unsigned int seed, double tol, const bool nonneg,
-                          const Rcpp::NumericVector L1, unsigned int maxit, const bool updateInPlace, const bool diag, const bool verbose,
-                          const unsigned int cd_maxit, const unsigned int fast_maxit, const double cd_tol, const unsigned int threads) {
+                           const Rcpp::NumericVector L1, unsigned int maxit, const bool updateInPlace, const bool diag, const bool verbose,
+                           const Rcpp::IntegerVector cd_maxit, const Rcpp::IntegerVector fast_maxit, const double cd_tol, const unsigned int threads) {
 
   RcppML::MatrixFactorization m(k, A.rows(), A.cols(), seed);
   m.tol = tol; m.updateInPlace = updateInPlace; m.nonneg = nonneg; m.L1_w = L1(0); m.L1_h = L1(1);
-  m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.cd_maxit = cd_maxit; m.fast_maxit = fast_maxit;
+  m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.cd_maxit_w = cd_maxit(0); m.fast_maxit_w = fast_maxit(0); m.cd_maxit_h = cd_maxit(1); m.fast_maxit_h = fast_maxit(1);
   m.cd_tol = cd_tol; m.threads = threads;
   m.fit(A);
   return Rcpp::List::create(Rcpp::Named("w") = m.matrixW().transpose(), Rcpp::Named("d") = m.vectorD(),

@@ -101,7 +101,7 @@ BEGIN_RCPP
 END_RCPP
 }
 // Rcpp_nmf_sparse
-Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A_S4, const unsigned int k, const unsigned int seed, double tol, const bool nonneg, const Rcpp::NumericVector L1, unsigned int maxit, const bool updateInPlace, const bool diag, const bool verbose, const unsigned int cd_maxit, const unsigned int fast_maxit, const double cd_tol, const unsigned int threads);
+Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A_S4, const unsigned int k, const unsigned int seed, double tol, const bool nonneg, const Rcpp::NumericVector L1, unsigned int maxit, const bool updateInPlace, const bool diag, const bool verbose, const Rcpp::IntegerVector cd_maxit, const Rcpp::IntegerVector fast_maxit, const double cd_tol, const unsigned int threads);
 RcppExport SEXP _RcppML_Rcpp_nmf_sparse(SEXP A_S4SEXP, SEXP kSEXP, SEXP seedSEXP, SEXP tolSEXP, SEXP nonnegSEXP, SEXP L1SEXP, SEXP maxitSEXP, SEXP updateInPlaceSEXP, SEXP diagSEXP, SEXP verboseSEXP, SEXP cd_maxitSEXP, SEXP fast_maxitSEXP, SEXP cd_tolSEXP, SEXP threadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
@@ -116,8 +116,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const bool >::type updateInPlace(updateInPlaceSEXP);
     Rcpp::traits::input_parameter< const bool >::type diag(diagSEXP);
     Rcpp::traits::input_parameter< const bool >::type verbose(verboseSEXP);
-    Rcpp::traits::input_parameter< const unsigned int >::type cd_maxit(cd_maxitSEXP);
-    Rcpp::traits::input_parameter< const unsigned int >::type fast_maxit(fast_maxitSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector >::type cd_maxit(cd_maxitSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector >::type fast_maxit(fast_maxitSEXP);
     Rcpp::traits::input_parameter< const double >::type cd_tol(cd_tolSEXP);
     Rcpp::traits::input_parameter< const unsigned int >::type threads(threadsSEXP);
     rcpp_result_gen = Rcpp::wrap(Rcpp_nmf_sparse(A_S4, k, seed, tol, nonneg, L1, maxit, updateInPlace, diag, verbose, cd_maxit, fast_maxit, cd_tol, threads));
@@ -125,7 +125,7 @@ BEGIN_RCPP
 END_RCPP
 }
 // Rcpp_nmf_dense
-Rcpp::List Rcpp_nmf_dense(Rcpp::NumericMatrix& A, const unsigned int k, const unsigned int seed, double tol, const bool nonneg, const Rcpp::NumericVector L1, unsigned int maxit, const bool updateInPlace, const bool diag, const bool verbose, const unsigned int cd_maxit, const unsigned int fast_maxit, const double cd_tol, const unsigned int threads);
+Rcpp::List Rcpp_nmf_dense(Rcpp::NumericMatrix& A, const unsigned int k, const unsigned int seed, double tol, const bool nonneg, const Rcpp::NumericVector L1, unsigned int maxit, const bool updateInPlace, const bool diag, const bool verbose, const Rcpp::IntegerVector cd_maxit, const Rcpp::IntegerVector fast_maxit, const double cd_tol, const unsigned int threads);
 RcppExport SEXP _RcppML_Rcpp_nmf_dense(SEXP ASEXP, SEXP kSEXP, SEXP seedSEXP, SEXP tolSEXP, SEXP nonnegSEXP, SEXP L1SEXP, SEXP maxitSEXP, SEXP updateInPlaceSEXP, SEXP diagSEXP, SEXP verboseSEXP, SEXP cd_maxitSEXP, SEXP fast_maxitSEXP, SEXP cd_tolSEXP, SEXP threadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
@@ -140,8 +140,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const bool >::type updateInPlace(updateInPlaceSEXP);
     Rcpp::traits::input_parameter< const bool >::type diag(diagSEXP);
     Rcpp::traits::input_parameter< const bool >::type verbose(verboseSEXP);
-    Rcpp::traits::input_parameter< const unsigned int >::type cd_maxit(cd_maxitSEXP);
-    Rcpp::traits::input_parameter< const unsigned int >::type fast_maxit(fast_maxitSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector >::type cd_maxit(cd_maxitSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector >::type fast_maxit(fast_maxitSEXP);
     Rcpp::traits::input_parameter< const double >::type cd_tol(cd_tolSEXP);
     Rcpp::traits::input_parameter< const unsigned int >::type threads(threadsSEXP);
     rcpp_result_gen = Rcpp::wrap(Rcpp_nmf_dense(A, k, seed, tol, nonneg, L1, maxit, updateInPlace, diag, verbose, cd_maxit, fast_maxit, cd_tol, threads));
