@@ -58,25 +58,28 @@ inline Eigen::VectorXd c_nnls(const Eigen::MatrixXd& a, const Eigen::VectorXd& b
 }
 
 inline Eigen::VectorXd c_nnls(const Eigen::MatrixXd& a, Eigen::VectorXd& b, unsigned int cd_maxit, const double cd_tol) {
-
   // refine solution by coordinate descent
   Eigen::VectorXd x = Eigen::VectorXd::Zero(b.size());
-  double tol = 1, xi, tol_, diff;
-  while (cd_maxit-- > 0 && (2 * tol) > cd_tol) {
+  double tol = 1, tol_;
+  for (unsigned int it = 0; it < cd_maxit && tol > cd_tol; ++it) {
     tol = 0;
-    for (unsigned int i = 0; i < x.size(); ++i) {
-      xi = x(i) + b(i) / a(i, i);
-      if (xi < 0) xi = 0; // impose non-negativity constraints
-      diff = xi - x(i);
-      if (diff != 0) {
+    for (unsigned int i = 0; i < b.size(); ++i) {
+      double diff = b(i) / a(i, i);
+      if (-diff > x(i)) {
+        if (x(i) != 0) {
+          // enforce non-negativity constraints
+          b -= a.col(i) * -x(i);
+          tol = 1;
+          x(i) = 0;
+        }
+      } else if (diff != 0) {
+        x(i) += diff;
         b -= a.col(i) * diff;
-        tol_ = std::abs(diff) / (xi + x(i) + TINY_NUM);
+        tol_ = std::abs(diff / (x(i) + TINY_NUM));
         if (tol_ > tol) tol = tol_;
-        x(i) = xi;
       }
     }
   }
   return x;
 }
-
 #endif
