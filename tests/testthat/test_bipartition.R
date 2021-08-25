@@ -19,17 +19,6 @@ test_that("Testing RcppML::nmf", {
   center1 <- rowMeans(A[,samples1 + 1])
   center2 <- rowMeans(A[,samples2 + 1])
   
-  # test that the bipartition is as expected (DENSE)
-  model <- bipartition(A, calc_dist = TRUE)
-  expect_equal(model$dist, 0.3197266, tolerance = 1e-4)
-  expect_equal(model$size1 == 4 || model$size1 == 6, TRUE)
-  
-  if(model$size1 == 6){
-    expect_equal(model$size2 == 4, TRUE)
-  } else {
-    expect_equal(model$size2 == 6, TRUE)
-  }
-
   # test that the bipartition is as expected (SPARSE)
   A <- as(A, "dgCMatrix")
   model <- bipartition(A, calc_dist = TRUE)
