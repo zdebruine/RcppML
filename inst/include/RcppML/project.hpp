@@ -12,9 +12,27 @@
 #include <RcppMLCommon.hpp>
 #endif
 
-#ifndef RcppML_nnls
-#include <RcppML/nnls.hpp>
-#endif
+// solve ax = b given "a", "b", and h.col(sample) giving "x". Coordinate descent.
+inline void c_nnls(Eigen::MatrixXd& a, Eigen::VectorXd& b, Eigen::MatrixXd& h, const unsigned int sample, const unsigned int cd_maxit, const double cd_tol) {
+  double tol = 1;
+  for (unsigned int it = 0; it < cd_maxit && (tol / b.size()) > cd_tol; ++it) {
+    tol = 0;
+    for (unsigned int i = 0; i < h.rows(); ++i) {
+      double diff = b(i) / a(i, i);
+      if (-diff > h(i, sample)) {
+        if (h(i, sample) != 0) {
+          b -= a.col(i) * -h(i, sample);
+          tol = 1;
+          h(i, sample) = 0;
+        }
+      } else if (diff != 0) {
+        h(i, sample) += diff;
+        b -= a.col(i) * diff;
+        tol += std::abs(diff / (h(i, sample) + TINY_NUM));
+      }
+    }
+  }
+}
 
 // solves ax_i = b for a two-variable system of equations, where the "i"th column in "x" contains the solution.
 // "denom" is a pre-conditioned denominator for solving by direct substition.
@@ -73,7 +91,7 @@ inline void nnls2InPlace(const Eigen::Matrix2d& a, const double denom, Eigen::Ma
 }
 
 void project(RcppML::SparseMatrix& A, const Eigen::MatrixXd& w, Eigen::MatrixXd& h, const bool nonneg, const double L1,
-             const unsigned int cd_maxit, const unsigned int fast_maxit, const double cd_tol, const unsigned int threads) {
+             const unsigned int cd_maxit, const double cd_tol, const unsigned int threads) {
 
   if (w.rows() == 1) {
     h.setZero();
@@ -100,26 +118,29 @@ void project(RcppML::SparseMatrix& A, const Eigen::MatrixXd& w, Eigen::MatrixXd&
   } else {
     Eigen::MatrixXd a = w * w.transpose();
     a.diagonal().array() += TINY_NUM;
-    unsigned int k = a.rows();
-    Eigen::LLT<Eigen::MatrixXd, 1> a_llt;
-    if (fast_maxit > 0) a_llt = a.llt();
+    Eigen::LLT<Eigen::MatrixXd, 1> a_llt = a.llt();
     #ifdef _OPENMP
     #pragma omp parallel for num_threads(threads) schedule(dynamic)
     #endif
     for (unsigned int i = 0; i < h.cols(); ++i) {
-      Eigen::VectorXd b = Eigen::VectorXd::Zero(k);
+      Eigen::VectorXd b = Eigen::VectorXd::Zero(a.rows());
       for (RcppML::SparseMatrix::InnerIterator it(A, i); it; ++it)
         b += it.value() * w.col(it.row());
       if (L1 != 0) b.array() -= L1;
-      // solve least squares
-      if (fast_maxit > 0) h.col(i) = c_nnls(a, b, a_llt, nonneg, cd_maxit, fast_maxit, cd_tol);
-      else h.col(i) = c_nnls(a, b, cd_maxit, cd_tol);
+
+      h.col(i) = a_llt.solve(b);
+      if (nonneg && (h.col(i).array() < 0).any()) {
+        // if unconstrained solution contains negative values
+        b -= a * h.col(i);
+        // update h.col(sample) with NNLS solution by coordinate descent
+        c_nnls(a, b, h, i, cd_maxit, cd_tol);
+      }
     }
   }
 }
 
 void project(const Rcpp::NumericMatrix& A, const Eigen::MatrixXd& w, Eigen::MatrixXd& h, const bool nonneg, const double L1,
-             const unsigned int cd_maxit, const unsigned int fast_maxit, const double cd_tol, const unsigned int threads) {
+             const unsigned int cd_maxit, const double cd_tol, const unsigned int threads) {
 
   if (w.rows() == 1) {
     h.setZero();
@@ -145,26 +166,29 @@ void project(const Rcpp::NumericMatrix& A, const Eigen::MatrixXd& w, Eigen::Matr
   } else {
     Eigen::MatrixXd a = w * w.transpose();
     a.diagonal().array() += TINY_NUM;
-    unsigned int k = a.rows();
-    Eigen::LLT<Eigen::MatrixXd, 1> a_llt;
-    if (fast_maxit > 0) a_llt = a.llt();
+    Eigen::LLT<Eigen::MatrixXd, 1> a_llt = a.llt();
     #ifdef _OPENMP
     #pragma omp parallel for num_threads(threads) schedule(dynamic)
     #endif
     for (unsigned int i = 0; i < h.cols(); ++i) {
-      Eigen::VectorXd b = Eigen::VectorXd::Zero(k);
+      Eigen::VectorXd b = Eigen::VectorXd::Zero(a.rows());
       for (int j = 0; j < A.rows(); ++j)
         b += A(j, i) * w.col(j);
       if (L1 != 0) b.array() -= L1;
-      // solve least squares
-      if (fast_maxit > 0) h.col(i) = c_nnls(a, b, a_llt, nonneg, cd_maxit, fast_maxit, cd_tol);
-      else h.col(i) = c_nnls(a, b, cd_maxit, cd_tol);
+
+      h.col(i) = a_llt.solve(b);
+      if (nonneg && (h.col(i).array() < 0).any()) {
+        // if unconstrained solution contains negative values
+        b -= a * h.col(i);
+        // update h.col(sample) with NNLS solution by coordinate descent
+        c_nnls(a, b, h, i, cd_maxit, cd_tol);
+      }
     }
   }
 }
 
 void projectInPlace(RcppML::SparseMatrix& A, const Eigen::MatrixXd& h, Eigen::MatrixXd& w, const bool nonneg, const double L1,
-                    const unsigned int cd_maxit, const unsigned int fast_maxit, const double cd_tol, const unsigned int threads) {
+                    const unsigned int cd_maxit, const double cd_tol, const unsigned int threads) {
 
   const unsigned int k = w.rows();
   if (k == 1) {
@@ -187,6 +211,8 @@ void projectInPlace(RcppML::SparseMatrix& A, const Eigen::MatrixXd& h, Eigen::Ma
     nnls2InPlace(a, denom, w, nonneg);
   } else {
     Eigen::MatrixXd a = h * h.transpose();
+    a.diagonal().array() += TINY_NUM;
+    Eigen::LLT<Eigen::MatrixXd, 1> a_llt = a.llt();
     #ifdef _OPENMP
     #pragma omp parallel for num_threads(threads) schedule(dynamic)
     #endif
@@ -195,23 +221,25 @@ void projectInPlace(RcppML::SparseMatrix& A, const Eigen::MatrixXd& h, Eigen::Ma
         for (unsigned int j = 0; j < k; ++j)
           w(j, it.row()) += it.value() * h(j, i);
     }
-    Eigen::LLT<Eigen::MatrixXd, 1> a_llt;
-    if (fast_maxit > 0) a_llt = a.llt();
     if (L1 != 0) w.array() -= L1;
     #ifdef _OPENMP
     #pragma omp parallel for num_threads(threads) schedule(dynamic)
     #endif
     for (unsigned int i = 0; i < w.cols(); ++i) {
       Eigen::VectorXd b = w.col(i);
-      // solve least squares
-      if (fast_maxit > 0) w.col(i) = c_nnls(a, b, a_llt, nonneg, cd_maxit, fast_maxit, cd_tol);
-      else w.col(i) = c_nnls(a, b, cd_maxit, cd_tol);
+      w.col(i) = a_llt.solve(b);
+      if (nonneg && (w.col(i).array() < 0).any()) {
+        // if unconstrained solution contains negative values
+        b -= a * w.col(i);
+        // update h.col(sample) with NNLS solution by coordinate descent
+        c_nnls(a, b, w, i, cd_maxit, cd_tol);
+      }
     }
   }
 }
 
 void projectInPlace(const Rcpp::NumericMatrix& A, const Eigen::MatrixXd& h, Eigen::MatrixXd& w, const bool nonneg, const double L1,
-                    const unsigned int cd_maxit, const unsigned int fast_maxit, const double cd_tol, const unsigned int threads) {
+                    const unsigned int cd_maxit, const double cd_tol, const unsigned int threads) {
 
   const unsigned int k = w.rows();
   if (k == 1) {
@@ -234,6 +262,8 @@ void projectInPlace(const Rcpp::NumericMatrix& A, const Eigen::MatrixXd& h, Eige
     nnls2InPlace(a, denom, w, nonneg);
   } else {
     Eigen::MatrixXd a = h * h.transpose();
+    a.diagonal().array() += TINY_NUM;
+    Eigen::LLT<Eigen::MatrixXd, 1> a_llt = a.llt();
     #ifdef _OPENMP
     #pragma omp parallel for num_threads(threads) schedule(dynamic)
     #endif
@@ -242,17 +272,19 @@ void projectInPlace(const Rcpp::NumericMatrix& A, const Eigen::MatrixXd& h, Eige
         for (unsigned int l = 0; l < k; ++l)
           w(l, j) += A(j, i) * h(l, i);
     }
-    Eigen::LLT<Eigen::MatrixXd, 1> a_llt;
-    if (fast_maxit > 0) a_llt = a.llt();
     if (L1 != 0) w.array() -= L1;
     #ifdef _OPENMP
     #pragma omp parallel for num_threads(threads) schedule(dynamic)
     #endif
     for (unsigned int i = 0; i < w.cols(); ++i) {
       Eigen::VectorXd b = w.col(i);
-      // solve least squares
-      if (fast_maxit > 0) w.col(i) = c_nnls(a, b, a_llt, nonneg, cd_maxit, fast_maxit, cd_tol);
-      else w.col(i) = c_nnls(a, b, cd_maxit, cd_tol);
+      w.col(i) = a_llt.solve(b);
+      if (nonneg && (w.col(i).array() < 0).any()) {
+        // if unconstrained solution contains negative values
+        b -= a * w.col(i);
+        // update h.col(sample) with NNLS solution by coordinate descent
+        c_nnls(a, b, w, i, cd_maxit, cd_tol);
+      }
     }
   }
 }

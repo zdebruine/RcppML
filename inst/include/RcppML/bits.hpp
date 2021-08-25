@@ -45,19 +45,19 @@ submat(const Eigen::MatrixBase<ArgType>& arg, const RowIndexType& row_indices, c
   return MatrixType::NullaryExpr(row_indices.size(), col_indices.size(), Func(arg.derived(), row_indices, col_indices));
 }
 
-inline Eigen::VectorXd subvec(const Eigen::VectorXd& b, const Eigen::VectorXi& ind){
+inline Eigen::VectorXd subvec(const Eigen::MatrixXd& b, const Eigen::VectorXi& ind, const unsigned int col) {
   Eigen::VectorXd bsub(ind.size());
-  for(unsigned int i = 0; i < ind.size(); ++i) bsub(i) = b(ind(i));
+  for (unsigned int i = 0; i < ind.size(); ++i) bsub(i) = b(ind(i), col);
   return bsub;
 }
 
-inline Eigen::VectorXi find_gtz(const Eigen::VectorXd& x) {
+inline Eigen::VectorXi find_gtz(const Eigen::MatrixXd& x, const unsigned int col) {
   unsigned int n_gtz = 0;
-  for (unsigned int i = 0; i < x.size(); ++i) if (x(i) > 0) ++n_gtz;
+  for (unsigned int i = 0; i < x.rows(); ++i) if (x(i, col) > 0) ++n_gtz;
   Eigen::VectorXi gtz(n_gtz);
   unsigned int j = 0;
-  for (unsigned int i = 0; i < x.size(); ++i) {
-    if (x(i) > 0) {
+  for (unsigned int i = 0; i < x.rows(); ++i) {
+    if (x(i, col) > 0) {
       gtz(j) = i;
       ++j;
     }

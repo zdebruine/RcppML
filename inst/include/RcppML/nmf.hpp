@@ -46,7 +46,7 @@ namespace RcppML {
     unsigned int iter_ = 0;
     bool nonneg = true, updateInPlace = false, diag = true, verbose = true;
     double L1_w = 0, L1_h = 0, tol = 1e-4, cd_tol = 1e-8;
-    unsigned int maxit = 100, cd_maxit_w = 100, cd_maxit_h = 100, fast_maxit_w = 10, fast_maxit_h = 10, threads = 0;
+    unsigned int maxit = 100, cd_maxit = 100, threads = 0;
 
     MatrixFactorization(const unsigned int k, const unsigned int nrow, const unsigned int ncol, const unsigned int seed = 0) {
       w = randomMatrix(k, nrow, seed);
@@ -66,17 +66,17 @@ namespace RcppML {
     unsigned int fit_iter() { return iter_; }
 
     // update "h"
-    void projectH(RcppML::SparseMatrix& A) { project(A, w, h, nonneg, L1_h, cd_maxit_h, fast_maxit_h, cd_tol, threads); }
-    void projectH(Rcpp::NumericMatrix& A) { project(A, w, h, nonneg, L1_h, cd_maxit_h, fast_maxit_h, cd_tol, threads); }
+    void projectH(RcppML::SparseMatrix& A) { project(A, w, h, nonneg, L1_h, cd_maxit, cd_tol, threads); }
+    void projectH(Rcpp::NumericMatrix& A) { project(A, w, h, nonneg, L1_h, cd_maxit, cd_tol, threads); }
 
     // update "w"
     void projectW(RcppML::SparseMatrix& A) {
-      if (is_appx_symmetric(A)) project(A, h, w, nonneg, L1_w, cd_maxit_w, fast_maxit_w, cd_tol, threads);
-      else projectInPlace(A, h, w, nonneg, L1_w, cd_maxit_w, fast_maxit_w, cd_tol, threads);
+      if (is_appx_symmetric(A)) project(A, h, w, nonneg, L1_w, cd_maxit, cd_tol, threads);
+      else projectInPlace(A, h, w, nonneg, L1_w, cd_maxit, cd_tol, threads);
     }
     void projectW(Rcpp::NumericMatrix& A) {
-      if (is_appx_symmetric(A)) project(A, h, w, nonneg, L1_w, cd_maxit_h, fast_maxit_w, cd_tol, threads);
-      else projectInPlace(A, h, w, nonneg, L1_w, cd_maxit_h, fast_maxit_w, cd_tol, threads);
+      if (is_appx_symmetric(A)) project(A, h, w, nonneg, L1_w, cd_maxit, cd_tol, threads);
+      else projectInPlace(A, h, w, nonneg, L1_w, cd_maxit, cd_tol, threads);
     }
 
     double mse(RcppML::SparseMatrix& A) {
@@ -163,13 +163,13 @@ namespace RcppML {
         Eigen::MatrixXd w_it = w;
 
         // update "h"
-        project(A, w, h, nonneg, L1_h, cd_maxit_h, fast_maxit_h, cd_tol, threads);
+        project(A, w, h, nonneg, L1_h, cd_maxit, cd_tol, threads);
         if (diag) scaleH(); // reset diagonal and scale "h"
 
         // update "w"
-        if (is_A_symmetric) project(A, h, w, nonneg, L1_w, cd_maxit_w, fast_maxit_w, cd_tol, threads);
-        else if (updateInPlace) projectInPlace(A, h, w, nonneg, L1_w, cd_maxit_w, fast_maxit_w, cd_tol, threads);
-        else project(At, h, w, nonneg, L1_w, cd_maxit_w, fast_maxit_w, cd_tol, threads);
+        if (is_A_symmetric) project(A, h, w, nonneg, L1_w, cd_maxit, cd_tol, threads);
+        else if (updateInPlace) projectInPlace(A, h, w, nonneg, L1_w, cd_maxit, cd_tol, threads);
+        else project(At, h, w, nonneg, L1_w, cd_maxit, cd_tol, threads);
         if (diag) scaleW(); // reset diagonal and scale "w"
 
         tol_ = cor(w, w_it); // correlation between "w" across consecutive iterations
@@ -192,13 +192,13 @@ namespace RcppML {
         Eigen::MatrixXd w_it = w;
 
         // update "h"
-        project(A, w, h, nonneg, L1_h, cd_maxit_h, fast_maxit_h, cd_tol, threads);
+        project(A, w, h, nonneg, L1_h, cd_maxit, cd_tol, threads);
         if (diag) scaleH(); // reset diagonal and scale "h"
 
         // update "w"
-        if (is_A_symmetric) project(A, h, w, nonneg, L1_w, cd_maxit_w, fast_maxit_w, cd_tol, threads);
-        else if (updateInPlace) projectInPlace(A, h, w, nonneg, L1_w, cd_maxit_w, fast_maxit_w, cd_tol, threads);
-        else project(At, h, w, nonneg, L1_w, cd_maxit_w, fast_maxit_w, cd_tol, threads);
+        if (is_A_symmetric) project(A, h, w, nonneg, L1_w, cd_maxit, cd_tol, threads);
+        else if (updateInPlace) projectInPlace(A, h, w, nonneg, L1_w, cd_maxit, cd_tol, threads);
+        else project(At, h, w, nonneg, L1_w, cd_maxit, cd_tol, threads);
         if (diag) scaleW(); // reset diagonal and scale "w"
 
         tol_ = cor(w, w_it); // correlation between "w" across consecutive iterations
