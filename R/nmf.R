@@ -139,12 +139,14 @@
 nmf <- function(A, k, tol = 1e-4, maxit = 100, verbose = TRUE, nonneg = TRUE, L1 = c(0, 0), seed = NULL, ...) {
   p <- list(...)
   if(is.null(p$diag)) p$diag <- TRUE
-  if(is.null(p$fast_maxit)) p$fast_maxit <- 10 
-  if(is.null(p$cd_maxit)) p$cd_maxit <- 100
+  if(is.null(p$fast_maxit)) p$fast_maxit <- c(10, 10)
+  if(is.null(p$cd_maxit)) p$cd_maxit <- c(100, 100)
   if(is.null(p$cd_tol)) p$cd_tol <- 1e-8
   if(is.null(p$updateInPlace)) p$updateInPlace <- FALSE
   if(is.null(seed) || is.na(seed) || seed < 1) seed <- 0
   if (length(L1) == 1) L1 <- rep(L1, 2)
+  if(length(p$cd_maxit) == 1) p$cd_maxit <- rep(p$cd_maxit, 2)
+  if(length(p$fast_maxit) == 1) p$fast_maxit <- rep(p$fast_maxit, 2)
   threads <- getRcppMLthreads()
 
   if(is(A, "sparseMatrix") && canCoerce(A, "dgCMatrix")) { # input matrix "A" is sparse
