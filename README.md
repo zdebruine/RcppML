@@ -2,6 +2,7 @@
 
 [![](https://cranlogs.r-pkg.org/badges/grand-total/RcppML)](https://cran.r-project.org/package=RcppML)
 [![](https://www.r-pkg.org/badges/version-last-release/RcppML)](https://cran.r-project.org/package=RcppML)
+[![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
 
 RcppML offers extremely fast **non-negative matrix factorization** and **divisive clustering**, thanks to highly optimized non-negative least squares solvers and a rank-2 NMF bipartitioning algorithm. 
 
