@@ -17,9 +17,9 @@ See the [package vignette](https://cran.r-project.org/web/packages/RcppML/vignet
 
 All functions are written entirely in Rcpp and RcppEigen.
 
-## C++ API:
+## Rcpp/Eigen Header Library:
 
-An object-oriented API provides object-oriented access to NMF and clustering classes in C++:
+An object-oriented API provides access to NMF and clustering classes in C++, with full support for both sparse and dense matrices.
 
 ## Installation
 
