@@ -82,7 +82,7 @@ cluster0 <- bipartition(A)
 ```
 
 #### C++ class
-The `RcppML::clusterModel`
+The `RcppML::clusterModel` class provides an interface to divisive clustering. In the future, more clustering algorithms may be added.
 
 ```{Rcpp}
 #include <RcppML.hpp>
