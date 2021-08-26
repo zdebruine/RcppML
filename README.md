@@ -10,7 +10,7 @@ RcppML NMF outperforms other implementations:
 1. It is **more interpretable and robust**, due to diagonal scaling.
 2. It is the **fastest** NMF implementation of which we are aware.
 
-# Installation
+## Installation
 
 RcppML is a [CRAN package](https://cran.r-project.org/web/packages/RcppML/index.html) so you can use `install.packages`.
 
@@ -28,9 +28,7 @@ devtools::install_github("zdebruine/RcppML")
 
 When the RcppML R library is loaded, the C++ classes can be directly included in any package using `#include <RcppML.hpp>`. This will also load RcppEigen, Rcpp, and OpenMP headers if needed.
 
-# Features
-
-### Matrix Factorization
+## Matrix Factorization
 Sparse matrix factorization by alternating least squares.
 * Non-negativity constraints (optional)
 * L1 regularization
@@ -67,7 +65,7 @@ Rcpp::List RunNMF(const Rcpp::S4& A_, int k){
 }
 ```
 
-### Divisive Clustering
+## Divisive Clustering
 
 The `dclust` function
 
