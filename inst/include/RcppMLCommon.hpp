@@ -21,6 +21,12 @@
 #define TINY_NUM 1e-15 // epsilon for numerical stability
 #endif
 
+// parameters for coordinate descent
+#ifndef CD_PARAMS
+#define CD_TOL 1e-8
+#define CD_MAXIT 100
+#endif
+
 #ifndef EIGEN_INITIALIZE_MATRICES_BY_ZERO
 #define EIGEN_INITIALIZE_MATRICES_BY_ZERO
 #endif
