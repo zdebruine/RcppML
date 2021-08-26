@@ -32,8 +32,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // project
-Eigen::MatrixXd project(const Rcpp::S4& A, const Rcpp::Nullable<Rcpp::NumericMatrix> w, const Rcpp::Nullable<Rcpp::NumericMatrix> h, const bool nonneg, const double L1, const unsigned int cd_maxit, const double cd_tol);
-RcppExport SEXP _RcppML_project(SEXP ASEXP, SEXP wSEXP, SEXP hSEXP, SEXP nonnegSEXP, SEXP L1SEXP, SEXP cd_maxitSEXP, SEXP cd_tolSEXP) {
+Eigen::MatrixXd project(const Rcpp::S4& A, const Rcpp::Nullable<Rcpp::NumericMatrix> w, const Rcpp::Nullable<Rcpp::NumericMatrix> h, const bool nonneg, const double L1, const bool mask_zeros);
+RcppExport SEXP _RcppML_project(SEXP ASEXP, SEXP wSEXP, SEXP hSEXP, SEXP nonnegSEXP, SEXP L1SEXP, SEXP mask_zerosSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -42,15 +42,14 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const Rcpp::Nullable<Rcpp::NumericMatrix> >::type h(hSEXP);
     Rcpp::traits::input_parameter< const bool >::type nonneg(nonnegSEXP);
     Rcpp::traits::input_parameter< const double >::type L1(L1SEXP);
-    Rcpp::traits::input_parameter< const unsigned int >::type cd_maxit(cd_maxitSEXP);
-    Rcpp::traits::input_parameter< const double >::type cd_tol(cd_tolSEXP);
-    rcpp_result_gen = Rcpp::wrap(project(A, w, h, nonneg, L1, cd_maxit, cd_tol));
+    Rcpp::traits::input_parameter< const bool >::type mask_zeros(mask_zerosSEXP);
+    rcpp_result_gen = Rcpp::wrap(project(A, w, h, nonneg, L1, mask_zeros));
     return rcpp_result_gen;
 END_RCPP
 }
 // mse
-double mse(const Rcpp::S4& A, Eigen::MatrixXd& w, Eigen::VectorXd& d, Eigen::MatrixXd& h);
-RcppExport SEXP _RcppML_mse(SEXP ASEXP, SEXP wSEXP, SEXP dSEXP, SEXP hSEXP) {
+double mse(const Rcpp::S4& A, Eigen::MatrixXd& w, Eigen::VectorXd& d, Eigen::MatrixXd& h, const bool mask_zeros);
+RcppExport SEXP _RcppML_mse(SEXP ASEXP, SEXP wSEXP, SEXP dSEXP, SEXP hSEXP, SEXP mask_zerosSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -58,7 +57,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type w(wSEXP);
     Rcpp::traits::input_parameter< Eigen::VectorXd& >::type d(dSEXP);
     Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type h(hSEXP);
-    rcpp_result_gen = Rcpp::wrap(mse(A, w, d, h));
+    Rcpp::traits::input_parameter< const bool >::type mask_zeros(mask_zerosSEXP);
+    rcpp_result_gen = Rcpp::wrap(mse(A, w, d, h, mask_zeros));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -100,8 +100,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // nmf
-Rcpp::List nmf(const Rcpp::S4& A, const unsigned int k, const double tol, const unsigned int maxit, const bool verbose, const bool nonneg, const Rcpp::NumericVector L1, Rcpp::Nullable<Rcpp::IntegerVector> seed, const bool updateInPlace, const bool diag, const unsigned int cd_maxit, const double cd_tol);
-RcppExport SEXP _RcppML_nmf(SEXP ASEXP, SEXP kSEXP, SEXP tolSEXP, SEXP maxitSEXP, SEXP verboseSEXP, SEXP nonnegSEXP, SEXP L1SEXP, SEXP seedSEXP, SEXP updateInPlaceSEXP, SEXP diagSEXP, SEXP cd_maxitSEXP, SEXP cd_tolSEXP) {
+Rcpp::List nmf(const Rcpp::S4& A, const unsigned int k, const double tol, const unsigned int maxit, const bool verbose, const bool nonneg, const Rcpp::NumericVector L1, Rcpp::Nullable<Rcpp::IntegerVector> seed, const bool update_in_place, const bool diag, const bool mask_zeros);
+RcppExport SEXP _RcppML_nmf(SEXP ASEXP, SEXP kSEXP, SEXP tolSEXP, SEXP maxitSEXP, SEXP verboseSEXP, SEXP nonnegSEXP, SEXP L1SEXP, SEXP seedSEXP, SEXP update_in_placeSEXP, SEXP diagSEXP, SEXP mask_zerosSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -113,11 +113,10 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const bool >::type nonneg(nonnegSEXP);
     Rcpp::traits::input_parameter< const Rcpp::NumericVector >::type L1(L1SEXP);
     Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::IntegerVector> >::type seed(seedSEXP);
-    Rcpp::traits::input_parameter< const bool >::type updateInPlace(updateInPlaceSEXP);
+    Rcpp::traits::input_parameter< const bool >::type update_in_place(update_in_placeSEXP);
     Rcpp::traits::input_parameter< const bool >::type diag(diagSEXP);
-    Rcpp::traits::input_parameter< const unsigned int >::type cd_maxit(cd_maxitSEXP);
-    Rcpp::traits::input_parameter< const double >::type cd_tol(cd_tolSEXP);
-    rcpp_result_gen = Rcpp::wrap(nmf(A, k, tol, maxit, verbose, nonneg, L1, seed, updateInPlace, diag, cd_maxit, cd_tol));
+    Rcpp::traits::input_parameter< const bool >::type mask_zeros(mask_zerosSEXP);
+    rcpp_result_gen = Rcpp::wrap(nmf(A, k, tol, maxit, verbose, nonneg, L1, seed, update_in_place, diag, mask_zeros));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -141,11 +140,11 @@ END_RCPP
 static const R_CallMethodDef CallEntries[] = {
     {"_RcppML_getRcppMLthreads", (DL_FUNC) &_RcppML_getRcppMLthreads, 0},
     {"_RcppML_setRcppMLthreads", (DL_FUNC) &_RcppML_setRcppMLthreads, 1},
-    {"_RcppML_project", (DL_FUNC) &_RcppML_project, 7},
-    {"_RcppML_mse", (DL_FUNC) &_RcppML_mse, 4},
+    {"_RcppML_project", (DL_FUNC) &_RcppML_project, 6},
+    {"_RcppML_mse", (DL_FUNC) &_RcppML_mse, 5},
     {"_RcppML_bipartition", (DL_FUNC) &_RcppML_bipartition, 9},
     {"_RcppML_dclust", (DL_FUNC) &_RcppML_dclust, 8},
-    {"_RcppML_nmf", (DL_FUNC) &_RcppML_nmf, 12},
+    {"_RcppML_nmf", (DL_FUNC) &_RcppML_nmf, 11},
     {"_RcppML_nnls", (DL_FUNC) &_RcppML_nnls, 6},
     {NULL, NULL, 0}
 };

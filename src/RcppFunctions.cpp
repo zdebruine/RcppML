@@ -28,10 +28,10 @@
 //' getRcppMLthreads()
 //' }
 //[[Rcpp::export]]
-int getRcppMLthreads(){
+int getRcppMLthreads() {
   Rcpp::Environment env = Rcpp::Environment::global_env();
   Rcpp::List v = env["RcppMLthreads"];
-  if(v[0] == R_NilValue) return 0;
+  if (v[0] == R_NilValue) return 0;
   return v[0];
 }
 
@@ -58,7 +58,7 @@ int getRcppMLthreads(){
 //' getRcppMLthreads()
 //' }
 //[[Rcpp::export]]
-void setRcppMLthreads(int threads){
+void setRcppMLthreads(int threads) {
   Rcpp::Environment env = Rcpp::Environment::global_env();
   env["RcppMLthreads"] = threads;
 }
@@ -140,33 +140,34 @@ void setRcppMLthreads(int threads){
 //' all.equal(w, w2)
 //' }
 //[[Rcpp::export]]
-Eigen::MatrixXd project(const Rcpp::S4& A, const Rcpp::Nullable<Rcpp::NumericMatrix> w = R_NilValue, 
-                        const Rcpp::Nullable<Rcpp::NumericMatrix> h = R_NilValue, const bool nonneg = true, 
-                        const double L1 = 0, const unsigned int cd_maxit = 50, const double cd_tol = 1e-7) {
-  
-  if(!A.hasSlot("i") || !A.hasSlot("p") || !A.hasSlot("x") || !A.hasSlot("Dim"))
+Eigen::MatrixXd project(const Rcpp::S4& A, const Rcpp::Nullable<Rcpp::NumericMatrix> w = R_NilValue,
+                        const Rcpp::Nullable<Rcpp::NumericMatrix> h = R_NilValue, const bool nonneg = true,
+                        const double L1 = 0, const bool mask_zeros = false) {
+
+  if (!A.hasSlot("i") || !A.hasSlot("p") || !A.hasSlot("x") || !A.hasSlot("Dim"))
     Rcpp::stop("'A' was not of class 'dgCMatrix'");
-  
+
   RcppML::SparseMatrix A_(A);
-  
-  if((w.isNotNull() && h.isNotNull()) || (!w.isNotNull() && !h.isNotNull()))
+
+  if ((w.isNotNull() && h.isNotNull()) || (!w.isNotNull() && !h.isNotNull()))
     Rcpp::stop("specify one of 'w' or 'h', leaving the other 'NULL'");
-  
-  if(w.isNotNull()){
+
+  if (w.isNotNull()) {
+    if (mask_zeros) Rcpp::stop("'mask_zeros = TRUE' is not supported for projections of 'w'. Use 'w <- project(t(A), w = h)' instead.");
     Rcpp::NumericMatrix w_(w);
     Eigen::MatrixXd w__ = Rcpp::as<Eigen::MatrixXd>(w_);
-    if(A_.rows() == w__.rows() && A_.rows() != A_.cols()) w__.transposeInPlace();
-    if(A_.rows() != w__.cols()) Rcpp::stop("dimensions of 'A' and 'w' are incompatible!");
+    if (A_.rows() == w__.rows() && A_.rows() != A_.cols()) w__.transposeInPlace();
+    if (A_.rows() != w__.cols()) Rcpp::stop("dimensions of 'A' and 'w' are incompatible!");
     Eigen::MatrixXd h_(w__.rows(), A_.cols());
-    project(A_, w__, h_, nonneg, L1, cd_maxit, cd_tol, getRcppMLthreads());
+    project(A_, w__, h_, nonneg, L1, getRcppMLthreads(), mask_zeros);
     return h_;
   } else {
     Rcpp::NumericMatrix h_(h);
     Eigen::MatrixXd h__ = Rcpp::as<Eigen::MatrixXd>(h_);
-    if(A_.cols() == h__.rows() && A_.rows() != A_.cols()) h__.transposeInPlace();
-    if(A_.cols() != h__.cols()) Rcpp::stop("dimensions of 'A' and 'h' are incompatible!");
+    if (A_.cols() == h__.rows() && A_.rows() != A_.cols()) h__.transposeInPlace();
+    if (A_.cols() != h__.cols()) Rcpp::stop("dimensions of 'A' and 'h' are incompatible!");
     Eigen::MatrixXd w_(h__.rows(), A_.rows());
-    projectInPlace(A_, h__, w_, nonneg, L1, cd_maxit, cd_tol, getRcppMLthreads());
+    projectInPlace(A_, h__, w_, nonneg, L1, getRcppMLthreads(), mask_zeros);
     return w_;
   }
 }
@@ -203,9 +204,9 @@ Eigen::MatrixXd project(const Rcpp::S4& A, const Rcpp::Nullable<Rcpp::NumericMat
 //' all.equal(c_mse, R_mse)
 //' }
 //[[Rcpp::export]]
-double mse(const Rcpp::S4& A, Eigen::MatrixXd& w, Eigen::VectorXd& d, Eigen::MatrixXd& h) {
-  
-  if(!A.hasSlot("i") || !A.hasSlot("p") || !A.hasSlot("x") || !A.hasSlot("Dim"))
+double mse(const Rcpp::S4& A, Eigen::MatrixXd& w, Eigen::VectorXd& d, Eigen::MatrixXd& h, const bool mask_zeros = false) {
+
+  if (!A.hasSlot("i") || !A.hasSlot("p") || !A.hasSlot("x") || !A.hasSlot("Dim"))
     Rcpp::stop("'A' was not of class 'dgCMatrix'");
   RcppML::SparseMatrix A_(A);
   if (w.rows() == A_.rows()) w.transposeInPlace();
@@ -214,9 +215,10 @@ double mse(const Rcpp::S4& A, Eigen::MatrixXd& w, Eigen::VectorXd& d, Eigen::Mat
   if (w.cols() != A_.rows()) Rcpp::stop("dimensions of 'w' and 'A' are incompatible");
   if (h.cols() != A_.cols()) Rcpp::stop("dimensions of 'h' and 'A' are incompatible");
   if (d.size() != w.rows()) Rcpp::stop("length of 'd' is not equal to rank of 'w' and 'h'");
-  
+
   RcppML::MatrixFactorization m(w, d, h);
   m.threads = getRcppMLthreads();
+  m.mask_zeros = mask_zeros;
   return m.mse(A_);
 }
 
@@ -265,38 +267,38 @@ double mse(const Rcpp::S4& A, Eigen::MatrixXd& w, Eigen::VectorXd& d, Eigen::Mat
 //' bipartition(A, calc_dist = TRUE)
 //' }
 //[[Rcpp::export]]
-Rcpp::List bipartition(const Rcpp::S4& A, const double tol = 1e-4, const unsigned int maxit = 100, const bool nonneg = true, 
+Rcpp::List bipartition(const Rcpp::S4& A, const double tol = 1e-4, const unsigned int maxit = 100, const bool nonneg = true,
                        Rcpp::Nullable<Rcpp::IntegerVector> samples = R_NilValue, Rcpp::Nullable<Rcpp::IntegerVector> seed = R_NilValue,
                        const bool verbose = false, const bool calc_dist = false, const bool diag = true) {
-  
-  if(!A.hasSlot("i") || !A.hasSlot("p") || !A.hasSlot("x") || !A.hasSlot("Dim"))
+
+  if (!A.hasSlot("i") || !A.hasSlot("p") || !A.hasSlot("x") || !A.hasSlot("Dim"))
     Rcpp::stop("'A' was not of class 'dgCMatrix'");
   RcppML::SparseMatrix A_(A);
-  
+
   // nullable "seed" parameter
   int seed_ = 0;
-  if(seed.isNotNull()) {
+  if (seed.isNotNull()) {
     Rcpp::IntegerVector s(seed);
     seed_ = s(0);
   }
   Eigen::MatrixXd w = randomMatrix(2, A_.rows(), seed_);
-  
+
   std::vector<unsigned int> samples__;
-  if(samples.isNotNull()){
+  if (samples.isNotNull()) {
     Rcpp::IntegerVector samples_(samples);
     samples__ = Rcpp::as<std::vector<unsigned int>>(samples_);
-    for(unsigned int i = 0; i < samples__.size(); ++i) samples__[i] -= 1;
+    for (unsigned int i = 0; i < samples__.size(); ++i) samples__[i] -= 1;
   } else {
     samples__ = std::vector<unsigned int>(A_.cols());
     std::iota(std::begin(samples__), std::end(samples__), 0);
   }
-  
+
   bipartitionModel m = c_bipartition_sparse(A_, w, samples__, tol, nonneg, calc_dist, maxit, verbose);
-  
+
   return Rcpp::List::create(Rcpp::Named("v") = m.v, Rcpp::Named("dist") = m.dist, Rcpp::Named("size1") = m.size1,
                             Rcpp::Named("size2") = m.size2, Rcpp::Named("samples1") = m.samples1, Rcpp::Named("samples2") = m.samples2,
-                                        Rcpp::Named("center1") = m.center1, Rcpp::Named("center2") = m.center2);
-  
+                            Rcpp::Named("center1") = m.center1, Rcpp::Named("center2") = m.center2);
+
 }
 
 //' @title Divisive clustering
@@ -365,25 +367,25 @@ Rcpp::List bipartition(const Rcpp::S4& A, const double tol = 1e-4, const unsigne
 //[[Rcpp::export]]
 Rcpp::List dclust(const Rcpp::S4& A, const unsigned int min_samples, const double min_dist = 0, const bool verbose = true,
                   const double tol = 1e-4, const unsigned int maxit = 100, const bool nonneg = true, Rcpp::Nullable<Rcpp::IntegerVector> seed = R_NilValue) {
-  
-  if(!A.hasSlot("i") || !A.hasSlot("p") || !A.hasSlot("x") || !A.hasSlot("Dim"))
+
+  if (!A.hasSlot("i") || !A.hasSlot("p") || !A.hasSlot("x") || !A.hasSlot("Dim"))
     Rcpp::stop("'A' was not of class 'dgCMatrix'");
   RcppML::SparseMatrix A_(A);
-  
+
   // nullable "seed" parameter
   int seed_ = 0;
-  if(seed.isNotNull()) {
+  if (seed.isNotNull()) {
     Rcpp::IntegerVector s(seed);
     seed_ = s(0);
   }
   RcppML::clusterModel m = RcppML::clusterModel(A_, min_samples, min_dist);
   m.nonneg = nonneg; m.verbose = verbose; m.tol = tol; m.min_dist = min_dist; m.seed = seed_; m.maxit = maxit; m.threads = getRcppMLthreads();
   m.min_samples = min_samples;
-  
+
   m.dclust();
-  
+
   std::vector<cluster> clusters = m.getClusters();
-  
+
   Rcpp::List result(clusters.size());
   for (unsigned int i = 0; i < clusters.size(); ++i) {
     result[i] = Rcpp::List::create(Rcpp::Named("id") = clusters[i].id, Rcpp::Named("samples") = clusters[i].samples,
@@ -462,21 +464,23 @@ Rcpp::List dclust(const Rcpp::S4& A, const unsigned int min_samples, const doubl
 //' **Symmetric factorization.** Special optimization for symmetric matrices is automatically applied. Specifically, alternating updates of \code{w} and \code{h} 
 //' require transposition of \code{A}, but \code{A == t(A)} when \code{A} is symmetric, thus no up-front transposition is performed.
 //'
+//' **Zero-masking**. When zeros in a data structure can be regarded as "missing", \code{mask_zeros = TRUE} may be set. However, this requires a slower
+//' algorithm, and tolerances will fluctuate more dramatically.
+//'
 //' **Publication reference.** For theoretical and practical considerations, please see our manuscript: "DeBruine ZJ, Melcher K, Triche TJ (2021) 
 //' High-performance non-negative matrix factorization for large single cell data." on BioRXiv.
 //'
 //' @param A Sparse matrix of features x samples, class "Matrix::dgCMatrix"
 //' @param nonneg enforce non-negativity
 //' @param k rank
-//' @param cd_maxit maximum number of coordinate descent iterations for NNLS solver, see \code{\link{nnls}}
-//' @param cd_tol stopping criteria for NNLS solver, see \code{\link{nnls}}
 //' @param diag scale factors in \eqn{w} and \eqn{h} to sum to 1 by introducing a diagonal, \eqn{d}. This should generally never be set to \code{FALSE}. Diagonalization enables symmetry of models in factorization of symmetric matrices, convex L1 regularization, and consistent factor scalings.
-//' @param updateInPlace use a slower algorithm for updates of \eqn{w} which avoids transposition of \eqn{A}
+//' @param update_in_place use a slower algorithm for updates of \eqn{w} which avoids transposition of \eqn{A}
 //' @param tol stopping criteria, \eqn{1 - cor(w_i, w_{i-1})}, the correlation distance between \eqn{w} across consecutive iterations
 //' @param maxit stopping criteria, maximum number of alternating updates of \eqn{w} and \eqn{h}
 //' @param L1 L1/LASSO penalties between 0 and 1, array of length two for \code{c(w, h)}
 //' @param seed random seed for model initialization
 //' @param verbose print model tolerances between iterations
+//' @param mask_zeros handle zeros as missing values
 //' @return
 //' A list giving the factorization model:
 //' 	\itemize{
@@ -525,35 +529,35 @@ Rcpp::List dclust(const Rcpp::S4& A, const unsigned int min_samples, const doubl
 //' # see package vignette for more examples
 //' }
 //[[Rcpp::export]]
-Rcpp::List nmf(const Rcpp::S4& A, const unsigned int k, const double tol = 1e-4, const unsigned int maxit = 100, 
-               const bool verbose = true, const bool nonneg = true, 
-               const Rcpp::NumericVector L1 = Rcpp::NumericVector::create(0, 0), 
-               Rcpp::Nullable<Rcpp::IntegerVector> seed = R_NilValue, const bool updateInPlace = false, 
-               const bool diag = true, const unsigned int cd_maxit = 50, const double cd_tol = 1e-7) {
-  
-  if(!A.hasSlot("i") || !A.hasSlot("p") || !A.hasSlot("x") || !A.hasSlot("Dim"))
+Rcpp::List nmf(const Rcpp::S4& A, const unsigned int k, const double tol = 1e-4, const unsigned int maxit = 100,
+               const bool verbose = true, const bool nonneg = true,
+               const Rcpp::NumericVector L1 = Rcpp::NumericVector::create(0, 0),
+               Rcpp::Nullable<Rcpp::IntegerVector> seed = R_NilValue, const bool update_in_place = false,
+               const bool diag = true, const bool mask_zeros = false) {
+
+  if (!A.hasSlot("i") || !A.hasSlot("p") || !A.hasSlot("x") || !A.hasSlot("Dim"))
     Rcpp::stop("'A' was not of class 'dgCMatrix'");
   RcppML::SparseMatrix A_(A);
-  
-  if(L1.size() != 2) 
+
+  if (L1.size() != 2)
     Rcpp::stop("L1 must be a vector of length 2");
-  
+
   // nullable "seed" parameter
   int seed_ = 0;
-  if(seed.isNotNull()) {
+  if (seed.isNotNull()) {
     Rcpp::IntegerVector s(seed);
     seed_ = s(0);
   }
   RcppML::MatrixFactorization m(k, A_.rows(), A_.cols(), seed_);
-  
+
   // set model parameters
-  m.tol = tol; m.updateInPlace = updateInPlace; m.nonneg = nonneg; m.L1_w = L1(0); m.L1_h = L1(1);
-  m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.cd_maxit = cd_maxit;
-  m.cd_tol = cd_tol; m.threads = getRcppMLthreads();
-  
+  m.tol = tol; m.updateInPlace = update_in_place; m.nonneg = nonneg; m.L1_w = L1(0); m.L1_h = L1(1);
+  m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.mask_zeros = mask_zeros;
+  m.threads = getRcppMLthreads();
+
   // fit the model by alternating least squares
   m.fit(A_);
-  
+
   return Rcpp::List::create(Rcpp::Named("w") = m.matrixW().transpose(), Rcpp::Named("d") = m.vectorD(),
                             Rcpp::Named("h") = m.matrixH(), Rcpp::Named("tol") = m.fit_tol(), Rcpp::Named("iter") = m.fit_iter());
 }
@@ -635,16 +639,16 @@ Rcpp::List nmf(const Rcpp::S4& A, const unsigned int k, const double tol = 1e-4,
 //' }
 //[[Rcpp::export]]
 Eigen::MatrixXd nnls(const Eigen::MatrixXd& a, Eigen::MatrixXd b, unsigned int cd_maxit = 100, const double cd_tol = 1e-8, const bool fast_nnls = false, const double L1 = 0) {
-  
+
   if (a.rows() != a.cols()) Rcpp::stop("'a' is not symmetric");
   if (a.rows() != b.rows()) Rcpp::stop("dimensions of 'b' and 'a' are not compatible!");
   if (L1 != 0) b.array() -= L1;
-  
+
   Eigen::LLT<Eigen::MatrixXd> a_llt;
   Eigen::MatrixXd x(b.rows(), b.cols());
   if (fast_nnls) a_llt = a.llt();
   for (unsigned int col = 0; col < b.cols(); ++col) {
-    
+
     if (fast_nnls) {
       // initialize with unconstrained least squares solution
       x.col(col) = a_llt.solve(b.col(col));
@@ -659,7 +663,7 @@ Eigen::MatrixXd nnls(const Eigen::MatrixXd& a, Eigen::MatrixXd b, unsigned int c
       }
       b.col(col) -= a * x.col(col); // adjust gradient for current solution
     }
-    
+
     // refine FAST solution by coordinate descent, or find solution from zero-initialized "x" matrix
     if (cd_maxit > 0) {
       double tol = 1;
