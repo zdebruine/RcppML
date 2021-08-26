@@ -3,7 +3,9 @@
 [![](https://cranlogs.r-pkg.org/badges/grand-total/RcppML)](https://cran.r-project.org/package=RcppML)
 [![](https://www.r-pkg.org/badges/version-last-release/RcppML)](https://cran.r-project.org/package=RcppML)
 
-RcppML offers extremely fast non-negative matrix factorization and divisive clustering, thanks to highly optimized non-negative least squares solvers and a rank-2 NMF bipartitioning algorithm. Diagonal scaling in RcppML NMF improves robustness, interpretability, and enables convex L1 regularization.
+RcppML offers extremely fast **non-negative matrix factorization** and **divisive clustering**, thanks to highly optimized non-negative least squares solvers and a rank-2 NMF bipartitioning algorithm. 
+
+Diagonal scaling in RcppML NMF improves robustness, interpretability, and enables convex L1 regularization.
 
 ## Main R functions:
 
