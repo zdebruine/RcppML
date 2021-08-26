@@ -13,10 +13,9 @@ nmf(
   nonneg = TRUE,
   L1 = as.numeric(c(0, 0)),
   seed = NULL,
-  updateInPlace = FALSE,
+  update_in_place = FALSE,
   diag = TRUE,
-  cd_maxit = 50L,
-  cd_tol = 1e-07
+  mask_zeros = FALSE
 )
 }
 \arguments{
@@ -36,13 +35,11 @@ nmf(
 
 \item{seed}{random seed for model initialization}
 
-\item{updateInPlace}{use a slower algorithm for updates of \eqn{w} which avoids transposition of \eqn{A}}
+\item{update_in_place}{use a slower algorithm for updates of \eqn{w} which avoids transposition of \eqn{A}}
 
 \item{diag}{scale factors in \eqn{w} and \eqn{h} to sum to 1 by introducing a diagonal, \eqn{d}. This should generally never be set to \code{FALSE}. Diagonalization enables symmetry of models in factorization of symmetric matrices, convex L1 regularization, and consistent factor scalings.}
 
-\item{cd_maxit}{maximum number of coordinate descent iterations for NNLS solver, see \code{\link{nnls}}}
-
-\item{cd_tol}{stopping criteria for NNLS solver, see \code{\link{nnls}}}
+\item{mask_zeros}{handle zeros as missing values}
 }
 \value{
 A list giving the factorization model:
@@ -123,6 +120,9 @@ than test-training splits and requires computationally slower factorization upda
 
 \strong{Symmetric factorization.} Special optimization for symmetric matrices is automatically applied. Specifically, alternating updates of \code{w} and \code{h}
 require transposition of \code{A}, but \code{A == t(A)} when \code{A} is symmetric, thus no up-front transposition is performed.
+
+\strong{Zero-masking}. When zeros in a data structure can be regarded as "missing", \code{mask_zeros = TRUE} may be set. However, this requires a slower
+algorithm, and tolerances will fluctuate more dramatically.
 
 \strong{Publication reference.} For theoretical and practical considerations, please see our manuscript: "DeBruine ZJ, Melcher K, Triche TJ (2021)
 High-performance non-negative matrix factorization for large single cell data." on BioRXiv.

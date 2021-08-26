@@ -4,7 +4,7 @@
 \alias{mse}
 \title{Mean Squared Error loss of a factor model}
 \usage{
-mse(A, w, d, h)
+mse(A, w, d, h, mask_zeros = FALSE)
 }
 \arguments{
 \item{A}{Sparse matrix of features x samples, class "Matrix::dgCMatrix"}
@@ -14,6 +14,8 @@ mse(A, w, d, h)
 \item{d}{diagonal scaling vector of rank length}
 
 \item{h}{dense matrix of class \code{matrix} with samples (columns) by factors (rows)}
+
+\item{mask_zeros}{handle zeros as missing values}
 }
 \value{
 mean squared error of the factorization model

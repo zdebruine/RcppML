@@ -4,15 +4,7 @@
 \alias{project}
 \title{Project a linear factor model}
 \usage{
-project(
-  A,
-  w = NULL,
-  h = NULL,
-  nonneg = TRUE,
-  L1 = 0,
-  cd_maxit = 50L,
-  cd_tol = 1e-07
-)
+project(A, w = NULL, h = NULL, nonneg = TRUE, L1 = 0, mask_zeros = FALSE)
 }
 \arguments{
 \item{A}{Sparse matrix of features x samples, class "Matrix::dgCMatrix"}
@@ -25,9 +17,7 @@ project(
 
 \item{L1}{L1/LASSO penalty to be applied. No scaling is performed. See details.}
 
-\item{cd_maxit}{maximum number of coordinate descent iterations for NNLS solver, see \code{\link{nnls}}}
-
-\item{cd_tol}{stopping criteria for NNLS solver, see \code{\link{nnls}}}
+\item{mask_zeros}{handle zeros as missing values}
 }
 \value{
 matrix \eqn{h} or \eqn{w}
