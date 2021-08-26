@@ -127,8 +127,8 @@ setRcppMLthreads <- function(threads) {
 #' w2 <- project(t(A), w = t(h))
 #' all.equal(w, w2)
 #' }
-project <- function(A, w = NULL, h = NULL, nonneg = TRUE, L1 = 0, cd_maxit = 50L, cd_tol = 1e-7) {
-    .Call('_RcppML_project', PACKAGE = 'RcppML', A, w, h, nonneg, L1, cd_maxit, cd_tol)
+project <- function(A, w = NULL, h = NULL, nonneg = TRUE, L1 = 0, mask_zeros = FALSE) {
+    .Call('_RcppML_project', PACKAGE = 'RcppML', A, w, h, nonneg, L1, mask_zeros)
 }
 
 #' Mean Squared Error loss of a factor model
@@ -162,8 +162,8 @@ project <- function(A, w = NULL, h = NULL, nonneg = TRUE, L1 = 0, cd_maxit = 50L
 #' R_mse <- mean((A - model$w %*% Diagonal(x = model$d) %*% model$h)^2)
 #' all.equal(c_mse, R_mse)
 #' }
-mse <- function(A, w, d, h) {
-    .Call('_RcppML_mse', PACKAGE = 'RcppML', A, w, d, h)
+mse <- function(A, w, d, h, mask_zeros = FALSE) {
+    .Call('_RcppML_mse', PACKAGE = 'RcppML', A, w, d, h, mask_zeros)
 }
 
 #' @title Bipartition a sample set
@@ -350,21 +350,23 @@ dclust <- function(A, min_samples, min_dist = 0, verbose = TRUE, tol = 1e-4, max
 #' **Symmetric factorization.** Special optimization for symmetric matrices is automatically applied. Specifically, alternating updates of \code{w} and \code{h} 
 #' require transposition of \code{A}, but \code{A == t(A)} when \code{A} is symmetric, thus no up-front transposition is performed.
 #'
+#' **Zero-masking**. When zeros in a data structure can be regarded as "missing", \code{mask_zeros = TRUE} may be set. However, this requires a slower
+#' algorithm, and tolerances will fluctuate more dramatically.
+#'
 #' **Publication reference.** For theoretical and practical considerations, please see our manuscript: "DeBruine ZJ, Melcher K, Triche TJ (2021) 
 #' High-performance non-negative matrix factorization for large single cell data." on BioRXiv.
 #'
 #' @param A Sparse matrix of features x samples, class "Matrix::dgCMatrix"
 #' @param nonneg enforce non-negativity
 #' @param k rank
-#' @param cd_maxit maximum number of coordinate descent iterations for NNLS solver, see \code{\link{nnls}}
-#' @param cd_tol stopping criteria for NNLS solver, see \code{\link{nnls}}
 #' @param diag scale factors in \eqn{w} and \eqn{h} to sum to 1 by introducing a diagonal, \eqn{d}. This should generally never be set to \code{FALSE}. Diagonalization enables symmetry of models in factorization of symmetric matrices, convex L1 regularization, and consistent factor scalings.
-#' @param updateInPlace use a slower algorithm for updates of \eqn{w} which avoids transposition of \eqn{A}
+#' @param update_in_place use a slower algorithm for updates of \eqn{w} which avoids transposition of \eqn{A}
 #' @param tol stopping criteria, \eqn{1 - cor(w_i, w_{i-1})}, the correlation distance between \eqn{w} across consecutive iterations
 #' @param maxit stopping criteria, maximum number of alternating updates of \eqn{w} and \eqn{h}
 #' @param L1 L1/LASSO penalties between 0 and 1, array of length two for \code{c(w, h)}
 #' @param seed random seed for model initialization
 #' @param verbose print model tolerances between iterations
+#' @param mask_zeros handle zeros as missing values
 #' @return
 #' A list giving the factorization model:
 #' 	\itemize{
@@ -412,8 +414,8 @@ dclust <- function(A, min_samples, min_dist = 0, verbose = TRUE, tol = 1e-4, max
 #' plot(model$w, t(model$h))
 #' # see package vignette for more examples
 #' }
-nmf <- function(A, k, tol = 1e-4, maxit = 100L, verbose = TRUE, nonneg = TRUE, L1 = as.numeric( c(0, 0)), seed = NULL, updateInPlace = FALSE, diag = TRUE, cd_maxit = 50L, cd_tol = 1e-7) {
-    .Call('_RcppML_nmf', PACKAGE = 'RcppML', A, k, tol, maxit, verbose, nonneg, L1, seed, updateInPlace, diag, cd_maxit, cd_tol)
+nmf <- function(A, k, tol = 1e-4, maxit = 100L, verbose = TRUE, nonneg = TRUE, L1 = as.numeric( c(0, 0)), seed = NULL, update_in_place = FALSE, diag = TRUE, mask_zeros = FALSE) {
+    .Call('_RcppML_nmf', PACKAGE = 'RcppML', A, k, tol, maxit, verbose, nonneg, L1, seed, update_in_place, diag, mask_zeros)
 }
 
 #' @title Non-negative least squares
