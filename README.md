@@ -1,26 +1,47 @@
-# RcppML: Rcpp Machine Learning Library
+# Rcpp Machine Learning Library
 
 [![](https://cranlogs.r-pkg.org/badges/grand-total/RcppML)](https://cran.r-project.org/package=RcppML)
 [![](https://www.r-pkg.org/badges/version-last-release/RcppML)](https://cran.r-project.org/package=RcppML)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
 
-RcppML offers extremely fast **non-negative matrix factorization** and **divisive clustering**, thanks to highly optimized non-negative least squares solvers and a rank-2 NMF bipartitioning algorithm. 
+`RcppML` is an R package for fast **non-negative matrix factorization** and **divisive clustering** using **large sparse matrices**. Optimized subroutines for non-negative least squares and spectral bipartitioning are also exposed.
 
-Diagonal scaling in RcppML NMF improves robustness, interpretability, and enables convex L1 regularization.
+RcppML NMF outperforms other implementations:
+1. It is **more interpretable and robust**, due to diagonal scaling.
+2. It is the **fastest** NMF implementation of which we are aware.
 
-## Main R functions:
+# Features
 
-* `nmf`: sparse matrix factorization by alternating least squares. Optional non-negativity constraints and L1 regularization. Special optimizations for symmetric, rank-1, and rank-2 decompositions
+## Matrix Factorization
+Sparse matrix factorization by alternating least squares.
+* Non-negativity constraints (optional)
+* L1 regularization
+* Diagonal scaling for interpretability and robustness
+* Rank-1 and Rank-2 specializations (~2x faster than _irlba_ SVD equivalents)
+
+### R function
+
+The `nmf` function runs matrix factorization by alternating least squares in the form `A = WDH`. The `project` function updates `w` or `h` given the other, while the `mse` function calculates mean squared error of the factor model.
+
+```{R}
+A <- Matrix::rsparsematrix(A, 1000, 1000, 0.1) # sparse Matrix::dgCMatrix
+model <- RcppML::nmf(A, k = 10, nonneg = TRUE)
+h0 <- RcppML::project(A, w = model$w)
+RcppML::mse(A, m$w, m$d, m$h)
+```
+
+## Divisive Clustering
+
+## Non-negative Least Squares
+
+## Spectral Bipartitioning
+
 * `dclust`: Divisive clustering by recursive bipartitioning of a sample set
 * `nnls`: Fast active-set/coordinate descent algorithms for solving non-negative least squares problems
 
 See the [package vignette](https://cran.r-project.org/web/packages/RcppML/vignettes/RcppML.html) for a basic introduction to these functions.
 
 All functions are written entirely in Rcpp and RcppEigen.
-
-## Rcpp/Eigen Header Library:
-
-An object-oriented API provides access to NMF and clustering classes in C++, with full support for both sparse and dense matrices.
 
 ## Installation
 
@@ -32,7 +53,12 @@ install.packages('RcppML')
 
 See the [CRAN manual](https://cran.r-project.org/web/packages/RcppML/RcppML.pdf) for details.
 
-Once loaded, the RcppML C++ header library in the `inst/include` folder can be included in other packages.
+When the RcppML R library is loaded, the C++ classes can be directly included in any package using `#include <RcppML.hpp>.
+
+# R Package
+
+# RcppEigen Header Library
+An object-oriented API provides access to NMF and clustering classes in C++, with full support for both sparse and dense matrices.
 
 ## Development News
 
