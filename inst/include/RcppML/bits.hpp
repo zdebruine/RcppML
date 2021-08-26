@@ -45,6 +45,13 @@ submat(const Eigen::MatrixBase<ArgType>& arg, const RowIndexType& row_indices, c
   return MatrixType::NullaryExpr(row_indices.size(), col_indices.size(), Func(arg.derived(), row_indices, col_indices));
 }
 
+Eigen::MatrixXd submat(const Eigen::MatrixXd& x, const Eigen::VectorXi& col_indices){
+  Eigen::MatrixXd x_(x.rows(), col_indices.size());
+  for(unsigned int i = 0; i < col_indices.size(); ++i)
+    x_.col(i) = x.col(col_indices(i));
+  return x_;
+}
+
 inline Eigen::VectorXd subvec(const Eigen::MatrixXd& b, const Eigen::VectorXi& ind, const unsigned int col) {
   Eigen::VectorXd bsub(ind.size());
   for (unsigned int i = 0; i < ind.size(); ++i) bsub(i) = b(ind(i), col);

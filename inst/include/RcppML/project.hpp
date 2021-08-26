@@ -13,9 +13,9 @@
 #endif
 
 // solve ax = b given "a", "b", and h.col(sample) giving "x". Coordinate descent.
-inline void c_nnls(Eigen::MatrixXd& a, Eigen::VectorXd& b, Eigen::MatrixXd& h, const unsigned int sample, const unsigned int cd_maxit, const double cd_tol) {
+inline void c_nnls(Eigen::MatrixXd& a, Eigen::VectorXd& b, Eigen::MatrixXd& h, const unsigned int sample) {
   double tol = 1;
-  for (unsigned int it = 0; it < cd_maxit && (tol / b.size()) > cd_tol; ++it) {
+  for (unsigned int it = 0; it < CD_MAXIT && (tol / b.size()) > CD_TOL; ++it) {
     tol = 0;
     for (unsigned int i = 0; i < h.rows(); ++i) {
       double diff = b(i) / a(i, i);
@@ -91,7 +91,7 @@ inline void nnls2InPlace(const Eigen::Matrix2d& a, const double denom, Eigen::Ma
 }
 
 void project(RcppML::SparseMatrix& A, const Eigen::MatrixXd& w, Eigen::MatrixXd& h, const bool nonneg, const double L1,
-             const unsigned int cd_maxit, const double cd_tol, const unsigned int threads) {
+             const unsigned int threads, const bool mask_zeros) {
 
   if (w.rows() == 1) {
     h.setZero();
@@ -116,31 +116,52 @@ void project(RcppML::SparseMatrix& A, const Eigen::MatrixXd& w, Eigen::MatrixXd&
       nnls2(a, b0, b1, denom, h, i, nonneg);
     }
   } else {
-    Eigen::MatrixXd a = w * w.transpose();
-    a.diagonal().array() += TINY_NUM;
-    Eigen::LLT<Eigen::MatrixXd, 1> a_llt = a.llt();
-    #ifdef _OPENMP
-    #pragma omp parallel for num_threads(threads) schedule(dynamic)
-    #endif
-    for (unsigned int i = 0; i < h.cols(); ++i) {
-      Eigen::VectorXd b = Eigen::VectorXd::Zero(a.rows());
-      for (RcppML::SparseMatrix::InnerIterator it(A, i); it; ++it)
-        b += it.value() * w.col(it.row());
-      if (L1 != 0) b.array() -= L1;
+    if (!mask_zeros) {
+      Eigen::MatrixXd a = w * w.transpose();
+      a.diagonal().array() += TINY_NUM;
+      Eigen::LLT<Eigen::MatrixXd, 1> a_llt = a.llt();
+      #ifdef _OPENMP
+      #pragma omp parallel for num_threads(threads) schedule(dynamic)
+      #endif
+      for (unsigned int i = 0; i < h.cols(); ++i) {
+        Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
+        for (RcppML::SparseMatrix::InnerIterator it(A, i); it; ++it)
+          b += it.value() * w.col(it.row());
+        if (L1 != 0) b.array() -= L1;
 
-      h.col(i) = a_llt.solve(b);
-      if (nonneg && (h.col(i).array() < 0).any()) {
-        // if unconstrained solution contains negative values
-        b -= a * h.col(i);
-        // update h.col(sample) with NNLS solution by coordinate descent
-        c_nnls(a, b, h, i, cd_maxit, cd_tol);
+        h.col(i) = a_llt.solve(b);
+        if (nonneg && (h.col(i).array() < 0).any()) {
+          // if unconstrained solution contains negative values
+          b -= a * h.col(i);
+          // update h.col(sample) with NNLS solution by coordinate descent
+          c_nnls(a, b, h, i);
+        }
+      }
+    } else {
+      h.setZero();
+      #ifdef _OPENMP
+      #pragma omp parallel for num_threads(threads) schedule(dynamic)
+      #endif
+      for (unsigned int i = 0; i < h.cols(); ++i) {
+        Eigen::VectorXi nnz = Rcpp::as<Eigen::VectorXi>(A.nonzeroRows(i));
+        Eigen::MatrixXd w_ = submat(w, nnz);
+        Eigen::MatrixXd a = w_ * w_.transpose();
+        a.diagonal().array() += TINY_NUM;
+
+        Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
+        for (RcppML::SparseMatrix::InnerIterator it(A, i); it; ++it)
+          b += it.value() * w.col(it.row());
+        if (L1 != 0) b.array() -= L1;
+
+        if (!nonneg) h.col(i) = a.llt().solve(b);
+        else c_nnls(a, b, h, i);
       }
     }
   }
 }
 
 void project(const Rcpp::NumericMatrix& A, const Eigen::MatrixXd& w, Eigen::MatrixXd& h, const bool nonneg, const double L1,
-             const unsigned int cd_maxit, const double cd_tol, const unsigned int threads) {
+             const unsigned int threads, const bool mask_zeros) {
 
   if (w.rows() == 1) {
     h.setZero();
@@ -181,14 +202,14 @@ void project(const Rcpp::NumericMatrix& A, const Eigen::MatrixXd& w, Eigen::Matr
         // if unconstrained solution contains negative values
         b -= a * h.col(i);
         // update h.col(sample) with NNLS solution by coordinate descent
-        c_nnls(a, b, h, i, cd_maxit, cd_tol);
+        c_nnls(a, b, h, i);
       }
     }
   }
 }
 
 void projectInPlace(RcppML::SparseMatrix& A, const Eigen::MatrixXd& h, Eigen::MatrixXd& w, const bool nonneg, const double L1,
-                    const unsigned int cd_maxit, const double cd_tol, const unsigned int threads) {
+                    const unsigned int threads, const bool mask_zeros) {
 
   const unsigned int k = w.rows();
   if (k == 1) {
@@ -229,17 +250,15 @@ void projectInPlace(RcppML::SparseMatrix& A, const Eigen::MatrixXd& h, Eigen::Ma
       Eigen::VectorXd b = w.col(i);
       w.col(i) = a_llt.solve(b);
       if (nonneg && (w.col(i).array() < 0).any()) {
-        // if unconstrained solution contains negative values
         b -= a * w.col(i);
-        // update h.col(sample) with NNLS solution by coordinate descent
-        c_nnls(a, b, w, i, cd_maxit, cd_tol);
+        c_nnls(a, b, w, i);
       }
     }
   }
 }
 
 void projectInPlace(const Rcpp::NumericMatrix& A, const Eigen::MatrixXd& h, Eigen::MatrixXd& w, const bool nonneg, const double L1,
-                    const unsigned int cd_maxit, const double cd_tol, const unsigned int threads) {
+                    const unsigned int threads, const bool mask_zeros) {
 
   const unsigned int k = w.rows();
   if (k == 1) {
@@ -283,7 +302,7 @@ void projectInPlace(const Rcpp::NumericMatrix& A, const Eigen::MatrixXd& h, Eige
         // if unconstrained solution contains negative values
         b -= a * w.col(i);
         // update h.col(sample) with NNLS solution by coordinate descent
-        c_nnls(a, b, w, i, cd_maxit, cd_tol);
+        c_nnls(a, b, w, i);
       }
     }
   }

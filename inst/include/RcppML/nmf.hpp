@@ -38,15 +38,15 @@ inline bool is_appx_symmetric(Rcpp::NumericMatrix& A) {
 
 namespace RcppML {
   class MatrixFactorization {
-  public:
+    public:
     Eigen::MatrixXd w;
     Eigen::VectorXd d;
     Eigen::MatrixXd h;
     double tol_ = -1;
     unsigned int iter_ = 0;
-    bool nonneg = true, updateInPlace = false, diag = true, verbose = true;
-    double L1_w = 0, L1_h = 0, tol = 1e-4, cd_tol = 1e-8;
-    unsigned int maxit = 100, cd_maxit = 100, threads = 0;
+    bool nonneg = true, updateInPlace = false, diag = true, verbose = true, mask_zeros = true;
+    double L1_w = 0, L1_h = 0, tol = 1e-4;
+    unsigned int maxit = 100, threads = 0;
 
     MatrixFactorization(const unsigned int k, const unsigned int nrow, const unsigned int ncol, const unsigned int seed = 0) {
       w = randomMatrix(k, nrow, seed);
@@ -66,17 +66,17 @@ namespace RcppML {
     unsigned int fit_iter() { return iter_; }
 
     // update "h"
-    void projectH(RcppML::SparseMatrix& A) { project(A, w, h, nonneg, L1_h, cd_maxit, cd_tol, threads); }
-    void projectH(Rcpp::NumericMatrix& A) { project(A, w, h, nonneg, L1_h, cd_maxit, cd_tol, threads); }
+    void projectH(RcppML::SparseMatrix& A) { project(A, w, h, nonneg, L1_h, threads, mask_zeros); }
+    void projectH(Rcpp::NumericMatrix& A) { project(A, w, h, nonneg, L1_h, threads, mask_zeros); }
 
     // update "w"
     void projectW(RcppML::SparseMatrix& A) {
-      if (is_appx_symmetric(A)) project(A, h, w, nonneg, L1_w, cd_maxit, cd_tol, threads);
-      else projectInPlace(A, h, w, nonneg, L1_w, cd_maxit, cd_tol, threads);
+      if (is_appx_symmetric(A)) project(A, h, w, nonneg, L1_w, threads, mask_zeros);
+      else projectInPlace(A, h, w, nonneg, L1_w, threads, mask_zeros);
     }
     void projectW(Rcpp::NumericMatrix& A) {
-      if (is_appx_symmetric(A)) project(A, h, w, nonneg, L1_w, cd_maxit, cd_tol, threads);
-      else projectInPlace(A, h, w, nonneg, L1_w, cd_maxit, cd_tol, threads);
+      if (is_appx_symmetric(A)) project(A, h, w, nonneg, L1_w, threads, mask_zeros);
+      else projectInPlace(A, h, w, nonneg, L1_w, threads, mask_zeros);
     }
 
     double mse(RcppML::SparseMatrix& A) {
@@ -89,20 +89,32 @@ namespace RcppML {
       // calculate total loss with parallelization across samples
       Eigen::VectorXd losses(h.cols());
       losses.setZero();
-      #ifdef _OPENMP
-      #pragma omp parallel for num_threads(threads) schedule(dynamic)
-      #endif
-      for (unsigned int i = 0; i < h.cols(); ++i) {
-        Eigen::VectorXd wh_i = w0 * h.col(i);
-        for (RcppML::SparseMatrix::InnerIterator iter(A, i); iter; ++iter)
-          wh_i(iter.row()) -= iter.value();
-        for (unsigned int j = 0; j < wh_i.size(); ++j)
-          losses(i) += std::pow(wh_i(j), 2);
+      double sq_loss = 0;
+      if (!mask_zeros) {
+        #ifdef _OPENMP
+        #pragma omp parallel for num_threads(threads) schedule(dynamic)
+        #endif
+        for (unsigned int i = 0; i < h.cols(); ++i) {
+          Eigen::VectorXd wh_i = w0 * h.col(i);
+          for (RcppML::SparseMatrix::InnerIterator iter(A, i); iter; ++iter)
+            wh_i(iter.row()) -= iter.value();
+          sq_loss += wh_i.array().square().sum();
+        }
+      } else {
+        #ifdef _OPENMP
+        #pragma omp parallel for num_threads(threads) schedule(dynamic)
+        #endif
+        for (unsigned int i = 0; i < h.cols(); ++i) {
+          Eigen::VectorXd wh_i = w0 * h.col(i);
+          for (RcppML::SparseMatrix::InnerIterator iter(A, i); iter; ++iter)
+            sq_loss += std::pow(wh_i(iter.row()) - iter.value(), 2);
+        }
       }
-      return losses.sum() / (h.cols() * w.cols());
+      return sq_loss / (h.cols() * w.cols());
     }
 
     double mse(Rcpp::NumericMatrix& A) {
+      if(mask_zeros) Rcpp::stop("mask_zeros = TRUE is not supported for mse(Rcpp::NumericMatrix)");
       Eigen::MatrixXd w0 = w.transpose();
       for (unsigned int i = 0; i < w0.cols(); ++i)
         for (unsigned int j = 0; j < w0.rows(); ++j)
@@ -155,6 +167,10 @@ namespace RcppML {
 
     // fit the model by alternating least squares projections
     void fit(RcppML::SparseMatrix& A) {
+      if(mask_zeros && updateInPlace) {
+        Rcpp::warning("'mask_zeros = TRUE' is not supported when 'updateInPlace = true'. Setting 'updateInPlace = false'");
+        updateInPlace = false;
+      } else if(mask_zeros && w.rows() < 3) Rcpp::stop("'mask_zeros = TRUE' is not supported when k = 1 or 2");
       if (verbose) Rprintf("\n%4s | %8s \n---------------\n", "iter", "tol");
       RcppML::SparseMatrix At;
       bool is_A_symmetric = is_appx_symmetric(A);
@@ -163,13 +179,13 @@ namespace RcppML {
         Eigen::MatrixXd w_it = w;
 
         // update "h"
-        project(A, w, h, nonneg, L1_h, cd_maxit, cd_tol, threads);
+        project(A, w, h, nonneg, L1_h, threads, mask_zeros);
         if (diag) scaleH(); // reset diagonal and scale "h"
 
         // update "w"
-        if (is_A_symmetric) project(A, h, w, nonneg, L1_w, cd_maxit, cd_tol, threads);
-        else if (updateInPlace) projectInPlace(A, h, w, nonneg, L1_w, cd_maxit, cd_tol, threads);
-        else project(At, h, w, nonneg, L1_w, cd_maxit, cd_tol, threads);
+        if (is_A_symmetric) project(A, h, w, nonneg, L1_w, threads, mask_zeros);
+        else if (updateInPlace) projectInPlace(A, h, w, nonneg, L1_w, threads, mask_zeros);
+        else project(At, h, w, nonneg, L1_w, threads, mask_zeros);
         if (diag) scaleW(); // reset diagonal and scale "w"
 
         tol_ = cor(w, w_it); // correlation between "w" across consecutive iterations
@@ -184,6 +200,7 @@ namespace RcppML {
 
     // fit the model by alternating least squares projections
     void fit(Rcpp::NumericMatrix& A) {
+      if(mask_zeros) Rcpp::stop("'mask_zeros = TRUE' is not supported for fit(Rcpp::NumericMatrix)");
       if (verbose) Rprintf("\n%4s | %8s \n---------------\n", "iter", "tol");
       Rcpp::NumericMatrix At;
       bool is_A_symmetric = is_appx_symmetric(A);
@@ -192,13 +209,13 @@ namespace RcppML {
         Eigen::MatrixXd w_it = w;
 
         // update "h"
-        project(A, w, h, nonneg, L1_h, cd_maxit, cd_tol, threads);
+        project(A, w, h, nonneg, L1_h, threads, mask_zeros);
         if (diag) scaleH(); // reset diagonal and scale "h"
 
         // update "w"
-        if (is_A_symmetric) project(A, h, w, nonneg, L1_w, cd_maxit, cd_tol, threads);
-        else if (updateInPlace) projectInPlace(A, h, w, nonneg, L1_w, cd_maxit, cd_tol, threads);
-        else project(At, h, w, nonneg, L1_w, cd_maxit, cd_tol, threads);
+        if (is_A_symmetric) project(A, h, w, nonneg, L1_w, threads, mask_zeros);
+        else if (updateInPlace) projectInPlace(A, h, w, nonneg, L1_w, threads, mask_zeros);
+        else project(At, h, w, nonneg, L1_w, threads, mask_zeros);
         if (diag) scaleW(); // reset diagonal and scale "w"
 
         tol_ = cor(w, w_it); // correlation between "w" across consecutive iterations
