@@ -37,7 +37,7 @@ Sparse matrix factorization by alternating least squares.
 * Diagonal scaling for interpretability and robustness
 * Rank-1 and Rank-2 specializations (~2x faster than _irlba_ SVD equivalents)
 
-#### R function
+#### R functions
 The `nmf` function runs matrix factorization by alternating least squares in the form `A = WDH`. The `project` function updates `w` or `h` given the other, while the `mse` function calculates mean squared error of the factor model.
 
 ```{R}
@@ -47,7 +47,29 @@ h0 <- RcppML::project(A, w = model$w)
 RcppML::mse(A, m$w, m$d, m$h)
 ```
 
+#### C++ class
+The `RcppML::MatrixFactorization` class is an object-oriented interface with methods for fitting, projecting, and evaluating linear factor models. It also contains a sparse matrix class equivalent to `Matrix::dgCMatrix` in R.
+
+```{Rcpp}
+#include <RcppML.hpp>
+
+//[[Rcpp::export]]
+Rcpp::List RunNMF(const Rcpp::S4& A_, int k){
+     RcppML::SparseMatrix A(A_); // zero-copy, unlike arma or Eigen equivalents
+     RcppML::MatrixFactorization model(k, A.rows(), A.cols());
+     model.tol = 1e-5;
+     model.fit(A);
+     return Rcpp::List::create(
+          Rcpp::Named("w") = model.w,
+          Rcpp::Named("d") = model.d,
+          Rcpp::Named("h") = model.h,
+          Rcpp::Named("mse") = model.mse(A));
+}
+```
+
 ### Divisive Clustering
+
+The `dclust` function
 
 * `dclust`: Divisive clustering by recursive bipartitioning of a sample set
 * `nnls`: Fast active-set/coordinate descent algorithms for solving non-negative least squares problems
@@ -55,15 +77,3 @@ RcppML::mse(A, m$w, m$d, m$h)
 See the [package vignette](https://cran.r-project.org/web/packages/RcppML/vignettes/RcppML.html) for a basic introduction to these functions.
 
 All functions are written entirely in Rcpp and RcppEigen.
-
-## Development News
-
-To install the development version of the R package from GitHub, use `devtools`:
-
-```
-devtools::install_github('zdebruine/RcppML')
-```
-
-Current development version is v.0.3.5:
-
-Note:  The CRAN version (v.0.1.0) only supports `nmf`, `project`, `nnls`, and `mse`, and all functions have been further optimized since initial release.
