@@ -66,12 +66,46 @@ Rcpp::List RunNMF(const Rcpp::S4& A_, int k){
 ```
 
 ## Divisive Clustering
+Divisive clustering by rank-2 spectral bipartitioning.
+* 2nd SVD vector is linearly related to the difference between factors in rank-2 matrix factorization.
+* Rank-2 matrix factorization (optional non-negativity constraints) for spectral bipartitioning **~2x faster** than _irlba_ SVD
+* Sensitive distance-based stopping criteria similar to Newman-Girvan modularity, but orders of magnitude faster
+* Stopping criteria based on minimum number of samples
 
-The `dclust` function
+#### R functions
+The `dclust` function runs divisive clustering by recursive spectral bipartitioning, while the `bipartition` function exposes the rank-2 NMF specialization and returns statistics of the bipartition.
 
-* `dclust`: Divisive clustering by recursive bipartitioning of a sample set
-* `nnls`: Fast active-set/coordinate descent algorithms for solving non-negative least squares problems
+```{R}
+A <- Matrix::rsparsematrix(A, 1000, 1000, 0.1) # sparse Matrix::dgcMatrix
+clusters <- dclust(A, min_dist = 0.001, min_samples = 5)
+cluster0 <- bipartition(A)
+```
 
-See the [package vignette](https://cran.r-project.org/web/packages/RcppML/vignettes/RcppML.html) for a basic introduction to these functions.
+#### C++ class
+The `RcppML::clusterModel`
 
-All functions are written entirely in Rcpp and RcppEigen.
+```{Rcpp}
+#include <RcppML.hpp>
+
+//[[Rcpp::export]]
+Rcpp::List DivisiveCluster(const Rcpp::S4& A_, int min_samples, double min_dist){
+   RcppML::SparseMatrix A(A_);
+   RcppML::clusterModel model(A, min_samples, min_dist);
+   model.dclust();
+   std::vector<RcppML::cluster> clusters = m.getClusters();
+   Rcpp::List result(clusters.size());
+   for (int i = 0; i < clusters.size(); ++i) {
+        result[i] = Rcpp::List::create(
+             Rcpp::Named("id") = clusters[i].id,
+             Rcpp::Named("samples") = clusters[i].samples,
+             Rcpp::Named("center") = clusters[i].center);
+   }
+   return result;
+}
+```
+
+## Documentation
+
+See the [package vignette](https://cran.r-project.org/web/packages/RcppML/vignettes/RcppML.html) for a basic introduction to the R functions.
+
+A pkgdown website will be published in the near future with documentation and examples for the R functions and C++ header library.
