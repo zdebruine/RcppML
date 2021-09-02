@@ -21,7 +21,7 @@ devtools::install_github("zdebruine/RcppML") # compile dev version
 
 Check out the [CRAN manual](https://cran.r-project.org/web/packages/RcppML/RcppML.pdf).
 
-Once installed and loaded, RcppML C++ headers defining classes can be loaded can be used in any R package using `#include <RcppML.hpp>`. 
+Once installed and loaded, RcppML C++ headers defining classes can be used in C++ files for any R package using `#include <RcppML.hpp>`. 
 
 ## Matrix Factorization
 Sparse matrix factorization by alternating least squares:
