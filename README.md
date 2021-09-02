@@ -12,19 +12,14 @@ RcppML NMF outperforms other implementations:
 
 ## Installation
 
-RcppML is a [CRAN package](https://cran.r-project.org/web/packages/RcppML/index.html) so you can use `install.packages`.
+RcppML is a [CRAN package](https://cran.r-project.org/web/packages/RcppML/index.html). The development version is up to date with the CRAN version:
 
 ```
-install.packages('RcppML')
+install.packages('RcppML')                   # install CRAN version
+devtools::install_github("zdebruine/RcppML") # compile dev version
 ```
 
 See the [CRAN manual](https://cran.r-project.org/web/packages/RcppML/RcppML.pdf) for details.
-
-The development version is newer than the CRAN version, and is better optimized and contains more features:
-
-```
-devtools::install_github("zdebruine/RcppML")
-```
 
 When the RcppML R library is loaded, the C++ classes can be directly included in any package using `#include <RcppML.hpp>`. This will also load RcppEigen, Rcpp, and OpenMP headers if needed.
 
