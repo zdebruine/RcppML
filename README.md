@@ -30,6 +30,8 @@ Sparse matrix factorization by alternating least squares.
 * Diagonal scaling for interpretability and robustness
 * Rank-1 and Rank-2 specializations (~2x faster than _irlba_ SVD equivalents)
 
+Read (and cite) our [bioRXiv manuscript](https://www.biorxiv.org/content/10.1101/2021.09.01.458620v1.article-metrics) for details.
+
 #### R functions
 The `nmf` function runs matrix factorization by alternating least squares in the form `A = WDH`. The `project` function updates `w` or `h` given the other, while the `mse` function calculates mean squared error of the factor model.
 
