@@ -79,7 +79,7 @@ namespace RcppML {
       s.slot("p") = p;
       s.slot("x") = x;
       s.slot("Dim") = Dim;
-      Rcpp::Environment base("package:Matrix");
+      Rcpp::Environment base = Rcpp::Environment::namespace_env("Matrix");
       Rcpp::Function t_r = base["t"];
       Rcpp::S4 At = t_r(Rcpp::_["x"] = s);
       return SparseMatrix(At);
