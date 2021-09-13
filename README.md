@@ -8,7 +8,7 @@
 
 RcppML NMF is:
 1. **more interpretable and robust** due to diagonal scaling
-2. The **fastest** NMF implementation
+2. The **fastest** NMF implementation in R, and possibly in any language
 
 ## Installation
 
