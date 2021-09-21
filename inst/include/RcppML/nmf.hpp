@@ -27,7 +27,7 @@ inline bool is_appx_symmetric(RcppML::SparseMatrix& A) {
   } else return false;
 }
 
-inline bool is_appx_symmetric(Rcpp::NumericMatrix& A) {
+inline bool is_appx_symmetric(Eigen::MatrixXd& A) {
   if (A.rows() == A.cols()) {
     for (int i = 0; i < A.cols(); ++i)
       if (A(i, 0) != A(0, i))
@@ -67,14 +67,14 @@ namespace RcppML {
 
     // update "h"
     void projectH(RcppML::SparseMatrix& A) { project(A, w, h, nonneg, L1_h, threads, mask_zeros); }
-    void projectH(Rcpp::NumericMatrix& A) { project(A, w, h, nonneg, L1_h, threads, mask_zeros); }
+    void projectH(Eigen::MatrixXd& A) { project(A, w, h, nonneg, L1_h, threads, mask_zeros); }
 
     // update "w"
     void projectW(RcppML::SparseMatrix& A) {
       if (is_appx_symmetric(A)) project(A, h, w, nonneg, L1_w, threads, mask_zeros);
       else projectInPlace(A, h, w, nonneg, L1_w, threads, mask_zeros);
     }
-    void projectW(Rcpp::NumericMatrix& A) {
+    void projectW(Eigen::MatrixXd& A) {
       if (is_appx_symmetric(A)) project(A, h, w, nonneg, L1_w, threads, mask_zeros);
       else projectInPlace(A, h, w, nonneg, L1_w, threads, mask_zeros);
     }
@@ -113,8 +113,8 @@ namespace RcppML {
       return sq_loss / (h.cols() * w.cols());
     }
 
-    double mse(Rcpp::NumericMatrix& A) {
-      if(mask_zeros) Rcpp::stop("mask_zeros = TRUE is not supported for mse(Rcpp::NumericMatrix)");
+    double mse(Eigen::MatrixXd& A) {
+      if(mask_zeros) Rcpp::stop("mask_zeros = TRUE is not supported for mse(Eigen::MatrixXd)");
       Eigen::MatrixXd w0 = w.transpose();
       for (unsigned int i = 0; i < w0.cols(); ++i)
         for (unsigned int j = 0; j < w0.rows(); ++j)
@@ -199,12 +199,12 @@ namespace RcppML {
     }
 
     // fit the model by alternating least squares projections
-    void fit(Rcpp::NumericMatrix& A) {
-      if(mask_zeros) Rcpp::stop("'mask_zeros = TRUE' is not supported for fit(Rcpp::NumericMatrix)");
+    void fit(Eigen::MatrixXd& A) {
+      if(mask_zeros) Rcpp::stop("'mask_zeros = TRUE' is not supported for fit(Eigen::MatrixXd)");
       if (verbose) Rprintf("\n%4s | %8s \n---------------\n", "iter", "tol");
-      Rcpp::NumericMatrix At;
+      Eigen::MatrixXd At;
       bool is_A_symmetric = is_appx_symmetric(A);
-      if (!is_A_symmetric && !updateInPlace) At = transpose(A);
+      if (!is_A_symmetric && !updateInPlace) At = A.transpose();
       for (; iter_ < maxit; ++iter_) { // alternating least squares updates
         Eigen::MatrixXd w_it = w;
 
