@@ -4,36 +4,33 @@
 [![](https://www.r-pkg.org/badges/version-last-release/RcppML)](https://cran.r-project.org/package=RcppML)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
 
-`RcppML` is an R package for fast **non-negative matrix factorization** and **divisive clustering** using **large sparse matrices**. Optimized subroutines for non-negative least squares and spectral bipartitioning are also exposed.
+`RcppML` is an R package for fast **non-negative matrix factorization** and **divisive clustering** using **large sparse matrices**. 
 
-RcppML NMF outperforms other implementations:
-1. It is **more interpretable and robust**, due to diagonal scaling.
-2. It is the **fastest** NMF implementation of which we are aware.
+RcppML NMF is:
+1. **more interpretable and robust** due to diagonal scaling
+2. The **fastest** NMF implementation in R, and possibly in any language
 
 ## Installation
 
-RcppML is a [CRAN package](https://cran.r-project.org/web/packages/RcppML/index.html) so you can use `install.packages`.
+Install from [CRAN](https://cran.r-project.org/web/packages/RcppML/index.html) or the development version from GitHub:
 
 ```
-install.packages('RcppML')
+install.packages('RcppML')                   # install CRAN version
+devtools::install_github("zdebruine/RcppML") # compile dev version
 ```
 
-See the [CRAN manual](https://cran.r-project.org/web/packages/RcppML/RcppML.pdf) for details.
+Check out the [CRAN manual](https://cran.r-project.org/web/packages/RcppML/RcppML.pdf).
 
-The development version is newer than the CRAN version, and is better optimized and contains more features:
-
-```
-devtools::install_github("zdebruine/RcppML")
-```
-
-When the RcppML R library is loaded, the C++ classes can be directly included in any package using `#include <RcppML.hpp>`. This will also load RcppEigen, Rcpp, and OpenMP headers if needed.
+Once installed and loaded, RcppML C++ headers defining classes can be used in C++ files for any R package using `#include <RcppML.hpp>`. 
 
 ## Matrix Factorization
-Sparse matrix factorization by alternating least squares.
-* Non-negativity constraints (optional)
+Sparse matrix factorization by alternating least squares:
+* Non-negativity constraints
 * L1 regularization
-* Diagonal scaling for interpretability and robustness
+* Diagonal scaling
 * Rank-1 and Rank-2 specializations (~2x faster than _irlba_ SVD equivalents)
+
+Read (and cite) our [bioRXiv manuscript](https://www.biorxiv.org/content/10.1101/2021.09.01.458620v1) on NMF for single-cell experiments.
 
 #### R functions
 The `nmf` function runs matrix factorization by alternating least squares in the form `A = WDH`. The `project` function updates `w` or `h` given the other, while the `mse` function calculates mean squared error of the factor model.
@@ -103,9 +100,3 @@ Rcpp::List DivisiveCluster(const Rcpp::S4& A_, int min_samples, double min_dist)
    return result;
 }
 ```
-
-## Documentation
-
-See the [package vignette](https://cran.r-project.org/web/packages/RcppML/vignettes/RcppML.html) for a basic introduction to the R functions.
-
-A pkgdown website will be published in the near future with documentation and examples for the R functions and C++ header library.
