@@ -40,7 +40,7 @@ inline std::vector<double> centroid(RcppML::SparseMatrix& A, const std::vector<u
 }
 
 // dense version
-inline std::vector<double> centroid(const Rcpp::NumericMatrix& A, const std::vector<unsigned int>& samples) {
+inline std::vector<double> centroid(const Eigen::MatrixXd& A, const std::vector<unsigned int>& samples) {
 
   std::vector<double> center(A.rows());
   for (unsigned int s = 0; s < samples.size(); ++s)
@@ -85,7 +85,7 @@ inline double rel_cosine(RcppML::SparseMatrix& A, const std::vector<unsigned int
   return (dist1 + dist2) / (2 * A.rows());
 }
 
-inline double rel_cosine(const Rcpp::NumericMatrix& A, const std::vector<unsigned int>& samples1, const std::vector<unsigned int>& samples2,
+inline double rel_cosine(const Eigen::MatrixXd& A, const std::vector<unsigned int>& samples1, const std::vector<unsigned int>& samples2,
                          const std::vector<double>& center1, const std::vector<double>& center2) {
 
   double center1_innerprod = std::sqrt(std::inner_product(center1.begin(), center1.end(), center1.begin(), (double)0));
@@ -204,7 +204,7 @@ inline bipartitionModel c_bipartition_sparse(
 }
 
 inline bipartitionModel c_bipartition_dense(
-  const Rcpp::NumericMatrix& A,
+  const Eigen::MatrixXd& A,
   Eigen::MatrixXd w,
   const std::vector<unsigned int> samples,
   const double tol,

@@ -104,6 +104,7 @@ void project(RcppML::SparseMatrix& A, const Eigen::MatrixXd& w, Eigen::MatrixXd&
     }
   } else if (w.rows() == 2) {
     Eigen::Matrix2d a = w * w.transpose();
+    a.diagonal().array() += TINY_NUM;
     const double denom = a(0, 0) * a(1, 1) - a(0, 1) * a(0, 1);
     for (unsigned int i = 0; i < h.cols(); ++i) {
       double b0 = 0, b1 = 0;
@@ -160,7 +161,7 @@ void project(RcppML::SparseMatrix& A, const Eigen::MatrixXd& w, Eigen::MatrixXd&
   }
 }
 
-void project(const Rcpp::NumericMatrix& A, const Eigen::MatrixXd& w, Eigen::MatrixXd& h, const bool nonneg, const double L1,
+void project(const Eigen::MatrixXd& A, const Eigen::MatrixXd& w, Eigen::MatrixXd& h, const bool nonneg, const double L1,
              const unsigned int threads, const bool mask_zeros) {
 
   if (w.rows() == 1) {
@@ -174,6 +175,7 @@ void project(const Rcpp::NumericMatrix& A, const Eigen::MatrixXd& w, Eigen::Matr
     }
   } else if (w.rows() == 2) {
     Eigen::Matrix2d a = w * w.transpose();
+    a.diagonal().array() += TINY_NUM;
     const double denom = a(0, 0) * a(1, 1) - a(0, 1) * a(0, 1);
     for (unsigned int i = 0; i < h.cols(); ++i) {
       double b0 = 0, b1 = 0;
@@ -193,8 +195,7 @@ void project(const Rcpp::NumericMatrix& A, const Eigen::MatrixXd& w, Eigen::Matr
     #endif
     for (unsigned int i = 0; i < h.cols(); ++i) {
       Eigen::VectorXd b = Eigen::VectorXd::Zero(a.rows());
-      for (int j = 0; j < A.rows(); ++j)
-        b += A(j, i) * w.col(j);
+      b += w * A.col(i);
       if (L1 != 0) b.array() -= L1;
 
       h.col(i) = a_llt.solve(b);
@@ -222,6 +223,7 @@ void projectInPlace(RcppML::SparseMatrix& A, const Eigen::MatrixXd& h, Eigen::Ma
     for (unsigned int i = 0; i < w.cols(); ++i) w(0, i) /= a;
   } else if (k == 2) {
     Eigen::Matrix2d a = h * h.transpose();
+    a.diagonal().array() += TINY_NUM;
     const double denom = a(0, 0) * a(1, 1) - a(0, 1) * a(0, 1);
     w.setZero();
     for (unsigned int i = 0; i < h.cols(); ++i) {
@@ -257,7 +259,7 @@ void projectInPlace(RcppML::SparseMatrix& A, const Eigen::MatrixXd& h, Eigen::Ma
   }
 }
 
-void projectInPlace(const Rcpp::NumericMatrix& A, const Eigen::MatrixXd& h, Eigen::MatrixXd& w, const bool nonneg, const double L1,
+void projectInPlace(const Eigen::MatrixXd& A, const Eigen::MatrixXd& h, Eigen::MatrixXd& w, const bool nonneg, const double L1,
                     const unsigned int threads, const bool mask_zeros) {
 
   const unsigned int k = w.rows();
@@ -271,6 +273,7 @@ void projectInPlace(const Rcpp::NumericMatrix& A, const Eigen::MatrixXd& h, Eige
     for (unsigned int i = 0; i < w.cols(); ++i) w(0, i) /= a;
   } else if (k == 2) {
     Eigen::Matrix2d a = h * h.transpose();
+    a.diagonal().array() += TINY_NUM;
     const double denom = a(0, 0) * a(1, 1) - a(0, 1) * a(0, 1);
     w.setZero();
     for (unsigned int i = 0; i < h.cols(); ++i) {
