@@ -11,72 +11,78 @@
 
 //[[Rcpp::export]]
 Eigen::MatrixXd Rcpp_projectW_sparse(const Rcpp::S4& A, const Eigen::MatrixXd w, const bool nonneg,
-                                     const double L1, const unsigned int threads, const bool mask_zeros) {
+                                     const double L1, const unsigned int threads, const bool mask_zeros,
+                                     const std::vector<unsigned int>& samples, const std::vector<unsigned int>& features) {
   RcppML::SparseMatrix A_(A);
-  Eigen::MatrixXd h(w.rows(), A_.cols());
-  project(A_, w, h, nonneg, L1, threads, mask_zeros);
+  Eigen::MatrixXd h(w.rows(), samples.size());
+  project(A_, w, h, nonneg, L1, threads, mask_zeros, samples, features);
   return h;
 }
 
 //[[Rcpp::export]]
 Eigen::MatrixXd Rcpp_projectH_sparse(const Rcpp::S4& A, const Eigen::MatrixXd h, const bool nonneg,
-                                     const double L1, const unsigned int threads, const bool mask_zeros) {
+                                     const double L1, const unsigned int threads, const bool mask_zeros,
+                                     const std::vector<unsigned int>& samples, const std::vector<unsigned int>& features) {
   RcppML::SparseMatrix A_(A);
   Eigen::MatrixXd w(h.rows(), A_.rows());
-  projectInPlace(A_, h, w, nonneg, L1, threads, mask_zeros);
+  projectInPlace(A_, h, w, nonneg, L1, threads, mask_zeros, samples, features);
   return w;
 }
 
 //[[Rcpp::export]]
 Eigen::MatrixXd Rcpp_projectW_dense(const Eigen::MatrixXd& A, const Eigen::MatrixXd w, const bool nonneg,
-                                    const double L1, const unsigned int threads, const bool mask_zeros) {
-  Eigen::MatrixXd h(w.rows(), A.cols());
-  project(A, w, h, nonneg, L1, threads, mask_zeros);
+                                    const double L1, const unsigned int threads, const bool mask_zeros,
+                                    const std::vector<unsigned int>& samples, const std::vector<unsigned int>& features) {
+  Eigen::MatrixXd h(w.rows(), samples.size());
+  project(A, w, h, nonneg, L1, threads, mask_zeros, samples, features);
   return h;
 }
 
 //[[Rcpp::export]]
 Eigen::MatrixXd Rcpp_projectH_dense(Eigen::MatrixXd& A, const Eigen::MatrixXd h, const bool nonneg,
-                                    const double L1, const unsigned int threads, const bool mask_zeros) {
+                                    const double L1, const unsigned int threads, const bool mask_zeros,
+                                    const std::vector<unsigned int>& samples, const std::vector<unsigned int>& features) {
   Eigen::MatrixXd w(h.rows(), A.rows());
-  projectInPlace(A, h, w, nonneg, L1, threads, mask_zeros);
+  projectInPlace(A, h, w, nonneg, L1, threads, mask_zeros, samples, features);
   return w;
 }
 
 // MEAN SQUARED ERROR LOSS OF FACTORIZATION
 
 //[[Rcpp::export]]
-double Rcpp_mse_sparse(const Rcpp::S4& A, Eigen::MatrixXd& w, Eigen::VectorXd& d, Eigen::MatrixXd& h, const bool mask_zeros, const unsigned int threads) {
+double Rcpp_mse_sparse(const Rcpp::S4& A, Eigen::MatrixXd& w, Eigen::VectorXd& d, Eigen::MatrixXd& h, const bool mask_zeros, const unsigned int threads,
+                       const std::vector<unsigned int>& samples, const std::vector<unsigned int>& features) {
 
   RcppML::SparseMatrix A_(A);
   RcppML::MatrixFactorization m(w, d, h);
-  m.threads = threads;
-  m.mask_zeros = mask_zeros;
+  m.samples = samples; m.features = features; m.threads = threads; m.mask_zeros = mask_zeros;
   return m.mse(A_);
 }
 
 //[[Rcpp::export]]
-double Rcpp_mse_dense(Eigen::MatrixXd& A, Eigen::MatrixXd& w, Eigen::VectorXd& d, Eigen::MatrixXd& h, const bool mask_zeros, const unsigned int threads) {
+double Rcpp_mse_dense(Eigen::MatrixXd& A, Eigen::MatrixXd& w, Eigen::VectorXd& d, Eigen::MatrixXd& h, const bool mask_zeros, const unsigned int threads,
+                      const std::vector<unsigned int>& samples, const std::vector<unsigned int>& features) {
 
   RcppML::MatrixFactorization m(w, d, h);
-  m.threads = threads;
-  m.mask_zeros = mask_zeros;
+  m.samples = samples; m.features = features; m.threads = threads; m.mask_zeros = mask_zeros;
   return m.mse(A);
 }
 
 // NON_NEGATIVE MATRIX FACTORIZATION
 
 //[[Rcpp::export]]
-Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const unsigned int k, const double tol, const unsigned int maxit,
-                           const bool verbose, const bool nonneg, const Rcpp::NumericVector L1, const unsigned int seed,
-                           const bool diag, const bool mask_zeros, const unsigned int threads) {
+Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const double tol, const unsigned int maxit,
+                           const bool verbose, const bool nonneg, const Rcpp::NumericVector L1,
+                           const bool diag, const bool mask_zeros, const unsigned int threads, const std::vector<unsigned int>& samples,
+                           const std::vector<unsigned int>& features, Eigen::MatrixXd& w_init, const bool update_in_place) {
 
   RcppML::SparseMatrix A_(A);
-  RcppML::MatrixFactorization m(k, A_.rows(), A_.cols(), seed);
+  RcppML::MatrixFactorization m(w_init, samples, features);
 
   // set model parameters
   m.tol = tol; m.updateInPlace = false; m.nonneg = nonneg; m.L1_w = L1(0); m.L1_h = L1(1);
   m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.mask_zeros = mask_zeros; m.threads = threads;
+  m.updateInPlace = update_in_place;
 
   // fit the model by alternating least squares
   m.fit(A_);
@@ -90,15 +96,17 @@ Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const unsigned int k, const double
 }
 
 //[[Rcpp::export]]
-Rcpp::List Rcpp_nmf_dense(Eigen::MatrixXd& A, const unsigned int k, const double tol, const unsigned int maxit,
-                          const bool verbose, const bool nonneg, const Rcpp::NumericVector L1, const unsigned int seed,
-                          const bool diag, const bool mask_zeros, const unsigned int threads) {
+Rcpp::List Rcpp_nmf_dense(Eigen::MatrixXd& A, const double tol, const unsigned int maxit,
+                          const bool verbose, const bool nonneg, const Rcpp::NumericVector L1,
+                          const bool diag, const bool mask_zeros, const unsigned int threads, const std::vector<unsigned int>& samples,
+                          const std::vector<unsigned int>& features, Eigen::MatrixXd& w_init, const bool update_in_place) {
 
-  RcppML::MatrixFactorization m(k, A.rows(), A.cols(), seed);
+  RcppML::MatrixFactorization m(w_init, samples, features);
 
   // set model parameters
   m.tol = tol; m.updateInPlace = false; m.nonneg = nonneg; m.L1_w = L1(0); m.L1_h = L1(1);
   m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.mask_zeros = mask_zeros; m.threads = threads;
+  m.updateInPlace = update_in_place;
 
   // fit the model by alternating least squares
   m.fit(A);
@@ -115,13 +123,12 @@ Rcpp::List Rcpp_nmf_dense(Eigen::MatrixXd& A, const unsigned int k, const double
 
 //[[Rcpp::export]]
 Rcpp::List Rcpp_bipartition_sparse(const Rcpp::S4& A, const double tol, const unsigned int maxit, const bool nonneg,
-                       Rcpp::IntegerVector samples, const unsigned int seed, const bool verbose = false, 
-                       const bool calc_dist = false, const bool diag = true) {
+                                   const std::vector<unsigned int>& samples, const unsigned int seed, const bool verbose = false,
+                                   const bool calc_dist = false, const bool diag = true) {
 
   RcppML::SparseMatrix A_(A);
   Eigen::MatrixXd w = randomMatrix(2, A_.rows(), seed);
-  const std::vector<unsigned int> samples_ = Rcpp::as<std::vector<unsigned int>>(samples);
-  bipartitionModel m = c_bipartition_sparse(A_, w, samples_, tol, nonneg, calc_dist, maxit, verbose);
+  bipartitionModel m = c_bipartition_sparse(A_, w, samples, tol, nonneg, calc_dist, maxit, verbose);
   return Rcpp::List::create(Rcpp::Named("v") = m.v, Rcpp::Named("dist") = m.dist, Rcpp::Named("size1") = m.size1,
                             Rcpp::Named("size2") = m.size2, Rcpp::Named("samples1") = m.samples1, Rcpp::Named("samples2") = m.samples2,
                             Rcpp::Named("center1") = m.center1, Rcpp::Named("center2") = m.center2);
@@ -130,12 +137,11 @@ Rcpp::List Rcpp_bipartition_sparse(const Rcpp::S4& A, const double tol, const un
 
 //[[Rcpp::export]]
 Rcpp::List Rcpp_bipartition_dense(const Eigen::MatrixXd& A, const double tol, const unsigned int maxit, const bool nonneg,
-                       Rcpp::IntegerVector samples, const unsigned int seed, const bool verbose = false, 
-                       const bool calc_dist = false, const bool diag = true) {
+                                  const std::vector<unsigned int>& samples, const unsigned int seed, const bool verbose = false,
+                                  const bool calc_dist = false, const bool diag = true) {
 
   Eigen::MatrixXd w = randomMatrix(2, A.rows(), seed);
-  const std::vector<unsigned int> samples_ = Rcpp::as<std::vector<unsigned int>>(samples);
-  bipartitionModel m = c_bipartition_dense(A, w, samples_, tol, nonneg, calc_dist, maxit, verbose);
+  bipartitionModel m = c_bipartition_dense(A, w, samples, tol, nonneg, calc_dist, maxit, verbose);
   return Rcpp::List::create(Rcpp::Named("v") = m.v, Rcpp::Named("dist") = m.dist, Rcpp::Named("size1") = m.size1,
                             Rcpp::Named("size2") = m.size2, Rcpp::Named("samples1") = m.samples1, Rcpp::Named("samples2") = m.samples2,
                             Rcpp::Named("center1") = m.center1, Rcpp::Named("center2") = m.center2);
@@ -146,7 +152,7 @@ Rcpp::List Rcpp_bipartition_dense(const Eigen::MatrixXd& A, const double tol, co
 
 //[[Rcpp::export]]
 Rcpp::List Rcpp_dclust_sparse(const Rcpp::S4& A, const unsigned int min_samples, const double min_dist, const bool verbose,
-                  const double tol, const unsigned int maxit, const bool nonneg, const unsigned int seed, const unsigned int threads) {
+                              const double tol, const unsigned int maxit, const bool nonneg, const unsigned int seed, const unsigned int threads) {
 
   RcppML::SparseMatrix A_(A);
 

@@ -21,6 +21,14 @@
 #' **Publication reference.** For theoretical and practical considerations, please see our manuscript: "DeBruine ZJ, Melcher K, Triche TJ (2021) 
 #' High-performance non-negative matrix factorization for large single cell data." on BioRXiv.
 #'
+#' @section Advanced Parameters:
+#' Several parameters may be specified in the \code{...} argument:
+#'
+#' * \code{nonneg = TRUE}: enforce non-negativity
+#' * \code{samples = 1:ncol(A)}: samples to project, numbered between 1 and \code{ncol(A)}. Default is all samples.
+#' * \code{features = 1:nrow(A)}: features to consider in projection, numbered between 1 and \code{nrow(A)}. Default is all features. This can make the projection considerably slower.
+#' * \code{mask_zeros = FALSE}: handle zeros as missing values (i.e., implicitly), available only when \code{A} is sparse
+#'
 #' @inheritParams nmf
 #' @param w dense matrix of factors x features giving the linear model to be projected (if \code{h = NULL})
 #' @param h dense matrix of factors x samples giving the linear model to be projected (if \code{w = NULL})
@@ -58,12 +66,18 @@
 #' w2 <- project(t(A), w = t(h))
 #' all.equal(w, w2)
 #' }
-project <- function(A, w = NULL, h = NULL, nonneg = TRUE, L1 = 0, mask_zeros = FALSE) {
+project <- function(A, w = NULL, h = NULL, L1 = 0, ...) {
+
+  # apply defaults to advanced parameters
+  p <- list(...)
+  defaults <- list("mask_zeros" = FALSE, "nonneg" = TRUE, "samples" = 1:ncol(A), "features" = 1:nrow(A))
+  for(i in 1:length(defaults))
+    if(is.null(p[[names(defaults)[[i]]]])) p[[names(defaults)[[i]]]] <- defaults[[i]]
 
   threads <- getRcppMLthreads()
   if ((is.null(w) && is.null(h)) || (!is.null(w) && !is.null(h)))
     stop("specify one of 'w' or 'h', leaving the other 'NULL'")
-  if (!is.null(w) && mask_zeros) stop("'mask_zeros = TRUE' is not supported for projections of 'h'. Use 'w' <- project(t(A), w = h)' instead.")
+  if (!is.null(w) && p$mask_zeros) stop("'mask_zeros = TRUE' is not supported for projections of 'h'. Use 'w' <- project(t(A), w = h)' instead.")
 
   # get 'A' in either sparse or dense matrix format
   if (is(A, "sparseMatrix")) {
@@ -82,17 +96,17 @@ project <- function(A, w = NULL, h = NULL, nonneg = TRUE, L1 = 0, mask_zeros = F
   }
 
   # select backend based on whether 'A' is dense or sparse
-  if (class(A) == "dgCMatrix") {
+  if (class(A)[[1]] == "dgCMatrix") {
     if (!is.null(w)) {
-      Rcpp_projectW_sparse(A, w, nonneg, L1, threads, mask_zeros)
+      Rcpp_projectW_sparse(A, w, p$nonneg, L1, threads, p$mask_zeros, p$samples - 1, p$features - 1)
     } else {
-      Rcpp_projectH_sparse(A, h, nonneg, L1, threads, mask_zeros)
+      Rcpp_projectH_sparse(A, h, p$nonneg, L1, threads, p$mask_zeros, p$samples - 1, p$features - 1)
     }
   } else {
     if (!is.null(w)) {
-      Rcpp_projectW_dense(A, w, nonneg, L1, threads, mask_zeros)
+      Rcpp_projectW_dense(A, w, p$nonneg, L1, threads, p$mask_zeros, p$samples - 1, p$features - 1)
     } else {
-      Rcpp_projectH_dense(A, h, nonneg, L1, threads, mask_zeros)
+      Rcpp_projectH_dense(A, h, p$nonneg, L1, threads, p$mask_zeros, p$samples - 1, p$features - 1)
     }
   }
 }

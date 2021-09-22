@@ -4,36 +4,18 @@
 \alias{bipartition}
 \title{Bipartition a sample set}
 \usage{
-bipartition(
-  A,
-  tol = 1e-05,
-  maxit = 100,
-  nonneg = TRUE,
-  samples = 1:ncol(A),
-  seed = NULL,
-  verbose = FALSE,
-  calc_dist = FALSE,
-  diag = TRUE
-)
+bipartition(A, tol = 1e-05, verbose = FALSE, nonneg = TRUE, ...)
 }
 \arguments{
-\item{A}{matrix of features-by-samples in dense or sparse format (preferred classes are "matrix" or "Matrix::dgCMatrix", respectively). Prefer sparse storage when more than half of all values are zero.}
+\item{A}{matrix of features-by-samples in dense or sparse format (preferred classes are \code{matrix} or \code{Matrix::dgCMatrix}, respectively). Prefer sparse storage when >50\% of values are zero.}
 
 \item{tol}{stopping criteria, the correlation distance between \eqn{w} across consecutive iterations, \eqn{1 - cor(w_i, w_{i-1})}}
 
-\item{maxit}{stopping criteria, maximum number of alternating updates of \eqn{w} and \eqn{h}}
-
-\item{nonneg}{enforce non-negativity}
-
-\item{samples}{samples to include in bipartition, numbered from 1 to \code{ncol(A)}. Default is \code{NULL} for all samples.}
-
-\item{seed}{random seed for model initialization}
-
 \item{verbose}{print model tolerances between iterations}
 
-\item{calc_dist}{calculate the relative cosine distance of samples within a cluster to either cluster centroid. If \code{TRUE}, centers for clusters will also be calculated.}
+\item{nonneg}{enforce non-negativity of the rank-2 factorization used for bipartitioning}
 
-\item{diag}{scale factors in \eqn{w} and \eqn{h} to sum to 1 by introducing a diagonal, \eqn{d}. This should generally never be set to \code{FALSE}. Diagonalization enables symmetry of models in factorization of symmetric matrices, convex L1 regularization, and consistent factor scalings.}
+\item{...}{see "advanced parameters" section}
 }
 \value{
 A list giving the bipartition and useful statistics:
@@ -59,6 +41,18 @@ Rank-2 matrix factorization by alternating least squares is faster than rank-2-t
 
 This function is a specialization of rank-2 \code{\link{nmf}} with support for factorization of only a subset of samples, and with additional calculations on the factorization model relevant to bipartitioning. See \code{\link{nmf}} for details regarding rank-2 factorization.
 }
+\section{Advanced Parameters}{
+
+Several parameters may be specified in the \code{...} argument:
+\itemize{
+\item \code{diag = TRUE}: scale factors in \eqn{w} and \eqn{h} to sum to 1 by introducing a diagonal, \eqn{d}. This should generally never be set to \code{FALSE}. Diagonalization enables symmetry of models in factorization of symmetric matrices, convex L1 regularization, and consistent factor scalings.
+\item \code{samples = 1:ncol(A)}: samples to include in bipartition, numbered from 1 to \code{ncol(A)}. Default is all samples.
+\item \code{calc_dist = TRUE}: calculate the relative cosine distance of samples within a cluster to either cluster centroid. If \code{TRUE}, centers for clusters will also be calculated.
+\item \code{seed = NULL}: random seed for model initialization, generally not needed for rank-2 factorizations because robust solutions are recovered when \code{diag = TRUE}
+\item \code{maxit = 100}: maximum number of alternating updates of \eqn{w} and \eqn{h}. Generally, rank-2 factorizations converge quickly and this should not need to be adjusted.
+}
+}
+
 \examples{
 \dontrun{
 library(Matrix)

@@ -12,6 +12,13 @@
 #' **Parallelization.** Calculation of mean squared error is performed in parallel across columns in \code{A} using the number of threads set by \code{\link{setRcppMLthreads}}. 
 #' By default, all available threads are used, see \code{\link{getRcppMLthreads}}.
 #' 
+#' @section Advanced Parameters:
+#' Additional parameters may be specified in the \code{...} argument:
+#'
+#' * \code{mask_zeros = FALSE}: handle zeros as missing values (i.e., implicitly), available only when \code{A} is sparse
+#' * \code{samples = 1:ncol(A)}: samples to include in loss calculation, numbered between 1 and \code{ncol(A)}. Default is all samples.
+#' * \code{features = 1:nrow(A)}: features to include in loss calculation, numbered between 1 and \code{nrow(A)}. Default is all features. This can make the loss calculation somewhat slower.
+#'
 #' @inheritParams nmf
 #' @param w dense matrix of class \code{matrix} with factors (columns) by features (rows)
 #' @param d diagonal scaling vector of rank length
@@ -29,13 +36,20 @@
 #' R_mse <- mean((A - model$w %*% Diagonal(x = model$d) %*% model$h)^2)
 #' all.equal(c_mse, R_mse)
 #' }
-mse <- function(A, w, d = NULL, h, mask_zeros = FALSE) {
+mse <- function(A, w, d = NULL, h, ...) {
   threads <- getRcppMLthreads()
+
+  # apply defaults to advanced parameters
+  p <- list(...)
+  defaults <- list("mask_zeros" = FALSE, "samples" = 1:ncol(A), "features" = 1:nrow(A))
+  for(i in 1:length(defaults))
+    if(is.null(p[[names(defaults)[[i]]]])) p[[names(defaults)[[i]]]] <- defaults[[i]]
 
   if (is(A, "sparseMatrix")) {
     A <- as(A, "dgCMatrix")
   } else if (canCoerce(A, "matrix")) {
     A <- as.matrix(A)
+    if(p$mask_zeros) stop("'mask_zeros = TRUE' is not supported for dense 'A'")
   } else stop("'A' was not coercible to a matrix")
 
   if (nrow(w) == nrow(A)) w <- t(w)
@@ -44,14 +58,14 @@ mse <- function(A, w, d = NULL, h, mask_zeros = FALSE) {
   if (ncol(w) != nrow(A)) stop("dimensions of 'w' and 'A' are incompatible")
   if (ncol(h) != ncol(A)) stop("dimensions of 'h' and 'A' are incompatible")
   if (is.null(d)) {
-    d <- rep(1, ncol(w))
+    d <- rep(1, nrow(w))
   } else {
     if (length(d) != nrow(w)) stop("length of 'd' and rank of 'w' and 'h' are not equivalent")
   }
 
-  if (class(A) == "dgCMatrix") {
-    Rcpp_mse_sparse(A, w, d, h, mask_zeros, threads)
+  if (class(A)[[1]] == "dgCMatrix") {
+    Rcpp_mse_sparse(A, w, d, h, p$mask_zeros, threads, p$samples - 1, p$features - 1)
   } else {
-    Rcpp_mse_dense(A, w, d, h, mask_zeros, threads)
+    Rcpp_mse_dense(A, w, d, h, p$mask_zeros, threads, p$samples - 1, p$features - 1)
   }
 }

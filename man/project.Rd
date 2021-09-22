@@ -4,20 +4,18 @@
 \alias{project}
 \title{Project a linear factor model}
 \usage{
-project(A, w = NULL, h = NULL, nonneg = TRUE, L1 = 0, mask_zeros = FALSE)
+project(A, w = NULL, h = NULL, L1 = 0, ...)
 }
 \arguments{
-\item{A}{matrix of features-by-samples in dense or sparse format (preferred classes are "matrix" or "Matrix::dgCMatrix", respectively). Prefer sparse storage when more than half of all values are zero.}
+\item{A}{matrix of features-by-samples in dense or sparse format (preferred classes are \code{matrix} or \code{Matrix::dgCMatrix}, respectively). Prefer sparse storage when >50\% of values are zero.}
 
 \item{w}{dense matrix of factors x features giving the linear model to be projected (if \code{h = NULL})}
 
 \item{h}{dense matrix of factors x samples giving the linear model to be projected (if \code{w = NULL})}
 
-\item{nonneg}{enforce non-negativity}
-
 \item{L1}{L1/LASSO penalty to be applied. No scaling is performed. See details.}
 
-\item{mask_zeros}{handle zeros as missing values, available only when \code{A} is sparse}
+\item{...}{see "advanced parameters" section}
 }
 \value{
 matrix \eqn{h} or \eqn{w}
@@ -46,6 +44,17 @@ By default, all available threads are used, see \code{\link{getRcppMLthreads}}. 
 \strong{Publication reference.} For theoretical and practical considerations, please see our manuscript: "DeBruine ZJ, Melcher K, Triche TJ (2021)
 High-performance non-negative matrix factorization for large single cell data." on BioRXiv.
 }
+\section{Advanced Parameters}{
+
+Several parameters may be specified in the \code{...} argument:
+\itemize{
+\item \code{nonneg = TRUE}: enforce non-negativity
+\item \code{samples = 1:ncol(A)}: samples to project, numbered between 1 and \code{ncol(A)}. Default is all samples.
+\item \code{features = 1:nrow(A)}: features to consider in projection, numbered between 1 and \code{nrow(A)}. Default is all features. This can make the projection considerably slower.
+\item \code{mask_zeros = FALSE}: handle zeros as missing values (i.e., implicitly), available only when \code{A} is sparse
+}
+}
+
 \examples{
 \dontrun{
 library(Matrix)

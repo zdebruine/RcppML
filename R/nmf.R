@@ -73,16 +73,25 @@
 #' **Publication reference.** For theoretical and practical considerations, please see our manuscript: "DeBruine ZJ, Melcher K, Triche TJ (2021) 
 #' High-performance non-negative matrix factorization for large single cell data." on BioRXiv.
 #'
-#' @param A matrix of features-by-samples in dense or sparse format (preferred classes are "matrix" or "Matrix::dgCMatrix", respectively). Prefer sparse storage when more than half of all values are zero.
-#' @param nonneg enforce non-negativity
+#' @section Advanced Parameters:
+#' Several parameters may be specified in the \code{...} argument:
+#'
+#' * \code{nonneg = TRUE}: enforce non-negativity
+#' * \code{diag = TRUE}: scale factors in \eqn{w} and \eqn{h} to sum to 1 by introducing a diagonal, \eqn{d}. This should generally never be set to \code{FALSE}. Diagonalization enables symmetry of models in factorization of symmetric matrices, convex L1 regularization, and consistent factor scalings.
+#' * \code{samples = 1:ncol(A)}: samples to include in factorization, numbered between 1 and \code{ncol(A)}. Default is all samples. This can make the factorization significantly slower, it may be advantageous to set \code{updateInPlace = TRUE}.
+#' * \code{features = 1:nrow(A)}: features to include in factorization, numbered between 1 and \code{nrow(A)}. Default is all features. This can make the factorization significantly slower.
+#' * \code{mask_zeros = FALSE}: handle zeros as missing values (i.e., implicitly), available only when \code{A} is sparse
+#' * \code{w_init = NULL}: initial "w" matrix, if other than a random initialization using \code{seed}
+#' * \code{update_in_place = FALSE}: avoid transposition of 'A' (and associated memory usage) by using a slower in-place algorithm for alternating least squares updates of 'w'. \code{update_in_place} is always \code{TRUE} when \code{samples != 1:ncol(A)} and \code{A} is asymmetric, it is always \code{FALSE} when \code{A} is symmetric.
+#'
+#' @param A matrix of features-by-samples in dense or sparse format (preferred classes are \code{matrix} or \code{Matrix::dgCMatrix}, respectively). Prefer sparse storage when >50% of values are zero.
 #' @param k rank
-#' @param diag scale factors in \eqn{w} and \eqn{h} to sum to 1 by introducing a diagonal, \eqn{d}. This should generally never be set to \code{FALSE}. Diagonalization enables symmetry of models in factorization of symmetric matrices, convex L1 regularization, and consistent factor scalings.
 #' @param tol stopping criteria, the correlation distance between \eqn{w} across consecutive iterations, \eqn{1 - cor(w_i, w_{i-1})}
 #' @param maxit stopping criteria, maximum number of alternating updates of \eqn{w} and \eqn{h}
 #' @param L1 L1/LASSO penalties between 0 and 1, array of length two for \code{c(w, h)}
 #' @param seed random seed for model initialization
 #' @param verbose print model tolerances between iterations
-#' @param mask_zeros handle zeros as missing values, available only when \code{A} is sparse
+#' @param ... see "advanced parameters" section
 #' @return
 #' A list giving the factorization model:
 #' 	\itemize{
@@ -90,7 +99,7 @@
 #'    \item d    : scaling diagonal vector
 #'    \item h    : sample factor matrix
 #'    \item tol  : tolerance between models at final update
-#'    \item iter : number of alternating updates run
+#'    \item iter : number of alternating updates
 #'  }
 #' @references
 #' 
@@ -130,23 +139,54 @@
 #' plot(model$w, t(model$h))
 #' # see package vignette for more examples
 #' }
-nmf <- function(A, k, tol = 1e-4, maxit = 100, verbose = TRUE, L1 = c(0, 0), seed = NULL, mask_zeros = FALSE, diag = TRUE, nonneg = TRUE) {
+nmf <- function(A, k, tol = 1e-4, maxit = 100, verbose = TRUE, L1 = c(0, 0), seed = NULL, ...) {
 
-  if (!is.numeric(seed)) seed <- 0
-  if (length(L1) == 1) L1 <- rep(L1, 2)
+  # apply defaults to advanced parameters
+  p <- list(...)
+  defaults <- list("mask_zeros" = FALSE, "diag" = TRUE, "nonneg" = TRUE, "samples" = 1:ncol(A), "features" = 1:nrow(A), "w_init" = NULL, "update_in_place" = FALSE)
+  for(i in 1:length(defaults))
+    if(is.null(p[[names(defaults)[[i]]]])) p[[names(defaults)[[i]]]] <- defaults[[i]]
+
+  if (length(L1) != 2) stop("'L1' must be an array of two values, the first for the penalty on 'w', the second for the penalty on 'h'")
   if (max(L1) >= 1 || min(L1) < 0) stop("L1 penalties must be strictly in the range [0,1)")
   threads <- getRcppMLthreads()
-  
+
+  # get 'A' in either sparse or dense matrix format
   if (is(A, "sparseMatrix")) {
     A <- as(A, "dgCMatrix")
-    Rcpp_nmf_sparse(A, k, tol, maxit, verbose, nonneg, L1, seed, diag, mask_zeros, threads)
+  } else if (canCoerce(A, "matrix")) {
+    A <- as.matrix(A)
+  } else stop("'A' was not coercible to a matrix")
+
+  # randomly initialize "w", or check dimensions of provided initialization
+  if (!is.null(p$w_init)) {
+    if (nrow(p$w_init) == length(p$features)) w_init <- t(w_init)
+    if (ncol(p$w_init) != length(p$features)) stop("a matrix was specified for 'w_init', but dimensions are not compatible with number of features")
+    if (k != nrow(p$w_init)) stop("'k' is not equal to rank of 'w_init' matrix")
   } else {
-    if (canCoerce(A, "matrix")) {
-      A <- as.matrix(A)
-      if(mask_zeros) stop("mask_zeros = TRUE not supported when 'A' is in dense format")
-      Rcpp_nmf_dense(A, k, tol, maxit, verbose, nonneg, L1, seed, diag, mask_zeros, threads)
-    } else {
-      stop("'A' was not coercible to a matrix")
-    }
+    if (is.numeric(seed)) set.seed(seed)
+    p$w_init <- matrix(runif(k * length(p$features)), k, length(p$features))
+  }
+
+  # check samples and features arrays
+  if(length(p$samples) != ncol(A)){
+    if(is.unsorted(p$samples)) p$samples <- sort(p$samples)
+    if(min(p$samples) < 1 || max(p$samples) > ncol(A)) stop("'samples' must strictly be between 1 and ncol(A)")
+    if(length(p$samples) < 2 || length(p$samples) > ncol(A)) stop("'samples' must be a vector of integers of length >= 2 and <= ncol(A)")
+    if(any(duplicated(p$samples))) stop("'samples' array contains duplicate values")
+  }
+  if(length(p$features) != nrow(A)){
+    if(is.unsorted(p$features)) p$features <- sort(p$features)
+    if(min(p$features) < 1 || max(p$features) > ncol(A)) stop("'features' must strictly be between 1 and nrow(A)")
+    if(length(p$features) < 2 || length(p$features) > nrow(A)) stop("'features' must be a vector of integers of length >= 2 and <= nrow(A)")
+    if(any(duplicated(p$features))) stop("'features' array contains duplicate values")
+  }
+
+  # call C++ routines
+  if (class(A)[[1]] == "dgCMatrix") {
+    Rcpp_nmf_sparse(A, tol, maxit, verbose, p$nonneg, L1, p$diag, p$mask_zeros, threads, p$samples - 1, p$features - 1, p$w_init, p$update_in_place)
+  } else {
+    if (p$mask_zeros) stop("mask_zeros = TRUE not supported when 'A' is in dense format")
+    Rcpp_nmf_dense(A, tol, maxit, verbose, p$nonneg, L1, p$diag, p$mask_zeros, threads, p$samples - 1, p$features - 1, p$w_init, p$update_in_place)
   }
 }

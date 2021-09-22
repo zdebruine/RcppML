@@ -10,7 +10,7 @@
 
 namespace RcppML {
   class SparseMatrix {
-    public:
+  public:
     Rcpp::IntegerVector i, p, Dim;
     Rcpp::NumericVector x;
 
@@ -22,21 +22,49 @@ namespace RcppML {
 
     // const column iterator
     class InnerIterator {
-      public:
+    public:
       InnerIterator(SparseMatrix& ptr, int col) : ptr(ptr) { index = ptr.p[col]; max_index = ptr.p[col + 1]; }
       operator bool() const { return (index < max_index); }
       InnerIterator& operator++() { ++index; return *this; }
       const double& value() const { return ptr.x[index]; }
       int row() const { return ptr.i[index]; }
 
-      private:
+    private:
       SparseMatrix& ptr;
       int index, max_index;
     };
 
+    // equivalent to the "Forward Range" concept in two boost::ForwardTraversalIterator
+    class InnerRangedIterator {
+    public:
+      InnerRangedIterator(SparseMatrix& ptr, int col, const std::vector<unsigned int>& s) : ptr(ptr), s(s) {
+        index = ptr.p[col];
+        max_index = ptr.p[col + 1];
+        s_size = s.size();
+        // increment index to the first case where ptr.i intersects with s
+        while (index < max_index && s_index < s_size && (unsigned int)ptr.i[index] != s[s_index])
+          s[s_index] < (unsigned int)ptr.i[index] ? ++s_index : ++index;
+      }
+      operator bool() const { return (index < max_index&& s_index < s_size); }
+      InnerRangedIterator& operator++() {
+        ++index; ++s_index;
+        while (index < max_index && s_index < s_size && (unsigned int)ptr.i[index] != s[s_index])
+          s[s_index] < (unsigned int)ptr.i[index] ? ++s_index : ++index;
+        return *this;
+      }
+      const double& value() const { return ptr.x[index]; }
+      int row() const { return ptr.i[index]; }
+      int rangedRow() const { return s_index; }
+
+    private:
+      SparseMatrix& ptr;
+      const std::vector<unsigned int>& s;
+      int index, max_index, s_index = 0, s_size;
+    };
+
     // const row iterator
     class InnerRowIterator {
-      public:
+    public:
       InnerRowIterator(SparseMatrix& ptr, int j) : ptr(ptr) {
         index = 0, max_index = 0;
         for (; index < ptr.Dim[1]; ++index) {
@@ -62,7 +90,7 @@ namespace RcppML {
         return j;
       };
       double& value() const { return ptr.x[index]; };
-      private:
+    private:
       SparseMatrix& ptr;
       int row = 0, index, max_index;
     };
