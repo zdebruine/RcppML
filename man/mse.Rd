@@ -4,10 +4,10 @@
 \alias{mse}
 \title{Mean Squared Error loss of a factor model}
 \usage{
-mse(A, w, d = NULL, h, mask_zeros = FALSE)
+mse(A, w, d = NULL, h, ...)
 }
 \arguments{
-\item{A}{matrix of features-by-samples in dense or sparse format (preferred classes are "matrix" or "Matrix::dgCMatrix", respectively). Prefer sparse storage when more than half of all values are zero.}
+\item{A}{matrix of features-by-samples in dense or sparse format (preferred classes are \code{matrix} or \code{Matrix::dgCMatrix}, respectively). Prefer sparse storage when >50\% of values are zero.}
 
 \item{w}{dense matrix of class \code{matrix} with factors (columns) by features (rows)}
 
@@ -15,7 +15,7 @@ mse(A, w, d = NULL, h, mask_zeros = FALSE)
 
 \item{h}{dense matrix of class \code{matrix} with samples (columns) by factors (rows)}
 
-\item{mask_zeros}{handle zeros as missing values, available only when \code{A} is sparse}
+\item{...}{see "advanced parameters" section}
 }
 \value{
 mean squared error of the factorization model
@@ -34,6 +34,16 @@ If no diagonal scaling vector is present in the model, input \code{d = rep(1, k)
 \strong{Parallelization.} Calculation of mean squared error is performed in parallel across columns in \code{A} using the number of threads set by \code{\link{setRcppMLthreads}}.
 By default, all available threads are used, see \code{\link{getRcppMLthreads}}.
 }
+\section{Advanced Parameters}{
+
+Additional parameters may be specified in the \code{...} argument:
+\itemize{
+\item \code{mask_zeros = FALSE}: handle zeros as missing values (i.e., implicitly), available only when \code{A} is sparse
+\item \code{samples = 1:ncol(A)}: samples to include in loss calculation, numbered between 1 and \code{ncol(A)}. Default is all samples.
+\item \code{features = 1:nrow(A)}: features to include in loss calculation, numbered between 1 and \code{nrow(A)}. Default is all features. This can make the loss calculation somewhat slower.
+}
+}
+
 \examples{
 \dontrun{
 library(Matrix)

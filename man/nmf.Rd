@@ -12,13 +12,11 @@ nmf(
   verbose = TRUE,
   L1 = c(0, 0),
   seed = NULL,
-  mask_zeros = FALSE,
-  diag = TRUE,
-  nonneg = TRUE
+  ...
 )
 }
 \arguments{
-\item{A}{matrix of features-by-samples in dense or sparse format (preferred classes are "matrix" or "Matrix::dgCMatrix", respectively). Prefer sparse storage when more than half of all values are zero.}
+\item{A}{matrix of features-by-samples in dense or sparse format (preferred classes are \code{matrix} or \code{Matrix::dgCMatrix}, respectively). Prefer sparse storage when >50\% of values are zero.}
 
 \item{k}{rank}
 
@@ -32,11 +30,7 @@ nmf(
 
 \item{seed}{random seed for model initialization}
 
-\item{mask_zeros}{handle zeros as missing values, available only when \code{A} is sparse}
-
-\item{diag}{scale factors in \eqn{w} and \eqn{h} to sum to 1 by introducing a diagonal, \eqn{d}. This should generally never be set to \code{FALSE}. Diagonalization enables symmetry of models in factorization of symmetric matrices, convex L1 regularization, and consistent factor scalings.}
-
-\item{nonneg}{enforce non-negativity}
+\item{...}{see "advanced parameters" section}
 }
 \value{
 A list giving the factorization model:
@@ -45,7 +39,7 @@ A list giving the factorization model:
 \item d    : scaling diagonal vector
 \item h    : sample factor matrix
 \item tol  : tolerance between models at final update
-\item iter : number of alternating updates run
+\item iter : number of alternating updates
 }
 }
 \description{
@@ -124,6 +118,20 @@ algorithm, and tolerances will fluctuate more dramatically.
 \strong{Publication reference.} For theoretical and practical considerations, please see our manuscript: "DeBruine ZJ, Melcher K, Triche TJ (2021)
 High-performance non-negative matrix factorization for large single cell data." on BioRXiv.
 }
+\section{Advanced Parameters}{
+
+Several parameters may be specified in the \code{...} argument:
+\itemize{
+\item \code{nonneg = TRUE}: enforce non-negativity
+\item \code{diag = TRUE}: scale factors in \eqn{w} and \eqn{h} to sum to 1 by introducing a diagonal, \eqn{d}. This should generally never be set to \code{FALSE}. Diagonalization enables symmetry of models in factorization of symmetric matrices, convex L1 regularization, and consistent factor scalings.
+\item \code{samples = 1:ncol(A)}: samples to include in factorization, numbered between 1 and \code{ncol(A)}. Default is all samples. This can make the factorization significantly slower, it may be advantageous to set \code{updateInPlace = TRUE}.
+\item \code{features = 1:nrow(A)}: features to include in factorization, numbered between 1 and \code{nrow(A)}. Default is all features. This can make the factorization significantly slower.
+\item \code{mask_zeros = FALSE}: handle zeros as missing values (i.e., implicitly), available only when \code{A} is sparse
+\item \code{w_init = NULL}: initial "w" matrix, if other than a random initialization using \code{seed}
+\item \code{update_in_place = FALSE}: avoid transposition of 'A' (and associated memory usage) by using a slower in-place algorithm for alternating least squares updates of 'w'. \code{update_in_place} is always \code{TRUE} when \code{samples != 1:ncol(A)} and \code{A} is asymmetric, it is always \code{FALSE} when \code{A} is symmetric.
+}
+}
+
 \examples{
 \dontrun{
 library(Matrix)
