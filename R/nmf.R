@@ -81,7 +81,7 @@
 #' * \code{samples = 1:ncol(A)}: samples to include in factorization, numbered between 1 and \code{ncol(A)}. Default is all samples. This can make the factorization significantly slower, it may be advantageous to set \code{updateInPlace = TRUE}.
 #' * \code{features = 1:nrow(A)}: features to include in factorization, numbered between 1 and \code{nrow(A)}. Default is all features. This can make the factorization significantly slower.
 #' * \code{mask_zeros = FALSE}: handle zeros as missing values (i.e., implicitly), available only when \code{A} is sparse
-#' * \code{w_init = NULL}: initial "w" matrix, if other than a random initialization using \code{seed}
+#' * \code{w_init = NULL}: initial "w" matrix (or list of matrices), if other than a random initialization using \code{seed}
 #' * \code{update_in_place = FALSE}: avoid transposition of 'A' (and associated memory usage) by using a slower in-place algorithm for alternating least squares updates of 'w'. \code{update_in_place} is always \code{TRUE} when \code{samples != 1:ncol(A)} and \code{A} is asymmetric, it is always \code{FALSE} when \code{A} is symmetric.
 #'
 #' @param A matrix of features-by-samples in dense or sparse format (preferred classes are \code{matrix} or \code{Matrix::dgCMatrix}, respectively). Prefer sparse storage when >50% of values are zero.
@@ -89,7 +89,7 @@
 #' @param tol stopping criteria, the correlation distance between \eqn{w} across consecutive iterations, \eqn{1 - cor(w_i, w_{i-1})}
 #' @param maxit stopping criteria, maximum number of alternating updates of \eqn{w} and \eqn{h}
 #' @param L1 L1/LASSO penalties between 0 and 1, array of length two for \code{c(w, h)}
-#' @param seed random seed for model initialization
+#' @param seed random seed (or array of seeds) for model initialization
 #' @param verbose print model tolerances between iterations
 #' @param ... see "advanced parameters" section
 #' @return
@@ -160,12 +160,19 @@ nmf <- function(A, k, tol = 1e-4, maxit = 100, verbose = TRUE, L1 = c(0, 0), see
 
   # randomly initialize "w", or check dimensions of provided initialization
   if (!is.null(p$w_init)) {
-    if (nrow(p$w_init) == length(p$features)) p$w_init <- t(p$w_init)
-    if (ncol(p$w_init) != length(p$features)) stop("a matrix was specified for 'w_init', but dimensions are not compatible with number of features")
-    if (k != nrow(p$w_init)) stop("'k' is not equal to rank of 'w_init' matrix")
+    if(!is.list(p$w_init)) p$w_init <- as.list(p$w_init)
+    for(i in 1:length(p$w_init)){
+      if (nrow(p$w_init[[i]]) == length(p$features)) p$w_init <- t(p$w_init[[i]])
+      if (ncol(p$w_init[[i]]) != length(p$features)) stop("a matrix was specified for 'w_init', but dimensions are not compatible with number of features")
+      if (k != nrow(p$w_init[[i]])) stop("'k' is not equal to rank of the 'w_init' matrix")
+    }
   } else {
-    if (is.numeric(seed)) set.seed(seed)
-    p$w_init <- matrix(runif(k * length(p$features)), k, length(p$features))
+    p$w_init <- list()
+    if(!is.list(seed)) seed <- as.list(seed)
+    for(i in 1:length(seed)){
+      if (is.numeric(seed[[i]])) set.seed(seed[[i]])
+      p$w_init[[i]] <- matrix(runif(k * length(p$features)), k, length(p$features))
+    }
   }
 
   # check samples and features arrays

@@ -29,8 +29,8 @@ Rcpp_nmf_sparse <- function(A, tol, maxit, verbose, nonneg, L1, diag, mask_zeros
     .Call('_RcppML_Rcpp_nmf_sparse', PACKAGE = 'RcppML', A, tol, maxit, verbose, nonneg, L1, diag, mask_zeros, threads, samples, features, w_init, update_in_place)
 }
 
-Rcpp_nmf_dense <- function(A, tol, maxit, verbose, nonneg, L1, diag, mask_zeros, threads, samples, features, w_init, update_in_place) {
-    .Call('_RcppML_Rcpp_nmf_dense', PACKAGE = 'RcppML', A, tol, maxit, verbose, nonneg, L1, diag, mask_zeros, threads, samples, features, w_init, update_in_place)
+Rcpp_nmf_dense <- function(A_, tol, maxit, verbose, nonneg, L1, diag, mask_zeros, threads, samples, features, w_init, update_in_place) {
+    .Call('_RcppML_Rcpp_nmf_dense', PACKAGE = 'RcppML', A_, tol, maxit, verbose, nonneg, L1, diag, mask_zeros, threads, samples, features, w_init, update_in_place)
 }
 
 Rcpp_bipartition_sparse <- function(A, tol, maxit, nonneg, samples, seed, verbose = FALSE, calc_dist = FALSE, diag = TRUE) {
