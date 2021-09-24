@@ -19,6 +19,8 @@ install.packages('RcppML')                   # install CRAN version
 devtools::install_github("zdebruine/RcppML") # compile dev version
 ```
 
+NOTE: RcppML is being actively developed. Please check that your `packageVersion("RcppML")` is current before raising issues.
+
 Check out the [CRAN manual](https://cran.r-project.org/web/packages/RcppML/RcppML.pdf).
 
 Once installed and loaded, RcppML C++ headers defining classes can be used in C++ files for any R package using `#include <RcppML.hpp>`. 
