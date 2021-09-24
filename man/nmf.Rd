@@ -28,7 +28,7 @@ nmf(
 
 \item{L1}{L1/LASSO penalties between 0 and 1, array of length two for \code{c(w, h)}}
 
-\item{seed}{random seed for model initialization}
+\item{seed}{random seed (or array of seeds) for model initialization}
 
 \item{...}{see "advanced parameters" section}
 }
@@ -127,7 +127,7 @@ Several parameters may be specified in the \code{...} argument:
 \item \code{samples = 1:ncol(A)}: samples to include in factorization, numbered between 1 and \code{ncol(A)}. Default is all samples. This can make the factorization significantly slower, it may be advantageous to set \code{updateInPlace = TRUE}.
 \item \code{features = 1:nrow(A)}: features to include in factorization, numbered between 1 and \code{nrow(A)}. Default is all features. This can make the factorization significantly slower.
 \item \code{mask_zeros = FALSE}: handle zeros as missing values (i.e., implicitly), available only when \code{A} is sparse
-\item \code{w_init = NULL}: initial "w" matrix, if other than a random initialization using \code{seed}
+\item \code{w_init = NULL}: initial "w" matrix (or list of matrices), if other than a random initialization using \code{seed}
 \item \code{update_in_place = FALSE}: avoid transposition of 'A' (and associated memory usage) by using a slower in-place algorithm for alternating least squares updates of 'w'. \code{update_in_place} is always \code{TRUE} when \code{samples != 1:ncol(A)} and \code{A} is asymmetric, it is always \code{FALSE} when \code{A} is symmetric.
 }
 }
