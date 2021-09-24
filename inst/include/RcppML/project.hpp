@@ -143,51 +143,99 @@ void project(RcppML::SparseMatrix& A, const Eigen::MatrixXd& w, Eigen::MatrixXd&
       Eigen::MatrixXd a = w * w.transpose();
       a.diagonal().array() += TINY_NUM;
       Eigen::LLT<Eigen::MatrixXd, 1> a_llt = a.llt();
-      #ifdef _OPENMP
-      #pragma omp parallel for num_threads(threads) schedule(dynamic)
-      #endif
-      for (unsigned int i = 0; i < h.cols(); ++i) {
-        Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
-        if (all_features) {
-          for (RcppML::SparseMatrix::InnerIterator it(A, samples[i]); it; ++it)
-            b += it.value() * w.col(it.row());
-        } else {
-          for (RcppML::SparseMatrix::InnerRangedIterator it(A, samples[i], features); it; ++it)
-            b += it.value() * w.col(it.rangedRow());
-        }
-        if (L1 != 0) b.array() -= L1;
+      if(threads != 1){
+        #ifdef _OPENMP
+        #pragma omp parallel for num_threads(threads) schedule(dynamic)
+        #endif
+        for (unsigned int i = 0; i < h.cols(); ++i) {
+          Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
+          if (all_features) {
+            for (RcppML::SparseMatrix::InnerIterator it(A, samples[i]); it; ++it)
+              b += it.value() * w.col(it.row());
+          } else {
+            for (RcppML::SparseMatrix::InnerRangedIterator it(A, samples[i], features); it; ++it)
+              b += it.value() * w.col(it.rangedRow());
+          }
+          if (L1 != 0) b.array() -= L1;
 
-        h.col(i) = a_llt.solve(b);
-        if (nonneg && (h.col(i).array() < 0).any()) {
-          // if unconstrained solution contains negative values
-          b -= a * h.col(i);
-          // update h.col(sample) with NNLS solution by coordinate descent
-          c_nnls(a, b, h, i);
+          h.col(i) = a_llt.solve(b);
+          if (nonneg && (h.col(i).array() < 0).any()) {
+            // if unconstrained solution contains negative values
+            b -= a * h.col(i);
+            // update h.col(sample) with NNLS solution by coordinate descent
+            c_nnls(a, b, h, i);
+          }
+        }
+      } else {
+        // compile without OpenMP interference
+        // see https://stackoverflow.com/questions/16807766/may-compiler-optimizations-be-inhibited-by-multi-threading
+        for (unsigned int i = 0; i < h.cols(); ++i) {
+          Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
+          if (all_features) {
+            for (RcppML::SparseMatrix::InnerIterator it(A, samples[i]); it; ++it)
+              b += it.value() * w.col(it.row());
+          } else {
+            for (RcppML::SparseMatrix::InnerRangedIterator it(A, samples[i], features); it; ++it)
+              b += it.value() * w.col(it.rangedRow());
+          }
+          if (L1 != 0) b.array() -= L1;
+
+          h.col(i) = a_llt.solve(b);
+          if (nonneg && (h.col(i).array() < 0).any()) {
+            // if unconstrained solution contains negative values
+            b -= a * h.col(i);
+            // update h.col(sample) with NNLS solution by coordinate descent
+            c_nnls(a, b, h, i);
+          }
         }
       }
     } else {
       h.setZero();
-      #ifdef _OPENMP
-      #pragma omp parallel for num_threads(threads) schedule(dynamic)
-      #endif
-      for (unsigned int i = 0; i < h.cols(); ++i) {
-        Eigen::VectorXi nnz = Rcpp::as<Eigen::VectorXi>(A.nonzeroRows(samples[i]));
-        Eigen::MatrixXd w_ = submat(w, nnz);
-        Eigen::MatrixXd a = w_ * w_.transpose();
-        a.diagonal().array() += TINY_NUM;
+      if(threads != 1){
+        #ifdef _OPENMP
+        #pragma omp parallel for num_threads(threads) schedule(dynamic)
+        #endif
+        for (unsigned int i = 0; i < h.cols(); ++i) {
+          Eigen::VectorXi nnz = Rcpp::as<Eigen::VectorXi>(A.nonzeroRows(samples[i]));
+          Eigen::MatrixXd w_ = submat(w, nnz);
+          Eigen::MatrixXd a = w_ * w_.transpose();
+          a.diagonal().array() += TINY_NUM;
 
-        Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
-        if (all_features) {
-          for (RcppML::SparseMatrix::InnerIterator it(A, samples[i]); it; ++it)
-            b += it.value() * w.col(it.row());
-        } else {
-          for (RcppML::SparseMatrix::InnerRangedIterator it(A, samples[i], features); it; ++it)
-            b += it.value() * w.col(it.rangedRow());
+          Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
+          if (all_features) {
+            for (RcppML::SparseMatrix::InnerIterator it(A, samples[i]); it; ++it)
+              b += it.value() * w.col(it.row());
+          } else {
+            for (RcppML::SparseMatrix::InnerRangedIterator it(A, samples[i], features); it; ++it)
+              b += it.value() * w.col(it.rangedRow());
+          }
+          if (L1 != 0) b.array() -= L1;
+
+          if (!nonneg) h.col(i) = a.llt().solve(b);
+          else c_nnls(a, b, h, i);
         }
-        if (L1 != 0) b.array() -= L1;
+      } else {
+        // compile without OpenMP interference
+        // see https://stackoverflow.com/questions/16807766/may-compiler-optimizations-be-inhibited-by-multi-threading
+        for (unsigned int i = 0; i < h.cols(); ++i) {
+          Eigen::VectorXi nnz = Rcpp::as<Eigen::VectorXi>(A.nonzeroRows(samples[i]));
+          Eigen::MatrixXd w_ = submat(w, nnz);
+          Eigen::MatrixXd a = w_ * w_.transpose();
+          a.diagonal().array() += TINY_NUM;
 
-        if (!nonneg) h.col(i) = a.llt().solve(b);
-        else c_nnls(a, b, h, i);
+          Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
+          if (all_features) {
+            for (RcppML::SparseMatrix::InnerIterator it(A, samples[i]); it; ++it)
+              b += it.value() * w.col(it.row());
+          } else {
+            for (RcppML::SparseMatrix::InnerRangedIterator it(A, samples[i], features); it; ++it)
+              b += it.value() * w.col(it.rangedRow());
+          }
+          if (L1 != 0) b.array() -= L1;
+
+          if (!nonneg) h.col(i) = a.llt().solve(b);
+          else c_nnls(a, b, h, i);
+        }
       }
     }
   }
@@ -243,26 +291,48 @@ void project(const Eigen::MatrixXd& A, const Eigen::MatrixXd& w, Eigen::MatrixXd
     Eigen::MatrixXd a = w * w.transpose();
     a.diagonal().array() += TINY_NUM;
     Eigen::LLT<Eigen::MatrixXd, 1> a_llt = a.llt();
-    #ifdef _OPENMP
-    #pragma omp parallel for num_threads(threads) schedule(dynamic)
-    #endif
-    for (unsigned int i = 0; i < h.cols(); ++i) {
-      Eigen::VectorXd b = Eigen::VectorXd::Zero(a.rows());
-      if (all_features) {
-        b += w * A.col(samples[i]);
-      } else {
-        for (unsigned int j = 0; j < w.cols(); ++j)
-          b += A(features[j], samples[i]) * w.col(j);
-      }
-      if (L1 != 0) b.array() -= L1;
+    if(threads == 1){
+      #ifdef _OPENMP
+      #pragma omp parallel for num_threads(threads) schedule(dynamic)
+      #endif
+      for (unsigned int i = 0; i < h.cols(); ++i) {
+        Eigen::VectorXd b = Eigen::VectorXd::Zero(a.rows());
+        if (all_features) {
+          b += w * A.col(samples[i]);
+        } else {
+          for (unsigned int j = 0; j < w.cols(); ++j)
+            b += A(features[j], samples[i]) * w.col(j);
+        }
+        if (L1 != 0) b.array() -= L1;
 
-      h.col(i) = a_llt.solve(b);
-      if (nonneg && (h.col(i).array() < 0).any()) {
-        // if unconstrained solution contains negative values
-        b -= a * h.col(i);
-        // update h.col(sample) with NNLS solution by coordinate descent
-        c_nnls(a, b, h, i);
+        h.col(i) = a_llt.solve(b);
+        if (nonneg && (h.col(i).array() < 0).any()) {
+          // if unconstrained solution contains negative values
+          b -= a * h.col(i);
+          // update h.col(sample) with NNLS solution by coordinate descent
+          c_nnls(a, b, h, i);
+        }
       }
+    } else {
+      // compile without OpenMP interference
+      for (unsigned int i = 0; i < h.cols(); ++i) {
+        Eigen::VectorXd b = Eigen::VectorXd::Zero(a.rows());
+        if (all_features) {
+          b += w * A.col(samples[i]);
+        } else {
+          for (unsigned int j = 0; j < w.cols(); ++j)
+            b += A(features[j], samples[i]) * w.col(j);
+        }
+        if (L1 != 0) b.array() -= L1;
+
+        h.col(i) = a_llt.solve(b);
+        if (nonneg && (h.col(i).array() < 0).any()) {
+          // if unconstrained solution contains negative values
+          b -= a * h.col(i);
+          // update h.col(sample) with NNLS solution by coordinate descent
+          c_nnls(a, b, h, i);
+        }
+      }      
     }
   }
 }
@@ -322,18 +392,33 @@ void projectInPlace(RcppML::SparseMatrix& A, const Eigen::MatrixXd& h, Eigen::Ma
     nnls2InPlace(a, denom, w, nonneg);
   } else {
     // calculate "b", right-hand side of system of equations
-    #ifdef _OPENMP
-    #pragma omp parallel for num_threads(threads) schedule(dynamic)
-    #endif
-    for (unsigned int i = 0; i < h.cols(); ++i) {
-      if (all_features) {
-        for (RcppML::SparseMatrix::InnerIterator it(A, samples[i]); it; ++it)
-          for (unsigned int j = 0; j < k; ++j)
-            w(j, it.row()) += it.value() * h(j, i);
-      } else {
-        for (RcppML::SparseMatrix::InnerRangedIterator it(A, samples[i], features); it; ++it)
-          for (unsigned int j = 0; j < k; ++j)
-            w(j, it.rangedRow()) += it.value() * h(j, i);
+    if(threads != 1){
+      #ifdef _OPENMP
+      #pragma omp parallel for num_threads(threads) schedule(dynamic)
+      #endif
+      for (unsigned int i = 0; i < h.cols(); ++i) {
+        if (all_features) {
+          for (RcppML::SparseMatrix::InnerIterator it(A, samples[i]); it; ++it)
+            for (unsigned int j = 0; j < k; ++j)
+              w(j, it.row()) += it.value() * h(j, i);
+        } else {
+          for (RcppML::SparseMatrix::InnerRangedIterator it(A, samples[i], features); it; ++it)
+            for (unsigned int j = 0; j < k; ++j)
+              w(j, it.rangedRow()) += it.value() * h(j, i);
+        }
+      }
+    } else {
+      // compile without OpenMP interference
+      for (unsigned int i = 0; i < h.cols(); ++i) {
+        if (all_features) {
+          for (RcppML::SparseMatrix::InnerIterator it(A, samples[i]); it; ++it)
+            for (unsigned int j = 0; j < k; ++j)
+              w(j, it.row()) += it.value() * h(j, i);
+        } else {
+          for (RcppML::SparseMatrix::InnerRangedIterator it(A, samples[i], features); it; ++it)
+            for (unsigned int j = 0; j < k; ++j)
+              w(j, it.rangedRow()) += it.value() * h(j, i);
+        }
       }
     }
     if (L1 != 0) w.array() -= L1;
@@ -345,44 +430,84 @@ void projectInPlace(RcppML::SparseMatrix& A, const Eigen::MatrixXd& h, Eigen::Ma
       Eigen::LLT<Eigen::MatrixXd, 1> a_llt = a.llt();
 
       // solve systems 
-      #ifdef _OPENMP
-      #pragma omp parallel for num_threads(threads) schedule(dynamic)
-      #endif
-      for (unsigned int i = 0; i < w.cols(); ++i) {
-        Eigen::VectorXd b = w.col(i);
-        w.col(i) = a_llt.solve(b);
-        if (nonneg && (w.col(i).array() < 0).any()) {
-          b -= a * w.col(i);
-          c_nnls(a, b, w, i);
+      if(threads != 1){
+        #ifdef _OPENMP
+        #pragma omp parallel for num_threads(threads) schedule(dynamic)
+        #endif
+        for (unsigned int i = 0; i < w.cols(); ++i) {
+          Eigen::VectorXd b = w.col(i);
+          w.col(i) = a_llt.solve(b);
+          if (nonneg && (w.col(i).array() < 0).any()) {
+            b -= a * w.col(i);
+            c_nnls(a, b, w, i);
+          }
+        }
+      } else {
+        // compile without OpenMP interference
+        for (unsigned int i = 0; i < w.cols(); ++i) {
+          Eigen::VectorXd b = w.col(i);
+          w.col(i) = a_llt.solve(b);
+          if (nonneg && (w.col(i).array() < 0).any()) {
+            b -= a * w.col(i);
+            c_nnls(a, b, w, i);
+          }
         }
       }
     } else {
-      #ifdef _OPENMP
-      #pragma omp parallel for num_threads(threads) schedule(dynamic)
-      #endif
-      for (int i = 0; i < w.cols(); ++i) {
-        // calculate "a", left-hand side of system of equations
+      if(threads != 1){
+        #ifdef _OPENMP
+        #pragma omp parallel for num_threads(threads) schedule(dynamic)
+        #endif
+        for (int i = 0; i < w.cols(); ++i) {
+          // calculate "a", left-hand side of system of equations
 
-        // get indices in samples for which A.row(i) is non-zero
-        std::vector<int> nnz_;
-        for (unsigned int col = 0; col < h.cols(); ++col) {
-          for (RcppML::SparseMatrix::InnerIterator it(A, samples[col]); it; ++it) {
-            if (it.row() > i) continue;
-            if (it.row() == i) {
-              nnz_.push_back(col);
-              continue;
+          // get indices in samples for which A.row(i) is non-zero
+          std::vector<int> nnz_;
+          for (unsigned int col = 0; col < h.cols(); ++col) {
+            for (RcppML::SparseMatrix::InnerIterator it(A, samples[col]); it; ++it) {
+              if (it.row() > i) continue;
+              if (it.row() == i) {
+                nnz_.push_back(col);
+                continue;
+              }
             }
           }
-        }
-        Eigen::VectorXi nnz = Eigen::VectorXi::Map(nnz_.data(), nnz_.size());
-        Eigen::MatrixXd h_ = submat(h, nnz);
-        Eigen::MatrixXd a = h_ * h_.transpose();
-        a.diagonal().array() += TINY_NUM;
+          Eigen::VectorXi nnz = Eigen::VectorXi::Map(nnz_.data(), nnz_.size());
+          Eigen::MatrixXd h_ = submat(h, nnz);
+          Eigen::MatrixXd a = h_ * h_.transpose();
+          a.diagonal().array() += TINY_NUM;
 
-        // solve systems
-        Eigen::VectorXd b = w.col(i);
-        if (!nonneg) w.col(i) = a.llt().solve(b);
-        else c_nnls(a, b, w, i);
+          // solve systems
+          Eigen::VectorXd b = w.col(i);
+          if (!nonneg) w.col(i) = a.llt().solve(b);
+          else c_nnls(a, b, w, i);
+        }
+      } else {
+        // compile without OpenMP interference
+        for (int i = 0; i < w.cols(); ++i) {
+          // calculate "a", left-hand side of system of equations
+
+          // get indices in samples for which A.row(i) is non-zero
+          std::vector<int> nnz_;
+          for (unsigned int col = 0; col < h.cols(); ++col) {
+            for (RcppML::SparseMatrix::InnerIterator it(A, samples[col]); it; ++it) {
+              if (it.row() > i) continue;
+              if (it.row() == i) {
+                nnz_.push_back(col);
+                continue;
+              }
+            }
+          }
+          Eigen::VectorXi nnz = Eigen::VectorXi::Map(nnz_.data(), nnz_.size());
+          Eigen::MatrixXd h_ = submat(h, nnz);
+          Eigen::MatrixXd a = h_ * h_.transpose();
+          a.diagonal().array() += TINY_NUM;
+
+          // solve systems
+          Eigen::VectorXd b = w.col(i);
+          if (!nonneg) w.col(i) = a.llt().solve(b);
+          else c_nnls(a, b, w, i);
+        }
       }
     }
   }
@@ -429,32 +554,61 @@ void projectInPlace(const Eigen::MatrixXd& A, const Eigen::MatrixXd& h, Eigen::M
     Eigen::MatrixXd a = h * h.transpose();
     a.diagonal().array() += TINY_NUM;
     Eigen::LLT<Eigen::MatrixXd, 1> a_llt = a.llt();
-    #ifdef _OPENMP
-    #pragma omp parallel for num_threads(threads) schedule(dynamic)
-    #endif
-    for (unsigned int i = 0; i < h.cols(); ++i) {
-      if (all_features) {
-        for (int j = 0; j < w.cols(); ++j)
-          for (unsigned int l = 0; l < k; ++l)
-            w(l, j) += A(j, samples[i]) * h(l, i);
-      } else {
-        for (int j = 0; j < w.cols(); ++j)
-          for (unsigned int l = 0; l < k; ++l)
-            w(l, j) += A(features[j], samples[i]) * h(l, i);
+    if(threads != 1){
+      #ifdef _OPENMP
+      #pragma omp parallel for num_threads(threads) schedule(dynamic)
+      #endif
+      for (unsigned int i = 0; i < h.cols(); ++i) {
+        if (all_features) {
+          for (int j = 0; j < w.cols(); ++j)
+            for (unsigned int l = 0; l < k; ++l)
+              w(l, j) += A(j, samples[i]) * h(l, i);
+        } else {
+          for (int j = 0; j < w.cols(); ++j)
+            for (unsigned int l = 0; l < k; ++l)
+              w(l, j) += A(features[j], samples[i]) * h(l, i);
+        }
+      }
+    } else {
+      // compile without OpenMP interference
+      for (unsigned int i = 0; i < h.cols(); ++i) {
+        if (all_features) {
+          for (int j = 0; j < w.cols(); ++j)
+            for (unsigned int l = 0; l < k; ++l)
+              w(l, j) += A(j, samples[i]) * h(l, i);
+        } else {
+          for (int j = 0; j < w.cols(); ++j)
+            for (unsigned int l = 0; l < k; ++l)
+              w(l, j) += A(features[j], samples[i]) * h(l, i);
+        }
       }
     }
     if (L1 != 0) w.array() -= L1;
-    #ifdef _OPENMP
-    #pragma omp parallel for num_threads(threads) schedule(dynamic)
-    #endif
-    for (unsigned int i = 0; i < w.cols(); ++i) {
-      Eigen::VectorXd b = w.col(i);
-      w.col(i) = a_llt.solve(b);
-      if (nonneg && (w.col(i).array() < 0).any()) {
-        // if unconstrained solution contains negative values
-        b -= a * w.col(i);
-        // update h.col(sample) with NNLS solution by coordinate descent
-        c_nnls(a, b, w, i);
+    if(threads != 1){
+      #ifdef _OPENMP
+      #pragma omp parallel for num_threads(threads) schedule(dynamic)
+      #endif
+      for (unsigned int i = 0; i < w.cols(); ++i) {
+        Eigen::VectorXd b = w.col(i);
+        w.col(i) = a_llt.solve(b);
+        if (nonneg && (w.col(i).array() < 0).any()) {
+          // if unconstrained solution contains negative values
+          b -= a * w.col(i);
+          // update h.col(sample) with NNLS solution by coordinate descent
+          c_nnls(a, b, w, i);
+        }
+      }
+    } else {
+      // compile without OpenMP interference
+      for (unsigned int i = 0; i < w.cols(); ++i) {
+        Eigen::VectorXd b = w.col(i);
+        w.col(i) = a_llt.solve(b);
+        if (nonneg && (w.col(i).array() < 0).any()) {
+          // if unconstrained solution contains negative values
+          b -= a * w.col(i);
+          // update h.col(sample) with NNLS solution by coordinate descent
+          c_nnls(a, b, w, i);
+        }
       }
     }
   }

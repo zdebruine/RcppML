@@ -60,6 +60,13 @@ namespace RcppML {
       std::iota(features.begin(), features.end(), 0);
     }
 
+    // constructor for random initialization of "w"
+    MatrixFactorization(const unsigned int k, const std::vector<unsigned int>& samples_, const std::vector<unsigned int>& features_, const unsigned int seed = 0) : samples(samples_), features(features_) {
+      w = randomMatrix(k, features.size(), seed);
+      h = Eigen::MatrixXd(k, samples.size());
+      d = Eigen::VectorXd::Ones(k);
+    }
+
     // constructor for complete initialization
     MatrixFactorization(Eigen::MatrixXd& w, Eigen::VectorXd& d, Eigen::MatrixXd& h) : w(w), d(d), h(h) {
       if (w.rows() != h.rows()) Rcpp::stop("number of rows in 'w' and 'h' are not equal!");
@@ -108,31 +115,56 @@ namespace RcppML {
       // calculate total loss with parallelization across samples
       double sq_loss = 0;
       if (!mask_zeros) {
-        #ifdef _OPENMP
-        #pragma omp parallel for num_threads(threads) schedule(dynamic)
-        #endif
-        for (unsigned int i = 0; i < h.cols(); ++i) {
-          Eigen::VectorXd wh_i = w0 * h.col(i);
-          if (all_features)
-            for (RcppML::SparseMatrix::InnerIterator iter(A, samples[i]); iter; ++iter)
-              wh_i(iter.row()) -= iter.value();
-          else
-            for (RcppML::SparseMatrix::InnerRangedIterator iter(A, samples[i], features); iter; ++iter)
-              wh_i(iter.rangedRow()) -= iter.value();
-          sq_loss += wh_i.array().square().sum();
+        if(threads != 1){
+          #ifdef _OPENMP
+          #pragma omp parallel for num_threads(threads) schedule(dynamic)
+          #endif
+          for (unsigned int i = 0; i < h.cols(); ++i) {
+            Eigen::VectorXd wh_i = w0 * h.col(i);
+            if (all_features)
+              for (RcppML::SparseMatrix::InnerIterator iter(A, samples[i]); iter; ++iter)
+                wh_i(iter.row()) -= iter.value();
+            else
+              for (RcppML::SparseMatrix::InnerRangedIterator iter(A, samples[i], features); iter; ++iter)
+                wh_i(iter.rangedRow()) -= iter.value();
+            sq_loss += wh_i.array().square().sum();
+          }
+        } else {
+          for (unsigned int i = 0; i < h.cols(); ++i) {
+            Eigen::VectorXd wh_i = w0 * h.col(i);
+            if (all_features)
+              for (RcppML::SparseMatrix::InnerIterator iter(A, samples[i]); iter; ++iter)
+                wh_i(iter.row()) -= iter.value();
+            else
+              for (RcppML::SparseMatrix::InnerRangedIterator iter(A, samples[i], features); iter; ++iter)
+                wh_i(iter.rangedRow()) -= iter.value();
+            sq_loss += wh_i.array().square().sum();
+          }          
         }
       } else {
-        #ifdef _OPENMP
-        #pragma omp parallel for num_threads(threads) schedule(dynamic)
-        #endif
-        for (unsigned int i = 0; i < h.cols(); ++i) {
-          Eigen::VectorXd wh_i = w0 * h.col(i);
-          if (all_features)
-            for (RcppML::SparseMatrix::InnerIterator iter(A, samples[i]); iter; ++iter)
-              sq_loss += std::pow(wh_i(iter.row()) - iter.value(), 2);
-          else
-            for (RcppML::SparseMatrix::InnerRangedIterator iter(A, samples[i], features); iter; ++iter)
-              sq_loss += std::pow(wh_i(iter.rangedRow()) - iter.value(), 2);
+        if(threads != 1){
+          #ifdef _OPENMP
+          #pragma omp parallel for num_threads(threads) schedule(dynamic)
+          #endif
+          for (unsigned int i = 0; i < h.cols(); ++i) {
+            Eigen::VectorXd wh_i = w0 * h.col(i);
+            if (all_features)
+              for (RcppML::SparseMatrix::InnerIterator iter(A, samples[i]); iter; ++iter)
+                sq_loss += std::pow(wh_i(iter.row()) - iter.value(), 2);
+            else
+              for (RcppML::SparseMatrix::InnerRangedIterator iter(A, samples[i], features); iter; ++iter)
+                sq_loss += std::pow(wh_i(iter.rangedRow()) - iter.value(), 2);
+          }
+        } else {
+            for (unsigned int i = 0; i < h.cols(); ++i) {
+            Eigen::VectorXd wh_i = w0 * h.col(i);
+            if (all_features)
+              for (RcppML::SparseMatrix::InnerIterator iter(A, samples[i]); iter; ++iter)
+                sq_loss += std::pow(wh_i(iter.row()) - iter.value(), 2);
+            else
+              for (RcppML::SparseMatrix::InnerRangedIterator iter(A, samples[i], features); iter; ++iter)
+                sq_loss += std::pow(wh_i(iter.rangedRow()) - iter.value(), 2);
+          }
         }
       }
       return sq_loss / (h.cols() * w.cols());
@@ -146,19 +178,32 @@ namespace RcppML {
         for (unsigned int j = 0; j < w0.rows(); ++j)
           w0(j, i) *= d(i);
       double sq_loss = 0;
-      #ifdef _OPENMP
-      #pragma omp parallel for num_threads(threads) schedule(dynamic)
-      #endif
-      for (unsigned int i = 0; i < h.cols(); ++i) {
-        Eigen::VectorXd wh_i = w0 * h.col(i);
-        if (all_features)
-          wh_i -= A.col(samples[i]);
-        else
-          for (unsigned int j = 0; j < w.cols(); ++j)
-            wh_i(j) -= A(features[j], samples[i]);
-        sq_loss += wh_i.array().square().sum();
+      if(threads != 1){
+        #ifdef _OPENMP
+        #pragma omp parallel for num_threads(threads) schedule(dynamic)
+        #endif
+        for (unsigned int i = 0; i < h.cols(); ++i) {
+          Eigen::VectorXd wh_i = w0 * h.col(i);
+          if (all_features)
+            wh_i -= A.col(samples[i]);
+          else
+            for (unsigned int j = 0; j < w.cols(); ++j)
+              wh_i(j) -= A(features[j], samples[i]);
+          sq_loss += wh_i.array().square().sum();
+        }
+        return sq_loss / (h.cols() * w.cols());
+      } else {
+        for (unsigned int i = 0; i < h.cols(); ++i) {
+          Eigen::VectorXd wh_i = w0 * h.col(i);
+          if (all_features)
+            wh_i -= A.col(samples[i]);
+          else
+            for (unsigned int j = 0; j < w.cols(); ++j)
+              wh_i(j) -= A(features[j], samples[i]);
+          sq_loss += wh_i.array().square().sum();
+        }
+        return sq_loss / (h.cols() * w.cols());
       }
-      return sq_loss / (h.cols() * w.cols());
     }
 
     void sortByDiagonal() {
@@ -195,7 +240,7 @@ namespace RcppML {
     // fit the model by alternating least squares projections
     void fit(RcppML::SparseMatrix& A) {
       if (mask_zeros && w.rows() < 3) Rcpp::stop("'mask_zeros = TRUE' is not supported when k = 1 or 2");
-      if (verbose) Rprintf("\nFitting:\n%4s | %8s \n---------------\n", "iter", "tol");
+      if (verbose) Rprintf("\n%4s | %8s \n---------------\n", "iter", "tol");
       RcppML::SparseMatrix At;
       bool is_A_symmetric = is_appx_symmetric(A);
       if (!is_A_symmetric && !updateInPlace) At = A.t();
@@ -219,7 +264,7 @@ namespace RcppML {
       }
 
       if (tol_ > tol && iter_ == maxit && verbose)
-        Rprintf("\n convergence not reached in %d iterations\n  (actual tol = %4.2e, target tol = %4.2e)", iter_, tol_, tol);
+        Rprintf(" convergence not reached in %d iterations\n  (actual tol = %4.2e, target tol = %4.2e)\n", iter_, tol_, tol);
       if (diag) sortByDiagonal();
     }
 
@@ -249,7 +294,7 @@ namespace RcppML {
         Rcpp::checkUserInterrupt();
       }
       if (tol_ > tol && iter_ == maxit && verbose)
-        Rprintf("\n convergence not reached in %d iterations\n  (actual tol = %4.2e, target tol = %4.2e)", iter_, tol_, tol);
+        Rprintf(" convergence not reached in %d iterations\n  (actual tol = %4.2e, target tol = %4.2e)", iter_, tol_, tol);
       if (diag) sortByDiagonal();
     }
   };
