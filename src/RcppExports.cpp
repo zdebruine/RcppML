@@ -6,11 +6,6 @@
 
 using namespace Rcpp;
 
-#ifdef RCPP_USE_GLOBAL_ROSTREAM
-Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
-Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
-#endif
-
 // Rcpp_projectW_sparse
 Eigen::MatrixXd Rcpp_projectW_sparse(const Rcpp::S4& A, const Eigen::MatrixXd w, const bool nonneg, const double L1, const unsigned int threads, const bool mask_zeros, const std::vector<unsigned int>& samples, const std::vector<unsigned int>& features);
 RcppExport SEXP _RcppML_Rcpp_projectW_sparse(SEXP ASEXP, SEXP wSEXP, SEXP nonnegSEXP, SEXP L1SEXP, SEXP threadsSEXP, SEXP mask_zerosSEXP, SEXP samplesSEXP, SEXP featuresSEXP) {
@@ -120,7 +115,7 @@ BEGIN_RCPP
 END_RCPP
 }
 // Rcpp_nmf_sparse
-Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const double tol, const unsigned int maxit, const bool verbose, const bool nonneg, const Rcpp::NumericVector L1, const bool diag, const bool mask_zeros, const unsigned int threads, const std::vector<unsigned int>& samples, const std::vector<unsigned int>& features, Eigen::MatrixXd& w_init, const bool update_in_place);
+Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const double tol, const unsigned int maxit, const bool verbose, const bool nonneg, const Rcpp::NumericVector L1, const bool diag, const bool mask_zeros, const unsigned int threads, const std::vector<unsigned int>& samples, const std::vector<unsigned int>& features, Rcpp::List w_init, const bool update_in_place);
 RcppExport SEXP _RcppML_Rcpp_nmf_sparse(SEXP ASEXP, SEXP tolSEXP, SEXP maxitSEXP, SEXP verboseSEXP, SEXP nonnegSEXP, SEXP L1SEXP, SEXP diagSEXP, SEXP mask_zerosSEXP, SEXP threadsSEXP, SEXP samplesSEXP, SEXP featuresSEXP, SEXP w_initSEXP, SEXP update_in_placeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
@@ -136,19 +131,19 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const unsigned int >::type threads(threadsSEXP);
     Rcpp::traits::input_parameter< const std::vector<unsigned int>& >::type samples(samplesSEXP);
     Rcpp::traits::input_parameter< const std::vector<unsigned int>& >::type features(featuresSEXP);
-    Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type w_init(w_initSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type w_init(w_initSEXP);
     Rcpp::traits::input_parameter< const bool >::type update_in_place(update_in_placeSEXP);
     rcpp_result_gen = Rcpp::wrap(Rcpp_nmf_sparse(A, tol, maxit, verbose, nonneg, L1, diag, mask_zeros, threads, samples, features, w_init, update_in_place));
     return rcpp_result_gen;
 END_RCPP
 }
 // Rcpp_nmf_dense
-Rcpp::List Rcpp_nmf_dense(Eigen::MatrixXd& A, const double tol, const unsigned int maxit, const bool verbose, const bool nonneg, const Rcpp::NumericVector L1, const bool diag, const bool mask_zeros, const unsigned int threads, const std::vector<unsigned int>& samples, const std::vector<unsigned int>& features, Eigen::MatrixXd& w_init, const bool update_in_place);
-RcppExport SEXP _RcppML_Rcpp_nmf_dense(SEXP ASEXP, SEXP tolSEXP, SEXP maxitSEXP, SEXP verboseSEXP, SEXP nonnegSEXP, SEXP L1SEXP, SEXP diagSEXP, SEXP mask_zerosSEXP, SEXP threadsSEXP, SEXP samplesSEXP, SEXP featuresSEXP, SEXP w_initSEXP, SEXP update_in_placeSEXP) {
+Rcpp::List Rcpp_nmf_dense(Eigen::MatrixXd& A_, const double tol, const unsigned int maxit, const bool verbose, const bool nonneg, const Rcpp::NumericVector L1, const bool diag, const bool mask_zeros, const unsigned int threads, const std::vector<unsigned int>& samples, const std::vector<unsigned int>& features, Rcpp::List w_init, const bool update_in_place);
+RcppExport SEXP _RcppML_Rcpp_nmf_dense(SEXP A_SEXP, SEXP tolSEXP, SEXP maxitSEXP, SEXP verboseSEXP, SEXP nonnegSEXP, SEXP L1SEXP, SEXP diagSEXP, SEXP mask_zerosSEXP, SEXP threadsSEXP, SEXP samplesSEXP, SEXP featuresSEXP, SEXP w_initSEXP, SEXP update_in_placeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type A(ASEXP);
+    Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type A_(A_SEXP);
     Rcpp::traits::input_parameter< const double >::type tol(tolSEXP);
     Rcpp::traits::input_parameter< const unsigned int >::type maxit(maxitSEXP);
     Rcpp::traits::input_parameter< const bool >::type verbose(verboseSEXP);
@@ -159,9 +154,9 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const unsigned int >::type threads(threadsSEXP);
     Rcpp::traits::input_parameter< const std::vector<unsigned int>& >::type samples(samplesSEXP);
     Rcpp::traits::input_parameter< const std::vector<unsigned int>& >::type features(featuresSEXP);
-    Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type w_init(w_initSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type w_init(w_initSEXP);
     Rcpp::traits::input_parameter< const bool >::type update_in_place(update_in_placeSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_nmf_dense(A, tol, maxit, verbose, nonneg, L1, diag, mask_zeros, threads, samples, features, w_init, update_in_place));
+    rcpp_result_gen = Rcpp::wrap(Rcpp_nmf_dense(A_, tol, maxit, verbose, nonneg, L1, diag, mask_zeros, threads, samples, features, w_init, update_in_place));
     return rcpp_result_gen;
 END_RCPP
 }
