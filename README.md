@@ -38,10 +38,10 @@ Read (and cite) our [bioRXiv manuscript](https://www.biorxiv.org/content/10.1101
 The `nmf` function runs matrix factorization by alternating least squares in the form `A = WDH`. The `project` function updates `w` or `h` given the other, while the `mse` function calculates mean squared error of the factor model.
 
 ```{R}
-A <- Matrix::rsparsematrix(A, 1000, 1000, 0.1) # sparse Matrix::dgCMatrix
+A <- Matrix::rsparsematrix(1000, 100, 0.1) # sparse Matrix::dgCMatrix
 model <- RcppML::nmf(A, k = 10, nonneg = TRUE)
 h0 <- RcppML::project(A, w = model$w)
-RcppML::mse(A, m$w, m$d, m$h)
+RcppML::mse(A, model$w, model$d, model$h)
 ```
 
 #### C++ class
