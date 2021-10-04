@@ -168,10 +168,14 @@ nmf <- function(A, k, tol = 1e-4, maxit = 100, verbose = TRUE, L1 = c(0, 0), see
     }
   } else {
     p$w_init <- list()
-    if(!is.list(seed)) seed <- as.list(seed)
-    for(i in 1:length(seed)){
-      if (is.numeric(seed[[i]])) set.seed(seed[[i]])
-      p$w_init[[i]] <- matrix(runif(k * length(p$features)), k, length(p$features))
+    if(is.null(seed)) {
+      p$w_init[[1]] <- matrix(runif(k * length(p$features)), k, length(p$features))
+    } else {
+      if(!is.list(seed)) seed <- as.list(seed)
+      for(i in 1:length(seed)){
+        if (is.numeric(seed[[i]])) set.seed(seed[[i]])
+        p$w_init[[i]] <- matrix(runif(k * length(p$features)), k, length(p$features))
+      }
     }
   }
 

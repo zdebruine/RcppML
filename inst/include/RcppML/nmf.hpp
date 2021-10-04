@@ -116,6 +116,7 @@ namespace RcppML {
       double sq_loss = 0;
       if (!mask_zeros) {
         if(threads != 1){
+          Eigen::ArrayXd losses(h.cols());
           #ifdef _OPENMP
           #pragma omp parallel for num_threads(threads) schedule(dynamic)
           #endif
@@ -127,8 +128,9 @@ namespace RcppML {
             else
               for (RcppML::SparseMatrix::InnerRangedIterator iter(A, samples[i], features); iter; ++iter)
                 wh_i(iter.rangedRow()) -= iter.value();
-            sq_loss += wh_i.array().square().sum();
+            losses(i) += wh_i.array().square().sum();
           }
+          sq_loss = losses.sum();
         } else {
           for (unsigned int i = 0; i < h.cols(); ++i) {
             Eigen::VectorXd wh_i = w0 * h.col(i);
@@ -143,6 +145,7 @@ namespace RcppML {
         }
       } else {
         if(threads != 1){
+          Eigen::ArrayXd losses(h.cols());
           #ifdef _OPENMP
           #pragma omp parallel for num_threads(threads) schedule(dynamic)
           #endif
@@ -150,11 +153,12 @@ namespace RcppML {
             Eigen::VectorXd wh_i = w0 * h.col(i);
             if (all_features)
               for (RcppML::SparseMatrix::InnerIterator iter(A, samples[i]); iter; ++iter)
-                sq_loss += std::pow(wh_i(iter.row()) - iter.value(), 2);
+                losses(i) += std::pow(wh_i(iter.row()) - iter.value(), 2);
             else
               for (RcppML::SparseMatrix::InnerRangedIterator iter(A, samples[i], features); iter; ++iter)
-                sq_loss += std::pow(wh_i(iter.rangedRow()) - iter.value(), 2);
+                losses(i) += std::pow(wh_i(iter.rangedRow()) - iter.value(), 2);
           }
+          sq_loss = losses.sum();
         } else {
             for (unsigned int i = 0; i < h.cols(); ++i) {
             Eigen::VectorXd wh_i = w0 * h.col(i);
@@ -179,6 +183,7 @@ namespace RcppML {
           w0(j, i) *= d(i);
       double sq_loss = 0;
       if(threads != 1){
+        Eigen::ArrayXd losses(h.cols());
         #ifdef _OPENMP
         #pragma omp parallel for num_threads(threads) schedule(dynamic)
         #endif
@@ -189,9 +194,9 @@ namespace RcppML {
           else
             for (unsigned int j = 0; j < w.cols(); ++j)
               wh_i(j) -= A(features[j], samples[i]);
-          sq_loss += wh_i.array().square().sum();
+          losses(i) += wh_i.array().square().sum();
         }
-        return sq_loss / (h.cols() * w.cols());
+        return losses.sum() / (h.cols() * w.cols());
       } else {
         for (unsigned int i = 0; i < h.cols(); ++i) {
           Eigen::VectorXd wh_i = w0 * h.col(i);
