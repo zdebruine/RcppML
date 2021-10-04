@@ -6,6 +6,11 @@
 
 using namespace Rcpp;
 
+#ifdef RCPP_USE_GLOBAL_ROSTREAM
+Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
+Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
+#endif
+
 // Rcpp_projectW_sparse
 Eigen::MatrixXd Rcpp_projectW_sparse(const Rcpp::S4& A, const Eigen::MatrixXd w, const bool nonneg, const double L1, const unsigned int threads, const bool mask_zeros, const std::vector<unsigned int>& samples, const std::vector<unsigned int>& features);
 RcppExport SEXP _RcppML_Rcpp_projectW_sparse(SEXP ASEXP, SEXP wSEXP, SEXP nonnegSEXP, SEXP L1SEXP, SEXP threadsSEXP, SEXP mask_zerosSEXP, SEXP samplesSEXP, SEXP featuresSEXP) {
