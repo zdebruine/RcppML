@@ -124,3 +124,7 @@ nnls <- function(a, b, cd_maxit = 100L, cd_tol = 1e-8, fast_nnls = FALSE, L1 = 0
     .Call('_RcppML_nnls', PACKAGE = 'RcppML', a, b, cd_maxit, cd_tol, fast_nnls, L1)
 }
 
+Rcpp_bipartite_match <- function(x) {
+    .Call('_RcppML_Rcpp_bipartite_match', PACKAGE = 'RcppML', x)
+}
+
