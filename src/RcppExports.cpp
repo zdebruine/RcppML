@@ -238,6 +238,17 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// Rcpp_bipartite_match
+Rcpp::List Rcpp_bipartite_match(Rcpp::NumericMatrix x);
+RcppExport SEXP _RcppML_Rcpp_bipartite_match(SEXP xSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type x(xSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_bipartite_match(x));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_RcppML_Rcpp_projectW_sparse", (DL_FUNC) &_RcppML_Rcpp_projectW_sparse, 8},
@@ -252,6 +263,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_RcppML_Rcpp_bipartition_dense", (DL_FUNC) &_RcppML_Rcpp_bipartition_dense, 9},
     {"_RcppML_Rcpp_dclust_sparse", (DL_FUNC) &_RcppML_Rcpp_dclust_sparse, 9},
     {"_RcppML_nnls", (DL_FUNC) &_RcppML_nnls, 6},
+    {"_RcppML_Rcpp_bipartite_match", (DL_FUNC) &_RcppML_Rcpp_bipartite_match, 1},
     {NULL, NULL, 0}
 };
 

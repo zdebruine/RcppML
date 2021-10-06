@@ -160,7 +160,11 @@ nmf <- function(A, k, tol = 1e-4, maxit = 100, verbose = TRUE, L1 = c(0, 0), see
 
   # randomly initialize "w", or check dimensions of provided initialization
   if (!is.null(p$w_init)) {
-    if(!is.list(p$w_init)) p$w_init <- as.list(p$w_init)
+    if(!is.list(p$w_init)) {
+      w_ <- p$w_init
+      p$w_init <- list()
+      p$w_init[[1]] <- w_
+    }
     for(i in 1:length(p$w_init)){
       if (nrow(p$w_init[[i]]) == length(p$features)) p$w_init <- t(p$w_init[[i]])
       if (ncol(p$w_init[[i]]) != length(p$features)) stop("a matrix was specified for 'w_init', but dimensions are not compatible with number of features")

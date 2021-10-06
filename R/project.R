@@ -88,11 +88,13 @@ project <- function(A, w = NULL, h = NULL, L1 = 0, ...) {
 
   # check that dimensions of w or h are compatible with A
   if (!is.null(w)) {
-    if (nrow(A) == nrow(w) && nrow(A) != ncol(A)) w <- t(w)
-    if (nrow(A) != ncol(w)) stop("dimensions of 'A' and 'w' are incompatible!")
+    if (nrow(A) == nrow(w) || nrow(A) == ncol(w)){
+      if(nrow(w) == nrow(A)) w <- t(w)
+    } else stop("dimensions of 'A' and 'w' are incompatible!")
   } else {
-    if (ncol(A) == nrow(h) && nrow(A) != ncol(A)) h <- t(h)
-    if (ncol(A) != ncol(h)) stop("dimensions of 'A' and 'h' are incompatible!")
+    if (ncol(A) == nrow(h) || ncol(A) == ncol(h)){
+      if(ncol(A) == nrow(h)) h <- t(h)
+    } else stop("dimensions of 'A' and 'h' are incompatible!")
   }
 
   # select backend based on whether 'A' is dense or sparse
