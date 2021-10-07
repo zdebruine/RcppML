@@ -152,9 +152,12 @@ nmf <- function(A, k, tol = 1e-4, maxit = 100, verbose = TRUE, L1 = c(0, 0), see
 
   # call C++ routines
   if (class(A)[[1]] == "dgCMatrix") {
-    Rcpp_nmf_sparse(A, tol, maxit, verbose, p$nonneg, L1, p$diag, p$mask_zeros, threads, p$samples - 1, p$features - 1, p$w_init, p$update_in_place)
+    model <- Rcpp_nmf_sparse(A, tol, maxit, verbose, p$nonneg, L1, p$diag, p$mask_zeros, threads, p$samples - 1, p$features - 1, p$w_init, p$update_in_place)
   } else {
     if (p$mask_zeros) stop("mask_zeros = TRUE not supported when 'A' is in dense format")
-    Rcpp_nmf_dense(A, tol, maxit, verbose, p$nonneg, L1, p$diag, p$mask_zeros, threads, p$samples - 1, p$features - 1, p$w_init, p$update_in_place)
+    model <- Rcpp_nmf_dense(A, tol, maxit, verbose, p$nonneg, L1, p$diag, p$mask_zeros, threads, p$samples - 1, p$features - 1, p$w_init, p$update_in_place)
   }
+  if(!is.null(rownames(A))) rownames(model$w) <- rownames(A)
+  if(!is.null(colnames(A))) colnames(model$h) <- colnames(A)
+  return(model)
 }
