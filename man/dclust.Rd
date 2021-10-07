@@ -26,7 +26,7 @@ dclust(
 
 \item{tol}{in rank-2 NMF, the correlation distance (\eqn{1 - R^2}) between \eqn{w} across consecutive iterations at which to stop factorization}
 
-\item{maxit}{stopping criteria, maximum number of alternating updates of \eqn{w} and \eqn{h}}
+\item{maxit}{stopping criteria, maximum number of alternating least squares updates of \eqn{w} and \eqn{h}}
 
 \item{nonneg}{in rank-2 NMF, enforce non-negativity}
 
