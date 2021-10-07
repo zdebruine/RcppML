@@ -159,5 +159,6 @@ nmf <- function(A, k, tol = 1e-4, maxit = 100, verbose = TRUE, L1 = c(0, 0), see
   }
   if(!is.null(rownames(A))) rownames(model$w) <- rownames(A)
   if(!is.null(colnames(A))) colnames(model$h) <- colnames(A)
+  rownames(model$h) <- colnames(model$w) <- paste0("nmf", 1:ncol(model$w))
   return(model)
 }
