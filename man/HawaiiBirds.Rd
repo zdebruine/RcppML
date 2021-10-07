@@ -5,13 +5,13 @@
 \alias{HawaiiBirds}
 \title{Bird species frequency in Hawaii}
 \format{
-list of two components: \code{counts} giving mean total counts of species in each grid, and \code{metadata} giving information about each grid (i.e. latitude, longitude, and county)
+list of two components: \code{counts} giving mean total counts of species in each grid, and \code{metadata} giving information about each grid (i.e. latitude, longitude, and island)
 }
 \usage{
 data(HawaiiBirds)
 }
 \description{
-Mean counts of bird species in 10-by-10km grids in Hawaii.
+Mean counts of bird species in 1-by-1km grids in Hawaii as recorded in the eBird project. Not all counts are complete because some grids are sampled better than others (i.e. urban areas, birding hotspots).
 }
 \details{
 This dataset was obtained as follows:
@@ -19,12 +19,11 @@ This dataset was obtained as follows:
 \item All eBird observations in Hawaii were downloaded from the eBird website as of Oct. 2021
 \item Only complete checklists were retained
 \item Only non-X counts were retained
-\item Latitude/Longitude were rounded to one decimal place
 \item Species were removed with fewer than 50 observations or that were spuhs
-\item Grids were defined by latitude/longitude rounded to one decimal place
-\item Grids were removed with fewer than 25 checklists
-\item Mean counts of species in each grid across all checklists were compiled in the $counts component
-\item Metadata for each grid was recorded in the $metadata component
+\item Grids were defined by latitude/longitude rounded to two decimal places
+\item Grids were removed with fewer than 10 checklists
+\item Mean counts of species in each grid across all checklists were compiled in the \code{$counts} component
+\item Metadata for each grid was recorded in the \code{$metadata} component
 }
 }
 \keyword{datasets}
