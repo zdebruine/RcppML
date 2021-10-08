@@ -31,7 +31,7 @@ crossValidate <- function(A, k, method = 1, reps = 5, verbose = 1, ...) {
     ifelse(verbose == 2, verbose2 <- TRUE, verbose2 <- FALSE)
     
     for(rank in k){
-      cat("Rank:", rank, "\n")
+      if(verbose > 0) cat("Rank:", rank, "\n")
       
       if(method == 1){
         m22 <- nmf(A[-features, -samples], rank, verbose = verbose2, ...)
