@@ -2,59 +2,38 @@
 % Please edit documentation in R/project.R
 \name{project}
 \alias{project}
-\title{Project a linear factor model}
+\title{Project a factor model with least squares}
 \usage{
-project(A, w = NULL, h = NULL, L1 = 0, ...)
+project(model, newdata, L1 = 0, nonneg = TRUE, mask_zeros = FALSE)
 }
 \arguments{
-\item{A}{matrix of features-by-samples in dense or sparse format (preferred classes are \code{matrix} or \code{Matrix::dgCMatrix}, respectively). Prefer sparse storage when >50\% of values are zero.}
+\item{model}{\eqn{w}, matrix of features (rows) by factors (columns) containing the linear model to project}
 
-\item{w}{dense matrix of factors x features giving the linear model to be projected (if \code{h = NULL})}
-
-\item{h}{dense matrix of factors x samples giving the linear model to be projected (if \code{w = NULL})}
+\item{newdata}{\eqn{A}, data containing features (rows) by samples (columns) containing the new samples onto which to project the model}
 
 \item{L1}{L1/LASSO penalty to be applied. No scaling is performed. See details.}
 
-\item{...}{see "advanced parameters" section}
+\item{nonneg}{enforce non-negativity}
+
+\item{mask_zeros}{handle zeros as missing values}
 }
 \value{
-matrix \eqn{h} or \eqn{w}
+matrix \eqn{h}
 }
 \description{
-Solves the equation \eqn{A = wh} for either \eqn{h} or \eqn{w} given either \eqn{w} or \eqn{h} and \eqn{A}
+Solves the equation \eqn{A = wh} for \eqn{h} given \eqn{w} and \eqn{A}
 }
 \details{
-For the classical alternating least squares matrix factorization update problem \eqn{A = wh}, the updates
+For the alternating least squares matrix factorization update problem \eqn{A = wh}, the updates
 (or projection) of \eqn{h} is given by the equation: \deqn{w^Twh = wA_j}
 which is in the form \eqn{ax = b} where \eqn{a = w^Tw} \eqn{x = h} and \eqn{b = wA_j} for all columns \eqn{j} in \eqn{A}.
 
-Given \eqn{A}, \code{project} can solve for either \eqn{w} or \eqn{h} given the other:
-\itemize{
-\item When given \eqn{A} and \eqn{w}, \eqn{h} is found using a highly efficient parallelization scheme.
-\item When given \eqn{A} and \eqn{h}, \eqn{w} is found without transposition of \eqn{A} (as would be the case in traditional block-pivoting matrix factorization) by accumulating the right-hand sides of linear systems in-place in \eqn{A}, then solving the systems. Note that \eqn{w} may also be found by inputting the transpose of \eqn{A} and \eqn{h} in place of \eqn{w}, (i.e. \code{A = t(A), w = h, h = NULL}). However, for most applications, the cost of a single projection in-place is less than transposition of \eqn{A}. However, for matrix factorization, it is desirable to transpose \eqn{A} if possible because many projections are needed.
+Least squares projections in factorizations of rank-3 and greater are parallelized using the number of threads set by \code{\link{setRcppMLthreads}}.
+
+Any L1 penalty is subtracted from \eqn{b} and should generally be scaled to \code{max(b)}, where \eqn{b = WA_j} for all columns \eqn{j} in \eqn{A}. An easy way to properly scale an L1 penalty is to normalize all columns in \eqn{w} to sum to the same value (e.g. 1). No scaling is applied in this function. Such scaling guarantees that \code{L1 = 1} gives a completely sparse solution.
+
+There are specializations for dense and sparse input matrices, symmetric input matrices, and for rank-1 and rank-2 projections. See documentation for \code{\link{nmf}} for theoretical details and guidance.
 }
-
-\strong{Parallelization.} Least squares projections in factorizations of rank-3 and greater are parallelized using the number of threads set by \code{\link{setRcppMLthreads}}.
-By default, all available threads are used, see \code{\link{getRcppMLthreads}}. The overhead of parallization is too great for rank-1 and -2 factorization.
-
-\strong{L1 Regularization.} Any L1 penalty is subtracted from \eqn{b} and should generally be scaled to \code{max(b)}, where \eqn{b = WA_j} for all columns \eqn{j} in \eqn{A}. An easy way to properly scale an L1 penalty is to normalize all columns in \eqn{w} to sum to 1. No scaling is applied in this function. Such scaling guarantees that \code{L1 = 1} gives a completely sparse solution.
-
-\strong{Specializations.} There are specializations for symmetric input matrices, and for rank-1 and rank-2 projections. See documentation for \code{\link{nmf}} for theoretical details and guidance.
-
-\strong{Publication reference.} For theoretical and practical considerations, please see our manuscript: "DeBruine ZJ, Melcher K, Triche TJ (2021)
-High-performance non-negative matrix factorization for large single cell data." on BioRXiv.
-}
-\section{Advanced Parameters}{
-
-Several parameters may be specified in the \code{...} argument:
-\itemize{
-\item \code{nonneg = TRUE}: enforce non-negativity
-\item \code{samples = 1:ncol(A)}: samples to project, numbered between 1 and \code{ncol(A)}. Default is all samples.
-\item \code{features = 1:nrow(A)}: features to consider in projection, numbered between 1 and \code{nrow(A)}. Default is all features. This can make the projection considerably slower.
-\item \code{mask_zeros = FALSE}: handle zeros as missing values (i.e., implicitly), available only when \code{A} is sparse
-}
-}
-
 \examples{
 \dontrun{
 library(Matrix)

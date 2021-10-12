@@ -4,18 +4,18 @@
 \alias{bipartition}
 \title{Bipartition a sample set}
 \usage{
-bipartition(A, tol = 1e-05, verbose = FALSE, nonneg = TRUE, ...)
+bipartition(data, tol = 1e-05, verbose = FALSE, nonneg = TRUE, ...)
 }
 \arguments{
-\item{A}{matrix of features-by-samples in dense or sparse format (preferred classes are \code{matrix} or \code{Matrix::dgCMatrix}, respectively). Prefer sparse storage when >50\% of values are zero.}
+\item{data}{input data with the same number of rows as \code{object$w}}
 
-\item{tol}{stopping criteria for alternating least squares updates, the correlation distance between \eqn{w} across consecutive iterations, \eqn{1 - cor(w_i, w_{i-1})}. Prefer \code{tol < 1e-5} for publication runs, \code{1e-5 < tol < 1e-3} for rapid experimentation.}
+\item{tol}{stopping criteria based on the correlation distance between \eqn{w} across consecutive iterations. Prefer \code{tol <= 1e-5} for publication runs, \code{1e-5 < tol <= 1e-3} for rapid experimentation.}
 
-\item{verbose}{print model tolerances between iterations}
+\item{verbose}{print tolerance after each iteration}
 
 \item{nonneg}{enforce non-negativity of the rank-2 factorization used for bipartitioning}
 
-\item{...}{see "advanced parameters" section}
+\item{...}{development parameters}
 }
 \value{
 A list giving the bipartition and useful statistics:
