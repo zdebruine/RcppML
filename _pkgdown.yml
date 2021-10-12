@@ -1,0 +1,4 @@
+url: https://zdebruine.github.io/RcppML
+template:
+  params:
+    bootswatch: simplex
