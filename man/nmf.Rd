@@ -2,38 +2,54 @@
 % Please edit documentation in R/nmf.R
 \name{nmf}
 \alias{nmf}
+\alias{mse.nmf}
+\alias{predict.nmf}
 \title{Non-negative matrix factorization}
 \usage{
 nmf(
-  A,
+  data,
   k,
   tol = 1e-04,
   maxit = 100,
   verbose = TRUE,
   L1 = c(0, 0),
   seed = NULL,
+  nonneg = TRUE,
+  mask_zeros = FALSE,
   ...
 )
+
+\method{mse}{nmf}(object, data, mask_zeros = FALSE, ...)
+
+\method{predict}{nmf}(object, newdata, L1 = 0, nonneg = TRUE, mask_zeros = FALSE, ...)
 }
 \arguments{
-\item{A}{matrix of features-by-samples in dense or sparse format (preferred classes are \code{matrix} or \code{Matrix::dgCMatrix}, respectively). Prefer sparse storage when >50\% of values are zero.}
+\item{data}{input data with the same number of rows as \code{object$w}}
 
 \item{k}{rank}
 
-\item{tol}{stopping criteria for alternating least squares updates, the correlation distance between \eqn{w} across consecutive iterations, \eqn{1 - cor(w_i, w_{i-1})}. Prefer \code{tol < 1e-5} for publication runs, \code{1e-5 < tol < 1e-3} for rapid experimentation.}
+\item{tol}{stopping criteria based on the correlation distance between \eqn{w} across consecutive iterations. Prefer \code{tol <= 1e-5} for publication runs, \code{1e-5 < tol <= 1e-3} for rapid experimentation.}
 
-\item{maxit}{stopping criteria, maximum number of alternating least squares updates of \eqn{w} and \eqn{h}}
+\item{maxit}{maximum permitted update iterations}
 
-\item{verbose}{print model tolerances between iterations}
+\item{verbose}{print tolerance after each iteration}
 
-\item{L1}{L1/LASSO penalties between 0 and 1, array of length two for \code{c(w, h)}}
+\item{L1}{LASSO penalties in the range (0, 1], array of length two for \code{c(w, h)}}
 
-\item{seed}{random seed for model initialization. If an array of seeds is provided, multiple factorizations will be run and the model with the lowest Mean Squared Error will be returned.}
+\item{seed}{random seed for initializing \code{w}, or initial \code{w} matrix. If an array of seeds (or list of \code{w} matrices) is provided, \code{nmf} will be run for each seed and the fitted model with the lowest Mean Squared Error will be returned.}
 
-\item{...}{see "advanced parameters" section}
+\item{nonneg}{enforce non-negativity}
+
+\item{mask_zeros}{handle zeros as missing values}
+
+\item{...}{development parameters}
+
+\item{object}{model of class \code{nmf}, generally the result of calling \code{nmf}}
+
+\item{newdata}{matrix of features-by-samples in dense or sparse format, coercible to \code{matrix} or \code{Matrix::dgCMatrix}, must contain the same number of rows as \code{object$w}.}
 }
 \value{
-A list giving the factorization model:
+\code{nmf} returns a list with class "\code{nmf}" containing the following components:
 \itemize{
 \item w    : feature factor matrix
 \item d    : scaling diagonal vector
@@ -43,43 +59,36 @@ A list giving the factorization model:
 }
 }
 \description{
-Sparse matrix factorization of the form \eqn{A = wdh} by alternating least squares with optional non-negativity constraints.
+High-performance NMF of the form \eqn{A = wdh} for large dense or sparse matrices, returns an object of class \code{nmf}.
 }
 \details{
-This fast non-negative matrix factorization (NMF) implementation decomposes a matrix \eqn{A} into lower-rank
-non-negative matrices \eqn{w} and \eqn{h}, with factors scaled to sum to 1 via multiplication by a diagonal, \eqn{d}: \deqn{A = wdh}
+This fast NMF implementation decomposes a matrix \eqn{A} into lower-rank non-negative matrices \eqn{w} and \eqn{h},
+with columns of \eqn{w} and rows of \eqn{h} scaled to sum to 1 via multiplication by a diagonal, \eqn{d}: \deqn{A = wdh}
 
 The scaling diagonal ensures convex L1 regularization, consistent factor scalings regardless of random initialization, and model symmetry in factorizations of symmetric matrices.
 
-The factorization model is randomly initialized, and \eqn{w} and \eqn{h} are updated alternately using least squares.
+The factorization model is randomly initialized.  \eqn{w} and \eqn{h} are updated by alternating least squares.
 
-\strong{Parallelization:} Least squares projections in factorizations of rank-3 and greater are parallelized using the number of threads set by \code{\link{setRcppMLthreads}}.
-By default, all available threads are used, see \code{\link{getRcppMLthreads}}.
-The overhead of parallelization is too great to benefit rank-1 and rank-2 factorization.
+RcppML achieves high performance using the Eigen C++ linear algebra library, OpenMP parallelization, a dedicated Rcpp sparse matrix class, and fast sequential coordinate descent non-negative least squares initialized by Cholesky least squares solutions.
 
-\strong{Specializations.} There are specialized backends for dense and sparse matrices (be explicit about what type of matrix you provide), symmetric, rank-1, and rank-2 factorization.
+Parallelization is applied with OpenMP using the number of threads set by \code{\link{setRcppMLthreads}}. When \code{k < 3} or \code{setRcppMLthreads(1)}, a backend compiled without OpenMP is used for optimal performance. NMF with \code{mask_zeros = TRUE} is always single-threaded for efficiency.
 
-\strong{L1 regularization}. L1 penalization increases the sparsity of factors, but does not change the information content of the model
-or the relative contributions of the leading coefficients in each factor to the model. L1 regularization only slightly increases the loss of a model.
-L1 penalization should be used to assist interpretability. Penalty values should range from 0 to 1, where 1 gives complete sparsity. In this implementation of NMF,
-a scaling diagonal ensures that the L1 penalty is equally applied across all factors regardless of random initialization and the distribution of the model.
-Many other implementations of matrix factorization claim to apply L1, but the magnitude of the penalty is at the mercy of the random distribution and
-more significantly affects factors with lower overall contribution to the model. L1 regularization of rank-1 and rank-2 factorizations has no effect.
+Sparse optimization is automatically applied if the input matrix \code{A} is a sparse matrix (i.e. \code{Matrix::dgCMatrix}). There are also specialized back-ends for symmetric, rank-1, and rank-2 factorizations.
 
-\strong{Publication reference.} Please cite our manuscript: "DeBruine ZJ, Melcher K, Triche TJ (2021)
-Fast and robust non-negative matrix factorization for single-cell experiments." on BioRXiv.
+L1 penalization can be used for increasing the sparsity of factors and assisting interpretability. Penalty values should range from 0 to 1, where 1 gives complete sparsity.
 }
-\section{Advanced Parameters}{
+\section{Methods}{
 
-Several parameters may be specified in the \code{...} argument:
+The \code{nmf} S3 class has several methods:
 \itemize{
-\item \code{nonneg = TRUE}: enforce non-negativity
-\item \code{diag = TRUE}: scale factors in \eqn{w} and \eqn{h} to sum to 1 by introducing a diagonal, \eqn{d}. This should generally never be set to \code{FALSE}. Diagonalization enables symmetry of models in factorization of symmetric matrices, convex L1 regularization, and consistent factor scalings.
-\item \code{mask_zeros = FALSE}: handle zeros as missing values. \code{A} must be a sparse matrix. This algorithm is slower and tolerances will fluctuate more than with the standard algorithm.
-\item \code{w_init = NULL}: initial "w" matrix (or list of matrices), supersedes the \code{seed} parameter. If a list of matrices is provided, factorizations will be run for each matrix, and the model with the lowest Mean Squared Error will be returned.
-\item \code{update_in_place = FALSE}: avoid transposition of 'A' (and associated memory usage) by using a slower in-place algorithm for alternating least squares updates of 'w'. \code{update_in_place} is always \code{FALSE} when \code{A} is symmetric.
-\item \code{samples = 1:ncol(A)}: samples to include in factorization, numbered between 1 and \code{ncol(A)}. Default is all samples. This can make the factorization significantly slower. Generally, prefer subsetting prior to factorization.
-\item \code{features = 1:nrow(A)}: features to include in factorization, numbered between 1 and \code{nrow(A)}. Default is all features. This can make the factorization significantly slower. Generally, prefer subsetting prior to factorization.
+\item \code{predict(object, newdata, L1 = 0)}: equivalent to \code{\link{project}}, project the model onto new samples.
+\item \code{mse(object, data)}: calculates mean squared error loss of the model, \code{data} must be the same data used to fit the model.
+\item \code{prod}: compute the product of the model (multiply it out). Returns a dense matrix
+\item \code{summary(object, group_by, stat = "fractional")}: \code{data.frame} giving \code{fractional}, \code{total}, or \code{mean} representation of factors in samples or features grouped by some criteria
+\item \code{sparsity(object)}: returns a \code{data.frame} giving sparsity of each factor in \eqn{w} and \eqn{h}
+\item \code{match(x, y)}: find an ordering of factors in \code{nmf} model \code{y$w} that best matches those in \code{nmf} model \code{x$w} based on cost of \code{\link{bipartiteMatch}} on a \code{\link{cosine}} similarity matrix.
+\item \code{`[`}: subset, reorder, select, or extract factors
+\item generics such as \code{dim}, \code{t} (transpose), \code{print}, \code{head}, \code{dimnames}
 }
 }
 
@@ -117,7 +126,7 @@ Lee, D, and Seung, HS (1999). "Learning the parts of objects by non-negative mat
 Franc, VC, Hlavac, VC, Navara, M. (2005). "Sequential Coordinate-Wise Algorithm for the Non-negative Least Squares Problem". Proc. Int'l Conf. Computer Analysis of Images and Patterns. Lecture Notes in Computer Science.
 }
 \seealso{
-\code{\link{nnls}}, \code{\link{project}}, \code{\link{mse}}
+\code{\link{predict.nmf}}, \code{\link{mse.nmf}}, \code{\link{nnls}}
 }
 \author{
 Zach DeBruine

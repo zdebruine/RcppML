@@ -33,7 +33,7 @@
 #'    \item center1 : mean feature loadings across samples in first cluster
 #'    \item center2 : mean feature loadings across samples in second cluster
 #'  }
-#'
+#' @importFrom methods is
 #' @references
 #' 
 #' Kuang, D, Park, H. (2013). "Fast rank-2 nonnegative matrix factorization for hierarchical document clustering." Proc. 19th ACM SIGKDD intl. conf. on Knowledge discovery and data mining.
@@ -50,26 +50,26 @@
 #' A <- as(as.matrix(iris[,1:4]), "dgCMatrix")
 #' bipartition(A, calc_dist = TRUE)
 #' }
-bipartition <- function(A, tol = 1e-5, verbose = FALSE, nonneg = TRUE, ...){
+bipartition <- function(data, tol = 1e-5, verbose = FALSE, nonneg = TRUE, ...){
 
   p <- list(...)
-  defaults <- list("diag" = TRUE, "samples" = 1:ncol(A), "seed" = NULL, "calc_dist" = TRUE, "maxit" = 100)
+  defaults <- list("diag" = TRUE, "samples" = 1:ncol(data), "seed" = NULL, "calc_dist" = TRUE, "maxit" = 100)
   for(i in 1:length(defaults))
     if(is.null(p[[names(defaults)[[i]]]])) p[[names(defaults)[[i]]]] <- defaults[[i]]
 
-  if (is(A, "sparseMatrix")) {
-    A <- as(A, "dgCMatrix")
-  } else if (canCoerce(A, "matrix")) {
-    A <- as.matrix(A)
-  } else stop("'A' was not coercible to a matrix")
+  if (is(data, "sparseMatrix")) {
+    data <- as(data, "dgCMatrix")
+  } else if (canCoerce(data, "matrix")) {
+    data <- as.matrix(data)
+  } else stop("'data' was not coercible to a matrix")
 
     if(!is.numeric(p$seed)) p$seed <- 0
     if(min(p$samples) == 0) stop("sample indices must be strictly positive")
-    if(max(p$samples) > ncol(A)) stop("sample indices must be strictly less than the number of columns in 'A'")
+    if(max(p$samples) > ncol(data)) stop("sample indices must be strictly less than the number of columns in 'data'")
 
-    if(class(A)[[1]] == "dgCMatrix"){
-        Rcpp_bipartition_sparse(A, tol, p$maxit, nonneg, p$samples - 1, p$seed, verbose, p$calc_dist, p$diag)
+    if(class(data)[[1]] == "dgCMatrix"){
+        Rcpp_bipartition_sparse(data, tol, p$maxit, nonneg, p$samples - 1, p$seed, verbose, p$calc_dist, p$diag)
     } else {
-        Rcpp_bipartition_dense(A, tol, p$maxit, nonneg, p$samples - 1, p$seed, verbose, p$calc_dist, p$diag)
+        Rcpp_bipartition_dense(data, tol, p$maxit, nonneg, p$samples - 1, p$seed, verbose, p$calc_dist, p$diag)
     }
 }

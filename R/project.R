@@ -1,39 +1,24 @@
-#' @title Project a linear factor model
+#' @title Project a factor model with least squares
 #'
-#' @description Solves the equation \eqn{A = wh} for either \eqn{h} or \eqn{w} given either \eqn{w} or \eqn{h} and \eqn{A}
+#' @description Solves the equation \eqn{A = wh} for \eqn{h} given \eqn{w} and \eqn{A}
 #'
 #' @details
-#' For the classical alternating least squares matrix factorization update problem \eqn{A = wh}, the updates 
+#' For the alternating least squares matrix factorization update problem \eqn{A = wh}, the updates 
 #' (or projection) of \eqn{h} is given by the equation: \deqn{w^Twh = wA_j} 
 #' which is in the form \eqn{ax = b} where \eqn{a = w^Tw} \eqn{x = h} and \eqn{b = wA_j} for all columns \eqn{j} in \eqn{A}.
 #'
-#' Given \eqn{A}, \code{project} can solve for either \eqn{w} or \eqn{h} given the other:
-#' * When given \eqn{A} and \eqn{w}, \eqn{h} is found using a highly efficient parallelization scheme.
-#' * When given \eqn{A} and \eqn{h}, \eqn{w} is found without transposition of \eqn{A} (as would be the case in traditional block-pivoting matrix factorization) by accumulating the right-hand sides of linear systems in-place in \eqn{A}, then solving the systems. Note that \eqn{w} may also be found by inputting the transpose of \eqn{A} and \eqn{h} in place of \eqn{w}, (i.e. \code{A = t(A), w = h, h = NULL}). However, for most applications, the cost of a single projection in-place is less than transposition of \eqn{A}. However, for matrix factorization, it is desirable to transpose \eqn{A} if possible because many projections are needed.
+#' Least squares projections in factorizations of rank-3 and greater are parallelized using the number of threads set by \code{\link{setRcppMLthreads}}. 
 #'
-#' **Parallelization.** Least squares projections in factorizations of rank-3 and greater are parallelized using the number of threads set by \code{\link{setRcppMLthreads}}. 
-#' By default, all available threads are used, see \code{\link{getRcppMLthreads}}. The overhead of parallization is too great for rank-1 and -2 factorization.
+#' Any L1 penalty is subtracted from \eqn{b} and should generally be scaled to \code{max(b)}, where \eqn{b = WA_j} for all columns \eqn{j} in \eqn{A}. An easy way to properly scale an L1 penalty is to normalize all columns in \eqn{w} to sum to the same value (e.g. 1). No scaling is applied in this function. Such scaling guarantees that \code{L1 = 1} gives a completely sparse solution.
 #'
-#' **L1 Regularization.** Any L1 penalty is subtracted from \eqn{b} and should generally be scaled to \code{max(b)}, where \eqn{b = WA_j} for all columns \eqn{j} in \eqn{A}. An easy way to properly scale an L1 penalty is to normalize all columns in \eqn{w} to sum to 1. No scaling is applied in this function. Such scaling guarantees that \code{L1 = 1} gives a completely sparse solution.
-#'
-#' **Specializations.** There are specializations for symmetric input matrices, and for rank-1 and rank-2 projections. See documentation for \code{\link{nmf}} for theoretical details and guidance.
+#' There are specializations for dense and sparse input matrices, symmetric input matrices, and for rank-1 and rank-2 projections. See documentation for \code{\link{nmf}} for theoretical details and guidance.
 #' 
-#' **Publication reference.** For theoretical and practical considerations, please see our manuscript: "DeBruine ZJ, Melcher K, Triche TJ (2021) 
-#' High-performance non-negative matrix factorization for large single cell data." on BioRXiv.
-#'
-#' @section Advanced Parameters:
-#' Several parameters may be specified in the \code{...} argument:
-#'
-#' * \code{nonneg = TRUE}: enforce non-negativity
-#' * \code{samples = 1:ncol(A)}: samples to project, numbered between 1 and \code{ncol(A)}. Default is all samples.
-#' * \code{features = 1:nrow(A)}: features to consider in projection, numbered between 1 and \code{nrow(A)}. Default is all features. This can make the projection considerably slower.
-#' * \code{mask_zeros = FALSE}: handle zeros as missing values (i.e., implicitly), available only when \code{A} is sparse
-#'
-#' @inheritParams nmf
-#' @param w dense matrix of factors x features giving the linear model to be projected (if \code{h = NULL})
-#' @param h dense matrix of factors x samples giving the linear model to be projected (if \code{w = NULL})
+#' @param model \eqn{w}, matrix of features (rows) by factors (columns) containing the linear model to project
+#' @param newdata \eqn{A}, data containing features (rows) by samples (columns) containing the new samples onto which to project the model
 #' @param L1 L1/LASSO penalty to be applied. No scaling is performed. See details.
-#' @returns matrix \eqn{h} or \eqn{w}
+#' @param nonneg enforce non-negativity
+#' @param mask_zeros handle zeros as missing values
+#' @returns matrix \eqn{h}
 #' @references
 #' DeBruine, ZJ, Melcher, K, and Triche, TJ. (2021). "High-performance non-negative matrix factorization for large single-cell data." BioRXiv.
 #' @author Zach DeBruine
@@ -66,49 +51,27 @@
 #' w2 <- project(t(A), w = t(h))
 #' all.equal(w, w2)
 #' }
-project <- function(A, w = NULL, h = NULL, L1 = 0, ...) {
-
-  # apply defaults to advanced parameters
-  p <- list(...)
-  defaults <- list("mask_zeros" = FALSE, "nonneg" = TRUE, "samples" = 1:ncol(A), "features" = 1:nrow(A))
-  for(i in 1:length(defaults))
-    if(is.null(p[[names(defaults)[[i]]]])) p[[names(defaults)[[i]]]] <- defaults[[i]]
-
+project <- function(model, newdata, L1 = 0, nonneg = TRUE, mask_zeros = FALSE) {
+  
   threads <- getRcppMLthreads()
-  if ((is.null(w) && is.null(h)) || (!is.null(w) && !is.null(h)))
-    stop("specify one of 'w' or 'h', leaving the other 'NULL'")
-  if (!is.null(w) && p$mask_zeros) stop("'mask_zeros = TRUE' is not supported for projections of 'h'. Use 'w' <- project(t(A), w = h)' instead.")
 
   # get 'A' in either sparse or dense matrix format
-  if (is(A, "sparseMatrix")) {
-    A <- as(A, "dgCMatrix")
-  } else if (canCoerce(A, "matrix")) {
-    A <- as.matrix(A)
-  } else stop("'A' was not coercible to a matrix")
-
+  if (is(newdata, "sparseMatrix")) {
+    newdata <- as(newdata, "dgCMatrix")
+  } else if (canCoerce(newdata, "matrix")) {
+    newdata <- as.matrix(newdata)
+    if(mask_zeros) newdata <- as(newdata, "dgCMatrix")
+  } else stop("'newdata' was not coercible to a matrix")
+  
   # check that dimensions of w or h are compatible with A
-  if (!is.null(w)) {
-    if (nrow(A) == nrow(w) || nrow(A) == ncol(w)){
-      if(nrow(w) == nrow(A)) w <- t(w)
-    } else stop("dimensions of 'A' and 'w' are incompatible!")
-  } else {
-    if (ncol(A) == nrow(h) || ncol(A) == ncol(h)){
-      if(ncol(A) == nrow(h)) h <- t(h)
-    } else stop("dimensions of 'A' and 'h' are incompatible!")
-  }
+  if (nrow(newdata) == nrow(model) || nrow(newdata) == ncol(model)){
+    if(nrow(model) == nrow(newdata)) model <- t(model)
+  } else stop("dimensions of 'newdata' and 'model' are incompatible!")
 
-  # select backend based on whether 'A' is dense or sparse
-  if (class(A)[[1]] == "dgCMatrix") {
-    if (!is.null(w)) {
-      Rcpp_projectW_sparse(A, w, p$nonneg, L1, threads, p$mask_zeros, p$samples - 1, p$features - 1)
-    } else {
-      Rcpp_projectH_sparse(A, h, p$nonneg, L1, threads, p$mask_zeros, p$samples - 1, p$features - 1)
-    }
+  # select backend based on whether 'newdata' is dense or sparse
+  if (class(newdata)[[1]] == "dgCMatrix") {
+    Rcpp_projectW_sparse(newdata, model, nonneg, L1, threads, mask_zeros)
   } else {
-    if (!is.null(w)) {
-      Rcpp_projectW_dense(A, w, p$nonneg, L1, threads, p$mask_zeros, p$samples - 1, p$features - 1)
-    } else {
-      Rcpp_projectH_dense(A, h, p$nonneg, L1, threads, p$mask_zeros, p$samples - 1, p$features - 1)
-    }
+    Rcpp_projectW_dense(newdata, model, nonneg, L1, threads)
   }
 }

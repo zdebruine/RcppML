@@ -1,0 +1,14 @@
+body {
+  background: #fdfdfd;
+  color:#111;
+}
+
+pre, code {
+  background-color: #fbfbfb;
+  color: #222;
+  border-radius: 0px;
+}
+
+p {
+  color:#111;
+}
