@@ -1,0 +1,5 @@
+template:
+  params:
+    bootstrap: 4
+    bootswatch: simplex
+    bg: #"fdfdfd"
