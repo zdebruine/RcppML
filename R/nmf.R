@@ -1,52 +1,54 @@
 #' @title Non-negative matrix factorization
 #'
-#' @description Sparse matrix factorization of the form \eqn{A = wdh} by alternating least squares with optional non-negativity constraints.
+#' @description High-performance NMF of the form \eqn{A = wdh} for large dense or sparse matrices, returns an object of class \code{nmf}.
 #'
 #' @details
-#' This fast non-negative matrix factorization (NMF) implementation decomposes a matrix \eqn{A} into lower-rank
-#'  non-negative matrices \eqn{w} and \eqn{h}, with factors scaled to sum to 1 via multiplication by a diagonal, \eqn{d}: \deqn{A = wdh}
+#' This fast NMF implementation decomposes a matrix \eqn{A} into lower-rank non-negative matrices \eqn{w} and \eqn{h}, 
+#' with columns of \eqn{w} and rows of \eqn{h} scaled to sum to 1 via multiplication by a diagonal, \eqn{d}: \deqn{A = wdh}
 #'
 #' The scaling diagonal ensures convex L1 regularization, consistent factor scalings regardless of random initialization, and model symmetry in factorizations of symmetric matrices.
 #' 
-#' The factorization model is randomly initialized, and \eqn{w} and \eqn{h} are updated alternately using least squares. 
-#'
-#' **Parallelization:** Least squares projections in factorizations of rank-3 and greater are parallelized using the number of threads set by \code{\link{setRcppMLthreads}}. 
-#' By default, all available threads are used, see \code{\link{getRcppMLthreads}}.
-#' The overhead of parallelization is too great to benefit rank-1 and rank-2 factorization.
-#'
-#' **Specializations.** There are specialized backends for dense and sparse matrices (be explicit about what type of matrix you provide), symmetric, rank-1, and rank-2 factorization.
+#' The factorization model is randomly initialized.  \eqn{w} and \eqn{h} are updated by alternating least squares.
 #' 
-#' **L1 regularization**. L1 penalization increases the sparsity of factors, but does not change the information content of the model 
-#' or the relative contributions of the leading coefficients in each factor to the model. L1 regularization only slightly increases the loss of a model. 
-#' L1 penalization should be used to assist interpretability. Penalty values should range from 0 to 1, where 1 gives complete sparsity. In this implementation of NMF, 
-#' a scaling diagonal ensures that the L1 penalty is equally applied across all factors regardless of random initialization and the distribution of the model. 
-#' Many other implementations of matrix factorization claim to apply L1, but the magnitude of the penalty is at the mercy of the random distribution and 
-#' more significantly affects factors with lower overall contribution to the model. L1 regularization of rank-1 and rank-2 factorizations has no effect.
+#' RcppML achieves high performance using the Eigen C++ linear algebra library, OpenMP parallelization, a dedicated Rcpp sparse matrix class, and fast sequential coordinate descent non-negative least squares initialized by Cholesky least squares solutions.
 #'
-#' **Publication reference.** Please cite our manuscript: "DeBruine ZJ, Melcher K, Triche TJ (2021) 
-#' Fast and robust non-negative matrix factorization for single-cell experiments." on BioRXiv.
+#' Parallelization is applied with OpenMP using the number of threads set by \code{\link{setRcppMLthreads}}. When \code{k < 3} or \code{setRcppMLthreads(1)}, a backend compiled without OpenMP is used for optimal performance. NMF with \code{mask_zeros = TRUE} is always single-threaded for efficiency.
 #'
-#' @section Advanced Parameters:
-#' Several parameters may be specified in the \code{...} argument:
+#' Sparse optimization is automatically applied if the input matrix \code{A} is a sparse matrix (i.e. \code{Matrix::dgCMatrix}). There are also specialized back-ends for symmetric, rank-1, and rank-2 factorizations.
+#' 
+#' L1 penalization can be used for increasing the sparsity of factors and assisting interpretability. Penalty values should range from 0 to 1, where 1 gives complete sparsity.
 #'
-#' * \code{nonneg = TRUE}: enforce non-negativity
-#' * \code{diag = TRUE}: scale factors in \eqn{w} and \eqn{h} to sum to 1 by introducing a diagonal, \eqn{d}. This should generally never be set to \code{FALSE}. Diagonalization enables symmetry of models in factorization of symmetric matrices, convex L1 regularization, and consistent factor scalings.
-#' * \code{mask_zeros = FALSE}: handle zeros as missing values. \code{A} must be a sparse matrix. This algorithm is slower and tolerances will fluctuate more than with the standard algorithm.
-#' * \code{w_init = NULL}: initial "w" matrix (or list of matrices), supersedes the \code{seed} parameter. If a list of matrices is provided, factorizations will be run for each matrix, and the model with the lowest Mean Squared Error will be returned.
-#' * \code{update_in_place = FALSE}: avoid transposition of 'A' (and associated memory usage) by using a slower in-place algorithm for alternating least squares updates of 'w'. \code{update_in_place} is always \code{FALSE} when \code{A} is symmetric.
-#' * \code{samples = 1:ncol(A)}: samples to include in factorization, numbered between 1 and \code{ncol(A)}. Default is all samples. This can make the factorization significantly slower. Generally, prefer subsetting prior to factorization.
-#' * \code{features = 1:nrow(A)}: features to include in factorization, numbered between 1 and \code{nrow(A)}. Default is all features. This can make the factorization significantly slower. Generally, prefer subsetting prior to factorization.
-#'
-#' @param A matrix of features-by-samples in dense or sparse format (preferred classes are \code{matrix} or \code{Matrix::dgCMatrix}, respectively). Prefer sparse storage when >50% of values are zero.
+# @section Development Parameters:
+# Several parameters may be specified in the \code{...} argument:
+#
+# * \code{diag = TRUE}: scale factors in \eqn{w} and \eqn{h} to sum to 1 by introducing a diagonal, \eqn{d}. This should generally never be set to \code{FALSE}. Diagonalization enables symmetry of models in factorization of symmetric matrices, convex L1 regularization, and consistent factor scalings.
+# * \code{update_in_place = FALSE}: avoid transposition of 'A' (and associated memory usage) by using a slower in-place algorithm for alternating least squares updates of 'w'. \code{update_in_place} is always \code{FALSE} when \code{data} is symmetric.
+# * \code{samples = 1:ncol(data)}: samples to include in factorization, numbered between 1 and \code{ncol(data)}. Default is all samples. This can make the factorization significantly slower. Generally, prefer subsetting prior to factorization.
+# * \code{features = 1:nrow(data)}: features to include in factorization, numbered between 1 and \code{nrow(data)}. Default is all features. This can make the factorization significantly slower. Generally, prefer subsetting prior to factorization.
+#
+#' @section Methods:
+#' The \code{nmf} S3 class has several methods:
+#' * \code{predict(object, newdata, L1 = 0)}: equivalent to \code{\link{project}}, project the model onto new samples.
+#' * \code{mse(object, data)}: calculates mean squared error loss of the model, \code{data} must be the same data used to fit the model.
+#' * \code{prod}: compute the product of the model (multiply it out). Returns a dense matrix
+#' * \code{summary(object, group_by, stat = "fractional")}: \code{data.frame} giving \code{fractional}, \code{total}, or \code{mean} representation of factors in samples or features grouped by some criteria
+#' * \code{sparsity(object)}: returns a \code{data.frame} giving sparsity of each factor in \eqn{w} and \eqn{h}
+#' * \code{match(x, y)}: find an ordering of factors in \code{nmf} model \code{y$w} that best matches those in \code{nmf} model \code{x$w} based on cost of \code{\link{bipartiteMatch}} on a \code{\link{cosine}} similarity matrix.
+#' * \code{`[`}: subset, reorder, select, or extract factors
+#' * generics such as \code{dim}, \code{t} (transpose), \code{print}, \code{head}, \code{dimnames} 
+#' 
+#' @param data matrix of features-by-samples in dense or sparse format, coercible to \code{matrix} or \code{Matrix::dgCMatrix}, respectively.
 #' @param k rank
-#' @param tol stopping criteria for alternating least squares updates, the correlation distance between \eqn{w} across consecutive iterations, \eqn{1 - cor(w_i, w_{i-1})}. Prefer \code{tol < 1e-5} for publication runs, \code{1e-5 < tol < 1e-3} for rapid experimentation.
-#' @param maxit stopping criteria, maximum number of alternating least squares updates of \eqn{w} and \eqn{h}
-#' @param L1 L1/LASSO penalties between 0 and 1, array of length two for \code{c(w, h)}
-#' @param seed random seed for model initialization. If an array of seeds is provided, multiple factorizations will be run and the model with the lowest Mean Squared Error will be returned.
-#' @param verbose print model tolerances between iterations
-#' @param ... see "advanced parameters" section
+#' @param tol stopping criteria based on the correlation distance between \eqn{w} across consecutive iterations. Prefer \code{tol <= 1e-5} for publication runs, \code{1e-5 < tol <= 1e-3} for rapid experimentation.
+#' @param maxit maximum permitted update iterations
+#' @param L1 LASSO penalties in the range (0, 1], array of length two for \code{c(w, h)}
+#' @param seed random seed for initializing \code{w}, or initial \code{w} matrix. If an array of seeds (or list of \code{w} matrices) is provided, \code{nmf} will be run for each seed and the fitted model with the lowest Mean Squared Error will be returned.
+#' @param verbose print tolerance after each iteration
+#' @param nonneg enforce non-negativity
+#' @param mask_zeros handle zeros as missing values
+#' @param ... development parameters
 #' @return
-#' A list giving the factorization model:
+#' `nmf` returns a list with class "`nmf`" containing the following components:
 #' 	\itemize{
 #'    \item w    : feature factor matrix
 #'    \item d    : scaling diagonal vector
@@ -54,6 +56,7 @@
 #'    \item tol  : tolerance between models at final update
 #'    \item iter : number of alternating updates
 #'  }
+#' @importFrom methods is
 #' @references
 #' 
 #' DeBruine, ZJ, Melcher, K, and Triche, TJ. (2021). "High-performance non-negative matrix factorization for large single-cell data." BioRXiv.
@@ -67,7 +70,7 @@
 #' @author Zach DeBruine
 #'
 #' @export
-#' @seealso \code{\link{nnls}}, \code{\link{project}}, \code{\link{mse}}
+#' @seealso \code{\link{predict.nmf}}, \code{\link{mse.nmf}}, \code{\link{nnls}}
 #' @md
 #' @examples
 #' \dontrun{
@@ -92,73 +95,141 @@
 #' plot(model$w, t(model$h))
 #' # see package vignette for more examples
 #' }
-nmf <- function(A, k, tol = 1e-4, maxit = 100, verbose = TRUE, L1 = c(0, 0), seed = NULL, ...) {
+nmf <- function(data, k, tol = 1e-4, maxit = 100, verbose = TRUE, L1 = c(0, 0), seed = NULL, nonneg = TRUE, mask_zeros = FALSE, ...) {
+
+  start_time <- Sys.time()
 
   # apply defaults to advanced parameters
   p <- list(...)
-  defaults <- list("mask_zeros" = FALSE, "diag" = TRUE, "nonneg" = TRUE, "samples" = 1:ncol(A), "features" = 1:nrow(A), "w_init" = NULL, "update_in_place" = FALSE)
+  defaults <- list("diag" = TRUE)
   for(i in 1:length(defaults))
     if(is.null(p[[names(defaults)[[i]]]])) p[[names(defaults)[[i]]]] <- defaults[[i]]
 
-  if (length(L1) != 2) stop("'L1' must be an array of two values, the first for the penalty on 'w', the second for the penalty on 'h'")
+  if (length(L1) == 1) {
+    L1 <- rep(L1, 2)
+  } else if (length(L1) != 2) stop("'L1' must be an array of two values, the first for the penalty on 'w', the second for the penalty on 'h'")
   if (max(L1) >= 1 || min(L1) < 0) stop("L1 penalties must be strictly in the range [0,1)")
+
   threads <- getRcppMLthreads()
 
-  # get 'A' in either sparse or dense matrix format
-  if (is(A, "sparseMatrix")) {
-    A <- as(A, "dgCMatrix")
-  } else if (canCoerce(A, "matrix")) {
-    A <- as.matrix(A)
-  } else stop("'A' was not coercible to a matrix")
+  # get 'data' in either sparse or dense matrix format
+  if (is(data, "sparseMatrix")) {
+    data <- as(data, "dgCMatrix")
+  } else if (canCoerce(data, "matrix")) {
+    data <- as.matrix(data)
+  } else stop("'data' was not coercible to a matrix")
 
   # randomly initialize "w", or check dimensions of provided initialization
-  if (!is.null(p$w_init)) {
-    if(!is.list(p$w_init)) {
-      w_ <- p$w_init
-      p$w_init <- list()
-      p$w_init[[1]] <- w_
-    }
-    for(i in 1:length(p$w_init)){
-      if (nrow(p$w_init[[i]]) == length(p$features)) p$w_init <- t(p$w_init[[i]])
-      if (ncol(p$w_init[[i]]) != length(p$features)) stop("a matrix was specified for 'w_init', but dimensions are not compatible with number of features")
-      if (k != nrow(p$w_init[[i]])) stop("'k' is not equal to rank of the 'w_init' matrix")
-    }
-  } else {
-    p$w_init <- list()
-    if(is.null(seed)) {
-      p$w_init[[1]] <- matrix(runif(k * length(p$features)), k, length(p$features))
-    } else {
-      if(!is.list(seed)) seed <- as.list(seed)
+  w_init <- list()
+  if(is.matrix(seed)) seed <- list(seed)
+  if (!is.null(seed)){
+    if(is.matrix(seed)[[1]]){
+      if(!is.list(seed)) stop("if specifying initial 'w' matrices for 'seed', specify a list of matrices.")
       for(i in 1:length(seed)){
-        if (is.numeric(seed[[i]])) set.seed(seed[[i]])
-        p$w_init[[i]] <- matrix(runif(k * length(p$features)), k, length(p$features))
+        if (ncol(seed[[i]]) == nrow(data) && nrow(seed[[i]]) == k) {
+          w_init[[i]] <- seed[[i]]
+        } else if (nrow(seed[[i]]) == nrow(data) && ncol(seed[[i]]) == k) {
+          w_init[[i]] <- t(seed[[i]])
+        } else stop("dimensions of provided initial 'w' matrices in 'seed' were incompatible with dimensions of 'data' and/or 'k'")
+      }
+    } else if(is.numeric(seed[[1]])){
+      for(i in 1:length(seed)){
+        set.seed(seed[[i]])
+        w_init[[i]] <- matrix(runif(k * nrow(data)), k, nrow(data))
       }
     }
-  }
-
-  # check samples and features arrays
-  if(length(p$samples) != ncol(A)){
-    if(is.unsorted(p$samples)) p$samples <- sort(p$samples)
-    if(min(p$samples) < 1 || max(p$samples) > ncol(A)) stop("'samples' must strictly be between 1 and ncol(A)")
-    if(length(p$samples) < 2 || length(p$samples) > ncol(A)) stop("'samples' must be a vector of integers of length >= 2 and <= ncol(A)")
-    if(any(duplicated(p$samples))) stop("'samples' array contains duplicate values")
-  }
-  if(length(p$features) != nrow(A)){
-    if(is.unsorted(p$features)) p$features <- sort(p$features)
-    if(min(p$features) < 1 || max(p$features) > ncol(A)) stop("'features' must strictly be between 1 and nrow(A)")
-    if(length(p$features) < 2 || length(p$features) > nrow(A)) stop("'features' must be a vector of integers of length >= 2 and <= nrow(A)")
-    if(any(duplicated(p$features))) stop("'features' array contains duplicate values")
-  }
-
-  # call C++ routines
-  if (class(A)[[1]] == "dgCMatrix") {
-    model <- Rcpp_nmf_sparse(A, tol, maxit, verbose, p$nonneg, L1, p$diag, p$mask_zeros, threads, p$samples - 1, p$features - 1, p$w_init, p$update_in_place)
   } else {
-    if (p$mask_zeros) stop("mask_zeros = TRUE not supported when 'A' is in dense format")
-    model <- Rcpp_nmf_dense(A, tol, maxit, verbose, p$nonneg, L1, p$diag, p$mask_zeros, threads, p$samples - 1, p$features - 1, p$w_init, p$update_in_place)
+    w_init[[1]] <- matrix(runif(k * nrow(data)), k, nrow(data))
   }
-  if(!is.null(rownames(A))) rownames(model$w) <- rownames(A)
-  if(!is.null(colnames(A))) colnames(model$h) <- colnames(A)
+  
+  # call C++ routines
+  if (class(data)[[1]] == "dgCMatrix") {
+    model <- Rcpp_nmf_sparse(data, tol, maxit, verbose, nonneg, L1, p$diag, threads, w_init, mask_zeros)
+  } else {
+    model <- Rcpp_nmf_dense(data, tol, maxit, verbose, nonneg, L1, p$diag, threads, w_init)
+  }
+
+  # add back dimnames
+  if(!is.null(rownames(data))) rownames(model$w) <- rownames(data)
+  if(!is.null(colnames(data))) colnames(model$h) <- colnames(data)
   rownames(model$h) <- colnames(model$w) <- paste0("nmf", 1:ncol(model$w))
+  model$runtime <- difftime(Sys.time(), start_time, units = "secs")
+  class(model) <- "nmf"
   return(model)
+}
+
+#' Mean squared error of model fit
+#' 
+#' \code{mse} is a generic function for evaluating the fit of models using Mean Squared Error (MSE).
+#' 
+#' @param object fitted model
+#' @param data data to which the model was fit
+#' @param ... additional arguments affecting the fit of the model
+#'  
+#' @seealso \code{\link{mse.nmf}}
+#' @export
+mse <- function(object, data, ...) {
+  UseMethod("mse")
+}
+
+#' @param object fitted model, class \code{nmf}, generally the result of calling \code{nmf}
+#' @param data input data with the same number of rows as \code{object$w}
+#' @param mask_zeros handle zeros as missing values
+#' @importFrom methods is
+#' @rdname nmf
+#' @export
+mse.nmf <- function(object, data, mask_zeros = FALSE, ...) {
+  validate_nmf(object)
+  threads <- getRcppMLthreads()
+
+  if (is(data, "sparseMatrix")) {
+    data <- as(data, "dgCMatrix")
+  } else if (canCoerce(data, "matrix")) {
+    data <- as.matrix(data)
+    if(mask_zeros) data <- as(data, "dgCMatrix")
+  } else stop("'data' was not coercible to a matrix")
+  
+  if (nrow(object$w) != nrow(data)) stop("dimensions of 'w' and 'A' are incompatible")
+  if (ncol(object$h) != ncol(data)) stop("dimensions of 'h' and 'A' are incompatible")
+  
+  if (class(data)[[1]] == "dgCMatrix") {
+    Rcpp_mse_sparse(data, t(object$w), object$d, object$h, threads, mask_zeros)
+  } else {
+    Rcpp_mse_dense(data, t(object$w), object$d, object$h, threads)
+  }
+}
+
+#' @importFrom stats predict
+#' @param object model of class \code{nmf}, generally the result of calling \code{nmf}
+#' @param newdata matrix of features-by-samples in dense or sparse format, coercible to \code{matrix} or \code{Matrix::dgCMatrix}, must contain the same number of rows as \code{object$w}.
+#' @param mask_zeros handle zeros as missing values
+#' @export
+#' @method predict nmf
+#' @rdname nmf
+predict.nmf <- function(object, newdata, L1 = 0, nonneg = TRUE, mask_zeros = FALSE, ...) {
+  validate_nmf(object)
+  
+  # get 'A' in either sparse or dense matrix format
+  if (is(newdata, "sparseMatrix")) {
+    newdata <- as(newdata, "dgCMatrix")
+  } else if (canCoerce(newdata, "matrix")) {
+    newdata <- as.matrix(newdata)
+    if(mask_zeros) newdata <- as(newdata, "dgCMatrix")
+  } else stop("'newdata' was not coercible to a matrix")
+  
+  # check that dimensions of w or h are compatible with A
+  if(nrow(object$w) != nrow(newdata)) stop("dimensions of 'newdata' and 'object$w' are incompatible!")
+  
+  threads <- getRcppMLthreads()
+  
+  # select backend based on whether 'A' is dense or sparse
+  if (class(newdata)[[1]] == "dgCMatrix") {
+    h <- Rcpp_projectW_sparse(newdata, t(object$w), nonneg, L1, threads, mask_zeros)
+  } else {
+    h <- Rcpp_projectW_dense(newdata, t(object$w), nonneg, L1, threads)
+  }
+  result <- new_nmf(w = object$w, d = rowSums(h), h = t(apply(h, 1, function(x) x / sum(x))))
+  if(!is.null(colnames(newdata))) colnames(result$h) <- colnames(newdata)
+  rownames(result$h) <- paste0("nmf", 1:nrow(result$h))
+  result
 }
