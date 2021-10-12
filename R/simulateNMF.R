@@ -9,6 +9,7 @@
 #' @param dropout density of dropout events
 #' @param seed seed for random number generation
 #' @export
+#' @importFrom stats cor rmultinom rnorm runif
 #' @return dense matrix
 #'
 simulateNMF <- function(nrow, ncol, k, noise = 0.5, dropout = 0.5, seed = NULL){
