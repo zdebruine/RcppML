@@ -166,6 +166,12 @@ inline Eigen::MatrixXd addL2(Eigen::MatrixXd a, double L2, const std::string& sc
   if(scale_L2 == "mean") L2 *= a.diagonal().array().mean();
   else if(scale_L2 == "sum") L2 *= a.diagonal().array().sum();
   else if(scale_L2 == "max") L2 *= a.diagonal().array().maxCoeff();
+  else if(scale_L2 = "tot_sum") L2 *= a.array().sum();
+  else if(scale_L2 = "off_diag_sum") {
+    double off_diag_sum = a.array().sum();
+    off_diag_sum -= a.diagonal().array().sum();
+    L2 *= off_diag_sum;
+  }
   a.diagonal().array() += L2;
   return a;
 }
@@ -174,6 +180,12 @@ inline Eigen::MatrixXd addPE(Eigen::MatrixXd a, double PE, const std::string& sc
   if(scale_PE == "mean") PE *= a.diagonal().array().mean();
   else if(scale_PE == "sum") PE *= a.diagonal().array().sum();
   else if(scale_PE == "max") PE *= a.diagonal().array().maxCoeff();
+  else if(scale_PE = "tot_sum") PE *= a.array().sum();
+  else if(scale_PE = "off_diag_sum") {
+    double off_diag_sum = a.array().sum();
+    off_diag_sum -= a.diagonal().array().sum();
+    PE *= off_diag_sum;
+  }
   a.array() += PE;
   a.diagonal().array() -= PE;
   return a;
