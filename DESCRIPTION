@@ -1,7 +1,7 @@
 Package: RcppML
 Type: Package
 Title: Rcpp Machine Learning Library
-Version: 0.5.0
+Version: 0.5.1
 Date: 2021-10-12
 Authors@R: person("Zach", "DeBruine", 
     email = "zacharydebruine@gmail.com", 
@@ -33,6 +33,7 @@ Suggests:
     viridis,
     testthat (>= 3.0.0) 
 Config/testthat/edition: 3
+LazyData: true
 URL: https://github.com/zdebruine/RcppML
 BugReports: https://github.com/zdebruine/RcppML/issues
 Encoding: UTF-8
