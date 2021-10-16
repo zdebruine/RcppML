@@ -1,5 +1,5 @@
 test_that("Testing RcppML::nmf", {
-  setRcppMLthreads(1)
+  options(RcppML.threads = 1)
   
   A <- rsparsematrix(100, 1000, 0.1)
   m <- dclust(A, min_samples = 100, min_dist = 0)
