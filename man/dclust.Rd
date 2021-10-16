@@ -8,7 +8,6 @@ dclust(
   A,
   min_samples,
   min_dist = 0,
-  verbose = TRUE,
   tol = 1e-05,
   maxit = 100,
   nonneg = TRUE,
@@ -22,11 +21,9 @@ dclust(
 
 \item{min_dist}{stopping criteria giving the minimum cosine distance of samples within a cluster to the center of their assigned vs. unassigned cluster. If \code{0}, neither this distance nor cluster centroids will be calculated.}
 
-\item{verbose}{print number of divisions in each generation}
-
 \item{tol}{in rank-2 NMF, the correlation distance (\eqn{1 - R^2}) between \eqn{w} across consecutive iterations at which to stop factorization}
 
-\item{maxit}{maximum permitted update iterations}
+\item{maxit}{maximum number of fitting iterations}
 
 \item{nonneg}{in rank-2 NMF, enforce non-negativity}
 

@@ -4,14 +4,12 @@
 \alias{bipartition}
 \title{Bipartition a sample set}
 \usage{
-bipartition(data, tol = 1e-05, verbose = FALSE, nonneg = TRUE, ...)
+bipartition(data, tol = 1e-05, nonneg = TRUE, ...)
 }
 \arguments{
-\item{data}{input data with the same number of rows as \code{object$w}}
+\item{data}{dense or sparse matrix of features in rows and samples in columns. Prefer \code{matrix} or \code{Matrix::dgCMatrix}, respectively.}
 
-\item{tol}{stopping criteria based on the correlation distance between \eqn{w} across consecutive iterations. Prefer \code{tol <= 1e-5} for publication runs, \code{1e-5 < tol <= 1e-3} for rapid experimentation.}
-
-\item{verbose}{print tolerance after each iteration}
+\item{tol}{tolerance of the fit}
 
 \item{nonneg}{enforce non-negativity of the rank-2 factorization used for bipartitioning}
 

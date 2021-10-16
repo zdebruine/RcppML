@@ -5,20 +5,18 @@
 \alias{plot.nmfCrossValidate}
 \title{Cross-validation for NMF}
 \usage{
-crossValidate(data, k, method = 1, reps = 5, verbose = 1, ...)
+crossValidate(data, k, method = 1, reps = 5, ...)
 
 \method{plot}{nmfCrossValidate}(x, ...)
 }
 \arguments{
-\item{data}{input data with the same number of rows as \code{object$w}}
+\item{data}{dense or sparse matrix of features in rows and samples in columns. Prefer \code{matrix} or \code{Matrix::dgCMatrix}, respectively.}
 
 \item{k}{array of factorization ranks to test}
 
 \item{method}{algorithm to use for cross-validation, see "details", either \code{1} or \code{2}.}
 
 \item{reps}{number of independent replicates to run}
-
-\item{verbose}{level of verbosity, \code{c(0, 1, 2)}}
 
 \item{...}{parameters to \code{RcppML::nmf}, not including \code{data} or \code{k}}
 
