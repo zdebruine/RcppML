@@ -50,7 +50,7 @@
 #' A <- as(as.matrix(iris[,1:4]), "dgCMatrix")
 #' bipartition(A, calc_dist = TRUE)
 #' }
-bipartition <- function(data, tol = 1e-5, verbose = FALSE, nonneg = TRUE, ...){
+bipartition <- function(data, tol = 1e-5, nonneg = TRUE, ...){
 
   p <- list(...)
   defaults <- list("diag" = TRUE, "samples" = 1:ncol(data), "seed" = NULL, "calc_dist" = TRUE, "maxit" = 100)
@@ -68,8 +68,8 @@ bipartition <- function(data, tol = 1e-5, verbose = FALSE, nonneg = TRUE, ...){
     if(max(p$samples) > ncol(data)) stop("sample indices must be strictly less than the number of columns in 'data'")
 
     if(class(data)[[1]] == "dgCMatrix"){
-        Rcpp_bipartition_sparse(data, tol, p$maxit, nonneg, p$samples - 1, p$seed, verbose, p$calc_dist, p$diag)
+        Rcpp_bipartition_sparse(data, tol, p$maxit, nonneg, p$samples - 1, p$seed, getOption("verbose"), p$calc_dist, p$diag)
     } else {
-        Rcpp_bipartition_dense(data, tol, p$maxit, nonneg, p$samples - 1, p$seed, verbose, p$calc_dist, p$diag)
+        Rcpp_bipartition_dense(data, tol, p$maxit, nonneg, p$samples - 1, p$seed, getOption("verbose"), p$calc_dist, p$diag)
     }
 }

@@ -27,7 +27,6 @@
 #' @param A matrix of features-by-samples in sparse format (preferred class is "Matrix::dgCMatrix")
 #' @param min_dist stopping criteria giving the minimum cosine distance of samples within a cluster to the center of their assigned vs. unassigned cluster. If \code{0}, neither this distance nor cluster centroids will be calculated.
 #' @param min_samples stopping criteria giving the minimum number of samples permitted in a cluster
-#' @param verbose print number of divisions in each generation
 #' @param tol in rank-2 NMF, the correlation distance (\eqn{1 - R^2}) between \eqn{w} across consecutive iterations at which to stop factorization
 #' @param nonneg in rank-2 NMF, enforce non-negativity
 #' @param seed random seed for rank-2 NMF model initialization
@@ -62,10 +61,9 @@
 #' clusters <- dclust(A, min_samples = 2, min_dist = 0.001)
 #' str(clusters)
 #' }
-dclust <- function(A, min_samples, min_dist = 0, verbose = TRUE, tol = 1e-5, maxit = 100, nonneg = TRUE, seed = NULL){
+dclust <- function(A, min_samples, min_dist = 0, tol = 1e-5, maxit = 100, nonneg = TRUE, seed = NULL){
 
-    threads <- getRcppMLthreads()
-      if (!is.numeric(seed)) seed <- 0
+    if (!is.numeric(seed)) seed <- 0
 
     if(canCoerce(A, "dgCMatrix")){
         A <- as(A, "dgCMatrix")
@@ -74,5 +72,5 @@ dclust <- function(A, min_samples, min_dist = 0, verbose = TRUE, tol = 1e-5, max
         A <- as(A, "dgCMatrix")
     } else stop("'A' could not be coerced to a dgCMatrix")
 
-    Rcpp_dclust_sparse(A, min_samples, min_dist, verbose, tol, maxit, nonneg, seed, threads)
+    Rcpp_dclust_sparse(A, min_samples, min_dist, getOption("RcppML.verbose"), tol, maxit, nonneg, seed, getOption("RcppML.threads"))
 }

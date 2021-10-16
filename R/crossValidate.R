@@ -12,37 +12,36 @@
 #' @param k array of factorization ranks to test
 #' @param method algorithm to use for cross-validation, see "details", either \code{1} or \code{2}.
 #' @param reps number of independent replicates to run
-#' @param verbose level of verbosity, \code{c(0, 1, 2)}
 #' @param ... parameters to \code{RcppML::nmf}, not including \code{data} or \code{k}
 #' @return \code{data.frame} with columns \code{rep}, \code{k}, and \code{value}, where \code{value} depends on the \code{method} selected (i.e. MSE, cost of bipartite matching)
 #' @md
 #' @seealso \code{\link{nmf}}
 #' @export
-crossValidate <- function(data, k, method = 1, reps = 5, verbose = 1, ...) {
+crossValidate <- function(data, k, method = 1, reps = 5, ...) {
+  verbose <- getOption("RcppML.verbose")
   results <- list()
   for(rep in 1:reps){
-    if(verbose > 0) cat("\nREPLICATE", rep, "\n")
+    if(verbose) cat("\nREPLICATE", rep, "\n")
     
     # get samples and features for test and training sets
     set.seed(rep)
     samples <- sample(1:ncol(data), floor(ncol(data) * 0.5))
     set.seed(rep)
     features <- sample(1:nrow(data), floor(nrow(data) * 0.5))
-    ifelse(verbose == 2, verbose2 <- TRUE, verbose2 <- FALSE)
-    
+
     for(rank in k){
-      if(verbose > 0) cat("Rank:", rank, "\n")
+      if(verbose) cat("Rank:", rank, "\n")
       
       if(method == 1){
-        m22 <- nmf(data[-features, -samples], rank, verbose = verbose2, ...)
+        m22 <- nmf(data[-features, -samples], rank, verbose = FALSE, ...)
         m21 <- project(m22$w, data[-features, samples])
         m11 <- project(m21, t(data[features, samples]))
         m <- new_nmf("w" = t(m11), "d" = rep(1, rank), "h" = m21)
         class(m) <- "nmf"
-        value <- mse(m, data[features, samples])
+        value <- evaluate(m, data[features, samples])
       } else {
-        w1 <- nmf(data[, samples], rank, verbose = verbose2, ...)$w
-        w2 <- nmf(data[, -samples], rank, verbose = verbose2, ...)$w
+        w1 <- nmf(data[, samples], rank, verbose = FALSE, ...)$w
+        w2 <- nmf(data[, -samples], rank, verbose = FALSE, ...)$w
         value <- bipartiteMatch(1 - cosine(w1, w2))$cost / rank
       }
       results[[length(results) + 1]] <- c(rep, rank, value)
