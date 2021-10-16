@@ -24,15 +24,15 @@ namespace RcppML {
         double tol_ = -1, mse_ = 0;
         unsigned int iter_ = 0;
         bool mask = false, mask_zeros = false, symmetric = false, transposed = false;
-        std::string scale_L2 = "mean";
-        std::string scale_PE = "mean";
 
     public:
         bool nonneg = true, diag = true, verbose = true;
         unsigned int maxit = 100, threads = 0;
         std::vector<double> L1 = std::vector<double>(2), L2 = std::vector<double>(2), PE = std::vector<double>(2);
         double tol = 1e-4;
-
+        std::string scale_L2 = "mean";
+        std::string scale_PE = "mean";
+        
         // CONSTRUCTORS
         // constructor for initialization with a randomly generated "w" matrix
         nmf(T& A, const unsigned int k, const unsigned int seed = 0) : A(A) {
@@ -65,7 +65,7 @@ namespace RcppML {
             if (mask) Rcpp::stop("a masking function has already been specified");
             mask_zeros = true;
         }
-
+        
         void maskMatrix(SparsePatternMatrix& m) {
             if (mask) Rcpp::stop("a masking function has already been specified");
             if (m.rows() != A.rows() || m.cols() != A.cols()) Rcpp::stop("dimensions of masking matrix and 'A' are not equivalent");
