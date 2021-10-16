@@ -5,7 +5,7 @@
 \alias{predict.nmf}
 \title{Project an NMF model onto new samples}
 \usage{
-\S4method{predict}{nmf}(object, data, L1 = 0, L2 = 0, PE = 0, nonneg = TRUE, mask = NULL, ...)
+\S4method{predict}{nmf}(object, data, L1 = 0, L2 = 0, nonneg = TRUE, mask = NULL, ...)
 
 predict.nmf(w, data, L1 = 0, L2 = 0, nonneg = TRUE, mask = NULL, ...)
 }
@@ -18,14 +18,11 @@ predict.nmf(w, data, L1 = 0, L2 = 0, nonneg = TRUE, mask = NULL, ...)
 
 \item{L2}{a single Ridge penalty greater than zero}
 
-\item{PE}{a single Pattern Extraction (angular) penalty greater than zero
-... arguments passed to or from other methods (i.e. \code{\link{nmf}} development parameters)}
-
 \item{nonneg}{enforce non-negativity}
 
 \item{mask}{dense or sparse matrix of values in \code{data} to handle as missing. Prefer \code{Matrix::ngCMatrix}. Alternatively, specify "\code{zeros}" or "\code{NA}" to mask either all zeros or NA values.}
 
-\item{...}{development parameters}
+\item{...}{arguments passed to or from other methods}
 
 \item{w}{matrix of features (rows) by factors (columns), corresponding to rows in \code{data}}
 }

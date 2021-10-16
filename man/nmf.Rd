@@ -14,7 +14,6 @@ nmf(
   maxit = 100,
   L1 = c(0, 0),
   L2 = c(0, 0),
-  PE = c(0, 0),
   nonneg = TRUE,
   seed = NULL,
   mask = NULL,
@@ -32,9 +31,7 @@ nmf(
 
 \item{L1}{LASSO penalties in the range (0, 1], single value or array of length two for \code{c(w, h)}}
 
-\item{L2}{Ridge (Tikhonov) penalties greater than zero, single value or array of length two for \code{c(w, h)}}
-
-\item{PE}{Pattern Extraction (or angular) penalties greater than zero, single value or array of length two for \code{c(w, h)}}
+\item{L2}{Ridge penalties greater than zero, single value or array of length two for \code{c(w, h)}}
 
 \item{nonneg}{enforce non-negativity}
 

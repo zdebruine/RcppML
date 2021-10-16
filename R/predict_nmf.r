@@ -17,8 +17,7 @@
 #' @param object fitted model, class \code{nmf}, generally the result of calling \code{nmf}, with models of equal dimensions as \code{data}
 #' @param L1 a single LASSO penalty in the range (0, 1]
 #' @param L2 a single Ridge penalty greater than zero
-#' @param PE a single Pattern Extraction (angular) penalty greater than zero
-#' ... arguments passed to or from other methods (i.e. \code{\link{nmf}} development parameters)
+#' @param ... arguments passed to or from other methods
 #' @export
 #' @method predict nmf
 #' @rdname predict.nmf
@@ -55,13 +54,8 @@
 #' w2 <- project(t(A), w = t(h))
 #' all.equal(w, w2)
 #' }
-setMethod("predict", signature = "nmf", function(object, data, L1 = 0, L2 = 0, PE = 0, nonneg = TRUE, mask = NULL, ...) {
+setMethod("predict", signature = "nmf", function(object, data, L1 = 0, L2 = 0, nonneg = TRUE, mask = NULL, ...) {
   validObject(object)
-
-  p <- list(...)
-  defaults <- list("diag" = TRUE, "scale_L2" = "sum", "scale_PE" = "sum")
-  for (i in 1:length(defaults))
-    if (is.null(p[[names(defaults)[[i]]]])) p[[names(defaults)[[i]]]] <- defaults[[i]]
 
   if (length(L1) != 1) stop("'L1' must be a single value giving the penalty on 'h'")
   if (L1 >= 1 || L1 < 0) stop("L1 penalty must be strictly in the range [0,1)")
@@ -105,9 +99,9 @@ setMethod("predict", signature = "nmf", function(object, data, L1 = 0, L2 = 0, P
   if (ncol(w) != nrow(data)) stop("dimensions of 'object@w' and 'A' are not compatible")
 
   if (class(data)[[1]] == "dgCMatrix") {
-    h <- Rcpp_predict_sparse(newdata, mask_matrix, seed[[1]], nonneg, L1[1], L2[1], p$scale_L2, PE[1], p$scale_PE, getOption("RcppML.threads"), mask_zeros)
+    h <- Rcpp_predict_sparse(newdata, mask_matrix, seed[[1]], nonneg, L1[1], L2[1], getOption("RcppML.threads"), mask_zeros)
   } else {
-    h <- Rcpp_predict_dense(newdata, mask_matrix, seed[[1]], nonneg, L1[1], L2[1], p$scale_L2, PE[1], p$scale_PE, getOption("RcppML.threads"), mask_zeros)
+    h <- Rcpp_predict_dense(newdata, mask_matrix, seed[[1]], nonneg, L1[1], L2[1], getOption("RcppML.threads"), mask_zeros)
   }
   if (!is.null(colnames(data))) colnames(h) <- colnames(data)
   rownames(h) <- paste0("nmf", 1:nrow(h))

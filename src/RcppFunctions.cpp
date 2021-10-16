@@ -11,18 +11,16 @@
 
 //[[Rcpp::export]]
 Eigen::MatrixXd Rcpp_predict_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eigen::MatrixXd w, const bool nonneg,
-                                    const double L1, const double L2, const std::string scale_L2, const double PE,
-                                    const std::string scale_PE, const unsigned int threads, const bool mask_zeros) {
+                                    const double L1, const double L2, 
+                                    const unsigned int threads, const bool mask_zeros) {
   RcppML::SparseMatrix A_(A);
   RcppML::SparsePatternMatrix mask_(mask);
   RcppML::nmf<RcppML::SparseMatrix> m(A_, w);
   if (mask_zeros) m.maskZeros();
   else if (mask_.rows() == A_.rows() && mask_.cols() == A_.cols()) m.maskMatrix(mask_);
   m.threads = threads;
-  m.scale_L2 = scale_L2; m.scale_PE = scale_PE;
   m.L1[1] = L1;
   m.L2[1] = L2;
-  m.PE[1] = PE; 
   m.nonneg = nonneg;
   m.predictH();
   return m.matrixH();
@@ -30,17 +28,14 @@ Eigen::MatrixXd Rcpp_predict_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eig
 
 //[[Rcpp::export]]
 Eigen::MatrixXd Rcpp_predict_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Eigen::MatrixXd w, const bool nonneg,
-                                   const double L1, const double L2, const std::string scale_L2, const double PE,
-                                   const std::string scale_PE, const unsigned int threads, const bool mask_zeros) {
+                                   const double L1, const double L2, const unsigned int threads, const bool mask_zeros) {
   RcppML::SparsePatternMatrix mask_(mask);
   RcppML::nmf<Eigen::MatrixXd> m(A_, w);
   if (mask_zeros) m.maskZeros();
   else if (mask_.rows() == A_.rows() && mask_.cols() == A_.cols()) m.maskMatrix(mask_);
   m.threads = threads;
-  m.scale_L2 = scale_L2; m.scale_PE = scale_PE;
   m.L1[1] = L1;
   m.L2[1] = L1;
-  m.PE[1] = PE; 
   m.nonneg = nonneg;
   m.predictH();
   return m.matrixH();
@@ -101,7 +96,6 @@ double Rcpp_mse_missing_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Eigen::
 //[[Rcpp::export]]
 Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, const double tol, const unsigned int maxit,
                            const bool verbose, const bool nonneg, const std::vector<double> L1, const std::vector<double> L2,
-                           const std::string scale_L2, const std::vector<double> PE, const std::string scale_PE,
                            const bool diag, const unsigned int threads, Rcpp::List w_init, const bool mask_zeros) {
 
   RcppML::SparseMatrix A_(A);
@@ -110,8 +104,7 @@ Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, const double
   RcppML::nmf<RcppML::SparseMatrix> m(A_, w_);
 
   // set model parameters
-  m.tol = tol; m.nonneg = nonneg; m.L1 = L1; m.L2 = L2; m.PE = PE; m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.threads = threads;
-  m.scale_L2 = scale_L2; m.scale_PE = scale_PE;
+  m.tol = tol; m.nonneg = nonneg; m.L1 = L1; m.L2 = L2; m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.threads = threads;
 
   if (mask_zeros) m.maskZeros();
   else if (mask_.rows() == A_.rows() && mask_.cols() == A_.cols()) m.maskMatrix(mask_);
@@ -130,7 +123,6 @@ Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, const double
 //[[Rcpp::export]]
 Rcpp::List Rcpp_nmf_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, const double tol, const unsigned int maxit,
                           const bool verbose, const bool nonneg, const std::vector<double> L1, const std::vector<double> L2,
-                          const std::string scale_L2, const std::vector<double> PE, const std::string scale_PE,
                           const bool diag, const unsigned int threads, Rcpp::List w_init, const bool mask_zeros) {
 
   RcppML::SparsePatternMatrix mask_(mask);
@@ -138,8 +130,7 @@ Rcpp::List Rcpp_nmf_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, const doubl
   RcppML::nmf<Eigen::MatrixXd> m(A_, w_);
 
   // set model parameters
-  m.tol = tol; m.nonneg = nonneg; m.L1 = L1; m.L2 = L2; m.PE = PE; m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.threads = threads;
-  m.scale_L2 = scale_L2; m.scale_PE = scale_PE;
+  m.tol = tol; m.nonneg = nonneg; m.L1 = L1; m.L2 = L2; m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.threads = threads;
 
   if (mask_zeros) m.maskZeros();
   else if (mask_.rows() == A_.rows() && mask_.cols() == A_.cols()) m.maskMatrix(mask_);

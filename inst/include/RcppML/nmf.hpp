@@ -28,10 +28,8 @@ namespace RcppML {
     public:
         bool nonneg = true, diag = true, verbose = true;
         unsigned int maxit = 100, threads = 0;
-        std::vector<double> L1 = std::vector<double>(2), L2 = std::vector<double>(2), PE = std::vector<double>(2);
+        std::vector<double> L1 = std::vector<double>(2), L2 = std::vector<double>(2);
         double tol = 1e-4;
-        std::string scale_L2 = "mean";
-        std::string scale_PE = "mean";
         
         // CONSTRUCTORS
         // constructor for initialization with a randomly generated "w" matrix
@@ -119,19 +117,19 @@ namespace RcppML {
 
         // project "w" onto "A" to solve for "h" in the equation "A = wh"
         void predictH() {
-            predict(A, mask_matrix, w, h, nonneg, L1[1], L2[1], scale_L2, PE[1], scale_PE, threads, mask_zeros, mask);
+            predict(A, mask_matrix, w, h, nonneg, L1[1], L2[1], threads, mask_zeros, mask);
         }
 
         // project "h" onto "t(A)" to solve for "w"
         void predictW() {
-            if (symmetric) predict(A, mask_matrix, h, w, nonneg, L1[0], L2[0], scale_L2, PE[0], scale_PE, threads, mask_zeros, mask);
+            if (symmetric) predict(A, mask_matrix, h, w, nonneg, L1[0], L2[0], threads, mask_zeros, mask);
             else {
                 if (!transposed) {
                     t_A = A.transpose();
                     if (mask) t_mask_matrix = mask_matrix.transpose();
                     transposed = true;
                 }
-                predict(t_A, t_mask_matrix, h, w, nonneg, L1[0], L2[0], scale_L2, PE[0], scale_PE, threads, mask_zeros, mask);
+                predict(t_A, t_mask_matrix, h, w, nonneg, L1[0], L2[0], threads, mask_zeros, mask);
             }
         };
 

@@ -14,9 +14,8 @@
 
 // solve for 'h' given sparse 'A' in 'A = wh'
 void predict(RcppML::SparseMatrix& A, RcppML::SparsePatternMatrix& m, const Eigen::MatrixXd& w,
-             Eigen::MatrixXd& h, const bool nonneg, const double L1, const double L2, const std::string scale_L2,
-             const double PE, const std::string scale_PE, const unsigned int threads, const bool mask_zeros,
-             const bool mask) {
+             Eigen::MatrixXd& h, const bool nonneg, const double L1, const double L2,
+             const unsigned int threads, const bool mask_zeros, const bool mask) {
 
   if (!mask_zeros && !mask) {
     int rank = w.rows();
@@ -39,9 +38,7 @@ void predict(RcppML::SparseMatrix& A, RcppML::SparsePatternMatrix& m, const Eige
     else if (rank == 2) {
       // calculate "a" in "ax = b" as w^Tw
       Eigen::Matrix2d a = w * w.transpose();
-      a.diagonal().array() += TINY_NUM;
-      if (L2 != 0) a = addL2(a, L2, scale_L2);
-      if (PE != 0) a = addPE(a, PE, scale_PE);
+      a.diagonal().array() += TINY_NUM + L2;
       const double denom = a(0, 0) * a(1, 1) - a(0, 1) * a(0, 1);
       for (unsigned int i = 0; i < h.cols(); ++i) {
         // calculate "b" in "ax = b" as w^Tw
@@ -60,9 +57,7 @@ void predict(RcppML::SparseMatrix& A, RcppML::SparsePatternMatrix& m, const Eige
     // GENERAL RANK IMPLEMENTATION
     else if (rank > 2) {
       Eigen::MatrixXd a = w * w.transpose();
-      a.diagonal().array() += TINY_NUM;
-      if (L2 != 0) a = addL2(a, L2, scale_L2);
-      if (PE != 0) a = addPE(a, PE, scale_PE);
+      a.diagonal().array() += TINY_NUM + L2;
       Eigen::LLT<Eigen::MatrixXd, 1> a_llt = a.llt();
       #ifdef _OPENMP
       #pragma omp parallel for num_threads(threads) schedule(dynamic)
@@ -98,9 +93,7 @@ void predict(RcppML::SparseMatrix& A, RcppML::SparsePatternMatrix& m, const Eige
           nnz(j) = (int)nz[j];
         Eigen::MatrixXd w_ = submat(w, nnz);
         Eigen::MatrixXd a = w_ * w_.transpose();
-        a.diagonal().array() += TINY_NUM;
-        if (L2 != 0) a = addL2(a, L2, scale_L2);
-        if (PE != 0) a = addPE(a, PE, scale_PE);
+        a.diagonal().array() += TINY_NUM + L2;
         Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
         for (RcppML::SparseMatrix::InnerIterator it(A, i); it; ++it)
           b += it.value() * w.col(it.row());
@@ -124,10 +117,8 @@ void predict(RcppML::SparseMatrix& A, RcppML::SparsePatternMatrix& m, const Eige
       Eigen::MatrixXd w_ = submat(w, masked_rows);
       Eigen::MatrixXd a_ = w_ * w_.transpose();
       a_ = a - a_;
-      a_.diagonal().array() += TINY_NUM;
-      if (L2 != 0) a_ = addL2(a_, L2, scale_L2);
-      if (PE != 0) a_ = addPE(a_, PE, scale_PE);
-      
+      a_.diagonal().array() += TINY_NUM + L2;
+
       // calculate "b" for all non-masked rows
       Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
       for (RcppML::SparseMatrix::InnerIteratorNotInRange it(A, i, masked_rows_); it; ++it)
@@ -143,9 +134,8 @@ void predict(RcppML::SparseMatrix& A, RcppML::SparsePatternMatrix& m, const Eige
 
 // solve for 'h' given sparse 'A' in 'A = wh'
 void predict(Eigen::MatrixXd& A, RcppML::SparsePatternMatrix& m, const Eigen::MatrixXd& w,
-             Eigen::MatrixXd& h, const bool nonneg, const double L1, const double L2, const std::string scale_L2,
-             const double PE, const std::string scale_PE, const unsigned int threads, const bool mask_zeros,
-             const bool mask) {
+             Eigen::MatrixXd& h, const bool nonneg, const double L1, const double L2,
+             const unsigned int threads, const bool mask_zeros, const bool mask) {
 
   if (!mask_zeros && !mask) {
     int rank = w.rows();
@@ -168,9 +158,7 @@ void predict(Eigen::MatrixXd& A, RcppML::SparsePatternMatrix& m, const Eigen::Ma
     else if (rank == 2) {
       // calculate "a" in "ax = b" as w^Tw
       Eigen::Matrix2d a = w * w.transpose();
-      a.diagonal().array() += TINY_NUM;
-      if (L2 != 0) a = addL2(a, L2, scale_L2);
-      if (PE != 0) a = addPE(a, PE, scale_PE);
+      a.diagonal().array() += TINY_NUM + L2;
       const double denom = a(0, 0) * a(1, 1) - a(0, 1) * a(0, 1);
       for (unsigned int i = 0; i < h.cols(); ++i) {
         // calculate "b" in "ax = b" as w^Tw
@@ -188,9 +176,7 @@ void predict(Eigen::MatrixXd& A, RcppML::SparsePatternMatrix& m, const Eigen::Ma
     // GENERAL RANK IMPLEMENTATION
     else if (rank > 2) {
       Eigen::MatrixXd a = w * w.transpose();
-      a.diagonal().array() += TINY_NUM;
-      if (L2 != 0) a = addL2(a, L2, scale_L2);
-      if (PE != 0) a = addPE(a, PE, scale_PE);
+      a.diagonal().array() += TINY_NUM + L2;
       Eigen::LLT<Eigen::MatrixXd, 1> a_llt = a.llt();
       #ifdef _OPENMP
       #pragma omp parallel for num_threads(threads) schedule(dynamic)
@@ -226,9 +212,7 @@ void predict(Eigen::MatrixXd& A, RcppML::SparsePatternMatrix& m, const Eigen::Ma
           nnz(j) = (int)nz[j];
         Eigen::MatrixXd w_ = submat(w, nnz);
         Eigen::MatrixXd a = w_ * w_.transpose();
-        a.diagonal().array() += TINY_NUM;
-        if (L2 != 0) a = addL2(a, L2, scale_L2);
-        if (PE != 0) a = addPE(a, PE, scale_PE);
+        a.diagonal().array() += TINY_NUM + L2;
         Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
         for (unsigned int it = 0; it < A.rows(); ++it) {
           const double val = A(it, i);
@@ -256,10 +240,8 @@ void predict(Eigen::MatrixXd& A, RcppML::SparsePatternMatrix& m, const Eigen::Ma
       Eigen::MatrixXd w_ = submat(w, masked_rows);
       Eigen::MatrixXd a_ = w_ * w_.transpose();
       a_ = a - a_;
-      a_.diagonal().array() += TINY_NUM;
-      if (L2 != 0) a_ = addL2(a_, L2, scale_L2);
-      if (PE != 0) a_ = addPE(a_, PE, scale_PE);
-      
+      a_.diagonal().array() += TINY_NUM + L2;
+
       // calculate "b" for all non-masked rows
       Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
       b += w * A.col(i);
