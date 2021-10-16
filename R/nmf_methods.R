@@ -209,7 +209,7 @@ setMethod("align", signature = "nmf", function(object, ref, method = "cosine", .
     cost <- 1 - cor(object$w, ref$w) + 1e-10
   }
   cost[cost < 0] <- 0
-  ref[bipartiteMatch(cost)$pairs]
+  object[bipartiteMatch(cost)$pairs]
 })
 
 #' @rdname align.nmf
@@ -223,7 +223,7 @@ align.nmf <- function(w, wref, method = "cosine", ...) {
     cost <- 1 - cor(w, wref) + 1e-10
   }
   cost[cost < 0] <- 0
-  wref[bipartiteMatch(cost)$pairs]
+  w[bipartiteMatch(cost)$pairs]
 }
 
 #' Summarize NMF factors
