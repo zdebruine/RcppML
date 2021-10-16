@@ -23,6 +23,7 @@
 
 // parameters for coordinate descent
 #ifndef CD_PARAMS
+#define CD_PARAMS
 #define CD_TOL 1e-8
 #define CD_MAXIT 100
 #endif

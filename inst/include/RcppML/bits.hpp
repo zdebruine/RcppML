@@ -133,4 +133,32 @@ Eigen::MatrixXd randomMatrix(const unsigned int nrow, const unsigned int ncol, c
   return x;
 }
 
+inline bool isAppxSymmetric(Eigen::MatrixXd& A) {
+  if (A.rows() == A.cols()) {
+    for (int i = 0; i < A.cols(); ++i)
+      if (A(i, 0) != A(0, i))
+        return false;
+    return true;
+  } else return false;
+}
+
+inline std::vector<unsigned int> nonzeroRowsInCol(const Eigen::MatrixXd& x, const unsigned int i){
+  std::vector<unsigned int> nonzeros(x.rows());
+  unsigned int it_nz = 0;
+  for(unsigned int it = 0; it < x.rows(); ++it){
+    if(x(it, i) != 0){
+      nonzeros[it_nz] = it;
+      ++it_nz;
+    }
+  }
+  nonzeros.resize(it_nz);
+  return nonzeros;
+}
+
+inline unsigned int n_nonzeros(const Eigen::MatrixXd& x) {
+  unsigned int nz = 0;
+  for (unsigned int i = 0, size = x.size(); i < size; ++i)
+    if(*(x.data() + i) == 0) ++nz;
+  return nz;
+}
 #endif

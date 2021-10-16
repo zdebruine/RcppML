@@ -8,12 +8,8 @@
 #ifndef RcppML_bipartition
 #define RcppML_bipartition
 
-#ifndef RcppML_common
-#include <RcppMLCommon.hpp>
-#endif
-
-#ifndef RcppML_project
-#include <RcppML/project.hpp>
+#ifndef RcppML_nnls
+#include <RcppML/nnls.hpp>
 #endif
 
 struct bipartitionModel {
@@ -140,14 +136,14 @@ inline bipartitionModel c_bipartition_sparse(
     Eigen::Matrix2d a = w * w.transpose();
     double denom = a(0, 0) * a(1, 1) - a(0, 1) * a(0, 1);
     for (unsigned int i = 0; i < h.cols(); ++i) {
-      double b0 = 0, b1 = 0;
+      Eigen::Vector2d b(0, 0);
       for (RcppML::SparseMatrix::InnerIterator it(A, samples[i]); it; ++it) {
         const double val = it.value();
         const unsigned int r = it.row();
-        b0 += val * w(0, r);
-        b1 += val * w(1, r);
+        b(0) += val * w(0, r);
+        b(1) += val * w(1, r);
       }
-      nnls2(a, b0, b1, denom, h, i, nonneg);
+      nnls2(a, b, denom, h, i, nonneg);
     }
     scale(d, h);
 
@@ -225,13 +221,13 @@ inline bipartitionModel c_bipartition_dense(
     Eigen::Matrix2d a = w * w.transpose();
     double denom = a(0, 0) * a(1, 1) - a(0, 1) * a(0, 1);
     for (unsigned int i = 0; i < h.cols(); ++i) {
-      double b0 = 0, b1 = 0;
+      Eigen::Vector2d b(0, 0);
       for (int j = 0; j < A.rows(); ++j) {
         const double val = A(j, samples[i]);
-        b0 += val * w(0, j);
-        b1 += val * w(1, j);
+        b(0) += val * w(0, j);
+        b(1) += val * w(1, j);
       }
-      nnls2(a, b0, b1, denom, h, i, nonneg);
+      nnls2(a, b, denom, h, i, nonneg);
     }
     scale(d, h);
 

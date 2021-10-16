@@ -11,7 +11,8 @@
 #include "RcppMLCommon.hpp"
 
 #include <RcppML/bits.hpp>
-#include <RcppML/project.hpp>
+#include <RcppML/nnls.hpp>
+#include <RcppML/predict.hpp>
 #include <RcppML/nmf.hpp>
 #include <RcppML/bipartition.hpp>
 #include <RcppML/cluster.hpp>
