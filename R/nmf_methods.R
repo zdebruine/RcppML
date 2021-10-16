@@ -1,8 +1,8 @@
+#' @importFrom methods new validObject
 #' @slot w feature factor matrix
 #' @slot d scaling diagonal vector
 #' @slot h sample factor matrix
 #' @slot misc list often containing components:
-#' @importFrom methods new validObject
 #'  \itemize{
 #'    \item tol  : tolerance of fit
 #'    \item iter : number of fitting updates

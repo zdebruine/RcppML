@@ -77,7 +77,13 @@ Parallelization is applied with OpenMP using the number of threads in \code{getO
 
 \item{\code{h}}{sample factor matrix}
 
-\item{\code{misc}}{list often containing components:}
+\item{\code{misc}}{list often containing components:
+\itemize{
+  \item tol  : tolerance of fit
+  \item iter : number of fitting updates
+  \item runtime : runtime in seconds
+  \item mse  : mean squared error of model (calculated for multiple starts only)
+}}
 }}
 
 \section{Methods}{
