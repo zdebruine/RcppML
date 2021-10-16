@@ -20,7 +20,7 @@
 #' @export
 crossValidate <- function(data, k, method = 1, reps = 5, n = 0.05, ...) {
   verbose <- getOption("RcppML.verbose")
-  option("RcppML.verbose" = FALSE)
+  options("RcppML.verbose" = FALSE)
 
   if(!(method %in% c("impute", "predict", "robust"))) stop("'method' must be one of 'impute', 'predict', or 'robust'")
   p <- list(...)
