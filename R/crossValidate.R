@@ -10,39 +10,80 @@
 #' 
 #' @inheritParams nmf
 #' @param k array of factorization ranks to test
-#' @param method algorithm to use for cross-validation, see "details", either \code{1} or \code{2}.
+#' @param method algorithm to use for cross-validation: "\code{predict}" = bi-cross-validation on equally sized feature/sample subsets, "\code{impute}" = MSE of missing value imputation, "\code{robust}" = mean cost of bipartite matching between models trained on equally sized non-overlapping sample sets.
 #' @param reps number of independent replicates to run
+#' @param n for \code{method = "impute"}, fraction of values to handle as missing
 #' @param ... parameters to \code{RcppML::nmf}, not including \code{data} or \code{k}
 #' @return \code{data.frame} with columns \code{rep}, \code{k}, and \code{value}, where \code{value} depends on the \code{method} selected (i.e. MSE, cost of bipartite matching)
 #' @md
 #' @seealso \code{\link{nmf}}
 #' @export
-crossValidate <- function(data, k, method = 1, reps = 5, ...) {
+crossValidate <- function(data, k, method = 1, reps = 5, n = 0.05, ...) {
   verbose <- getOption("RcppML.verbose")
+  option("RcppML.verbose" = FALSE)
+
+  if(!(method %in% c("impute", "predict", "robust"))) stop("'method' must be one of 'impute', 'predict', or 'robust'")
+  p <- list(...)
+  defaults <- list("mask" = "none")
+  for (i in 1:length(defaults))
+    if (is.null(p[[names(defaults)[[i]]]])) p[[names(defaults)[[i]]]] <- defaults[[i]]
+
+  if(!is.null(p$mask)){
+    if(method == "impute") stop("method = 'impute' is not supported for arguments to 'mask'")
+    if(!is.character(p$mask)){
+      if(canCoerce(p$mask, "ngCMatrix")){
+        p$mask <- as(p$mask, "ngCMatrix")
+      } else if(canCoerce(p$mask, "matrix")){
+        p$mask <- as(as.matrix(p$mask), "ngCMatrix")
+      } else stop("supplied masking value was invalid or not coercible to a matrix")
+    }
+  }
+
   results <- list()
   for(rep in 1:reps){
-    if(verbose) cat("\nREPLICATE", rep, "\n")
+    if(verbose) cat("\nReplicate", rep, ", rank: ")
     
-    # get samples and features for test and training sets
-    set.seed(rep)
-    samples <- sample(1:ncol(data), floor(ncol(data) * 0.5))
-    set.seed(rep)
-    features <- sample(1:nrow(data), floor(nrow(data) * 0.5))
+    # get samples, features, or missing values for test/training/cross-validation
+    if(method == "predict" || method == "robust"){
+      set.seed(rep)
+      samples <- sample(1:ncol(data), floor(ncol(data) * 0.5))
+    }
+    if(method == "predict"){
+      set.seed(rep)
+      features <- sample(1:nrow(data), floor(nrow(data) * 0.5))
+    }
+    if(method == "impute"){
+      set.seed(rep)
+      mask_matrix <- rsparsematrix(nrow(data), ncol(data), n, rand.x = NULL)
+    }
 
     for(rank in k){
-      if(verbose) cat("Rank:", rank, "\n")
+      if(verbose) cat(rank, " ")
       
-      if(method == 1){
-        m22 <- nmf(data[-features, -samples], rank, verbose = FALSE, ...)
-        m21 <- project(m22$w, data[-features, samples])
-        m11 <- project(m21, t(data[features, samples]))
-        m <- new_nmf("w" = t(m11), "d" = rep(1, rank), "h" = m21)
+      mask_22 <- mask_21 <- mask_11 <- mask_w1 <- mask_w2 <- p$mask
+      if(method == "predict"){
+        if(is(p$mask, "ngCMatrix")){
+          mask_22 <- p$mask[-features, -samples]
+          mask_21 <- p$mask[-features, samples]
+          mask_11 <- p$mask[features, samples]
+        }
+        m22 <- nmf(data[-features, -samples], rank, mask = mask_22, ...)
+        m21 <- predict.nmf(m22$w, data[-features, samples], mask = mask_21)
+        m11 <- predict.nmf(m21, t(data[features, samples]), mask = mask_11)
+        m <- new("nmf", "w" = t(m11), "d" = rep(1, rank), "h" = m21)
         class(m) <- "nmf"
-        value <- evaluate(m, data[features, samples])
-      } else {
-        w1 <- nmf(data[, samples], rank, verbose = FALSE, ...)$w
-        w2 <- nmf(data[, -samples], rank, verbose = FALSE, ...)$w
+        value <- evaluate(m, data[features, samples], mask = mask_11)
+      } else if(method == "robust"){
+        if(is(p$mask, "ngCMatrix")){
+          mask_w1 <- p$mask[, samples]
+          mask_w2 <- p$mask[, -samples]
+        }
+        w1 <- nmf(data[, samples], rank, mask = mask_w1, ...)$w
+        w2 <- nmf(data[, -samples], rank, mask = mask_w2, ...)$w
         value <- bipartiteMatch(1 - cosine(w1, w2))$cost / rank
+      } else if(method == "impute"){
+        m <- nmf(data, rank, mask = mask_matrix, ...)
+        value <- evalute(m, data, mask = mask_matrix, missing_only = TRUE)
       }
       results[[length(results) + 1]] <- c(rep, rank, value)
     }
@@ -51,5 +92,6 @@ crossValidate <- function(data, k, method = 1, reps = 5, ...) {
   colnames(results) <- c("rep", "k", "value")
   class(results) <- c("nmfCrossValidate", "data.frame")
   results$rep <- as.factor(results$rep)
+  options("RcppML.verbose" = verbose)
   return(results)
 }
