@@ -18,7 +18,7 @@ align.nmf(w, wref, method = "cosine", ...)
 
 \item{...}{arguments passed to or from other methods}
 
-\item{w}{matrix with columns to be aligned to columns in \code{ref}}
+\item{w}{matrix with columns to be aligned to columns in \code{wref}}
 
 \item{wref}{reference matrix to which columns in \code{w} will be aligned}
 }

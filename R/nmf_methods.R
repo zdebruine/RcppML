@@ -2,6 +2,7 @@
 #' @slot d scaling diagonal vector
 #' @slot h sample factor matrix
 #' @slot misc list often containing components:
+#' @importFrom methods new validObject
 #'  \itemize{
 #'    \item tol  : tolerance of fit
 #'    \item iter : number of fitting updates
@@ -201,7 +202,7 @@ setGeneric("align", function(object, ...) standardGeneric("align"))
 #'
 setMethod("align", signature = "nmf", function(object, ref, method = "cosine", ...) {
   validObject(object)
-  if (dim(ref$w) != dim(object$w)) stop("dimensions of object$w and ref$w are not identical")
+  if (all(dim(ref$w) != dim(object$w))) stop("dimensions of object$w and ref$w are not identical")
   if (method == "cosine") {
     cost <- 1 - cosine(object$w, ref$w) + 1e-10
   } else if (method == "cor") {
@@ -212,17 +213,17 @@ setMethod("align", signature = "nmf", function(object, ref, method = "cosine", .
 })
 
 #' @rdname align.nmf
-#' @param w matrix with columns to be aligned to columns in \code{ref}
+#' @param w matrix with columns to be aligned to columns in \code{wref}
 #' @param wref reference matrix to which columns in \code{w} will be aligned
 align.nmf <- function(w, wref, method = "cosine", ...) {
-  if (dim(wref) != dim(w)) stop("dimensions of 'w' and 'wref' are not identical")
+  if (all(dim(wref) != dim(w))) stop("dimensions of 'w' and 'wref' are not identical")
   if (method == "cosine") {
     cost <- 1 - cosine(w, wref) + 1e-10
   } else if (method == "cor") {
     cost <- 1 - cor(w, wref) + 1e-10
   }
   cost[cost < 0] <- 0
-  ref[bipartiteMatch(cost)$pairs]
+  wref[bipartiteMatch(cost)$pairs]
 }
 
 #' Summarize NMF factors
@@ -278,6 +279,7 @@ setGeneric("evaluate", function(x, ...) standardGeneric("evaluate"))
 #'
 #' @inheritParams nmf
 #' @param x fitted model, class \code{nmf}, generally the result of calling \code{nmf}, with models of equal dimensions as \code{data}
+#' @param missing_only calculate mean squared error only for missing values specified as a matrix in \code{mask}
 #' @importFrom methods is
 #' @export
 #' @rdname evaluate.nmf
@@ -285,8 +287,10 @@ setGeneric("evaluate", function(x, ...) standardGeneric("evaluate"))
 #' \dontrun{
 #' TO DO
 #' }
-setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, ...) {
+setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, missing_only = FALSE, ...) {
   validObject(x)
+
+  if (missing_only && is.null(mask)) stop("a mask matrix must be specified to set 'missing_only = TRUE'")
 
   # get 'data' in either sparse or dense matrix format and look for NA's
   if (is(data, "sparseMatrix")) {
@@ -321,9 +325,17 @@ setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, ...) {
   }
 
   if (class(data)[[1]] == "dgCMatrix") {
-    Rcpp_mse_sparse(data, mask_matrix, t(x@w), x@d, x@h, getOption("RcppML.threads"), mask_zeros)
+    if (missing_only) {
+      Rcpp_mse_missing_sparse(data, mask_matrix, t(x@w), x@d, x@h, getOption("RcppML.threads"))
+    } else {
+      Rcpp_mse_sparse(data, mask_matrix, t(x@w), x@d, x@h, getOption("RcppML.threads"), mask_zeros)
+    }
   } else {
-    Rcpp_mse_dense(data, mask_matrix, t(x@w), x@d, x@h, getOption("RcppML.threads"), mask_zeros)
+    if (missing_only) {
+      Rcpp_mse_missing_dense(data, mask_matrix, t(x@w), x@d, x@h, getOption("RcppML.threads"))
+    } else {
+      Rcpp_mse_dense(data, mask_matrix, t(x@w), x@d, x@h, getOption("RcppML.threads"), mask_zeros)
+    }
   }
 })
 
@@ -332,7 +344,7 @@ setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, ...) {
 #' @param w feature factor matrix (features as rows)
 #' @param h sample factor matrix (samples as columns)
 #' @param d scaling diagonal vector (if applicable)
-evaluate.nmf <- function(w, d = NULL, h, data, mask = NULL, ...) {
+evaluate.nmf <- function(w, d = NULL, h, data, mask = NULL, missing_only = FALSE, ...) {
   if (is.null(d)) d <- rep(1, nrow(h))
   m <- new("nmf", w = w, d = d, h = h)
   evaluate(m)

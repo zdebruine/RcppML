@@ -7,7 +7,7 @@
 bipartition(data, tol = 1e-05, nonneg = TRUE, ...)
 }
 \arguments{
-\item{data}{dense or sparse matrix of features in rows and samples in columns. Prefer \code{matrix} or \code{Matrix::dgCMatrix}, respectively.}
+\item{data}{dense or sparse matrix of features in rows and samples in columns. Prefer \code{matrix} or \code{Matrix::dgCMatrix}, respectively}
 
 \item{tol}{tolerance of the fit}
 
