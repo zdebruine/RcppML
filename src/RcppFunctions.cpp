@@ -22,6 +22,7 @@ Eigen::MatrixXd Rcpp_predict_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eig
   m.scale_L2 = scale_L2; m.scale_PE = scale_PE;
   m.L1[1] = L1;
   m.L2[1] = L2;
+  m.PE[1] = PE; 
   m.nonneg = nonneg;
   m.predictH();
   return m.matrixH();
@@ -39,6 +40,7 @@ Eigen::MatrixXd Rcpp_predict_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Ei
   m.scale_L2 = scale_L2; m.scale_PE = scale_PE;
   m.L1[1] = L1;
   m.L2[1] = L1;
+  m.PE[1] = PE; 
   m.nonneg = nonneg;
   m.predictH();
   return m.matrixH();
@@ -108,7 +110,7 @@ Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, const double
   RcppML::nmf<RcppML::SparseMatrix> m(A_, w_);
 
   // set model parameters
-  m.tol = tol; m.nonneg = nonneg; m.L1 = L1; m.L2 = L2; m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.threads = threads;
+  m.tol = tol; m.nonneg = nonneg; m.L1 = L1; m.L2 = L2; m.PE = PE; m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.threads = threads;
   m.scale_L2 = scale_L2; m.scale_PE = scale_PE;
 
   if (mask_zeros) m.maskZeros();
@@ -136,7 +138,7 @@ Rcpp::List Rcpp_nmf_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, const doubl
   RcppML::nmf<Eigen::MatrixXd> m(A_, w_);
 
   // set model parameters
-  m.tol = tol; m.nonneg = nonneg; m.L1 = L1; m.L2 = L2; m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.threads = threads;
+  m.tol = tol; m.nonneg = nonneg; m.L1 = L1; m.L2 = L2; m.PE = PE; m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.threads = threads;
   m.scale_L2 = scale_L2; m.scale_PE = scale_PE;
 
   if (mask_zeros) m.maskZeros();
