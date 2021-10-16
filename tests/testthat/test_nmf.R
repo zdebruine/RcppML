@@ -22,17 +22,16 @@ testConvergence <- function(A, k, mask = NULL, nonneg = TRUE, ...){
 does_nmf_converge <- function(A, k){
     testConvergence(A, k)
     testConvergence(A, k, mask = "zeros")
-    testConvergence(A, k, update_in_place = T)
     testConvergence(A, k, L1 = c(0.1, 0))
     testConvergence(A, k, L1 = c(0, 0.1))
     testConvergence(A, k, L1 = c(0.1, 0.1))
     testConvergence(A, k, nonneg = F)
     testConvergence(A, k, diag = F)
-    testConvergence(A, k, update_in_place = T, nonneg = F, diag = F)
+    testConvergence(A, k, nonneg = F, diag = F)
 }
 
 library(Matrix)
-A <- simulateNMF(nrow = 100, ncol = 100, k = 5, noise = 0.5, dropout = 0.5, seed = 123)
+A <- simulateNMF(nrow = 50, ncol = 50, k = 5, noise = 0.5, dropout = 0.5, seed = 123)
 A <- as(A, "dgCMatrix")
 test_that("nmf converges over several iterations for sparse asymmetric inputs (k = 1)", { does_nmf_converge(A, 1) })
 test_that("nmf converges over several iterations for sparse asymmetric inputs (k = 2)", { does_nmf_converge(A, 2)})
@@ -61,20 +60,19 @@ test_that("diagonal scaling enforces symmetry in symmetric factorization", {
 })
 
 
-# A <- abs(Matrix::rsparsematrix(100, 100, 0.1))
-# test_that("L1 regularization increases factor sparsity", {
-#  L1_ <- nmf(A, 5, maxit = 5, L1 = c(0, 0), seed = 123, v = F)
-#  L1_w <- nmf(A, 5, maxit = 5, L1 = c(0.1, 0), seed = 123, v = F)
-#  L1_h <- nmf(A, 5, maxit = 5, L1 = c(0, 0.1), seed = 123, v = F)
-#  L1_wh <- nmf(A, 5, maxit = 5, L1 = c(0.1, 0.1), seed = 123, v = F)
-#  expect_gt(sum(L1_w$w == 0), sum(L1_$w == 0))
-#  expect_gt(sum(L1_w$w == 0), sum(L1_w$h == 0))
-#  expect_gt(sum(L1_h$h == 0), sum(L1_$h == 0))
-#  expect_gt(sum(L1_h$h == 0), sum(L1_h$w == 0))
-#  expect_gt(sum(L1_wh$h == 0), sum(L1_$h == 0))
-#  expect_gt(sum(L1_wh$w == 0), sum(L1_$w == 0))
-# })
-
+A <- abs(Matrix::rsparsematrix(100, 100, 0.1))
+test_that("L1 regularization increases factor sparsity", {
+  L1_ <- nmf(A, 5, maxit = 5, L1 = c(0, 0), seed = 123, v = F)
+  L1_w <- nmf(A, 5, maxit = 5, L1 = c(0.1, 0), seed = 123, v = F)
+  L1_h <- nmf(A, 5, maxit = 5, L1 = c(0, 0.1), seed = 123, v = F)
+  L1_wh <- nmf(A, 5, maxit = 5, L1 = c(0.1, 0.1), seed = 123, v = F)
+  expect_gt(sum(L1_w$w == 0), sum(L1_$w == 0))
+  expect_gt(sum(L1_w$w == 0), sum(L1_w$h == 0))
+  expect_gt(sum(L1_h$h == 0), sum(L1_$h == 0))
+  expect_gt(sum(L1_h$h == 0), sum(L1_h$w == 0))
+  expect_gt(sum(L1_wh$h == 0), sum(L1_$h == 0))
+  expect_gt(sum(L1_wh$w == 0), sum(L1_$w == 0))
+})
 
 set.seed(123)
 w_ <- matrix(runif(500), 5, 100)
