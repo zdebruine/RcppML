@@ -1,4 +1,4 @@
-#' @rdname summary.nmf
+#' @rdname summary-nmf-method
 #' @export
 #' @param x \code{nmfSummary} object, the result of calling \code{summary} on an \code{nmf} object
 #' @method plot nmfSummary
@@ -37,8 +37,8 @@ plot.nmfCrossValidate <- function(x, ...){
 #' @return ggplot2 object
 #' @method biplot nmf
 #' @seealso \code{\link{nmf}}
-biplot.nmf <- function(x, factors = c(1, 2), matrix = "w", group_by = NULL, ...) {
-  validate_nmf(x)
+setMethod("biplot", signature = "nmf", function(x, factors = c(1,2), matrix = "w", group_by = NULL, ...) {
+  validObject(x)
   if(length(factors) != 2 || max(factors) > ncol(x$w)) stop("'factors' must be of length 2 containing values less than the rank of the nmf model")
   if(!(matrix %in% c("w", "h"))) stop("'matrix' must be either 'w' or 'h'")
   if(!is.null(group_by)){
@@ -61,4 +61,4 @@ biplot.nmf <- function(x, factors = c(1, 2), matrix = "w", group_by = NULL, ...)
       theme_classic() + 
       labs(x = paste0("NMF factor ", factors[1]), y = paste0("NMF factor ", factors[2]))
   }
-}
+})
