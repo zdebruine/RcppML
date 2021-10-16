@@ -19,6 +19,7 @@ Eigen::MatrixXd Rcpp_predict_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eig
   if (mask_zeros) m.maskZeros();
   else if (mask_.rows() == A_.rows() && mask_.cols() == A_.cols()) m.maskMatrix(mask_);
   m.threads = threads;
+  m.scale_L2 = scale_L2; m.scale_PE = scale_PE;
   m.L1[1] = L1;
   m.L2[1] = L2;
   m.nonneg = nonneg;
@@ -35,6 +36,7 @@ Eigen::MatrixXd Rcpp_predict_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Ei
   if (mask_zeros) m.maskZeros();
   else if (mask_.rows() == A_.rows() && mask_.cols() == A_.cols()) m.maskMatrix(mask_);
   m.threads = threads;
+  m.scale_L2 = scale_L2; m.scale_PE = scale_PE;
   m.L1[1] = L1;
   m.L2[1] = L1;
   m.nonneg = nonneg;
@@ -107,6 +109,7 @@ Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, const double
 
   // set model parameters
   m.tol = tol; m.nonneg = nonneg; m.L1 = L1; m.L2 = L2; m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.threads = threads;
+  m.scale_L2 = scale_L2; m.scale_PE = scale_PE;
 
   if (mask_zeros) m.maskZeros();
   else if (mask_.rows() == A_.rows() && mask_.cols() == A_.cols()) m.maskMatrix(mask_);
@@ -134,6 +137,7 @@ Rcpp::List Rcpp_nmf_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, const doubl
 
   // set model parameters
   m.tol = tol; m.nonneg = nonneg; m.L1 = L1; m.L2 = L2; m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.threads = threads;
+  m.scale_L2 = scale_L2; m.scale_PE = scale_PE;
 
   if (mask_zeros) m.maskZeros();
   else if (mask_.rows() == A_.rows() && mask_.cols() == A_.cols()) m.maskMatrix(mask_);
