@@ -5,16 +5,18 @@
 \alias{evaluate.nmf}
 \title{Evaluate an NMF model}
 \usage{
-\S4method{evaluate}{nmf}(x, data, mask = NULL, ...)
+\S4method{evaluate}{nmf}(x, data, mask = NULL, missing_only = FALSE, ...)
 
-evaluate.nmf(w, d = NULL, h, data, mask = NULL, ...)
+evaluate.nmf(w, d = NULL, h, data, mask = NULL, missing_only = FALSE, ...)
 }
 \arguments{
 \item{x}{fitted model, class \code{nmf}, generally the result of calling \code{nmf}, with models of equal dimensions as \code{data}}
 
-\item{data}{dense or sparse matrix of features in rows and samples in columns. Prefer \code{matrix} or \code{Matrix::dgCMatrix}, respectively.}
+\item{data}{dense or sparse matrix of features in rows and samples in columns. Prefer \code{matrix} or \code{Matrix::dgCMatrix}, respectively}
 
 \item{mask}{dense or sparse matrix of values in \code{data} to handle as missing. Prefer \code{Matrix::ngCMatrix}. Alternatively, specify "\code{zeros}" or "\code{NA}" to mask either all zeros or NA values.}
+
+\item{missing_only}{calculate mean squared error only for missing values specified as a matrix in \code{mask}}
 
 \item{...}{development parameters}
 
