@@ -13,6 +13,8 @@ nmf(
   tol = 1e-04,
   maxit = 100,
   L1 = c(0, 0),
+  L2 = c(0, 0),
+  PE = c(0, 0),
   nonneg = TRUE,
   seed = NULL,
   mask = NULL,
@@ -20,7 +22,7 @@ nmf(
 )
 }
 \arguments{
-\item{data}{dense or sparse matrix of features in rows and samples in columns. Prefer \code{matrix} or \code{Matrix::dgCMatrix}, respectively.}
+\item{data}{dense or sparse matrix of features in rows and samples in columns. Prefer \code{matrix} or \code{Matrix::dgCMatrix}, respectively}
 
 \item{k}{rank}
 
@@ -29,6 +31,10 @@ nmf(
 \item{maxit}{maximum number of fitting iterations}
 
 \item{L1}{LASSO penalties in the range (0, 1], single value or array of length two for \code{c(w, h)}}
+
+\item{L2}{Ridge (Tikhonov) penalties greater than zero, single value or array of length two for \code{c(w, h)}}
+
+\item{PE}{Pattern Extraction (or angular) penalties greater than zero, single value or array of length two for \code{c(w, h)}}
 
 \item{nonneg}{enforce non-negativity}
 
@@ -71,13 +77,7 @@ Parallelization is applied with OpenMP using the number of threads in \code{getO
 
 \item{\code{h}}{sample factor matrix}
 
-\item{\code{misc}}{list often containing components:
-\itemize{
-  \item tol  : tolerance of fit
-  \item iter : number of fitting updates
-  \item runtime : runtime in seconds
-  \item mse  : mean squared error of model (calculated for multiple starts only)
-}}
+\item{\code{misc}}{list often containing components:}
 }}
 
 \section{Methods}{

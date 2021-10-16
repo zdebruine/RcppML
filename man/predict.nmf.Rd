@@ -5,17 +5,21 @@
 \alias{predict.nmf}
 \title{Project an NMF model onto new samples}
 \usage{
-\S4method{predict}{nmf}(object, data, L1 = 0, nonneg = TRUE, mask = NULL, ...)
+\S4method{predict}{nmf}(object, data, L1 = 0, L2 = 0, PE = 0, nonneg = TRUE, mask = NULL, ...)
 
-predict.nmf(w, data, L1 = 0, nonneg = TRUE, mask = NULL, ...)
+predict.nmf(w, data, L1 = 0, L2 = 0, nonneg = TRUE, mask = NULL, ...)
 }
 \arguments{
 \item{object}{fitted model, class \code{nmf}, generally the result of calling \code{nmf}, with models of equal dimensions as \code{data}}
 
-\item{data}{dense or sparse matrix of features in rows and samples in columns. Prefer \code{matrix} or \code{Matrix::dgCMatrix}, respectively.}
+\item{data}{dense or sparse matrix of features in rows and samples in columns. Prefer \code{matrix} or \code{Matrix::dgCMatrix}, respectively}
 
-\item{L1}{a single LASSO penalty in the range (0, 1]
-... arguments passed to or from other methods}
+\item{L1}{a single LASSO penalty in the range (0, 1]}
+
+\item{L2}{a single Ridge penalty greater than zero}
+
+\item{PE}{a single Pattern Extraction (angular) penalty greater than zero
+... arguments passed to or from other methods (i.e. \code{\link{nmf}} development parameters)}
 
 \item{nonneg}{enforce non-negativity}
 

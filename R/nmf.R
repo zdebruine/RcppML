@@ -31,11 +31,13 @@
 #' * \code{\link{subset.nmf}}: subset, reorder, select, or extract factors (same as `[`)
 #' * generics such as \code{dim}, \code{dimnames}, \code{t}, \code{show}, \code{head}
 #' 
-#' @param data dense or sparse matrix of features in rows and samples in columns. Prefer \code{matrix} or \code{Matrix::dgCMatrix}, respectively.
+#' @param data dense or sparse matrix of features in rows and samples in columns. Prefer \code{matrix} or \code{Matrix::dgCMatrix}, respectively
 #' @param k rank
 #' @param tol tolerance of the fit
 #' @param maxit maximum number of fitting iterations
 #' @param L1 LASSO penalties in the range (0, 1], single value or array of length two for \code{c(w, h)}
+#' @param L2 Ridge (Tikhonov) penalties greater than zero, single value or array of length two for \code{c(w, h)}
+#' @param PE Pattern Extraction (or angular) penalties greater than zero, single value or array of length two for \code{c(w, h)}
 #' @param seed single initialization seed or array, or a matrix or list of matrices giving initial \code{w}. For multiple initializations, the model with least mean squared error is returned.
 #' @param nonneg enforce non-negativity
 #' @param mask dense or sparse matrix of values in \code{data} to handle as missing. Prefer \code{Matrix::ngCMatrix}. Alternatively, specify "\code{zeros}" or "\code{NA}" to mask either all zeros or NA values.
@@ -80,13 +82,13 @@
 #' plot(model$w, t(model$h))
 #' # see package vignette for more examples
 #' }
-nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), nonneg = TRUE, seed = NULL, mask = NULL, ...) {
+nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), PE = c(0, 0), nonneg = TRUE, seed = NULL, mask = NULL, ...) {
 
   start_time <- Sys.time()
 
   # apply defaults to development parameters
   p <- list(...)
-  defaults <- list("diag" = TRUE)
+  defaults <- list("diag" = TRUE, "scale_L2" = "sum", "scale_PE" = "sum")
   for (i in 1:length(defaults))
     if (is.null(p[[names(defaults)[[i]]]])) p[[names(defaults)[[i]]]] <- defaults[[i]]
 
@@ -94,6 +96,16 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), nonneg = TRUE, s
     L1 <- rep(L1, 2)
   } else if (length(L1) != 2) stop("'L1' must be an array of two values, the first for the penalty on 'w', the second for the penalty on 'h'")
   if (max(L1) >= 1 || min(L1) < 0) stop("L1 penalties must be strictly in the range [0,1)")
+
+  if (length(L2) == 1) {
+    L2 <- rep(L2, 2)
+  } else if (length(L2) != 2) stop("'L2' must be an array of two values, the first for the penalty on 'w', the second for the penalty on 'h'")
+  if (min(L2) < 0) stop("L2 penalties must be strictly >= 0")
+
+  if (length(PE) == 1) {
+    PE <- rep(PE, 2)
+  } else if (length(PE) != 2) stop("'PE' must be an array of two values, the first for the penalty on 'w', the second for the penalty on 'h'")
+  if (min(PE) < 0) stop("PE penalties must be strictly >= 0")
 
   # get 'data' in either sparse or dense matrix format and look for NA's
   if (is(data, "sparseMatrix")) {
@@ -151,11 +163,11 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), nonneg = TRUE, s
     w_init[[1]] <- matrix(runif(k * nrow(data)), k, nrow(data))
   }
 
-  # call C++ routines
+    # call C++ routines
   if (class(data)[[1]] == "dgCMatrix") {
-    model <- Rcpp_nmf_sparse(data, mask_matrix, tol, maxit, getOption("RcppML.verbose"), nonneg, L1, p$diag, getOption("RcppML.threads"), w_init, mask_zeros)
+    model <- Rcpp_nmf_sparse(data, mask_matrix, tol, maxit, getOption("RcppML.verbose"), nonneg, L1, L2, p$scale_L2, PE, p$scale_PE, p$diag, getOption("RcppML.threads"), w_init, mask_zeros)
   } else {
-    model <- Rcpp_nmf_dense(data, mask_matrix, tol, maxit, getOption("RcppML.verbose"), nonneg, L1, p$diag, getOption("RcppML.threads"), w_init, mask_zeros)
+    model <- Rcpp_nmf_dense(data, mask_matrix, tol, maxit, getOption("RcppML.verbose"), nonneg, L1, L2, p$scale_L2, PE, p$scale_PE, p$diag, getOption("RcppML.threads"), w_init, mask_zeros)
   }
 
   # add back dimnames

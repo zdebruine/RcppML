@@ -4,7 +4,16 @@
 \alias{nnls}
 \title{Non-negative least squares}
 \usage{
-nnls(a, b, cd_maxit = 100L, cd_tol = 1e-08, fast_nnls = FALSE, L1 = 0)
+nnls(
+  a,
+  b,
+  cd_maxit = 100L,
+  cd_tol = 1e-08,
+  fast_nnls = FALSE,
+  L1 = 0,
+  L2 = 0,
+  PE = 0
+)
 }
 \arguments{
 \item{a}{symmetric positive definite matrix giving coefficients of the linear system}
@@ -18,6 +27,10 @@ nnls(a, b, cd_maxit = 100L, cd_tol = 1e-08, fast_nnls = FALSE, L1 = 0)
 \item{fast_nnls}{initialize coordinate descent with a FAST NNLS approximation}
 
 \item{L1}{L1/LASSO penalty to be subtracted from \code{b}}
+
+\item{L2}{Ridge penalty to be added to diagonal of \code{a}}
+
+\item{PE}{Pattern Extraction (angular) penalty to be added to off-diagonal values of \code{a}}
 }
 \value{
 vector or matrix giving solution for \code{x}
