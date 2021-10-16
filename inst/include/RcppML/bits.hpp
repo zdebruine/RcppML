@@ -161,4 +161,22 @@ inline unsigned int n_nonzeros(const Eigen::MatrixXd& x) {
     if(*(x.data() + i) == 0) ++nz;
   return nz;
 }
+
+inline Eigen::MatrixXd addL2(Eigen::MatrixXd a, double L2, const std::string& scale_L2){
+  if(scale_L2 == "mean") L2 *= a.diagonal().array().mean();
+  else if(scale_L2 == "sum") L2 *= a.diagonal().array().sum();
+  else if(scale_L2 == "max") L2 *= a.diagonal().array().maxCoeff();
+  a.diagonal().array() += L2;
+  return a;
+}
+
+inline Eigen::MatrixXd addPE(Eigen::MatrixXd a, double PE, const std::string& scale_PE){
+  if(scale_PE == "mean") PE *= a.diagonal().array().mean();
+  else if(scale_PE == "sum") PE *= a.diagonal().array().sum();
+  else if(scale_PE == "max") PE *= a.diagonal().array().maxCoeff();
+  a.array() += PE;
+  a.diagonal().array() -= PE;
+  return a;
+}
+
 #endif

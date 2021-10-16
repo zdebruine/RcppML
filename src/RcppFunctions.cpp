@@ -11,14 +11,16 @@
 
 //[[Rcpp::export]]
 Eigen::MatrixXd Rcpp_predict_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eigen::MatrixXd w, const bool nonneg,
-                                    const double L1, const unsigned int threads, const bool mask_zeros) {
+                                    const double L1, const double L2, const std::string scale_L2, const double PE,
+                                    const std::string scale_PE, const unsigned int threads, const bool mask_zeros) {
   RcppML::SparseMatrix A_(A);
   RcppML::SparsePatternMatrix mask_(mask);
   RcppML::nmf<RcppML::SparseMatrix> m(A_, w);
   if (mask_zeros) m.maskZeros();
   else if (mask_.rows() == A_.rows() && mask_.cols() == A_.cols()) m.maskMatrix(mask_);
   m.threads = threads;
-  m.L1[1] = 0;
+  m.L1[1] = L1;
+  m.L2[1] = L2;
   m.nonneg = nonneg;
   m.predictH();
   return m.matrixH();
@@ -26,13 +28,15 @@ Eigen::MatrixXd Rcpp_predict_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eig
 
 //[[Rcpp::export]]
 Eigen::MatrixXd Rcpp_predict_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Eigen::MatrixXd w, const bool nonneg,
-                                    const double L1, const unsigned int threads, const bool mask_zeros) {
+                                   const double L1, const double L2, const std::string scale_L2, const double PE,
+                                   const std::string scale_PE, const unsigned int threads, const bool mask_zeros) {
   RcppML::SparsePatternMatrix mask_(mask);
   RcppML::nmf<Eigen::MatrixXd> m(A_, w);
   if (mask_zeros) m.maskZeros();
   else if (mask_.rows() == A_.rows() && mask_.cols() == A_.cols()) m.maskMatrix(mask_);
   m.threads = threads;
-  m.L1[1] = 0;
+  m.L1[1] = L1;
+  m.L2[1] = L1;
   m.nonneg = nonneg;
   m.predictH();
   return m.matrixH();
@@ -55,7 +59,7 @@ double Rcpp_mse_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eigen::MatrixXd 
 
 //[[Rcpp::export]]
 double Rcpp_mse_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h,
-                       const unsigned int threads, const bool mask_zeros) {
+                      const unsigned int threads, const bool mask_zeros) {
 
   RcppML::SparsePatternMatrix mask_(mask);
   RcppML::nmf<Eigen::MatrixXd> m(A_, w, d, h);
@@ -65,13 +69,36 @@ double Rcpp_mse_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Eigen::MatrixXd
   return m.mse();
 }
 
+//[[Rcpp::export]]
+double Rcpp_mse_missing_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h,
+                       const unsigned int threads) {
+
+  RcppML::SparseMatrix A_(A);
+  RcppML::SparsePatternMatrix mask_(mask);
+  RcppML::nmf<RcppML::SparseMatrix> m(A_, w, d, h);
+  m.maskMatrix(mask_);
+  m.threads = threads;
+  return m.mse_masked();
+}
+
+//[[Rcpp::export]]
+double Rcpp_mse_missing_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h,
+                      const unsigned int threads) {
+
+  RcppML::SparsePatternMatrix mask_(mask);
+  RcppML::nmf<Eigen::MatrixXd> m(A_, w, d, h);
+  m.maskMatrix(mask_);
+  m.threads = threads;
+  return m.mse_masked();
+}
+
 // NON_NEGATIVE MATRIX FACTORIZATION
 
 //[[Rcpp::export]]
 Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, const double tol, const unsigned int maxit,
-                           const bool verbose, const bool nonneg, const std::vector<unsigned int> L1,
-                           const bool diag, const unsigned int threads, Rcpp::List w_init,
-                           const bool mask_zeros) {
+                           const bool verbose, const bool nonneg, const std::vector<double> L1, const std::vector<double> L2,
+                           const std::string scale_L2, const std::vector<double> PE, const std::string scale_PE,
+                           const bool diag, const unsigned int threads, Rcpp::List w_init, const bool mask_zeros) {
 
   RcppML::SparseMatrix A_(A);
   RcppML::SparsePatternMatrix mask_(mask);
@@ -79,7 +106,7 @@ Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, const double
   RcppML::nmf<RcppML::SparseMatrix> m(A_, w_);
 
   // set model parameters
-  m.tol = tol; m.nonneg = nonneg; m.L1 = L1; m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.threads = threads;
+  m.tol = tol; m.nonneg = nonneg; m.L1 = L1; m.L2 = L2; m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.threads = threads;
 
   if (mask_zeros) m.maskZeros();
   else if (mask_.rows() == A_.rows() && mask_.cols() == A_.cols()) m.maskMatrix(mask_);
@@ -97,16 +124,16 @@ Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, const double
 
 //[[Rcpp::export]]
 Rcpp::List Rcpp_nmf_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, const double tol, const unsigned int maxit,
-                           const bool verbose, const bool nonneg, const std::vector<unsigned int> L1,
-                           const bool diag, const unsigned int threads, Rcpp::List w_init,
-                           const bool mask_zeros) {
+                          const bool verbose, const bool nonneg, const std::vector<double> L1, const std::vector<double> L2,
+                          const std::string scale_L2, const std::vector<double> PE, const std::string scale_PE,
+                          const bool diag, const unsigned int threads, Rcpp::List w_init, const bool mask_zeros) {
 
   RcppML::SparsePatternMatrix mask_(mask);
   Eigen::MatrixXd w_ = Rcpp::as<Eigen::MatrixXd>(w_init[0]);
   RcppML::nmf<Eigen::MatrixXd> m(A_, w_);
 
   // set model parameters
-  m.tol = tol; m.nonneg = nonneg; m.L1 = L1; m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.threads = threads;
+  m.tol = tol; m.nonneg = nonneg; m.L1 = L1; m.L2 = L2; m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.threads = threads;
 
   if (mask_zeros) m.maskZeros();
   else if (mask_.rows() == A_.rows() && mask_.cols() == A_.cols()) m.maskMatrix(mask_);
@@ -210,6 +237,8 @@ Rcpp::List Rcpp_dclust_sparse(const Rcpp::S4& A, const unsigned int min_samples,
 //' @param a symmetric positive definite matrix giving coefficients of the linear system
 //' @param b matrix giving the right-hand side(s) of the linear system
 //' @param L1 L1/LASSO penalty to be subtracted from \code{b}
+//' @param L2 Ridge penalty to be added to diagonal of \code{a}
+//' @param PE Pattern Extraction (angular) penalty to be added to off-diagonal values of \code{a}
 //' @param fast_nnls initialize coordinate descent with a FAST NNLS approximation
 //' @param cd_maxit maximum number of coordinate descent iterations
 //' @param cd_tol stopping criteria, difference in \eqn{x} across consecutive solutions over the sum of \eqn{x}
@@ -252,12 +281,17 @@ Rcpp::List Rcpp_dclust_sparse(const Rcpp::S4& A, const unsigned int min_samples,
 //' beta
 //' }
 //[[Rcpp::export]]
-Eigen::MatrixXd nnls(const Eigen::MatrixXd& a, Eigen::MatrixXd b, unsigned int cd_maxit = 100,
-                     const double cd_tol = 1e-8, const bool fast_nnls = false, const double L1 = 0) {
+Eigen::MatrixXd nnls(Eigen::MatrixXd a, Eigen::MatrixXd b, unsigned int cd_maxit = 100,
+                     const double cd_tol = 1e-8, const bool fast_nnls = false, const double L1 = 0, const double L2 = 0, const double PE = 0) {
 
   if (a.rows() != a.cols()) Rcpp::stop("'a' is not symmetric");
   if (a.rows() != b.rows()) Rcpp::stop("dimensions of 'b' and 'a' are not compatible!");
   if (L1 != 0) b.array() -= L1;
+  if (L2 != 0) a.diagonal().array() += L2;
+  if (PE != 0) {
+    a.array() += PE;
+    a.diagonal().array() -= PE;
+  }
 
   Eigen::LLT<Eigen::MatrixXd> a_llt;
   Eigen::MatrixXd x(b.rows(), b.cols());

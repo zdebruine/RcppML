@@ -24,11 +24,13 @@ namespace RcppML {
         double tol_ = -1, mse_ = 0;
         unsigned int iter_ = 0;
         bool mask = false, mask_zeros = false, symmetric = false, transposed = false;
+        std::string scale_L2 = "mean";
+        std::string scale_PE = "mean";
 
     public:
         bool nonneg = true, diag = true, verbose = true;
         unsigned int maxit = 100, threads = 0;
-        std::vector<unsigned int> L1 = std::vector<unsigned int>(2);
+        std::vector<double> L1 = std::vector<double>(2), L2 = std::vector<double>(2), PE = std::vector<double>(2);
         double tol = 1e-4;
 
         // CONSTRUCTORS
@@ -60,8 +62,8 @@ namespace RcppML {
         // SETTERS
         void isSymmetric();
         void maskZeros() {
-          if (mask) Rcpp::stop("a masking function has already been specified");
-          mask_zeros = true;
+            if (mask) Rcpp::stop("a masking function has already been specified");
+            mask_zeros = true;
         }
 
         void maskMatrix(SparsePatternMatrix& m) {
@@ -117,24 +119,25 @@ namespace RcppML {
 
         // project "w" onto "A" to solve for "h" in the equation "A = wh"
         void predictH() {
-            predict(A, mask_matrix, w, h, nonneg, L1[1], threads, mask_zeros, mask);
+            predict(A, mask_matrix, w, h, nonneg, L1[1], L2[1], scale_L2, PE[1], scale_PE, threads, mask_zeros, mask);
         }
 
         // project "h" onto "t(A)" to solve for "w"
         void predictW() {
-            if (symmetric) predict(A, mask_matrix, h, w, nonneg, L1[0], threads, mask_zeros, mask);
+            if (symmetric) predict(A, mask_matrix, h, w, nonneg, L1[0], L2[0], scale_L2, PE[0], scale_PE, threads, mask_zeros, mask);
             else {
                 if (!transposed) {
                     t_A = A.transpose();
                     if (mask) t_mask_matrix = mask_matrix.transpose();
                     transposed = true;
                 }
-                predict(t_A, t_mask_matrix, h, w, nonneg, L1[0], threads, mask_zeros, mask);
+                predict(t_A, t_mask_matrix, h, w, nonneg, L1[0], L2[0], scale_L2, PE[0], scale_PE, threads, mask_zeros, mask);
             }
         };
 
         // requires specialized dense and sparse backends
         double mse();
+        double mse_masked();
 
         // fit the model by alternating least squares projections
         void fit() {
@@ -197,14 +200,14 @@ namespace RcppML {
     // nmf class methods with specialized dense/sparse backends
     template <>
     void nmf<SparseMatrix>::isSymmetric() {
-      symmetric = A.isAppxSymmetric();
+        symmetric = A.isAppxSymmetric();
     }
-    
+
     template <>
     void nmf<Eigen::MatrixXd>::isSymmetric() {
-      symmetric = isAppxSymmetric(A);
+        symmetric = isAppxSymmetric(A);
     }
-    
+
     template <>
     double nmf<SparseMatrix>::mse() {
         Eigen::MatrixXd w0 = w.transpose();
@@ -228,7 +231,7 @@ namespace RcppML {
                     wh_i(iter.row()) -= iter.value();
                 if (mask) {
                     std::vector<unsigned int> m = mask_matrix.nonzeroRowsInCol(i);
-                    for (int it = 0; it < m.size(); ++it)
+                    for (unsigned int it = 0; it < m.size(); ++it)
                         wh_i(m[it]) = 0;
                 }
                 losses(i) += wh_i.array().square().sum();
@@ -241,6 +244,36 @@ namespace RcppML {
         else if (mask_zeros)
             return losses.sum() / A.x.size();
         return losses.sum() / ((h.cols() * w.cols()));
+    };
+
+    template <>
+    double nmf<SparseMatrix>::mse_masked() {
+        if (!mask) Rcpp::stop("'mse_masked' can only be run when a masking matrix has been specified");
+
+        Eigen::MatrixXd w0 = w.transpose();
+        for (unsigned int i = 0; i < w0.cols(); ++i)
+            for (unsigned int j = 0; j < w0.rows(); ++j)
+                w0(j, i) *= d(i);
+
+        Eigen::ArrayXd losses(h.cols());
+        #ifdef _OPENMP
+        #pragma omp parallel for num_threads(threads) schedule(dynamic)
+        #endif
+        for (unsigned int i = 0; i < h.cols(); ++i) {
+            std::vector<unsigned int> masked_rows = mask_matrix.nonzeroRowsInCol(i);
+            for (SparseMatrix::InnerIteratorInRange iter(A, i, masked_rows); iter; ++iter){
+                losses(i) += std::pow((w0.row(iter.row()) * h.col(i)) - iter.value(), 2);
+            }
+            // get masked rows that are also zero in A.col(i)
+            std::vector<unsigned int> zero_rows = A.zeroRowsInCol(i);
+            std::vector<unsigned int> masked_zero_rows;
+            std::set_intersection(zero_rows.begin(), zero_rows.end(),
+                                  masked_rows.begin(), masked_rows.end(),
+                                  std::back_inserter(masked_zero_rows));
+            for (unsigned int it = 0; it < masked_zero_rows.size(); ++it)
+                losses(i) += std::pow(w0.row(masked_zero_rows[it]) * h.col(i), 2);
+        }
+        return losses.sum() / mask_matrix.i.size();
     };
 
     template <>
@@ -260,13 +293,14 @@ namespace RcppML {
             Eigen::VectorXd wh_i = w0 * h.col(i);
             if (mask_zeros) {
                 for (unsigned int iter = 0; iter < A.rows(); ++iter)
-                    losses(i) += std::pow(wh_i(iter) - A(iter, i), 2);
+                    if (A(iter, i) != 0)
+                        losses(i) += std::pow(wh_i(iter) - A(iter, i), 2);
             } else {
                 for (unsigned int iter = 0; iter < A.rows(); ++iter)
                     wh_i(iter) -= A(iter, i);
                 if (mask) {
                     std::vector<unsigned int> m = mask_matrix.nonzeroRowsInCol(i);
-                    for (int it = 0; it < m.size(); ++it)
+                    for (unsigned int it = 0; it < m.size(); ++it)
                         wh_i(m[it]) = 0;
                 }
                 losses(i) += wh_i.array().square().sum();
@@ -280,56 +314,29 @@ namespace RcppML {
             return losses.sum() / n_nonzeros(A);
         return losses.sum() / ((h.cols() * w.cols()));
     };
-}
 
-/*
-// fit the model by alternating least squares projections
-void nmfDense::fit() {
-    if (verbose) Rprintf("\n%4s | %8s \n---------------\n", "iter", "tol");
-    if (!symmetric && !transposed) { At = A.transpose(); transposed = true; }
-    for (; iter_ < maxit; ++iter_) {
-        Eigen::MatrixXd w_it = w;
-        predictH();
-        if (diag) scaleH();
-        predictW();
-        if (diag) scaleW();
-        tol_ = cor(w, w_it);
-        if (verbose) Rprintf("%4d | %8.2e\n", iter_ + 1, tol_);
-        if (tol_ < tol) break;
-        Rcpp::checkUserInterrupt();
-    }
-    if (tol_ > tol && iter_ == maxit && verbose)
-        Rprintf(" convergence not reached in %d iterations\n  (actual tol = %4.2e, target tol = %4.2e)\n", iter_, tol_, tol);
-    if (diag) sortByDiagonal();
-}
-*/
-/*
-double mse(Eigen::MatrixXd& A) {
-    Eigen::MatrixXd w0 = w.transpose();
-    for (unsigned int i = 0; i < w0.cols(); ++i)
-        for (unsigned int j = 0; j < w0.rows(); ++j)
-            w0(j, i) *= d(i);
-    double sq_loss = 0;
-    if (threads != 1) {
+    template <>
+    double nmf<Eigen::MatrixXd>::mse_masked() {
+        if (!mask) Rcpp::stop("'mse_masked' can only be run when a masking matrix has been specified");
+
+        Eigen::MatrixXd w0 = w.transpose();
+        for (unsigned int i = 0; i < w0.cols(); ++i)
+            for (unsigned int j = 0; j < w0.rows(); ++j)
+                w0(j, i) *= d(i);
+
         Eigen::ArrayXd losses(h.cols());
         #ifdef _OPENMP
         #pragma omp parallel for num_threads(threads) schedule(dynamic)
         #endif
         for (unsigned int i = 0; i < h.cols(); ++i) {
-            Eigen::VectorXd wh_i = w0 * h.col(i);
-            wh_i -= A.col(i);
-            losses(i) += wh_i.array().square().sum();
+            std::vector<unsigned int> masked_rows = mask_matrix.nonzeroRowsInCol(i);
+            for (unsigned int it = 0; it < masked_rows.size(); ++it) {
+                const unsigned int row = masked_rows[it];
+                losses(i) += std::pow((w0.row(row) * h.col(i)) - A(row, i), 2);
+            }
         }
-        return losses.sum() / (h.cols() * w.cols());
-    } else {
-        for (unsigned int i = 0; i < h.cols(); ++i) {
-            Eigen::VectorXd wh_i = w0 * h.col(i);
-            wh_i -= A.col(i);
-            sq_loss += wh_i.array().square().sum();
-        }
-        return sq_loss / (h.cols() * w.cols());
-    }
+        return losses.sum() / mask_matrix.i.size();
+    };
 }
-*/
 
 #endif
