@@ -135,7 +135,6 @@ void predict(RcppML::SparseMatrix& A, RcppML::SparsePatternMatrix& m, const Eige
         else c_nnls(a, b, h, i);
       }
     }
-    b += w * A.col(i);
   }
 }
 
