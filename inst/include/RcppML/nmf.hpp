@@ -245,36 +245,6 @@ namespace RcppML {
     };
 
     template <>
-    double nmf<SparseMatrix>::mse_masked() {
-        if (!mask) Rcpp::stop("'mse_masked' can only be run when a masking matrix has been specified");
-
-        Eigen::MatrixXd w0 = w.transpose();
-        for (unsigned int i = 0; i < w0.cols(); ++i)
-            for (unsigned int j = 0; j < w0.rows(); ++j)
-                w0(j, i) *= d(i);
-
-        Eigen::ArrayXd losses(h.cols());
-        #ifdef _OPENMP
-        #pragma omp parallel for num_threads(threads) schedule(dynamic)
-        #endif
-        for (unsigned int i = 0; i < h.cols(); ++i) {
-            std::vector<unsigned int> masked_rows = mask_matrix.nonzeroRowsInCol(i);
-            for (SparseMatrix::InnerIteratorInRange iter(A, i, masked_rows); iter; ++iter) {
-                losses(i) += std::pow((w0.row(iter.row()) * h.col(i)) - iter.value(), 2);
-            }
-            // get masked rows that are also zero in A.col(i)
-            std::vector<unsigned int> zero_rows = A.zeroRowsInCol(i);
-            std::vector<unsigned int> masked_zero_rows;
-            std::set_intersection(zero_rows.begin(), zero_rows.end(),
-                                  masked_rows.begin(), masked_rows.end(),
-                                  std::back_inserter(masked_zero_rows));
-            for (unsigned int it = 0; it < masked_zero_rows.size(); ++it)
-                losses(i) += std::pow(w0.row(masked_zero_rows[it]) * h.col(i), 2);
-        }
-        return losses.sum() / mask_matrix.i.size();
-    };
-
-    template <>
     double nmf<Eigen::MatrixXd>::mse() {
         Eigen::MatrixXd w0 = w.transpose();
         // multiply w by diagonal
@@ -311,6 +281,38 @@ namespace RcppML {
         else if (mask_zeros)
             return losses.sum() / n_nonzeros(A);
         return losses.sum() / ((h.cols() * w.cols()));
+    };
+
+    template <>
+    double nmf<SparseMatrix>::mse_masked() {
+        if (!mask) Rcpp::stop("'mse_masked' can only be run when a masking matrix has been specified");
+
+        Eigen::MatrixXd w0 = w.transpose();
+        for (unsigned int i = 0; i < w0.cols(); ++i)
+            for (unsigned int j = 0; j < w0.rows(); ++j)
+                w0(j, i) *= d(i);
+
+        Eigen::ArrayXd losses(h.cols());
+        #ifdef _OPENMP
+        #pragma omp parallel for num_threads(threads) schedule(dynamic)
+        #endif
+        for (unsigned int i = 0; i < h.cols(); ++i) {
+            std::vector<unsigned int> masked_rows = mask_matrix.nonzeroRowsInCol(i);
+            if (masked_rows.size() > 0) {
+                for (SparseMatrix::InnerIteratorInRange iter(A, i, masked_rows); iter; ++iter) {
+                    losses(i) += std::pow((w0.row(iter.row()) * h.col(i)) - iter.value(), 2);
+                }
+                // get masked rows that are also zero in A.col(i)
+                std::vector<unsigned int> zero_rows = A.zeroRowsInCol(i);
+                std::vector<unsigned int> masked_zero_rows;
+                std::set_intersection(zero_rows.begin(), zero_rows.end(),
+                                      masked_rows.begin(), masked_rows.end(),
+                                      std::back_inserter(masked_zero_rows));
+                for (unsigned int it = 0; it < masked_zero_rows.size(); ++it)
+                    losses(i) += std::pow(w0.row(masked_zero_rows[it]) * h.col(i), 2);
+            }
+        }
+        return losses.sum() / mask_matrix.i.size();
     };
 
     template <>
