@@ -12,24 +12,24 @@
 #' @param k array of factorization ranks to test
 #' @param method algorithm to use for cross-validation: "\code{predict}" = bi-cross-validation on equally sized feature/sample subsets, "\code{impute}" = MSE of missing value imputation, "\code{robust}" = mean cost of bipartite matching between models trained on equally sized non-overlapping sample sets.
 #' @param reps number of independent replicates to run
-#' @param n for \code{method = "impute"}, fraction of values to handle as missing
+#' @param n for \code{method = "impute"} and \code{"perturb"}, fraction of values to handle as missing
 #' @param ... parameters to \code{RcppML::nmf}, not including \code{data} or \code{k}
 #' @return \code{data.frame} with columns \code{rep}, \code{k}, and \code{value}, where \code{value} depends on the \code{method} selected (i.e. MSE, cost of bipartite matching)
 #' @md
 #' @seealso \code{\link{nmf}}
 #' @export
-crossValidate <- function(data, k, method = "predict", reps = 5, n = 0.05, ...) {
+crossValidate <- function(data, k, method = "impute", reps = 5, n = 0.05, ...) {
   verbose <- getOption("RcppML.verbose")
   options("RcppML.verbose" = FALSE)
   
-  if(!(method %in% c("impute", "predict", "robust"))) stop("'method' must be one of 'impute', 'predict', or 'robust'")
+  if(!(method %in% c("impute", "predict", "robust", "perturb"))) stop("'method' must be one of 'impute', 'predict', 'robust', or 'perturb'")
   p <- list(...)
-  defaults <- list("mask" = NULL)
+  defaults <- list("mask" = NULL, "perturb_to_" = "random")
   for (i in 1:length(defaults))
     if (is.null(p[[names(defaults)[[i]]]])) p[[names(defaults)[[i]]]] <- defaults[[i]]
   
   if(!is.null(p$mask)){
-    if(method == "impute") stop("method = 'impute' is not supported for arguments to 'mask'")
+    if(method == "impute" || method == "perturb") stop("method = 'impute' or 'perturb' is not supported for arguments to 'mask'")
     if(!is.character(p$mask)){
       if(canCoerce(p$mask, "ngCMatrix")){
         p$mask <- as(p$mask, "ngCMatrix")
@@ -41,7 +41,7 @@ crossValidate <- function(data, k, method = "predict", reps = 5, n = 0.05, ...) 
   
   results <- list()
   for(rep in 1:reps){
-    if(verbose) cat("\nReplicate", rep, ", rank: ")
+    if(verbose) cat("\nReplicate ", rep, ", rank: ", sep = "")
     
     # get samples, features, or missing values for test/training/cross-validation
     if(method == "predict" || method == "robust"){
@@ -56,7 +56,26 @@ crossValidate <- function(data, k, method = "predict", reps = 5, n = 0.05, ...) 
       set.seed(rep)
       mask_matrix <- rsparsematrix(nrow(data), ncol(data), n, rand.x = NULL)
     }
-    
+    if(method == "perturb"){
+      if(canCoerce(data, "dgCMatrix")) {
+        data <- as(data, "dgCMatrix")
+        mask_matrix <- as(data, "dgTMatrix")
+      } else {
+        data <- as(as.matrix(data), "dgCMatrix")
+        mask_matrix <- as(data, "dgTMatrix")
+      }
+      ind <- sample(1:length(data@x), length(data@x) * n)
+      ind_vals <- data@x[ind]
+      if(p$perturb_to == "random"){
+        perturb_vals <- sample(data@x, length(ind))
+        data@x[ind] <- perturb_vals
+      } else {
+        data@x[ind] <- 0
+      }
+      mask_matrix <- new("ngTMatrix", i = mask_matrix@i[ind], j = mask_matrix@j[ind], Dim = mask_matrix@Dim)
+      mask_matrix <- as(mask_matrix, "ngCMatrix")
+    }
+
     for(rank in k){
       if(verbose) cat(rank, " ")
       
@@ -83,6 +102,15 @@ crossValidate <- function(data, k, method = "predict", reps = 5, n = 0.05, ...) 
       } else if(method == "impute"){
         m <- nmf(data, rank, mask = mask_matrix, ...)
         value <- evaluate(m, data, mask = mask_matrix, missing_only = TRUE)
+      } else if(method == "perturb") {
+        m <- nmf(data, rank, mask = NULL, ...)
+        data@x[ind] <- ind_vals
+        value <- evaluate(m, data, mask = mask_matrix, missing_only = TRUE)
+        if(p$perturb_to == "random"){
+          data@x[ind] <- perturb_vals
+        } else {
+          data@x[ind] <- 0
+        }
       }
       results[[length(results) + 1]] <- c(rep, rank, value)
     }
