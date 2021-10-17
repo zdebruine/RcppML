@@ -5,7 +5,15 @@
 \alias{plot.nmfCrossValidate}
 \title{Cross-validation for NMF}
 \usage{
-crossValidate(data, k, method = "impute", reps = 5, n = 0.05, ...)
+crossValidate(
+  data,
+  k,
+  method = "impute",
+  reps = 5,
+  n = 0.05,
+  cv_seed = NULL,
+  ...
+)
 
 \method{plot}{nmfCrossValidate}(x, ...)
 }
@@ -19,6 +27,8 @@ crossValidate(data, k, method = "impute", reps = 5, n = 0.05, ...)
 \item{reps}{number of independent replicates to run}
 
 \item{n}{for \code{method = "impute"} and \code{"perturb"}, fraction of values to handle as missing}
+
+\item{cv_seed}{seed for cross-validation sets or samples, independent of the \code{seed} argument to \code{\link{nmf}} (which can be specified in the \code{...} argument)}
 
 \item{...}{parameters to \code{RcppML::nmf}, not including \code{data} or \code{k}}
 

@@ -13,12 +13,13 @@
 #' @param method algorithm to use for cross-validation: "\code{predict}" = bi-cross-validation on equally sized feature/sample subsets, "\code{impute}" = MSE of missing value imputation, "\code{robust}" = mean cost of bipartite matching between models trained on equally sized non-overlapping sample sets.
 #' @param reps number of independent replicates to run
 #' @param n for \code{method = "impute"} and \code{"perturb"}, fraction of values to handle as missing
+#' @param cv_seed seed for cross-validation sets or samples, independent of the \code{seed} argument to \code{\link{nmf}} (which can be specified in the \code{...} argument)
 #' @param ... parameters to \code{RcppML::nmf}, not including \code{data} or \code{k}
 #' @return \code{data.frame} with columns \code{rep}, \code{k}, and \code{value}, where \code{value} depends on the \code{method} selected (i.e. MSE, cost of bipartite matching)
 #' @md
 #' @seealso \code{\link{nmf}}
 #' @export
-crossValidate <- function(data, k, method = "impute", reps = 5, n = 0.05, ...) {
+crossValidate <- function(data, k, method = "impute", reps = 5, n = 0.05, cv_seed = NULL, ...) {
   verbose <- getOption("RcppML.verbose")
   options("RcppML.verbose" = FALSE)
   
@@ -29,7 +30,9 @@ crossValidate <- function(data, k, method = "impute", reps = 5, n = 0.05, ...) {
     if (is.null(p[[names(defaults)[[i]]]])) p[[names(defaults)[[i]]]] <- defaults[[i]]
   
   if(!is.null(p$mask)){
-    if(method == "impute" || method == "perturb") stop("method = 'impute' or 'perturb' is not supported for arguments to 'mask'")
+    if(method == "impute") stop("method = 'impute' is not supported for arguments to 'mask'")
+    if(method == "perturb" && getOption("RcppML.verbose")) 
+      warning("method = 'perturb' does not consider masking parameters during evaluation of the mean squared error of perturbed values")
     if(!is.character(p$mask)){
       if(canCoerce(p$mask, "ngCMatrix")){
         p$mask <- as(p$mask, "ngCMatrix")
@@ -45,15 +48,15 @@ crossValidate <- function(data, k, method = "impute", reps = 5, n = 0.05, ...) {
     
     # get samples, features, or missing values for test/training/cross-validation
     if(method == "predict" || method == "robust"){
-      set.seed(rep)
+      if(!is.null(cv_seed)) set.seed(cv_seed + rep)
       samples <- sample(1:ncol(data), floor(ncol(data) * 0.5))
     }
     if(method == "predict"){
-      set.seed(rep)
+      if(!is.null(cv_seed)) set.seed(cv_seed + rep)
       features <- sample(1:nrow(data), floor(nrow(data) * 0.5))
     }
     if(method == "impute"){
-      set.seed(rep)
+      if(!is.null(cv_seed)) set.seed(cv_seed + rep)
       mask_matrix <- rsparsematrix(nrow(data), ncol(data), n, rand.x = NULL)
     }
     if(method == "perturb"){
@@ -64,9 +67,11 @@ crossValidate <- function(data, k, method = "impute", reps = 5, n = 0.05, ...) {
         data <- as(as.matrix(data), "dgCMatrix")
         mask_matrix <- as(data, "dgTMatrix")
       }
+      if(!is.null(cv_seed)) set.seed(cv_seed + rep)
       ind <- sample(1:length(data@x), length(data@x) * n)
       ind_vals <- data@x[ind]
       if(p$perturb_to == "random"){
+        if(!is.null(cv_seed)) set.seed(cv_seed + rep)
         perturb_vals <- sample(data@x, length(ind))
         data@x[ind] <- perturb_vals
       } else {
@@ -103,7 +108,7 @@ crossValidate <- function(data, k, method = "impute", reps = 5, n = 0.05, ...) {
         m <- nmf(data, rank, mask = mask_matrix, ...)
         value <- evaluate(m, data, mask = mask_matrix, missing_only = TRUE)
       } else if(method == "perturb") {
-        m <- nmf(data, rank, mask = NULL, ...)
+        m <- nmf(data, rank, ...)
         data@x[ind] <- ind_vals
         value <- evaluate(m, data, mask = mask_matrix, missing_only = TRUE)
         if(p$perturb_to == "random"){
