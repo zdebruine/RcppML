@@ -18,16 +18,16 @@
 #' @md
 #' @seealso \code{\link{nmf}}
 #' @export
-crossValidate <- function(data, k, method = 1, reps = 5, n = 0.05, ...) {
+crossValidate <- function(data, k, method = "predict", reps = 5, n = 0.05, ...) {
   verbose <- getOption("RcppML.verbose")
   options("RcppML.verbose" = FALSE)
-
+  
   if(!(method %in% c("impute", "predict", "robust"))) stop("'method' must be one of 'impute', 'predict', or 'robust'")
   p <- list(...)
-  defaults <- list("mask" = "none")
+  defaults <- list("mask" = NULL)
   for (i in 1:length(defaults))
     if (is.null(p[[names(defaults)[[i]]]])) p[[names(defaults)[[i]]]] <- defaults[[i]]
-
+  
   if(!is.null(p$mask)){
     if(method == "impute") stop("method = 'impute' is not supported for arguments to 'mask'")
     if(!is.character(p$mask)){
@@ -38,7 +38,7 @@ crossValidate <- function(data, k, method = 1, reps = 5, n = 0.05, ...) {
       } else stop("supplied masking value was invalid or not coercible to a matrix")
     }
   }
-
+  
   results <- list()
   for(rep in 1:reps){
     if(verbose) cat("\nReplicate", rep, ", rank: ")
@@ -56,7 +56,7 @@ crossValidate <- function(data, k, method = 1, reps = 5, n = 0.05, ...) {
       set.seed(rep)
       mask_matrix <- rsparsematrix(nrow(data), ncol(data), n, rand.x = NULL)
     }
-
+    
     for(rank in k){
       if(verbose) cat(rank, " ")
       
@@ -71,7 +71,6 @@ crossValidate <- function(data, k, method = 1, reps = 5, n = 0.05, ...) {
         m21 <- predict.nmf(m22$w, data[-features, samples], mask = mask_21)
         m11 <- predict.nmf(m21, t(data[features, samples]), mask = mask_11)
         m <- new("nmf", "w" = t(m11), "d" = rep(1, rank), "h" = m21)
-        class(m) <- "nmf"
         value <- evaluate(m, data[features, samples], mask = mask_11)
       } else if(method == "robust"){
         if(is(p$mask, "ngCMatrix")){
@@ -83,7 +82,7 @@ crossValidate <- function(data, k, method = 1, reps = 5, n = 0.05, ...) {
         value <- bipartiteMatch(1 - cosine(w1, w2))$cost / rank
       } else if(method == "impute"){
         m <- nmf(data, rank, mask = mask_matrix, ...)
-        value <- evalute(m, data, mask = mask_matrix, missing_only = TRUE)
+        value <- evaluate(m, data, mask = mask_matrix, missing_only = TRUE)
       }
       results[[length(results) + 1]] <- c(rep, rank, value)
     }

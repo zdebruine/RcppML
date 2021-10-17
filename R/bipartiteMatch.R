@@ -12,7 +12,7 @@
 bipartiteMatch <- function(x) {
   x <- as.matrix(x)
   if (min(x) < 0) {
-    warning("Negative values in 'x' were replaced by zero. Negative values are not permitted!")
+    if(getOption("RcppML.verbose")) warning("Negative values in 'x' were replaced by zero. Negative values are not permitted!")
     x[x < 0] <- 0
   }
   return(Rcpp_bipartite_match(x))

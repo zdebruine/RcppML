@@ -95,13 +95,17 @@ setMethod("predict", signature = "nmf", function(object, data, L1 = 0, L2 = 0, n
     mask_matrix <- as(mask, "ngCMatrix")
   }
 
-  w <- t(object@w)
+  if (nrow(object@w) == nrow(data) && ncol(object@w) != nrow(data)) {
+    w <- t(object@w)
+  } else if(ncol(object@w) == nrow(data)) {
+    w <- object@w
+  }
   if (ncol(w) != nrow(data)) stop("dimensions of 'object@w' and 'A' are not compatible")
 
   if (class(data)[[1]] == "dgCMatrix") {
-    h <- Rcpp_predict_sparse(newdata, mask_matrix, seed[[1]], nonneg, L1[1], L2[1], getOption("RcppML.threads"), mask_zeros)
+    h <- Rcpp_predict_sparse(data, mask_matrix, w, nonneg, L1[1], L2[1], getOption("RcppML.threads"), mask_zeros)
   } else {
-    h <- Rcpp_predict_dense(newdata, mask_matrix, seed[[1]], nonneg, L1[1], L2[1], getOption("RcppML.threads"), mask_zeros)
+    h <- Rcpp_predict_dense(data, mask_matrix, w, nonneg, L1[1], L2[1], getOption("RcppML.threads"), mask_zeros)
   }
   if (!is.null(colnames(data))) colnames(h) <- colnames(data)
   rownames(h) <- paste0("nmf", 1:nrow(h))
@@ -110,7 +114,8 @@ setMethod("predict", signature = "nmf", function(object, data, L1 = 0, L2 = 0, n
 
 #' @rdname predict.nmf
 #' @param w matrix of features (rows) by factors (columns), corresponding to rows in \code{data}
+#' @export
 predict.nmf <- function(w, data, L1 = 0, L2 = 0, nonneg = TRUE, mask = NULL, ...){
   m <- new("nmf", w = w, d = rep(1:ncol(w)), h = matrix(0, nrow = ncol(w), 1))
-  m.predict(data, L1 = L1, L2 = L2, nonneg = nonneg, mask = mask, ...)
+  predict(m, data, L1 = L1, L2 = L2, nonneg = nonneg, mask = mask, ...)
 }

@@ -9,8 +9,8 @@
 #endif
 
 std::vector<unsigned int> get_range(Rcpp::IntegerVector& i, unsigned int begin, unsigned int end) {
-  std::vector<unsigned int> v(end - begin + 1);
-  for (unsigned int j = 0, it = begin; it <= end; ++j, ++it)
+  std::vector<unsigned int> v(end - begin);
+  for (unsigned int j = 0, it = begin; it < end; ++j, ++it)
     v[j] = (unsigned int)i[it];
   return v;
 }
@@ -113,7 +113,7 @@ namespace RcppML {
         ptr(ptr), col_(col), index(ptr.p[col]), max_index(ptr.p[col + 1] - 1) {
         s = std::vector<unsigned int>(ptr.p[col_ + 1] - ptr.p[col]);
         if (s.size() > 0) {
-          s = get_range(ptr.i, ptr.p[col_], ptr.p[col_ + 1] - 1);
+          s = get_range(ptr.i, ptr.p[col_], ptr.p[col_ + 1]);
           if (s_.size() > 0)
             s = remove_vals(s, s_); // remove intersecting values in s_ from s
         }
@@ -174,14 +174,14 @@ namespace RcppML {
 
     // return indices of rows with nonzero values for a given column
     std::vector<unsigned int> nonzeroRowsInCol(int col) {
-      std::vector<unsigned int> v = get_range(i, p[col], p[col + 1] - 1);
+      std::vector<unsigned int> v = get_range(i, p[col], p[col + 1]);
       return v;
     }
 
     // return indices of rows with zeros values for a given column
     std::vector<unsigned int> zeroRowsInCol(int col) {
       // first get indices of non-zeros
-      std::vector<unsigned int> nonzeros = get_range(i, p[col], p[col + 1] - 1);
+      std::vector<unsigned int> nonzeros = get_range(i, p[col], p[col + 1]);
       std::vector<unsigned int> zeros = get_diff(nonzeros, Dim[0]);
       return zeros;
     }
@@ -227,7 +227,7 @@ namespace RcppML {
     // return indices of rows with nonzero values for a given column
     std::vector<unsigned int> nonzerosInColumn(int col) {
       std::vector<unsigned int> v(p[col + 1] - p[col]);
-      if (v.size() > 0) v = get_range(i, p[col], p[col + 1] - 1);
+      if (v.size() > 0) v = get_range(i, p[col], p[col + 1]);
       return v;
     }
 
@@ -276,13 +276,13 @@ namespace RcppML {
 
     // return indices of rows with nonzero values for a given column
     std::vector<unsigned int> nonzeroRowsInCol(int col) {
-      std::vector<unsigned int> v = get_range(i, p[col], p[col + 1] - 1);
+      std::vector<unsigned int> v = get_range(i, p[col], p[col + 1]);
       return v;
     }
 
     // return indices of rows with zeros values for a given column
     std::vector<unsigned int> zeroRowsInCol(int col) {
-      std::vector<unsigned int> nonzeros = get_range(i, p[col], p[col + 1] - 1);
+      std::vector<unsigned int> nonzeros = get_range(i, p[col], p[col + 1]);
       std::vector<unsigned int> zeros = get_diff(nonzeros, Dim[0]);
       return zeros;
     }

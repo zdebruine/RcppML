@@ -84,7 +84,6 @@
 nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), nonneg = TRUE, seed = NULL, mask = NULL, ...) {
 
   start_time <- Sys.time()
-
   # apply defaults to development parameters
   p <- list(...)
   defaults <- list("diag" = TRUE)
@@ -157,7 +156,7 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), no
     w_init[[1]] <- matrix(runif(k * nrow(data)), k, nrow(data))
   }
 
-    # call C++ routines
+  # call C++ routines
   if (class(data)[[1]] == "dgCMatrix") {
     model <- Rcpp_nmf_sparse(data, mask_matrix, tol, maxit, getOption("RcppML.verbose"), nonneg, L1, L2, p$diag, getOption("RcppML.threads"), w_init, mask_zeros)
   } else {

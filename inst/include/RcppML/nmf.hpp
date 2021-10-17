@@ -30,7 +30,7 @@ namespace RcppML {
         unsigned int maxit = 100, threads = 0;
         std::vector<double> L1 = std::vector<double>(2), L2 = std::vector<double>(2);
         double tol = 1e-4;
-        
+
         // CONSTRUCTORS
         // constructor for initialization with a randomly generated "w" matrix
         nmf(T& A, const unsigned int k, const unsigned int seed = 0) : A(A) {
@@ -63,7 +63,7 @@ namespace RcppML {
             if (mask) Rcpp::stop("a masking function has already been specified");
             mask_zeros = true;
         }
-        
+
         void maskMatrix(SparsePatternMatrix& m) {
             if (mask) Rcpp::stop("a masking function has already been specified");
             if (m.rows() != A.rows() || m.cols() != A.cols()) Rcpp::stop("dimensions of masking matrix and 'A' are not equivalent");
@@ -259,7 +259,7 @@ namespace RcppML {
         #endif
         for (unsigned int i = 0; i < h.cols(); ++i) {
             std::vector<unsigned int> masked_rows = mask_matrix.nonzeroRowsInCol(i);
-            for (SparseMatrix::InnerIteratorInRange iter(A, i, masked_rows); iter; ++iter){
+            for (SparseMatrix::InnerIteratorInRange iter(A, i, masked_rows); iter; ++iter) {
                 losses(i) += std::pow((w0.row(iter.row()) * h.col(i)) - iter.value(), 2);
             }
             // get masked rows that are also zero in A.col(i)

@@ -5,7 +5,7 @@
 \alias{plot.nmfCrossValidate}
 \title{Cross-validation for NMF}
 \usage{
-crossValidate(data, k, method = 1, reps = 5, n = 0.05, ...)
+crossValidate(data, k, method = "predict", reps = 5, n = 0.05, ...)
 
 \method{plot}{nmfCrossValidate}(x, ...)
 }

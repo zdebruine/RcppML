@@ -105,29 +105,36 @@ void predict(RcppML::SparseMatrix& A, RcppML::SparsePatternMatrix& m, const Eige
   } else if (mask) {
     h.setZero();
     Eigen::MatrixXd a = w * w.transpose();
+    Rprintf("test1\n");
     #ifdef _OPENMP
     #pragma omp parallel for num_threads(threads) schedule(dynamic)
     #endif
     for (unsigned int i = 0; i < h.cols(); ++i) {
       // subtract contribution of masked rows from "a"
       std::vector<unsigned int> masked_rows_ = m.nonzeroRowsInCol(i);
-      Eigen::VectorXi masked_rows(masked_rows_.size());
-      for (unsigned int j = 0; j < masked_rows.size(); ++j)
-        masked_rows(j) = (int)masked_rows_[j];
-      Eigen::MatrixXd w_ = submat(w, masked_rows);
-      Eigen::MatrixXd a_ = w_ * w_.transpose();
-      a_ = a - a_;
-      a_.diagonal().array() += TINY_NUM + L2;
-
-      // calculate "b" for all non-masked rows
       Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
-      for (RcppML::SparseMatrix::InnerIteratorNotInRange it(A, i, masked_rows_); it; ++it)
-        b += it.value() * w.col(it.row());
-      if (L1 != 0) b.array() -= L1;
-
-      // solve system with least squares
-      if (!nonneg) h.col(i) = a_.llt().solve(b);
-      else c_nnls(a_, b, h, i);
+      if(masked_rows_.size() > 0){
+        Eigen::VectorXi masked_rows(masked_rows_.size());
+        for (unsigned int j = 0; j < masked_rows.size(); ++j)
+          masked_rows(j) = (int)masked_rows_[j];
+        Eigen::MatrixXd w_ = submat(w, masked_rows);
+        Eigen::MatrixXd a_ = w_ * w_.transpose();
+        a_ = a - a_;
+        a_.diagonal().array() += TINY_NUM + L2;
+        
+        // calculate "b" for all non-masked rows
+        for (RcppML::SparseMatrix::InnerIteratorNotInRange it(A, i, masked_rows_); it; ++it)
+          b += it.value() * w.col(it.row());
+        if (L1 != 0) b.array() -= L1;
+        if (!nonneg) h.col(i) = a_.llt().solve(b);
+        else c_nnls(a_, b, h, i);
+      } else {
+        for (RcppML::SparseMatrix::InnerIterator it(A, i); it; ++it)
+          b += it.value() * w.col(it.row());
+        if (L1 != 0) b.array() -= L1;
+        if (!nonneg) h.col(i) = a.llt().solve(b);
+        else c_nnls(a, b, h, i);
+      }
     }
   }
 }
