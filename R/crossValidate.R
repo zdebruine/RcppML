@@ -104,7 +104,7 @@ crossValidate <- function(data, k, method = "impute", reps = 5, n = 0.05, ...) {
         w2 <- nmf(data[, -samples], rank, mask = mask_w2, ...)$w
         value <- bipartiteMatch(1 - cosine(w1, w2))$cost / rank
       } else if(method == "impute"){
-        m <- nmf(data, rank, mask = mask_matrix, seed = p$seed + rep, ...)
+        m <- nmf(data, rank, mask = mask_matrix, ...)
         value <- evaluate(m, data, mask = mask_matrix, missing_only = TRUE)
       } else if(method == "perturb") {
         m <- nmf(data, rank, ...)
