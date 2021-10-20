@@ -22,7 +22,7 @@ namespace RcppML {
         Eigen::VectorXd d;
         Eigen::MatrixXd h;
         double tol_ = -1, mse_ = 0;
-        unsigned int iter_ = 0;
+        unsigned int iter_ = 0, best_model_ = 0;
         bool mask = false, mask_zeros = false, symmetric = false, transposed = false;
 
     public:
@@ -80,6 +80,7 @@ namespace RcppML {
         double fit_tol() { return tol_; }
         unsigned int fit_iter() { return iter_; }
         double fit_mse() { return mse_; }
+        unsigned int best_model() { return best_model_; }
 
         // FUNCTIONS
         void sortByDiagonal() {
@@ -166,7 +167,6 @@ namespace RcppML {
             Eigen::MatrixXd h_best = h;
             Eigen::VectorXd d_best = d;
             double tol_best = tol_;
-            double iter_best = iter_;
             double mse_best = 0;
             for (unsigned int i = 0; i < w_init.length(); ++i) {
                 if (verbose) Rprintf("Fitting model %i/%i:", i + 1, w_init.length());
@@ -178,18 +178,20 @@ namespace RcppML {
                 mse_ = mse();
                 if (verbose) Rprintf("MSE: %8.4e\n\n", mse_);
                 if (i == 0 || mse_ < mse_best) {
-                    if (i != (w_init.length() - 1)) {
-                        w_best = w;
-                        h_best = h;
-                        d_best = d;
-                        tol_best = tol_;
-                        iter_best = iter_;
-                        mse_best = mse_;
-                    }
+                    best_model_ = i;
+                    w_best = w;
+                    h_best = h;
+                    d_best = d;
+                    tol_best = tol_;
+                    mse_best = mse_;
                 }
             }
-            if (mse_ < mse_best) {
-                w = w_best; h = h_best; d = d_best; tol_ = tol_best; iter_ = iter_best; mse_ = mse_best;
+            if (best_model_ != (w_init.length() - 1)) {
+                w = w_best;
+                h = h_best;
+                d = d_best;
+                tol_ = tol_best;
+                mse_ = mse_best;
             }
         }
 

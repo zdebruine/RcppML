@@ -138,7 +138,7 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), no
   w_init <- list()
   if (is.matrix(seed)) seed <- list(seed)
   if (!is.null(seed)) {
-    if (is.matrix(seed)[[1]]) {
+    if (is.matrix(seed[[1]])) {
       for (i in 1:length(seed)) {
         if (ncol(seed[[i]]) == nrow(data) && nrow(seed[[i]]) == k) {
           w_init[[i]] <- seed[[i]]
@@ -170,6 +170,11 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), no
 
   misc <- list("tol" = model$tol, "iter" = model$iter, "runtime" = difftime(Sys.time(), start_time, units = "secs"))
   if (model$mse != 0) misc$mse <- model$mse
+  if (length(w_init) > 1) {
+    misc$w_init <- w_init[[model$best_model + 1]]
+  } else {
+    misc$w_init <- w_init[[1]]
+  }
 
   new("nmf", w = model$w, d = model$d, h = model$h, misc = misc)
 }
