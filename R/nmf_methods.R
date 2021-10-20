@@ -83,12 +83,8 @@ setMethod("head", signature("nmf"), function(x, n = getOption("digits"), ...) {
     cat("...suppressing", nrow(x@h), "rows\n")
   }
   cat("\n@ misc\n")
-  if (length(x@misc) > 0) {
-    for (i in 1:length(x@misc))
-      cat("...$", names(x@misc)[i], ": ", x@misc[[i]], "\n")
-  } else {
-    cat("...list()")
-  }
+  cat(str(x@misc))
+  
   invisible(x)
 })
 
