@@ -148,8 +148,24 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), no
       }
     } else if (is.numeric(seed[[1]])) {
       for (i in 1:length(seed)) {
+        # randomly select runif or rnorm
         set.seed(seed[[i]])
-        w_init[[i]] <- matrix(runif(k * nrow(data)), k, nrow(data))
+        if(i == 1 || sample(c(FALSE, TRUE), 1)){
+          # runif
+          # randomly set lower and upper bounds from pre-determined array
+          # surprisingly, different bounds can affect the best possible discoverable solution from the initialization
+          set.seed(seed[[i]])
+          bounds <- sample(list(c(0, 1), c(0, 2), c(1, 2), c(1, 10)), 1)[[1]]
+          set.seed(seed[[i]])
+          w_init[[i]] <- matrix(runif(k * nrow(data), min = bounds[1], max = bounds[2]), k, nrow(data))
+        } else {
+          # rnorm
+          # use rnorm(mean = 2, sd = 1) which does about as well as any other parameter at finding the best solution
+          # rnorm often can do better than runif, but on some datatypes it does not, so
+          #   run runif for iteration 1 and then possibly rnorm in later iterations
+          set.seed(seed[[i]])
+          w_init[[i]] <- matrix(rnorm(k * nrow(data), mean = 2, sd = 1), k, nrow(data))
+        }
       }
     }
   } else {
