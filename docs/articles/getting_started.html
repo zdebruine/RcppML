@@ -32,7 +32,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">RcppML</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="Released version">0.5.0</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="Released version">0.5.2</span>
       </span>
     </div>
 
@@ -56,6 +56,9 @@
   <ul class="dropdown-menu" role="menu">
 <li>
       <a href="../articles/getting_started.html">Getting Started with NMF</a>
+    </li>
+    <li>
+      <a href="../articles/robust_nmf.html">Robust NMF with random initializations</a>
     </li>
   </ul>
 </li>
@@ -86,7 +89,7 @@
       <h1 data-toc-skip>Getting Started with NMF</h1>
                         <h4 class="author">Zach DeBruine</h4>
             
-            <h4 class="date">2021-10-12</h4>
+            <h4 class="date">2021-10-22</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/zdebruine/RcppML/blob/master/vignettes/getting_started.Rmd"><code>vignettes/getting_started.Rmd</code></a></small>
       <div class="hidden name"><code>getting_started.Rmd</code></div>
@@ -137,27 +140,33 @@
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span class="va">model</span>
 <span class="co">#&gt; 150 x 4 x 3 factor model of class "nmf"</span>
-<span class="co">#&gt; $ w</span>
-<span class="co">#&gt;              nmf1         nmf2       nmf3</span>
-<span class="co">#&gt; [1,] 0.0014403134 0.0002357974 0.01477539</span>
-<span class="co">#&gt; [2,] 0.0024259960 0.0000000000 0.01291767</span>
-<span class="co">#&gt; [3,] 0.0014543773 0.0001794741 0.01349884</span>
-<span class="co">#&gt; [4,] 0.0019489186 0.0005632185 0.01246689</span>
-<span class="co">#&gt; [5,] 0.0001151302 0.0015972125 0.01480720</span>
-<span class="co">#&gt; ...suppressing 145 rows</span>
+<span class="co">#&gt; @ w</span>
+<span class="co">#&gt;              nmf1         nmf2         nmf3</span>
+<span class="co">#&gt; [1,] 0.0014403134 0.0002357974 0.0147753897</span>
+<span class="co">#&gt; [2,] 0.0024259960            . 0.0129176731</span>
+<span class="co">#&gt; [3,] 0.0014543773 0.0001794741 0.0134988417</span>
+<span class="co">#&gt; [4,] 0.0019489186 0.0005632185 0.0124668937</span>
+<span class="co">#&gt; [5,] 0.0001151302 0.0015972125 0.0148072020</span>
+<span class="co">#&gt; [6,]            . 0.0030264275 0.0151420941</span>
+<span class="co">#&gt; [7,]            . 0.0022133280 0.0132919365</span>
+<span class="co">#&gt; ...suppressing 143 rows</span>
 <span class="co">#&gt; </span>
-<span class="co">#&gt; $ d</span>
-<span class="co">#&gt; [1] 747.8924 726.0631 605.7889</span>
+<span class="co">#&gt; @ d</span>
+<span class="co">#&gt; 747.8924  726.0631  605.7889  </span>
 <span class="co">#&gt; </span>
-<span class="co">#&gt; $ h</span>
+<span class="co">#&gt; @ h</span>
 <span class="co">#&gt;      Sepal.Length Sepal.Width Petal.Length Petal.Width</span>
-<span class="co">#&gt; nmf1    0.4268578   0.1235986    0.3554880 0.094055570</span>
-<span class="co">#&gt; nmf2    0.3405375   0.1938883    0.3208173 0.144756875</span>
-<span class="co">#&gt; nmf3    0.5117684   0.3725765    0.1076775 0.007977569</span>
+<span class="co">#&gt; nmf1  0.426857790 0.123598613  0.355488027 0.094055570</span>
+<span class="co">#&gt; nmf2  0.340537544 0.193888276  0.320817305 0.144756875</span>
+<span class="co">#&gt; nmf3  0.511768434 0.372576543  0.107677454 0.007977569</span>
 <span class="co">#&gt; </span>
-<span class="co">#&gt; $ tol: 9.755227e-05 </span>
-<span class="co">#&gt; $ iter: 14 </span>
-<span class="co">#&gt; $ runtime: 0.003988981 sec</span></code></pre></div>
+<span class="co">#&gt; @ misc</span>
+<span class="co">#&gt; List of 4</span>
+<span class="co">#&gt;  $ tol    : num 9.76e-05</span>
+<span class="co">#&gt;  $ iter   : num 14</span>
+<span class="co">#&gt;  $ runtime: 'difftime' num 0.00800418853759766</span>
+<span class="co">#&gt;   ..- attr(*, "units")= chr "secs"</span>
+<span class="co">#&gt;  $ w_init : num [1:3, 1:150] 0.266 0.372 0.573 0.908 0.202 ...</span></code></pre></div>
 </div>
 <div id="visualizing-nmf-models" class="section level2">
 <h2 class="hasAnchor">
@@ -165,8 +174,9 @@
 <p>The result of <code><a href="../reference/nmf.html">RcppML::nmf</a></code> is an S3 object of class <code>nmf</code>. The <code>nmf</code> class has many useful methods:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span class="fu"><a href="https://rdrr.io/r/utils/methods.html">methods</a></span><span class="op">(</span>class <span class="op">=</span> <span class="st">"nmf"</span><span class="op">)</span>
-<span class="co">#&gt;  [1] [        align    biplot   dim      dimnames head     mse      predict </span>
-<span class="co">#&gt;  [9] print    prod     sort     sparsity summary  t       </span>
+<span class="co">#&gt;  [1] $        [        align    biplot   coerce   dim      dimnames evaluate</span>
+<span class="co">#&gt;  [9] head     predict  prod     show     sort     sparsity subset   summary </span>
+<span class="co">#&gt; [17] t       </span>
 <span class="co">#&gt; see '?methods' for accessing help and source code</span></code></pre></div>
 <p>One of these useful methods is <code>summary</code> (which in turn has a <code>plot</code> method):</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
@@ -186,7 +196,7 @@
 <code class="sourceCode R"><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html">plot</a></span><span class="op">(</span><span class="va">species_stats</span>, stat <span class="op">=</span> <span class="st">"sum"</span><span class="op">)</span></code></pre></div>
 <p><img src="getting_started_files/figure-html/unnamed-chunk-6-1.png" width="288"></p>
 <p>Notice how NMF factors capture variable information among iris species.</p>
-<p>The <code>biplot</code> method for NMF (see <code><a href="../reference/biplot.nmf.html">?biplot.nmf</a></code> for details) can compare the weights of different features or samples in two factors:</p>
+<p>The <code>biplot</code> method for NMF (see <code>?biplot.nmf</code> for details) can compare the weights of different features or samples in two factors:</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span class="fu"><a href="https://rdrr.io/r/stats/biplot.html">biplot</a></span><span class="op">(</span><span class="va">model</span>, factors <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">2</span><span class="op">)</span>, group_by <span class="op">=</span> <span class="va">iris</span><span class="op">$</span><span class="va">Species</span><span class="op">)</span></code></pre></div>
 <p><img src="getting_started_files/figure-html/unnamed-chunk-7-1.png" width="384"></p>
@@ -200,12 +210,12 @@
 <code class="sourceCode R"><span class="va">model2</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">iris</span><span class="op">[</span>,<span class="fl">1</span><span class="op">:</span><span class="fl">4</span><span class="op">]</span>, k <span class="op">=</span> <span class="fl">3</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">10</span>, tol <span class="op">=</span> <span class="fl">1e-5</span><span class="op">)</span></code></pre></div>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span class="co"># MSE of model from single random initialization</span>
-<span class="fu"><a href="../reference/mse.html">mse</a></span><span class="op">(</span><span class="va">model</span>, <span class="va">iris</span><span class="op">[</span>,<span class="fl">1</span><span class="op">:</span><span class="fl">4</span><span class="op">]</span><span class="op">)</span>
+<span class="fu">evaluate</span><span class="op">(</span><span class="va">model</span>, <span class="va">iris</span><span class="op">[</span>,<span class="fl">1</span><span class="op">:</span><span class="fl">4</span><span class="op">]</span><span class="op">)</span>
 <span class="co">#&gt; [1] 0.007247329</span>
 
 <span class="co"># MSE of best model among 10 random restarts</span>
-<span class="fu"><a href="../reference/mse.html">mse</a></span><span class="op">(</span><span class="va">model2</span>, <span class="va">iris</span><span class="op">[</span>,<span class="fl">1</span><span class="op">:</span><span class="fl">4</span><span class="op">]</span><span class="op">)</span>
-<span class="co">#&gt; [1] 0.006122015</span></code></pre></div>
+<span class="fu">evaluate</span><span class="op">(</span><span class="va">model2</span>, <span class="va">iris</span><span class="op">[</span>,<span class="fl">1</span><span class="op">:</span><span class="fl">4</span><span class="op">]</span><span class="op">)</span>
+<span class="co">#&gt; [1] 0.006100573</span></code></pre></div>
 <p>The second model is slightly better.</p>
 </div>
 <div id="l1-regularization" class="section level2">
@@ -216,31 +226,35 @@
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span class="fu"><a href="https://rdrr.io/r/utils/data.html">data</a></span><span class="op">(</span><span class="va">movielens</span><span class="op">)</span>
 <span class="va">ratings</span> <span class="op">&lt;-</span> <span class="va">movielens</span><span class="op">$</span><span class="va">ratings</span>
-<span class="va">model_L1</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">ratings</span>, k <span class="op">=</span> <span class="fl">5</span>, L1 <span class="op">=</span> <span class="fl">0.05</span>, seed <span class="op">=</span> <span class="fl">123</span>, mask_zeros <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></code></pre></div>
+<span class="va">model_L1</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">ratings</span>, k <span class="op">=</span> <span class="fl">7</span>, L1 <span class="op">=</span> <span class="fl">0.1</span>, seed <span class="op">=</span> <span class="fl">123</span>, mask_zeros <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></code></pre></div>
 <div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span class="fu"><a href="../reference/sparsity.html">sparsity</a></span><span class="op">(</span><span class="va">model_L1</span><span class="op">)</span>
-<span class="co">#&gt;    factor   sparsity model</span>
-<span class="co">#&gt; 1    nmf1 0.82544608     w</span>
-<span class="co">#&gt; 2    nmf2 0.51435221     w</span>
-<span class="co">#&gt; 3    nmf3 0.50193949     w</span>
-<span class="co">#&gt; 4    nmf4 0.05197828     w</span>
-<span class="co">#&gt; 5    nmf5 0.88001034     w</span>
-<span class="co">#&gt; 6    nmf1 0.23606557     h</span>
-<span class="co">#&gt; 7    nmf2 0.74590164     h</span>
-<span class="co">#&gt; 8    nmf3 0.78852459     h</span>
-<span class="co">#&gt; 9    nmf4 0.92950820     h</span>
-<span class="co">#&gt; 10   nmf5 0.53770492     h</span></code></pre></div>
+<code class="sourceCode R"><span class="fu">sparsity</span><span class="op">(</span><span class="va">model_L1</span><span class="op">)</span>
+<span class="co">#&gt;    factor  sparsity model</span>
+<span class="co">#&gt; 1    nmf1 0.6224463     w</span>
+<span class="co">#&gt; 2    nmf2 0.8774244     w</span>
+<span class="co">#&gt; 3    nmf3 0.6351177     w</span>
+<span class="co">#&gt; 4    nmf4 0.5958107     w</span>
+<span class="co">#&gt; 5    nmf5 0.8988880     w</span>
+<span class="co">#&gt; 6    nmf6 0.2924748     w</span>
+<span class="co">#&gt; 7    nmf7 0.4641841     w</span>
+<span class="co">#&gt; 8    nmf1 0.6754098     h</span>
+<span class="co">#&gt; 9    nmf2 0.2803279     h</span>
+<span class="co">#&gt; 10   nmf3 0.6508197     h</span>
+<span class="co">#&gt; 11   nmf4 0.7213115     h</span>
+<span class="co">#&gt; 12   nmf5 0.4295082     h</span>
+<span class="co">#&gt; 13   nmf6 0.9229508     h</span>
+<span class="co">#&gt; 14   nmf7 0.9393443     h</span></code></pre></div>
 <p>The <code>sparsity</code> S3 method for class <code>nmf</code> makes it easy to compute the sparsity of factors, as done above.</p>
 <p>Note that <code>mask_zeros = TRUE</code> in the example above. This is because zero-valued ratings are missing, and thus should not be considered during factorization.</p>
 <p>In the above example, we regularized both <span class="math inline">\(w\)</span> and <span class="math inline">\(h\)</span>, however each model can also be regularized separately:</p>
 <div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span class="va">model_no_L1</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">ratings</span>, k <span class="op">=</span> <span class="fl">5</span>, L1 <span class="op">=</span> <span class="fl">0</span>, seed <span class="op">=</span> <span class="fl">123</span>, mask_zeros <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>
-<span class="va">model_L1_h</span> <span class="op">&lt;-</span>  <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">ratings</span>, k <span class="op">=</span> <span class="fl">5</span>, L1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.05</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">123</span>, mask_zeros <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>
-<span class="va">model_L1_w</span> <span class="op">&lt;-</span>  <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">ratings</span>, k <span class="op">=</span> <span class="fl">5</span>, L1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fl">0.05</span>, <span class="fl">0</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">123</span>, mask_zeros <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>
+<code class="sourceCode R"><span class="va">model_no_L1</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">ratings</span>, k <span class="op">=</span> <span class="fl">7</span>, L1 <span class="op">=</span> <span class="fl">0</span>, seed <span class="op">=</span> <span class="fl">123</span>, mask_zeros <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>
+<span class="va">model_L1_h</span> <span class="op">&lt;-</span>  <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">ratings</span>, k <span class="op">=</span> <span class="fl">7</span>, L1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.1</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">123</span>, mask_zeros <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>
+<span class="va">model_L1_w</span> <span class="op">&lt;-</span>  <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">ratings</span>, k <span class="op">=</span> <span class="fl">7</span>, L1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fl">0.1</span>, <span class="fl">0</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">123</span>, mask_zeros <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>
 
 <span class="co"># summarize sparsity of all models in a data.frame</span>
-<span class="va">df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html">rbind</a></span><span class="op">(</span><span class="fu"><a href="../reference/sparsity.html">sparsity</a></span><span class="op">(</span><span class="va">model_no_L1</span><span class="op">)</span>, <span class="fu"><a href="../reference/sparsity.html">sparsity</a></span><span class="op">(</span><span class="va">model_L1_h</span><span class="op">)</span>, <span class="fu"><a href="../reference/sparsity.html">sparsity</a></span><span class="op">(</span><span class="va">model_L1_w</span><span class="op">)</span>, <span class="fu"><a href="../reference/sparsity.html">sparsity</a></span><span class="op">(</span><span class="va">model_L1</span><span class="op">)</span><span class="op">)</span>
-<span class="va">df</span><span class="op">$</span><span class="va">side</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/rep.html">rep</a></span><span class="op">(</span><span class="st">"none"</span>, <span class="fl">10</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/rep.html">rep</a></span><span class="op">(</span><span class="st">"h only"</span>, <span class="fl">10</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/rep.html">rep</a></span><span class="op">(</span><span class="st">"w only"</span>, <span class="fl">10</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/rep.html">rep</a></span><span class="op">(</span><span class="st">"both"</span>, <span class="fl">10</span><span class="op">)</span><span class="op">)</span>
+<span class="va">df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html">rbind</a></span><span class="op">(</span><span class="fu">sparsity</span><span class="op">(</span><span class="va">model_no_L1</span><span class="op">)</span>, <span class="fu">sparsity</span><span class="op">(</span><span class="va">model_L1_h</span><span class="op">)</span>, <span class="fu">sparsity</span><span class="op">(</span><span class="va">model_L1_w</span><span class="op">)</span>, <span class="fu">sparsity</span><span class="op">(</span><span class="va">model_L1</span><span class="op">)</span><span class="op">)</span>
+<span class="va">df</span><span class="op">$</span><span class="va">side</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/rep.html">rep</a></span><span class="op">(</span><span class="st">"none"</span>, <span class="fl">14</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/rep.html">rep</a></span><span class="op">(</span><span class="st">"h only"</span>, <span class="fl">14</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/rep.html">rep</a></span><span class="op">(</span><span class="st">"w only"</span>, <span class="fl">14</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/rep.html">rep</a></span><span class="op">(</span><span class="st">"both"</span>, <span class="fl">14</span><span class="op">)</span><span class="op">)</span>
 <span class="va">df</span><span class="op">$</span><span class="va">side</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html">factor</a></span><span class="op">(</span><span class="va">df</span><span class="op">$</span><span class="va">side</span>, levels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/unique.html">unique</a></span><span class="op">(</span><span class="va">df</span><span class="op">$</span><span class="va">side</span><span class="op">)</span><span class="op">)</span></code></pre></div>
 <div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html">ggplot</a></span><span class="op">(</span><span class="va">df</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html">aes</a></span><span class="op">(</span>x <span class="op">=</span> <span class="va">side</span>, y <span class="op">=</span> <span class="va">sparsity</span>, color <span class="op">=</span> <span class="va">model</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span> 
@@ -252,23 +266,23 @@
 <p>L1 regularization does not significantly affect model loss:</p>
 <div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span class="co"># L1 = 0</span>
-<span class="fu"><a href="../reference/mse.html">mse</a></span><span class="op">(</span><span class="va">model_no_L1</span>, <span class="va">movielens</span><span class="op">$</span><span class="va">ratings</span><span class="op">)</span>
-<span class="co">#&gt; [1] 37.482</span>
+<span class="fu">evaluate</span><span class="op">(</span><span class="va">model_no_L1</span>, <span class="va">movielens</span><span class="op">$</span><span class="va">ratings</span>, mask <span class="op">=</span> <span class="st">"zeros"</span><span class="op">)</span>
+<span class="co">#&gt; [1] 6.868603</span>
 
 <span class="co"># L1 = 0.1</span>
-<span class="fu"><a href="../reference/mse.html">mse</a></span><span class="op">(</span><span class="va">model_L1</span>, <span class="va">movielens</span><span class="op">$</span><span class="va">ratings</span><span class="op">)</span>
-<span class="co">#&gt; [1] 1.43187</span></code></pre></div>
-<p>L1 regularization also does not significantly affect model information. Here we measure the cost of bipartite matching between two models on a cosine distance matrix for <code>L1 = 0</code>, <code>L1 = 0.01</code>, and <code>L1 = 0.1</code>:</p>
+<span class="fu">evaluate</span><span class="op">(</span><span class="va">model_L1</span>, <span class="va">movielens</span><span class="op">$</span><span class="va">ratings</span>, mask <span class="op">=</span> <span class="st">"zeros"</span><span class="op">)</span>
+<span class="co">#&gt; [1] 7.41899</span></code></pre></div>
+<p>L1 regularization also does not significantly affect model information at low penalties. Here we measure the cost of bipartite matching between two models on a cosine distance matrix for <code>L1 = 0</code>, <code>L1 = 0.01</code>, and <code>L1 = 0.1</code>:</p>
 <div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span class="va">model_high_L1</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">movielens</span><span class="op">$</span><span class="va">ratings</span>, k <span class="op">=</span> <span class="fl">5</span>, L1 <span class="op">=</span> <span class="fl">0.1</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></code></pre></div>
+<code class="sourceCode R"><span class="va">model_low_L1</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">movielens</span><span class="op">$</span><span class="va">ratings</span>, k <span class="op">=</span> <span class="fl">5</span>, L1 <span class="op">=</span> <span class="fl">0.01</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span></code></pre></div>
 <div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span class="co"># cost of bipartite matching: L1 = 0 vs. L1 = 0.05</span>
-<span class="fu"><a href="../reference/bipartiteMatch.html">bipartiteMatch</a></span><span class="op">(</span><span class="fl">1</span> <span class="op">-</span> <span class="fu"><a href="../reference/cosine.html">cosine</a></span><span class="op">(</span><span class="va">model_no_L1</span><span class="op">$</span><span class="va">w</span>, <span class="va">model_L1</span><span class="op">$</span><span class="va">w</span><span class="op">)</span><span class="op">)</span><span class="op">$</span><span class="va">cost</span> <span class="op">/</span> <span class="fl">10</span>
-<span class="co">#&gt; [1] 0.2897245</span>
+<code class="sourceCode R"><span class="co"># cost of bipartite matching: L1 = 0 vs. L1 = 0.01</span>
+<span class="fu"><a href="../reference/bipartiteMatch.html">bipartiteMatch</a></span><span class="op">(</span><span class="fl">1</span> <span class="op">-</span> <span class="fu"><a href="../reference/cosine.html">cosine</a></span><span class="op">(</span><span class="va">model_no_L1</span><span class="op">$</span><span class="va">w</span>, <span class="va">model_low_L1</span><span class="op">$</span><span class="va">w</span><span class="op">)</span><span class="op">)</span><span class="op">$</span><span class="va">cost</span> <span class="op">/</span> <span class="fl">10</span>
+<span class="co">#&gt; [1] 0.03932585</span>
 
 <span class="co"># cost of bipartite matching: L1 = 0 vs. L1 = 0.1</span>
-<span class="fu"><a href="../reference/bipartiteMatch.html">bipartiteMatch</a></span><span class="op">(</span><span class="fl">1</span> <span class="op">-</span> <span class="fu"><a href="../reference/cosine.html">cosine</a></span><span class="op">(</span><span class="va">model_no_L1</span><span class="op">$</span><span class="va">w</span>, <span class="va">model_high_L1</span><span class="op">$</span><span class="va">w</span><span class="op">)</span><span class="op">)</span><span class="op">$</span><span class="va">cost</span> <span class="op">/</span> <span class="fl">10</span>
-<span class="co">#&gt; [1] 0.3464829</span></code></pre></div>
+<span class="fu"><a href="../reference/bipartiteMatch.html">bipartiteMatch</a></span><span class="op">(</span><span class="fl">1</span> <span class="op">-</span> <span class="fu"><a href="../reference/cosine.html">cosine</a></span><span class="op">(</span><span class="va">model_no_L1</span><span class="op">$</span><span class="va">w</span>, <span class="va">model_L1</span><span class="op">$</span><span class="va">w</span><span class="op">)</span><span class="op">)</span><span class="op">$</span><span class="va">cost</span> <span class="op">/</span> <span class="fl">10</span>
+<span class="co">#&gt; [1] 0.07304686</span></code></pre></div>
 <p>See <code><a href="../reference/cosine.html">?RcppML::cosine</a></code> for details on very fast computation of cosine similarity.</p>
 <p>In the above code, we computed cosine distance by subtracting cosine similarity from 1, matched on this cost matrix, and divided by 10 to find the mean cosine distance between matched factors. In both cases, factors correspond well.</p>
 <p>Thus, regularized <code><a href="../reference/nmf.html">RcppML::nmf</a></code> increases factor sparsity without significantly affecting the loss or information content of the model.</p>
@@ -287,9 +301,8 @@
 <span class="va">predictions</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/predict.html">predict</a></span><span class="op">(</span><span class="va">model</span>, <span class="va">ratings</span><span class="op">[</span><span class="va">movies</span>, <span class="op">-</span><span class="va">train_users</span><span class="op">]</span><span class="op">)</span></code></pre></div>
 <p>Now we can assess the ability of our model to predict movie ratings by users in the test set. Because we trained the model with <code>mask_zeros = TRUE</code>, we also need to do the same when calculating mean squared error:</p>
 <div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span class="fu"><a href="../reference/mse.html">mse</a></span><span class="op">(</span><span class="va">predictions</span>, <span class="va">ratings</span><span class="op">[</span><span class="va">movies</span>, <span class="op">-</span><span class="va">train_users</span><span class="op">]</span>, mask_zeros <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>
-<span class="co">#&gt; [1] 0.4016201</span></code></pre></div>
-<p>On average, the model is 0.4 stars off – not bad on a 5-star scale!</p>
+<code class="sourceCode R"><span class="fu">evaluate</span><span class="op">(</span><span class="fu">new</span><span class="op">(</span><span class="st">"nmf"</span>, w <span class="op">=</span> <span class="va">model</span><span class="op">@</span><span class="va">w</span>, d <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html">rep</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">10</span><span class="op">)</span>, h <span class="op">=</span> <span class="va">predictions</span><span class="op">)</span>, <span class="va">ratings</span><span class="op">[</span><span class="va">movies</span>, <span class="op">-</span><span class="va">train_users</span><span class="op">]</span>, mask <span class="op">=</span> <span class="st">"zeros"</span><span class="op">)</span>
+<span class="co">#&gt; [1] 6.683479</span></code></pre></div>
 </div>
 <div id="cross-validation-for-rank-determination" class="section level2">
 <h2 class="hasAnchor">
@@ -309,22 +322,23 @@
 <p><img src="getting_started_files/figure-html/unnamed-chunk-20-1.png" width="288"></p>
 <p>We can use <code><a href="../reference/crossValidate.html">RcppML::crossValidate</a></code> to determine the rank of each dataset. The default method uses “bi-cross-validation”. See <code><a href="../reference/crossValidate.html">?crossValidate</a></code> for details.</p>
 <div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span class="va">cv_clean</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/crossValidate.html">crossValidate</a></span><span class="op">(</span><span class="va">data_clean</span>, k <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">10</span>, method <span class="op">=</span> <span class="fl">1</span>, reps <span class="op">=</span> <span class="fl">3</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span>
-<span class="va">cv_dirty</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/crossValidate.html">crossValidate</a></span><span class="op">(</span><span class="va">data_dirty</span>, k <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">10</span>, method <span class="op">=</span> <span class="fl">1</span>, reps <span class="op">=</span> <span class="fl">3</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span>
+<code class="sourceCode R"><span class="va">cv_clean</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/crossValidate.html">crossValidate</a></span><span class="op">(</span><span class="va">data_clean</span>, k <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">10</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span>
+<span class="va">cv_dirty</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/crossValidate.html">crossValidate</a></span><span class="op">(</span><span class="va">data_dirty</span>, k <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">10</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span>
 <span class="fu"><a href="https://wilkelab.org/cowplot/reference/plot_grid.html">plot_grid</a></span><span class="op">(</span>
-  <span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html">plot</a></span><span class="op">(</span><span class="va">cv_clean</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html">ggtitle</a></span><span class="op">(</span><span class="st">"cross-validation on\nclean dataset"</span><span class="op">)</span>,
-  <span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html">plot</a></span><span class="op">(</span><span class="va">cv_dirty</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html">ggtitle</a></span><span class="op">(</span><span class="st">"cross-validation on\ndirty dataset"</span><span class="op">)</span>, nrow <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></code></pre></div>
+  <span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html">plot</a></span><span class="op">(</span><span class="va">cv_clean</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html">ggtitle</a></span><span class="op">(</span><span class="st">"cross-validation on\nclean dataset"</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/scale_continuous.html">scale_y_continuous</a></span><span class="op">(</span>limits <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.5</span><span class="op">)</span><span class="op">)</span>,
+  <span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html">plot</a></span><span class="op">(</span><span class="va">cv_dirty</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html">ggtitle</a></span><span class="op">(</span><span class="st">"cross-validation on\ndirty dataset"</span><span class="op">)</span>, nrow <span class="op">=</span> <span class="fl">1</span><span class="op">)</span>
+<span class="co">#&gt; Warning: Removed 9 rows containing missing values (geom_point).</span>
+<span class="co">#&gt; Warning: Removed 2 row(s) containing missing values (geom_path).</span></code></pre></div>
 <p><img src="getting_started_files/figure-html/unnamed-chunk-21-1.png" width="576"></p>
 <p><code>crossValidate</code> also supports another method which compares robustness of two factorizations on independent sample subsets.</p>
 <div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span class="va">cv_clean</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/crossValidate.html">crossValidate</a></span><span class="op">(</span><span class="va">data_clean</span>, k <span class="op">=</span> <span class="fl">2</span><span class="op">:</span><span class="fl">10</span>, method <span class="op">=</span> <span class="fl">2</span>, reps <span class="op">=</span> <span class="fl">3</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span>
-<span class="va">cv_dirty</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/crossValidate.html">crossValidate</a></span><span class="op">(</span><span class="va">data_dirty</span>, k <span class="op">=</span> <span class="fl">2</span><span class="op">:</span><span class="fl">10</span>, method <span class="op">=</span> <span class="fl">2</span>, reps <span class="op">=</span> <span class="fl">3</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span>
+<code class="sourceCode R"><span class="va">cv_clean</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/crossValidate.html">crossValidate</a></span><span class="op">(</span><span class="va">data_clean</span>, k <span class="op">=</span> <span class="fl">2</span><span class="op">:</span><span class="fl">10</span>, method <span class="op">=</span> <span class="st">"robust"</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span>
+<span class="va">cv_dirty</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/crossValidate.html">crossValidate</a></span><span class="op">(</span><span class="va">data_dirty</span>, k <span class="op">=</span> <span class="fl">2</span><span class="op">:</span><span class="fl">10</span>, method <span class="op">=</span> <span class="st">"robust"</span>, seed <span class="op">=</span> <span class="fl">123</span><span class="op">)</span>
 <span class="fu"><a href="https://wilkelab.org/cowplot/reference/plot_grid.html">plot_grid</a></span><span class="op">(</span>
   <span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html">plot</a></span><span class="op">(</span><span class="va">cv_clean</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html">ggtitle</a></span><span class="op">(</span><span class="st">"cross-validation on\nclean dataset"</span><span class="op">)</span>,
   <span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html">plot</a></span><span class="op">(</span><span class="va">cv_dirty</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html">ggtitle</a></span><span class="op">(</span><span class="st">"cross-validation on\ndirty dataset"</span><span class="op">)</span>, nrow <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></code></pre></div>
 <p><img src="getting_started_files/figure-html/unnamed-chunk-22-1.png" width="576"></p>
-<p>This second method does better on ill-conditioned data because it measures the robustness between independent factorizations.</p>
-<p>For real datasets, it is important to experiment with both cross-validation methods and to explore multi-resolution analysis or other objectives where appropriate.</p>
+<p>For real datasets, it is important to experiment with all cross-validation methods and to explore multi-resolution analysis or other objectives where appropriate.</p>
 <p><code>crossValidate</code> does not support an objective against the mean squared error of imputed missing values because this method is slow, tends to under-estimate the true rank, and does not handle noisy data well.</p>
 </div>
   </div>

@@ -6,7 +6,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>RcppML 0.5.0 • RcppML</title>
+<title>NA • RcppML</title>
 
 
 <!-- jquery -->
@@ -41,7 +41,7 @@
   <link href="extra.css" rel="stylesheet">
   
 
-<meta property="og:title" content="RcppML 0.5.0" />
+<meta property="og:title" content="NA" />
 
 
 
@@ -127,14 +127,16 @@
 <div class="row">
   <div class="contents col-md-9">
     <div class="page-header">
-      <h1>RcppML 0.5.0</h1>
+      <h1>NA</h1>
     </div>
 
-<div id="rcppml-050" class="section level1">
 
-<div id="major-changes" class="section level2">
+<div id="rcppml-050" class="section level2">
 <h2 class="hasAnchor">
-<a href="#major-changes" class="anchor"></a>Major changes</h2>
+<a href="#rcppml-050" class="anchor"></a>RcppML 0.5.0</h2>
+<div id="major-changes" class="section level3">
+<h3 class="hasAnchor">
+<a href="#major-changes" class="anchor"></a>Major changes</h3>
 <ul>
 <li>Launch pkgdown site</li>
 <li>Added the <code>nmf</code> S3 class to the result of <code>nmf</code> function</li>
@@ -147,9 +149,9 @@
 <li>New vignette on <code>Getting Started with NMF</code>!</li>
 </ul>
 </div>
-<div id="minor-changes" class="section level2">
-<h2 class="hasAnchor">
-<a href="#minor-changes" class="anchor"></a>Minor changes</h2>
+<div id="minor-changes" class="section level3">
+<h3 class="hasAnchor">
+<a href="#minor-changes" class="anchor"></a>Minor changes</h3>
 <ul>
 <li>Support for specific sample and feature selections for NMF removed to increase performance on C++ end</li>
 <li>Removed <code>updateInPlace</code> advanced parameter for <code>nmf</code> because advantages were not convincing</li>
@@ -160,6 +162,34 @@
 </ul>
 </div>
 </div>
+<div id="rcppml-051" class="section level2">
+<h2 class="hasAnchor">
+<a href="#rcppml-051" class="anchor"></a>RcppML 0.5.1</h2>
+<div id="major-changes-1" class="section level3">
+<h3 class="hasAnchor">
+<a href="#major-changes-1" class="anchor"></a>Major changes</h3>
+<ul>
+<li>three new datasets (<code>hawaiibirds</code>, <code>aml</code>, and <code>movielens</code>)</li>
+<li>Move NMF models and methods from S3 to S4 for stability</li>
+<li>Better random initializations (now using both <code>rnorm</code> and <code>runif</code> with multiple ranges/shapes, when multiple seeds are specified)</li>
+<li>added L2 regularization to NMF</li>
+<li>Support for masking values</li>
+<li>add <code>impute</code> and <code>perturb</code> methods to <code>crossValidate</code>
+</li>
+</ul>
+</div>
+<div id="minor-changes-1" class="section level3">
+<h3 class="hasAnchor">
+<a href="#minor-changes-1" class="anchor"></a>Minor changes</h3>
+<ul>
+<li>better random initializations (now using both <code>rnorm</code> and <code>runif</code> with multiple ranges/shapes)</li>
+<li>New vignette on random restarts</li>
+<li>better “head” and “show” methods</li>
+<li>return “w_init” with model</li>
+</ul>
+</div>
+</div>
+
 
   </div>
 

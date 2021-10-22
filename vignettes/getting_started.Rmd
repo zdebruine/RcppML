@@ -70,7 +70,7 @@ model
 
 The result of `RcppML::nmf` is an S3 object of class `nmf`. The `nmf` class has many useful methods:
 
-```{R}
+```{R, warning = FALSE}
 methods(class = "nmf")
 ```
 
@@ -104,10 +104,10 @@ model2 <- nmf(iris[,1:4], k = 3, seed = 1:10, tol = 1e-5)
 
 ```{R}
 # MSE of model from single random initialization
-mse(model, iris[,1:4])
+evaluate(model, iris[,1:4])
 
 # MSE of best model among 10 random restarts
-mse(model2, iris[,1:4])
+evaluate(model2, iris[,1:4])
 ```
 
 The second model is slightly better.
@@ -121,7 +121,7 @@ L1/LASSO regularization is the best method for introducing sparsity into a linea
 ```{R, results = "hide"}
 data(movielens)
 ratings <- movielens$ratings
-model_L1 <- nmf(ratings, k = 5, L1 = 0.05, seed = 123, mask_zeros = TRUE)
+model_L1 <- nmf(ratings, k = 7, L1 = 0.1, seed = 123, mask_zeros = TRUE)
 ```
 
 ```{R}
@@ -135,13 +135,13 @@ Note that `mask_zeros = TRUE` in the example above. This is because zero-valued 
 In the above example, we regularized both $w$ and $h$, however each model can also be regularized separately:
 
 ```{R, results = "hide"}
-model_no_L1 <- nmf(ratings, k = 5, L1 = 0, seed = 123, mask_zeros = TRUE)
-model_L1_h <-  nmf(ratings, k = 5, L1 = c(0, 0.05), seed = 123, mask_zeros = TRUE)
-model_L1_w <-  nmf(ratings, k = 5, L1 = c(0.05, 0), seed = 123, mask_zeros = TRUE)
+model_no_L1 <- nmf(ratings, k = 7, L1 = 0, seed = 123, mask_zeros = TRUE)
+model_L1_h <-  nmf(ratings, k = 7, L1 = c(0, 0.1), seed = 123, mask_zeros = TRUE)
+model_L1_w <-  nmf(ratings, k = 7, L1 = c(0.1, 0), seed = 123, mask_zeros = TRUE)
 
 # summarize sparsity of all models in a data.frame
 df <- rbind(sparsity(model_no_L1), sparsity(model_L1_h), sparsity(model_L1_w), sparsity(model_L1))
-df$side <- c(rep("none", 10), rep("h only", 10), rep("w only", 10), rep("both", 10))
+df$side <- c(rep("none", 14), rep("h only", 14), rep("w only", 14), rep("both", 14))
 df$side <- factor(df$side, levels = unique(df$side))
 ```
 
@@ -158,24 +158,24 @@ L1 regularization does not significantly affect model loss:
 
 ```{R}
 # L1 = 0
-mse(model_no_L1, movielens$ratings)
+evaluate(model_no_L1, movielens$ratings, mask = "zeros")
 
 # L1 = 0.1
-mse(model_L1, movielens$ratings)
+evaluate(model_L1, movielens$ratings, mask = "zeros")
 ```
 
-L1 regularization also does not significantly affect model information. Here we measure the cost of bipartite matching between two models on a cosine distance matrix for `L1 = 0`, `L1 = 0.01`, and `L1 = 0.1`:
+L1 regularization also does not significantly affect model information at low penalties. Here we measure the cost of bipartite matching between two models on a cosine distance matrix for `L1 = 0`, `L1 = 0.01`, and `L1 = 0.1`:
 
 ```{R, results = "hide"}
-model_high_L1 <- nmf(movielens$ratings, k = 5, L1 = 0.1, seed = 123)
+model_low_L1 <- nmf(movielens$ratings, k = 5, L1 = 0.01, seed = 123)
 ```
 
 ```{R}
-# cost of bipartite matching: L1 = 0 vs. L1 = 0.05
-bipartiteMatch(1 - cosine(model_no_L1$w, model_L1$w))$cost / 10
+# cost of bipartite matching: L1 = 0 vs. L1 = 0.01
+bipartiteMatch(1 - cosine(model_no_L1$w, model_low_L1$w))$cost / 10
 
 # cost of bipartite matching: L1 = 0 vs. L1 = 0.1
-bipartiteMatch(1 - cosine(model_no_L1$w, model_high_L1$w))$cost / 10
+bipartiteMatch(1 - cosine(model_no_L1$w, model_L1$w))$cost / 10
 ```
 
 See `?RcppML::cosine` for details on very fast computation of cosine similarity.
@@ -202,10 +202,8 @@ predictions <- predict(model, ratings[movies, -train_users])
 Now we can assess the ability of our model to predict movie ratings by users in the test set. Because we trained the model with `mask_zeros = TRUE`, we also need to do the same when calculating mean squared error:
 
 ```{R}
-mse(predictions, ratings[movies, -train_users], mask_zeros = TRUE)
+evaluate(new("nmf", w = model@w, d = rep(1, 10), h = predictions), ratings[movies, -train_users], mask = "zeros")
 ```
-
-On average, the model is 0.4 stars off -- not bad on a 5-star scale!
 
 ## Cross-validation for rank determination
 
@@ -239,25 +237,23 @@ ggplot(rbind(df, df2), aes(x = k, y = singular_value, color = dataset)) +
 We can use `RcppML::crossValidate` to determine the rank of each dataset. The default method uses "bi-cross-validation". See `?crossValidate` for details.
 
 ```{R, fig.width = 6, fig.height = 3}
-cv_clean <- crossValidate(data_clean, k = 1:10, method = 1, reps = 3, verbose = FALSE, seed = 123)
-cv_dirty <- crossValidate(data_dirty, k = 1:10, method = 1, reps = 3, verbose = FALSE, seed = 123)
+cv_clean <- crossValidate(data_clean, k = 1:10, seed = 123)
+cv_dirty <- crossValidate(data_dirty, k = 1:10, seed = 123)
 plot_grid(
-  plot(cv_clean) + ggtitle("cross-validation on\nclean dataset"),
+  plot(cv_clean) + ggtitle("cross-validation on\nclean dataset") + scale_y_continuous(limits = c(0, 0.5)),
   plot(cv_dirty) + ggtitle("cross-validation on\ndirty dataset"), nrow = 1)
 ```
 
 `crossValidate` also supports another method which compares robustness of two factorizations on independent sample subsets.
 
 ```{R, fig.width = 6, fig.height = 3, warning = FALSE}
-cv_clean <- crossValidate(data_clean, k = 2:10, method = 2, reps = 3, verbose = FALSE, seed = 123)
-cv_dirty <- crossValidate(data_dirty, k = 2:10, method = 2, reps = 3, verbose = FALSE, seed = 123)
+cv_clean <- crossValidate(data_clean, k = 2:10, method = "robust", seed = 123)
+cv_dirty <- crossValidate(data_dirty, k = 2:10, method = "robust", seed = 123)
 plot_grid(
   plot(cv_clean) + ggtitle("cross-validation on\nclean dataset"),
   plot(cv_dirty) + ggtitle("cross-validation on\ndirty dataset"), nrow = 1)
 ```
 
-This second method does better on ill-conditioned data because it measures the robustness between independent factorizations.
-
-For real datasets, it is important to experiment with both cross-validation methods and to explore multi-resolution analysis or other objectives where appropriate.
+For real datasets, it is important to experiment with all cross-validation methods and to explore multi-resolution analysis or other objectives where appropriate.
 
 `crossValidate` does not support an objective against the mean squared error of imputed missing values because this method is slow, tends to under-estimate the true rank, and does not handle noisy data well.
