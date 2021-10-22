@@ -6,7 +6,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Calculate sparsity of an object — sparsity • RcppML</title>
+<title>Compute the sparsity of each NMF factor — sparsity,nmf-method • RcppML</title>
 
 
 <!-- jquery -->
@@ -41,8 +41,8 @@
   <link href="../extra.css" rel="stylesheet">
   
 
-<meta property="og:title" content="Calculate sparsity of an object — sparsity" />
-<meta property="og:description" content="sparsity is a generic function for calculating the (marginal) sparsity of a model." />
+<meta property="og:title" content="Compute the sparsity of each NMF factor — sparsity,nmf-method" />
+<meta property="og:description" content="Compute the sparsity of each NMF factor" />
 
 
 
@@ -74,7 +74,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">RcppML</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="Released version">0.5.0</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="Released version">0.5.2</span>
       </span>
     </div>
 
@@ -98,6 +98,9 @@
   <ul class="dropdown-menu" role="menu">
     <li>
       <a href="../articles/getting_started.html">Getting Started with NMF</a>
+    </li>
+    <li>
+      <a href="../articles/robust_nmf.html">Robust NMF with random initializations</a>
     </li>
   </ul>
 </li>
@@ -125,36 +128,23 @@
 <div class="row">
   <div class="col-md-9 contents">
     <div class="page-header">
-    <h1>Calculate sparsity of an object</h1>
+    <h1>Compute the sparsity of each NMF factor</h1>
     <small class="dont-index">Source: <a href='https://github.com/zdebruine/RcppML/blob/master/R/nmf_methods.R'><code>R/nmf_methods.R</code></a></small>
     <div class="hidden name"><code>sparsity.Rd</code></div>
     </div>
 
     <div class="ref-description">
-    <p><code>sparsity</code> is a generic function for calculating the (marginal) sparsity of a model.</p>
+    <p>Compute the sparsity of each NMF factor</p>
     </div>
 
-    <pre class="usage"><span class='fu'>sparsity</span><span class='op'>(</span><span class='va'>object</span>, <span class='va'>...</span><span class='op'>)</span>
-
-<span class='co'># S3 method for nmf</span>
+    <pre class="usage"><span class='co'># S4 method for nmf</span>
 <span class='fu'>sparsity</span><span class='op'>(</span><span class='va'>object</span>, <span class='va'>...</span><span class='op'>)</span></pre>
 
-    <h2 class="hasAnchor" id="arguments"><a class="anchor" href="#arguments"></a>Arguments</h2>
-    <table class="ref-arguments">
-    <colgroup><col class="name" /><col class="desc" /></colgroup>
-    <tr>
-      <th>object</th>
-      <td><p>object to be evaluated</p></td>
-    </tr>
-    <tr>
-      <th>...</th>
-      <td><p>arguments passed to or from other methods</p></td>
-    </tr>
-    </table>
 
     <h2 class="hasAnchor" id="details"><a class="anchor" href="#details"></a>Details</h2>
 
-    <p>For <code><a href='nmf.html'>nmf</a></code> models, the sparsity of each factor is computed and summarized for \(w\) and \(h\) matrices. A long <code>data.frame</code> with columns <code>factor</code>, <code>sparsity</code>, and <code>model</code> is returned.</p>
+    <p>For <code><a href='nmf.html'>nmf</a></code> models, the sparsity of each factor is computed and summarized
+or \(w\) and \(h\) matrices. A long <code>data.frame</code> with columns <code>factor</code>, <code>sparsity</code>, and <code>model</code> is returned.</p>
 
   </div>
   <div class="col-md-3 hidden-xs hidden-sm" id="pkgdown-sidebar">

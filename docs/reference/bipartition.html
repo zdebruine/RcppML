@@ -74,7 +74,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">RcppML</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="Released version">0.5.0</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="Released version">0.5.2</span>
       </span>
     </div>
 
@@ -98,6 +98,9 @@
   <ul class="dropdown-menu" role="menu">
     <li>
       <a href="../articles/getting_started.html">Getting Started with NMF</a>
+    </li>
+    <li>
+      <a href="../articles/robust_nmf.html">Robust NMF with random initializations</a>
     </li>
   </ul>
 </li>
@@ -134,22 +137,18 @@
     <p>Spectral biparitioning by rank-2 matrix factorization</p>
     </div>
 
-    <pre class="usage"><span class='fu'>bipartition</span><span class='op'>(</span><span class='va'>data</span>, tol <span class='op'>=</span> <span class='fl'>1e-05</span>, verbose <span class='op'>=</span> <span class='cn'>FALSE</span>, nonneg <span class='op'>=</span> <span class='cn'>TRUE</span>, <span class='va'>...</span><span class='op'>)</span></pre>
+    <pre class="usage"><span class='fu'>bipartition</span><span class='op'>(</span><span class='va'>data</span>, tol <span class='op'>=</span> <span class='fl'>1e-05</span>, nonneg <span class='op'>=</span> <span class='cn'>TRUE</span>, <span class='va'>...</span><span class='op'>)</span></pre>
 
     <h2 class="hasAnchor" id="arguments"><a class="anchor" href="#arguments"></a>Arguments</h2>
     <table class="ref-arguments">
     <colgroup><col class="name" /><col class="desc" /></colgroup>
     <tr>
       <th>data</th>
-      <td><p>input data with the same number of rows as <code>object$w</code></p></td>
+      <td><p>dense or sparse matrix of features in rows and samples in columns. Prefer <code>matrix</code> or <code>Matrix::dgCMatrix</code>, respectively</p></td>
     </tr>
     <tr>
       <th>tol</th>
-      <td><p>stopping criteria based on the correlation distance between \(w\) across consecutive iterations. Prefer <code>tol &lt;= 1e-5</code> for publication runs, <code>1e-5 &lt; tol &lt;= 1e-3</code> for rapid experimentation.</p></td>
-    </tr>
-    <tr>
-      <th>verbose</th>
-      <td><p>print tolerance after each iteration</p></td>
+      <td><p>tolerance of the fit</p></td>
     </tr>
     <tr>
       <th>nonneg</th>

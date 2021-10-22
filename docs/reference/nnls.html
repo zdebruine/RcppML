@@ -74,7 +74,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">RcppML</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="Released version">0.5.0</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="Released version">0.5.2</span>
       </span>
     </div>
 
@@ -98,6 +98,9 @@
   <ul class="dropdown-menu" role="menu">
     <li>
       <a href="../articles/getting_started.html">Getting Started with NMF</a>
+    </li>
+    <li>
+      <a href="../articles/robust_nmf.html">Robust NMF with random initializations</a>
     </li>
   </ul>
 </li>
@@ -134,7 +137,16 @@
     <p>Solves the equation <code>a %*% x = b</code> for <code>x</code> subject to \(x &gt; 0\).</p>
     </div>
 
-    <pre class="usage"><span class='fu'>nnls</span><span class='op'>(</span><span class='va'>a</span>, <span class='va'>b</span>, cd_maxit <span class='op'>=</span> <span class='fl'>100L</span>, cd_tol <span class='op'>=</span> <span class='fl'>1e-08</span>, fast_nnls <span class='op'>=</span> <span class='cn'>FALSE</span>, L1 <span class='op'>=</span> <span class='fl'>0</span><span class='op'>)</span></pre>
+    <pre class="usage"><span class='fu'>nnls</span><span class='op'>(</span>
+  <span class='va'>a</span>,
+  <span class='va'>b</span>,
+  cd_maxit <span class='op'>=</span> <span class='fl'>100L</span>,
+  cd_tol <span class='op'>=</span> <span class='fl'>1e-08</span>,
+  fast_nnls <span class='op'>=</span> <span class='cn'>FALSE</span>,
+  L1 <span class='op'>=</span> <span class='fl'>0</span>,
+  L2 <span class='op'>=</span> <span class='fl'>0</span>,
+  PE <span class='op'>=</span> <span class='fl'>0</span>
+<span class='op'>)</span></pre>
 
     <h2 class="hasAnchor" id="arguments"><a class="anchor" href="#arguments"></a>Arguments</h2>
     <table class="ref-arguments">
@@ -162,6 +174,14 @@
     <tr>
       <th>L1</th>
       <td><p>L1/LASSO penalty to be subtracted from <code>b</code></p></td>
+    </tr>
+    <tr>
+      <th>L2</th>
+      <td><p>Ridge penalty to be added to diagonal of <code>a</code></p></td>
+    </tr>
+    <tr>
+      <th>PE</th>
+      <td><p>Pattern Extraction (angular) penalty to be added to off-diagonal values of <code>a</code></p></td>
     </tr>
     </table>
 
@@ -199,7 +219,7 @@ coordinate descent instead.</p>
 <p>Myre, JM, Frahm, E, Lilja DJ, and Saar, MO. (2017) "TNT-NN: A Fast Active Set Method for Solving Large Non-Negative Least Squares Problems". Proc. Computer Science.</p>
     <h2 class="hasAnchor" id="see-also"><a class="anchor" href="#see-also"></a>See also</h2>
 
-    <div class='dont-index'><p><code><a href='nmf.html'>nmf</a></code>, <code><a href='project.html'>project</a></code></p></div>
+    <div class='dont-index'><p><code><a href='nmf.html'>nmf</a></code>, <code><a href='predict,nmf-method.html'>predict.nmf</a></code></p></div>
     <h2 class="hasAnchor" id="author"><a class="anchor" href="#author"></a>Author</h2>
 
     <p>Zach DeBruine</p>

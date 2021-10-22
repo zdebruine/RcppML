@@ -4,7 +4,10 @@
     <loc>https://zdebruine.github.io/RcppML/index.html</loc>
   </url>
   <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/align.html</loc>
+    <loc>https://zdebruine.github.io/RcppML/reference/align.nmf.html</loc>
+  </url>
+  <url>
+    <loc>https://zdebruine.github.io/RcppML/reference/aml.html</loc>
   </url>
   <url>
     <loc>https://zdebruine.github.io/RcppML/reference/bipartiteMatch.html</loc>
@@ -13,7 +16,7 @@
     <loc>https://zdebruine.github.io/RcppML/reference/bipartition.html</loc>
   </url>
   <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/biplot.nmf.html</loc>
+    <loc>https://zdebruine.github.io/RcppML/reference/biplot-nmf-method.html</loc>
   </url>
   <url>
     <loc>https://zdebruine.github.io/RcppML/reference/cosine.html</loc>
@@ -25,10 +28,13 @@
     <loc>https://zdebruine.github.io/RcppML/reference/dclust.html</loc>
   </url>
   <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/mse.html</loc>
+    <loc>https://zdebruine.github.io/RcppML/reference/evaluate.nmf.html</loc>
   </url>
   <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/new_nmf.html</loc>
+    <loc>https://zdebruine.github.io/RcppML/reference/hawaiibirds.html</loc>
+  </url>
+  <url>
+    <loc>https://zdebruine.github.io/RcppML/reference/movielens.html</loc>
   </url>
   <url>
     <loc>https://zdebruine.github.io/RcppML/reference/nmf.html</loc>
@@ -37,7 +43,7 @@
     <loc>https://zdebruine.github.io/RcppML/reference/nnls.html</loc>
   </url>
   <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/project.html</loc>
+    <loc>https://zdebruine.github.io/RcppML/reference/predict.nmf.html</loc>
   </url>
   <url>
     <loc>https://zdebruine.github.io/RcppML/reference/RcppML.html</loc>
@@ -49,12 +55,12 @@
     <loc>https://zdebruine.github.io/RcppML/reference/sparsity.html</loc>
   </url>
   <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/summary.nmf.html</loc>
-  </url>
-  <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/threads.html</loc>
+    <loc>https://zdebruine.github.io/RcppML/reference/summary-nmf-method.html</loc>
   </url>
   <url>
     <loc>https://zdebruine.github.io/RcppML/articles/getting_started.html</loc>
+  </url>
+  <url>
+    <loc>https://zdebruine.github.io/RcppML/articles/robust_nmf.html</loc>
   </url>
 </urlset>

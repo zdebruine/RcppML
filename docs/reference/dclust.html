@@ -74,7 +74,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">RcppML</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="Released version">0.5.0</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="Released version">0.5.2</span>
       </span>
     </div>
 
@@ -98,6 +98,9 @@
   <ul class="dropdown-menu" role="menu">
     <li>
       <a href="../articles/getting_started.html">Getting Started with NMF</a>
+    </li>
+    <li>
+      <a href="../articles/robust_nmf.html">Robust NMF with random initializations</a>
     </li>
   </ul>
 </li>
@@ -138,7 +141,6 @@
   <span class='va'>A</span>,
   <span class='va'>min_samples</span>,
   min_dist <span class='op'>=</span> <span class='fl'>0</span>,
-  verbose <span class='op'>=</span> <span class='cn'>TRUE</span>,
   tol <span class='op'>=</span> <span class='fl'>1e-05</span>,
   maxit <span class='op'>=</span> <span class='fl'>100</span>,
   nonneg <span class='op'>=</span> <span class='cn'>TRUE</span>,
@@ -161,16 +163,12 @@
       <td><p>stopping criteria giving the minimum cosine distance of samples within a cluster to the center of their assigned vs. unassigned cluster. If <code>0</code>, neither this distance nor cluster centroids will be calculated.</p></td>
     </tr>
     <tr>
-      <th>verbose</th>
-      <td><p>print number of divisions in each generation</p></td>
-    </tr>
-    <tr>
       <th>tol</th>
       <td><p>in rank-2 NMF, the correlation distance (\(1 - R^2\)) between \(w\) across consecutive iterations at which to stop factorization</p></td>
     </tr>
     <tr>
       <th>maxit</th>
-      <td><p>maximum permitted update iterations</p></td>
+      <td><p>maximum number of fitting iterations</p></td>
     </tr>
     <tr>
       <th>nonneg</th>

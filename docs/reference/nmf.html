@@ -74,7 +74,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">RcppML</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="Released version">0.5.0</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="Released version">0.5.2</span>
       </span>
     </div>
 
@@ -98,6 +98,9 @@
   <ul class="dropdown-menu" role="menu">
     <li>
       <a href="../articles/getting_started.html">Getting Started with NMF</a>
+    </li>
+    <li>
+      <a href="../articles/robust_nmf.html">Robust NMF with random initializations</a>
     </li>
   </ul>
 </li>
@@ -126,7 +129,7 @@
   <div class="col-md-9 contents">
     <div class="page-header">
     <h1>Non-negative matrix factorization</h1>
-    <small class="dont-index">Source: <a href='https://github.com/zdebruine/RcppML/blob/master/R/nmf.R'><code>R/nmf.R</code></a></small>
+    <small class="dont-index">Source: <a href='https://github.com/zdebruine/RcppML/blob/master/R/nmf.R'><code>R/nmf.R</code></a>, <a href='https://github.com/zdebruine/RcppML/blob/master/R/nmf_methods.R'><code>R/nmf_methods.R</code></a></small>
     <div class="hidden name"><code>nmf.Rd</code></div>
     </div>
 
@@ -139,26 +142,20 @@
   <span class='va'>k</span>,
   tol <span class='op'>=</span> <span class='fl'>1e-04</span>,
   maxit <span class='op'>=</span> <span class='fl'>100</span>,
-  verbose <span class='op'>=</span> <span class='cn'>TRUE</span>,
   L1 <span class='op'>=</span> <span class='fu'><a href='https://rdrr.io/r/base/c.html'>c</a></span><span class='op'>(</span><span class='fl'>0</span>, <span class='fl'>0</span><span class='op'>)</span>,
-  seed <span class='op'>=</span> <span class='cn'>NULL</span>,
+  L2 <span class='op'>=</span> <span class='fu'><a href='https://rdrr.io/r/base/c.html'>c</a></span><span class='op'>(</span><span class='fl'>0</span>, <span class='fl'>0</span><span class='op'>)</span>,
   nonneg <span class='op'>=</span> <span class='cn'>TRUE</span>,
-  mask_zeros <span class='op'>=</span> <span class='cn'>FALSE</span>,
+  seed <span class='op'>=</span> <span class='cn'>NULL</span>,
+  mask <span class='op'>=</span> <span class='cn'>NULL</span>,
   <span class='va'>...</span>
-<span class='op'>)</span>
-
-<span class='co'># S3 method for nmf</span>
-<span class='fu'><a href='mse.html'>mse</a></span><span class='op'>(</span><span class='va'>object</span>, <span class='va'>data</span>, mask_zeros <span class='op'>=</span> <span class='cn'>FALSE</span>, <span class='va'>...</span><span class='op'>)</span>
-
-<span class='co'># S3 method for nmf</span>
-<span class='fu'><a href='https://rdrr.io/r/stats/predict.html'>predict</a></span><span class='op'>(</span><span class='va'>object</span>, <span class='va'>newdata</span>, L1 <span class='op'>=</span> <span class='fl'>0</span>, nonneg <span class='op'>=</span> <span class='cn'>TRUE</span>, mask_zeros <span class='op'>=</span> <span class='cn'>FALSE</span>, <span class='va'>...</span><span class='op'>)</span></pre>
+<span class='op'>)</span></pre>
 
     <h2 class="hasAnchor" id="arguments"><a class="anchor" href="#arguments"></a>Arguments</h2>
     <table class="ref-arguments">
     <colgroup><col class="name" /><col class="desc" /></colgroup>
     <tr>
       <th>data</th>
-      <td><p>input data with the same number of rows as <code>object$w</code></p></td>
+      <td><p>dense or sparse matrix of features in rows and samples in columns. Prefer <code>matrix</code> or <code>Matrix::dgCMatrix</code>, respectively</p></td>
     </tr>
     <tr>
       <th>k</th>
@@ -166,56 +163,41 @@
     </tr>
     <tr>
       <th>tol</th>
-      <td><p>stopping criteria based on the correlation distance between \(w\) across consecutive iterations. Prefer <code>tol &lt;= 1e-5</code> for publication runs, <code>1e-5 &lt; tol &lt;= 1e-3</code> for rapid experimentation.</p></td>
+      <td><p>tolerance of the fit</p></td>
     </tr>
     <tr>
       <th>maxit</th>
-      <td><p>maximum permitted update iterations</p></td>
-    </tr>
-    <tr>
-      <th>verbose</th>
-      <td><p>print tolerance after each iteration</p></td>
+      <td><p>maximum number of fitting iterations</p></td>
     </tr>
     <tr>
       <th>L1</th>
-      <td><p>LASSO penalties in the range (0, 1], array of length two for <code><a href='https://rdrr.io/r/base/c.html'>c(w, h)</a></code></p></td>
+      <td><p>LASSO penalties in the range (0, 1], single value or array of length two for <code><a href='https://rdrr.io/r/base/c.html'>c(w, h)</a></code></p></td>
     </tr>
     <tr>
-      <th>seed</th>
-      <td><p>random seed for initializing <code>w</code>, or initial <code>w</code> matrix. If an array of seeds (or list of <code>w</code> matrices) is provided, <code>nmf</code> will be run for each seed and the fitted model with the lowest Mean Squared Error will be returned.</p></td>
+      <th>L2</th>
+      <td><p>Ridge penalties greater than zero, single value or array of length two for <code><a href='https://rdrr.io/r/base/c.html'>c(w, h)</a></code></p></td>
     </tr>
     <tr>
       <th>nonneg</th>
       <td><p>enforce non-negativity</p></td>
     </tr>
     <tr>
-      <th>mask_zeros</th>
-      <td><p>handle zeros as missing values</p></td>
+      <th>seed</th>
+      <td><p>single initialization seed or array, or a matrix or list of matrices giving initial <code>w</code>. For multiple initializations, the model with least mean squared error is returned.</p></td>
+    </tr>
+    <tr>
+      <th>mask</th>
+      <td><p>dense or sparse matrix of values in <code>data</code> to handle as missing. Prefer <code>Matrix::ngCMatrix</code>. Alternatively, specify "<code>zeros</code>" or "<code>NA</code>" to mask either all zeros or NA values.</p></td>
     </tr>
     <tr>
       <th>...</th>
       <td><p>development parameters</p></td>
     </tr>
-    <tr>
-      <th>object</th>
-      <td><p>model of class <code>nmf</code>, generally the result of calling <code>nmf</code></p></td>
-    </tr>
-    <tr>
-      <th>newdata</th>
-      <td><p>matrix of features-by-samples in dense or sparse format, coercible to <code>matrix</code> or <code>Matrix::dgCMatrix</code>, must contain the same number of rows as <code>object$w</code>.</p></td>
-    </tr>
     </table>
 
     <h2 class="hasAnchor" id="value"><a class="anchor" href="#value"></a>Value</h2>
 
-    <p><code>nmf</code> returns a list with class "<code>nmf</code>" containing the following components:</p><ul>
-<li><p>w    : feature factor matrix</p></li>
-<li><p>d    : scaling diagonal vector</p></li>
-<li><p>h    : sample factor matrix</p></li>
-<li><p>tol  : tolerance between models at final update</p></li>
-<li><p>iter : number of alternating updates</p></li>
-</ul>
-
+    <p>object of class <code>nmf</code></p>
     <h2 class="hasAnchor" id="details"><a class="anchor" href="#details"></a>Details</h2>
 
     <p>This fast NMF implementation decomposes a matrix \(A\) into lower-rank non-negative matrices \(w\) and \(h\),
@@ -223,22 +205,43 @@ with columns of \(w\) and rows of \(h\) scaled to sum to 1 via multiplication by
 <p>The scaling diagonal ensures convex L1 regularization, consistent factor scalings regardless of random initialization, and model symmetry in factorizations of symmetric matrices.</p>
 <p>The factorization model is randomly initialized.  \(w\) and \(h\) are updated by alternating least squares.</p>
 <p>RcppML achieves high performance using the Eigen C++ linear algebra library, OpenMP parallelization, a dedicated Rcpp sparse matrix class, and fast sequential coordinate descent non-negative least squares initialized by Cholesky least squares solutions.</p>
-<p>Parallelization is applied with OpenMP using the number of threads set by <code><a href='getRcppMLthreads.html'>setRcppMLthreads</a></code>. When <code>k &lt; 3</code> or <code><a href='getRcppMLthreads.html'>setRcppMLthreads(1)</a></code>, a backend compiled without OpenMP is used for optimal performance. NMF with <code>mask_zeros = TRUE</code> is always single-threaded for efficiency.</p>
 <p>Sparse optimization is automatically applied if the input matrix <code>A</code> is a sparse matrix (i.e. <code>Matrix::dgCMatrix</code>). There are also specialized back-ends for symmetric, rank-1, and rank-2 factorizations.</p>
 <p>L1 penalization can be used for increasing the sparsity of factors and assisting interpretability. Penalty values should range from 0 to 1, where 1 gives complete sparsity.</p>
+<p>Set <code><a href='https://rdrr.io/r/base/options.html'>options(RcppML.verbose = TRUE)</a></code> to print model tolerances to the console after each iteration.</p>
+<p>Parallelization is applied with OpenMP using the number of threads in <code><a href='https://rdrr.io/r/base/options.html'>getOption("RcppML.threads")</a></code> and set by <code><a href='https://rdrr.io/r/base/options.html'>option(RcppML.threads = 0)</a></code>, for example. <code>0</code> corresponds to all threads, let OpenMP decide.</p>
+    <h2 class="hasAnchor" id="slots"><a class="anchor" href="#slots"></a>Slots</h2>
+
+    
+
+<dl>
+<dt><code>w</code></dt><dd><p>feature factor matrix</p></dd>
+
+<dt><code>d</code></dt><dd><p>scaling diagonal vector</p></dd>
+
+<dt><code>h</code></dt><dd><p>sample factor matrix</p></dd>
+
+<dt><code>misc</code></dt><dd><p>list often containing components:
+<ul>
+<li><p>tol  : tolerance of fit</p></li>
+<li><p>iter : number of fitting updates</p></li>
+<li><p>runtime : runtime in seconds</p></li>
+<li><p>mse  : mean squared error of model (calculated for multiple starts only)</p></li>
+</ul></p></dd>
+
+</dl>
     <h2 class="hasAnchor" id="methods"><a class="anchor" href="#methods"></a>Methods</h2>
 
     
 
-<p>The <code>nmf</code> S3 class has several methods:</p><ul>
-<li><p><code><a href='https://rdrr.io/r/stats/predict.html'>predict(object, newdata, L1 = 0)</a></code>: equivalent to <code><a href='project.html'>project</a></code>, project the model onto new samples.</p></li>
-<li><p><code><a href='mse.html'>mse(object, data)</a></code>: calculates mean squared error loss of the model, <code>data</code> must be the same data used to fit the model.</p></li>
-<li><p><code>prod</code>: compute the product of the model (multiply it out). Returns a dense matrix</p></li>
-<li><p><code><a href='https://rdrr.io/r/base/summary.html'>summary(object, group_by, stat = "fractional")</a></code>: <code>data.frame</code> giving <code>fractional</code>, <code>total</code>, or <code>mean</code> representation of factors in samples or features grouped by some criteria</p></li>
-<li><p><code><a href='sparsity.html'>sparsity(object)</a></code>: returns a <code>data.frame</code> giving sparsity of each factor in \(w\) and \(h\)</p></li>
-<li><p><code><a href='https://rdrr.io/r/base/match.html'>match(x, y)</a></code>: find an ordering of factors in <code>nmf</code> model <code>y$w</code> that best matches those in <code>nmf</code> model <code>x$w</code> based on cost of <code><a href='bipartiteMatch.html'>bipartiteMatch</a></code> on a <code><a href='cosine.html'>cosine</a></code> similarity matrix.</p></li>
-<li><p><code><a href='https://rdrr.io/r/base/Extract.html'>`[`</a></code>: subset, reorder, select, or extract factors</p></li>
-<li><p>generics such as <code>dim</code>, <code>t</code> (transpose), <code>print</code>, <code>head</code>, <code>dimnames</code></p></li>
+<p>S4 methods available for the <code>nmf</code> class:</p><ul>
+<li><p><code><a href='predict,nmf-method.html'>predict.nmf</a></code>: project an NMF model (or partial model) onto new samples</p></li>
+<li><p><code>`evaluate-nmf-method`</code>: calculate mean squared error loss of an NMF model</p></li>
+<li><p><code>`summary-nmf-method`</code>: <code>data.frame</code> giving <code>fractional</code>, <code>total</code>, or <code>mean</code> representation of factors in samples or features grouped by some criteria</p></li>
+<li><p><code>`align-nmf-method`</code>: find an ordering of factors in one <code>nmf</code> model that best matches those in another <code>nmf</code> model</p></li>
+<li><p><code>prod.nmf</code>: compute the dense approximation of input data</p></li>
+<li><p><code>sparsity.nmf</code>: compute the sparsity of each factor in \(w\) and \(h\)</p></li>
+<li><p><code>subset.nmf</code>: subset, reorder, select, or extract factors (same as <code><a href='https://rdrr.io/r/base/Extract.html'>[</a></code>)</p></li>
+<li><p>generics such as <code>dim</code>, <code>dimnames</code>, <code>t</code>, <code>show</code>, <code>head</code></p></li>
 </ul>
 
     <h2 class="hasAnchor" id="references"><a class="anchor" href="#references"></a>References</h2>
@@ -249,7 +252,7 @@ with columns of \(w\) and rows of \(h\) scaled to sum to 1 via multiplication by
 <p>Franc, VC, Hlavac, VC, Navara, M. (2005). "Sequential Coordinate-Wise Algorithm for the Non-negative Least Squares Problem". Proc. Int'l Conf. Computer Analysis of Images and Patterns. Lecture Notes in Computer Science.</p>
     <h2 class="hasAnchor" id="see-also"><a class="anchor" href="#see-also"></a>See also</h2>
 
-    <div class='dont-index'><p><code>predict.nmf</code>, <code>mse.nmf</code>, <code><a href='nnls.html'>nnls</a></code></p></div>
+    <div class='dont-index'><p><code><a href='predict,nmf-method.html'>predict.nmf</a></code>, <code><a href='evaluate,nmf-method.html'>evaluate.nmf</a></code>, <code><a href='nnls.html'>nnls</a></code></p></div>
     <h2 class="hasAnchor" id="author"><a class="anchor" href="#author"></a>Author</h2>
 
     <p>Zach DeBruine</p>

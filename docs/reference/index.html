@@ -73,7 +73,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">RcppML</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="Released version">0.5.0</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="Released version">0.5.2</span>
       </span>
     </div>
 
@@ -97,6 +97,9 @@
   <ul class="dropdown-menu" role="menu">
     <li>
       <a href="../articles/getting_started.html">Getting Started with NMF</a>
+    </li>
+    <li>
+      <a href="../articles/robust_nmf.html">Robust NMF with random initializations</a>
     </li>
   </ul>
 </li>
@@ -150,9 +153,15 @@
       <tr>
         
         <td>
-          <p><code><a href="align.html">align()</a></code> </p>
+          <p><code><a href="align.nmf.html">align(<i>&lt;nmf&gt;</i>)</a></code> <code><a href="align.nmf.html">align.nmf()</a></code> </p>
         </td>
-        <td><p>Align two factor models</p></td>
+        <td><p>Align two NMF models</p></td>
+      </tr><tr>
+        
+        <td>
+          <p><code><a href="aml.html">aml</a></code> </p>
+        </td>
+        <td><p>Acute Myelogenous Leukemia cells</p></td>
       </tr><tr>
         
         <td>
@@ -168,7 +177,7 @@
       </tr><tr>
         
         <td>
-          <p><code><a href="biplot.nmf.html">biplot(<i>&lt;nmf&gt;</i>)</a></code> </p>
+          <p><code><a href="biplot-nmf-method.html">biplot(<i>&lt;nmf&gt;</i>)</a></code> </p>
         </td>
         <td><p>Biplot for NMF factors</p></td>
       </tr><tr>
@@ -192,19 +201,25 @@
       </tr><tr>
         
         <td>
-          <p><code><a href="mse.html">mse()</a></code> </p>
+          <p><code><a href="evaluate.nmf.html">evaluate(<i>&lt;nmf&gt;</i>)</a></code> <code><a href="evaluate.nmf.html">evaluate.nmf()</a></code> </p>
         </td>
-        <td><p>Mean squared error of model fit</p></td>
+        <td><p>Evaluate an NMF model</p></td>
       </tr><tr>
         
         <td>
-          <p><code><a href="new_nmf.html">new_nmf()</a></code> </p>
+          <p><code><a href="hawaiibirds.html">hawaiibirds</a></code> </p>
         </td>
-        <td><p>Constructor for nmf class</p></td>
+        <td><p>Bird species frequency in Hawaii</p></td>
       </tr><tr>
         
         <td>
-          <p><code><a href="nmf.html">nmf()</a></code> <code><a href="nmf.html">mse(<i>&lt;nmf&gt;</i>)</a></code> <code><a href="nmf.html">predict(<i>&lt;nmf&gt;</i>)</a></code> </p>
+          <p><code><a href="movielens.html">movielens</a></code> </p>
+        </td>
+        <td><p>Movie ratings</p></td>
+      </tr><tr>
+        
+        <td>
+          <p><code><a href="nmf.html">nmf()</a></code> </p>
         </td>
         <td><p>Non-negative matrix factorization</p></td>
       </tr><tr>
@@ -216,9 +231,9 @@
       </tr><tr>
         
         <td>
-          <p><code><a href="project.html">project()</a></code> </p>
+          <p><code><a href="predict.nmf.html">predict(<i>&lt;nmf&gt;</i>)</a></code> <code><a href="predict.nmf.html">predict.nmf()</a></code> </p>
         </td>
-        <td><p>Project a factor model with least squares</p></td>
+        <td><p>Project an NMF model onto new samples</p></td>
       </tr><tr>
         
         <td>
@@ -234,21 +249,15 @@
       </tr><tr>
         
         <td>
-          <p><code><a href="sparsity.html">sparsity()</a></code> </p>
+          <p><code><a href="sparsity.html">sparsity(<i>&lt;nmf&gt;</i>)</a></code> </p>
         </td>
-        <td><p>Calculate sparsity of an object</p></td>
+        <td><p>Compute the sparsity of each NMF factor</p></td>
       </tr><tr>
         
         <td>
-          <p><code><a href="summary.nmf.html">summary(<i>&lt;nmf&gt;</i>)</a></code> <code><a href="summary.nmf.html">plot(<i>&lt;nmfSummary&gt;</i>)</a></code> </p>
+          <p><code><a href="summary-nmf-method.html">summary(<i>&lt;nmf&gt;</i>)</a></code> <code><a href="summary-nmf-method.html">plot(<i>&lt;nmfSummary&gt;</i>)</a></code> </p>
         </td>
         <td><p>Summarize NMF factors</p></td>
-      </tr><tr>
-        
-        <td>
-          <p><code><a href="threads.html">getRcppMLthreads()</a></code> <code><a href="threads.html">setRcppMLthreads()</a></code> </p>
-        </td>
-        <td><p>Get and set the number of threads RcppML should use</p></td>
       </tr>
     </tbody>
     </table>

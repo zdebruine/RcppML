@@ -3,7 +3,8 @@ pkgdown: 1.6.1
 pkgdown_sha: ~
 articles:
   getting_started: getting_started.html
-last_built: 2021-10-12T18:35Z
+  robust_nmf: robust_nmf.html
+last_built: 2021-10-21T14:36Z
 urls:
   reference: https://zdebruine.github.io/RcppML/reference
   article: https://zdebruine.github.io/RcppML/articles
