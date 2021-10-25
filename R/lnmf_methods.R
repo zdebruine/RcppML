@@ -56,9 +56,8 @@ setMethod("coerce", signature(from = "lnmf", to = "nmf"), function(from, to) {
     start_rank <- stop_rank
     start_sample <- stop_sample
   }
-  diag_order <- order(d, decreasing = TRUE)
   names(d) <- NULL
-  new("nmf", w = w[, diag_order], d = d[diag_order], h = h[diag_order,], misc = slot(from, "misc"))
+  new("nmf", w = w, d = d, h = h, misc = slot(from, "misc"))
 })
 
 #'
