@@ -114,8 +114,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // Rcpp_nmf_sparse
-Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, const double tol, const unsigned int maxit, const bool verbose, const bool nonneg, const std::vector<double> L1, const std::vector<double> L2, const bool diag, const unsigned int threads, Rcpp::List w_init, Eigen::MatrixXd h_, const bool mask_zeros, const bool link_h, const bool sort_model);
-RcppExport SEXP _RcppML_Rcpp_nmf_sparse(SEXP ASEXP, SEXP maskSEXP, SEXP tolSEXP, SEXP maxitSEXP, SEXP verboseSEXP, SEXP nonnegSEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP diagSEXP, SEXP threadsSEXP, SEXP w_initSEXP, SEXP h_SEXP, SEXP mask_zerosSEXP, SEXP link_hSEXP, SEXP sort_modelSEXP) {
+Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, const double tol, const unsigned int maxit, const bool verbose, const bool nonneg, const std::vector<double> L1, const std::vector<double> L2, const bool diag, const unsigned int threads, Rcpp::List w_init, const Rcpp::S4& link_matrix_h, const bool mask_zeros, const bool link_h, const bool sort_model);
+RcppExport SEXP _RcppML_Rcpp_nmf_sparse(SEXP ASEXP, SEXP maskSEXP, SEXP tolSEXP, SEXP maxitSEXP, SEXP verboseSEXP, SEXP nonnegSEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP diagSEXP, SEXP threadsSEXP, SEXP w_initSEXP, SEXP link_matrix_hSEXP, SEXP mask_zerosSEXP, SEXP link_hSEXP, SEXP sort_modelSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -130,17 +130,17 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const bool >::type diag(diagSEXP);
     Rcpp::traits::input_parameter< const unsigned int >::type threads(threadsSEXP);
     Rcpp::traits::input_parameter< Rcpp::List >::type w_init(w_initSEXP);
-    Rcpp::traits::input_parameter< Eigen::MatrixXd >::type h_(h_SEXP);
+    Rcpp::traits::input_parameter< const Rcpp::S4& >::type link_matrix_h(link_matrix_hSEXP);
     Rcpp::traits::input_parameter< const bool >::type mask_zeros(mask_zerosSEXP);
     Rcpp::traits::input_parameter< const bool >::type link_h(link_hSEXP);
     Rcpp::traits::input_parameter< const bool >::type sort_model(sort_modelSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_nmf_sparse(A, mask, tol, maxit, verbose, nonneg, L1, L2, diag, threads, w_init, h_, mask_zeros, link_h, sort_model));
+    rcpp_result_gen = Rcpp::wrap(Rcpp_nmf_sparse(A, mask, tol, maxit, verbose, nonneg, L1, L2, diag, threads, w_init, link_matrix_h, mask_zeros, link_h, sort_model));
     return rcpp_result_gen;
 END_RCPP
 }
 // Rcpp_nmf_dense
-Rcpp::List Rcpp_nmf_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, const double tol, const unsigned int maxit, const bool verbose, const bool nonneg, const std::vector<double> L1, const std::vector<double> L2, const bool diag, const unsigned int threads, Rcpp::List w_init, Eigen::MatrixXd h_, const bool mask_zeros, const bool link_h, const bool sort_model);
-RcppExport SEXP _RcppML_Rcpp_nmf_dense(SEXP A_SEXP, SEXP maskSEXP, SEXP tolSEXP, SEXP maxitSEXP, SEXP verboseSEXP, SEXP nonnegSEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP diagSEXP, SEXP threadsSEXP, SEXP w_initSEXP, SEXP h_SEXP, SEXP mask_zerosSEXP, SEXP link_hSEXP, SEXP sort_modelSEXP) {
+Rcpp::List Rcpp_nmf_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, const double tol, const unsigned int maxit, const bool verbose, const bool nonneg, const std::vector<double> L1, const std::vector<double> L2, const bool diag, const unsigned int threads, Rcpp::List w_init, const Rcpp::S4& link_matrix_h, const bool mask_zeros, const bool link_h, const bool sort_model);
+RcppExport SEXP _RcppML_Rcpp_nmf_dense(SEXP A_SEXP, SEXP maskSEXP, SEXP tolSEXP, SEXP maxitSEXP, SEXP verboseSEXP, SEXP nonnegSEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP diagSEXP, SEXP threadsSEXP, SEXP w_initSEXP, SEXP link_matrix_hSEXP, SEXP mask_zerosSEXP, SEXP link_hSEXP, SEXP sort_modelSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -155,11 +155,11 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const bool >::type diag(diagSEXP);
     Rcpp::traits::input_parameter< const unsigned int >::type threads(threadsSEXP);
     Rcpp::traits::input_parameter< Rcpp::List >::type w_init(w_initSEXP);
-    Rcpp::traits::input_parameter< Eigen::MatrixXd >::type h_(h_SEXP);
+    Rcpp::traits::input_parameter< const Rcpp::S4& >::type link_matrix_h(link_matrix_hSEXP);
     Rcpp::traits::input_parameter< const bool >::type mask_zeros(mask_zerosSEXP);
     Rcpp::traits::input_parameter< const bool >::type link_h(link_hSEXP);
     Rcpp::traits::input_parameter< const bool >::type sort_model(sort_modelSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_nmf_dense(A_, mask, tol, maxit, verbose, nonneg, L1, L2, diag, threads, w_init, h_, mask_zeros, link_h, sort_model));
+    rcpp_result_gen = Rcpp::wrap(Rcpp_nmf_dense(A_, mask, tol, maxit, verbose, nonneg, L1, L2, diag, threads, w_init, link_matrix_h, mask_zeros, link_h, sort_model));
     return rcpp_result_gen;
 END_RCPP
 }

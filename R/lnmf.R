@@ -65,7 +65,9 @@ lnmf <- function(data, k_wh, k_uv, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c
     }
   }
 
-  model <- nmf(data, nrow(link_matrix), tol, maxit, L1, L2, nonneg, seed, mask, link_h = TRUE, h_init = link_matrix, sort_model = FALSE)
+  link_matrix <- as(link_matrix, "ngCMatrix")
+
+  model <- nmf(data, nrow(link_matrix), tol, maxit, L1, L2, nonneg, seed, mask, link_h = TRUE, link_matrix_h = link_matrix, sort_model = FALSE)
   diag_order_wh <- order(model@d[1:k_wh], decreasing = TRUE)
   w <- model@w[, diag_order_wh]
   rownames(model@h) <- paste0("h", 1:nrow(model@h))

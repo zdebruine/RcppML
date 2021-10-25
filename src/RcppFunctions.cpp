@@ -11,7 +11,7 @@
 
 //[[Rcpp::export]]
 Eigen::MatrixXd Rcpp_predict_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eigen::MatrixXd w, const bool nonneg,
-                                    const double L1, const double L2, 
+                                    const double L1, const double L2,
                                     const unsigned int threads, const bool mask_zeros) {
   RcppML::SparseMatrix A_(A);
   RcppML::SparsePatternMatrix mask_(mask);
@@ -46,7 +46,7 @@ Eigen::MatrixXd Rcpp_predict_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Ei
 //[[Rcpp::export]]
 double Rcpp_mse_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h,
                        const unsigned int threads, const bool mask_zeros) {
-  
+
   RcppML::SparseMatrix A_(A);
   RcppML::SparsePatternMatrix mask_(mask);
   RcppML::nmf<RcppML::SparseMatrix> m(A_, w, d, h);
@@ -59,7 +59,7 @@ double Rcpp_mse_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eigen::MatrixXd 
 //[[Rcpp::export]]
 double Rcpp_mse_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h,
                       const unsigned int threads, const bool mask_zeros) {
-  
+
   RcppML::SparsePatternMatrix mask_(mask);
   RcppML::nmf<Eigen::MatrixXd> m(A_, w, d, h);
   if (mask_zeros) m.maskZeros();
@@ -71,7 +71,7 @@ double Rcpp_mse_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Eigen::MatrixXd
 //[[Rcpp::export]]
 double Rcpp_mse_missing_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h,
                                const unsigned int threads) {
-  
+
   RcppML::SparseMatrix A_(A);
   RcppML::SparsePatternMatrix mask_(mask);
   RcppML::nmf<RcppML::SparseMatrix> m(A_, w, d, h);
@@ -83,7 +83,7 @@ double Rcpp_mse_missing_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eigen::M
 //[[Rcpp::export]]
 double Rcpp_mse_missing_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h,
                               const unsigned int threads) {
-  
+
   RcppML::SparsePatternMatrix mask_(mask);
   RcppML::nmf<Eigen::MatrixXd> m(A_, w, d, h);
   m.maskMatrix(mask_);
@@ -96,24 +96,24 @@ double Rcpp_mse_missing_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Eigen::
 //[[Rcpp::export]]
 Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, const double tol, const unsigned int maxit,
                            const bool verbose, const bool nonneg, const std::vector<double> L1, const std::vector<double> L2,
-                           const bool diag, const unsigned int threads, Rcpp::List w_init, Eigen::MatrixXd h_, const bool mask_zeros,
-                           const bool link_h, const bool sort_model) {
-  
+                           const bool diag, const unsigned int threads, Rcpp::List w_init, const Rcpp::S4& link_matrix_h,
+                           const bool mask_zeros, const bool link_h, const bool sort_model) {
+
   RcppML::SparseMatrix A_(A);
-  RcppML::SparsePatternMatrix mask_(mask);
+  RcppML::SparsePatternMatrix mask_(mask), link_matrix_h_(link_matrix_h);
   Eigen::MatrixXd w_ = Rcpp::as<Eigen::MatrixXd>(w_init[0]);
-  RcppML::nmf<RcppML::SparseMatrix> m(A_, w_, h_);
+  RcppML::nmf<RcppML::SparseMatrix> m(A_, w_);
 
   // set model parameters
   m.tol = tol; m.nonneg = nonneg; m.L1 = L1; m.L2 = L2; m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.threads = threads;
   m.sort_model = sort_model;
-  if(link_h) m.link[1] = true;
+  if (link_h) m.linkH(link_matrix_h_);
   if (mask_zeros) m.maskZeros();
   else if (mask_.rows() == A_.rows() && mask_.cols() == A_.cols()) m.maskMatrix(mask_);
-  
+
   if (w_init.length() == 1) m.fit();
   else m.fit_restarts(w_init);
-  
+
   return Rcpp::List::create(Rcpp::Named("w") = m.matrixW().transpose(),
                             Rcpp::Named("d") = m.vectorD(),
                             Rcpp::Named("h") = m.matrixH(),
@@ -126,23 +126,23 @@ Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, const double
 //[[Rcpp::export]]
 Rcpp::List Rcpp_nmf_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, const double tol, const unsigned int maxit,
                           const bool verbose, const bool nonneg, const std::vector<double> L1, const std::vector<double> L2,
-                          const bool diag, const unsigned int threads, Rcpp::List w_init, Eigen::MatrixXd h_, const bool mask_zeros,
+                          const bool diag, const unsigned int threads, Rcpp::List w_init, const Rcpp::S4& link_matrix_h, const bool mask_zeros,
                           const bool link_h, const bool sort_model) {
-  
-  RcppML::SparsePatternMatrix mask_(mask);
+
+  RcppML::SparsePatternMatrix mask_(mask), link_matrix_h_(link_matrix_h);
   Eigen::MatrixXd w_ = Rcpp::as<Eigen::MatrixXd>(w_init[0]);
-  RcppML::nmf<Eigen::MatrixXd> m(A_, w_, h_);
-  
+  RcppML::nmf<Eigen::MatrixXd> m(A_, w_);
+
   // set model parameters
   m.tol = tol; m.nonneg = nonneg; m.L1 = L1; m.L2 = L2; m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.threads = threads;
   m.sort_model = sort_model;
-  if(link_h) m.link[1] = true;
+  if (link_h) m.linkH(link_matrix_h_);
   if (mask_zeros) m.maskZeros();
   else if (mask_.rows() == A_.rows() && mask_.cols() == A_.cols()) m.maskMatrix(mask_);
-  
+
   if (w_init.length() == 1) m.fit();
   else m.fit_restarts(w_init);
-  
+
   return Rcpp::List::create(Rcpp::Named("w") = m.matrixW().transpose(),
                             Rcpp::Named("d") = m.vectorD(),
                             Rcpp::Named("h") = m.matrixH(),
@@ -158,27 +158,27 @@ Rcpp::List Rcpp_nmf_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, const doubl
 Rcpp::List Rcpp_bipartition_sparse(const Rcpp::S4& A, const double tol, const unsigned int maxit, const bool nonneg,
                                    const std::vector<unsigned int>& samples, const unsigned int seed, const bool verbose = false,
                                    const bool calc_dist = false, const bool diag = true) {
-  
+
   RcppML::SparseMatrix A_(A);
   Eigen::MatrixXd w = randomMatrix(2, A_.rows(), seed);
   bipartitionModel m = c_bipartition_sparse(A_, w, samples, tol, nonneg, calc_dist, maxit, verbose);
   return Rcpp::List::create(Rcpp::Named("v") = m.v, Rcpp::Named("dist") = m.dist, Rcpp::Named("size1") = m.size1,
                             Rcpp::Named("size2") = m.size2, Rcpp::Named("samples1") = m.samples1, Rcpp::Named("samples2") = m.samples2,
-                                        Rcpp::Named("center1") = m.center1, Rcpp::Named("center2") = m.center2);
-  
+                            Rcpp::Named("center1") = m.center1, Rcpp::Named("center2") = m.center2);
+
 }
 
 //[[Rcpp::export]]
 Rcpp::List Rcpp_bipartition_dense(const Eigen::MatrixXd& A, const double tol, const unsigned int maxit, const bool nonneg,
                                   const std::vector<unsigned int>& samples, const unsigned int seed, const bool verbose = false,
                                   const bool calc_dist = false, const bool diag = true) {
-  
+
   Eigen::MatrixXd w = randomMatrix(2, A.rows(), seed);
   bipartitionModel m = c_bipartition_dense(A, w, samples, tol, nonneg, calc_dist, maxit, verbose);
   return Rcpp::List::create(Rcpp::Named("v") = m.v, Rcpp::Named("dist") = m.dist, Rcpp::Named("size1") = m.size1,
                             Rcpp::Named("size2") = m.size2, Rcpp::Named("samples1") = m.samples1, Rcpp::Named("samples2") = m.samples2,
-                                        Rcpp::Named("center1") = m.center1, Rcpp::Named("center2") = m.center2);
-  
+                            Rcpp::Named("center1") = m.center1, Rcpp::Named("center2") = m.center2);
+
 }
 
 // DIVISIVE CLUSTERING BY RECURSIVE BIPARTITIONING
@@ -186,17 +186,17 @@ Rcpp::List Rcpp_bipartition_dense(const Eigen::MatrixXd& A, const double tol, co
 //[[Rcpp::export]]
 Rcpp::List Rcpp_dclust_sparse(const Rcpp::S4& A, const unsigned int min_samples, const double min_dist, const bool verbose,
                               const double tol, const unsigned int maxit, const bool nonneg, const unsigned int seed, const unsigned int threads) {
-  
+
   RcppML::SparseMatrix A_(A);
-  
+
   RcppML::clusterModel m = RcppML::clusterModel(A_, min_samples, min_dist);
   m.nonneg = nonneg; m.verbose = verbose; m.tol = tol; m.min_dist = min_dist; m.seed = seed; m.maxit = maxit; m.threads = threads;
   m.min_samples = min_samples;
-  
+
   m.dclust();
-  
+
   std::vector<cluster> clusters = m.getClusters();
-  
+
   Rcpp::List result(clusters.size());
   for (unsigned int i = 0; i < clusters.size(); ++i) {
     result[i] = Rcpp::List::create(Rcpp::Named("id") = clusters[i].id, Rcpp::Named("samples") = clusters[i].samples,
@@ -286,7 +286,7 @@ Rcpp::List Rcpp_dclust_sparse(const Rcpp::S4& A, const unsigned int min_samples,
 //[[Rcpp::export]]
 Eigen::MatrixXd nnls(Eigen::MatrixXd a, Eigen::MatrixXd b, unsigned int cd_maxit = 100,
                      const double cd_tol = 1e-8, const bool fast_nnls = false, const double L1 = 0, const double L2 = 0, const double PE = 0) {
-  
+
   if (a.rows() != a.cols()) Rcpp::stop("'a' is not symmetric");
   if (a.rows() != b.rows()) Rcpp::stop("dimensions of 'b' and 'a' are not compatible!");
   if (L1 != 0) b.array() -= L1;
@@ -295,12 +295,12 @@ Eigen::MatrixXd nnls(Eigen::MatrixXd a, Eigen::MatrixXd b, unsigned int cd_maxit
     a.array() += PE;
     a.diagonal().array() -= PE;
   }
-  
+
   Eigen::LLT<Eigen::MatrixXd> a_llt;
   Eigen::MatrixXd x(b.rows(), b.cols());
   if (fast_nnls) a_llt = a.llt();
   for (unsigned int col = 0; col < b.cols(); ++col) {
-    
+
     if (fast_nnls) {
       // initialize with unconstrained least squares solution
       x.col(col) = a_llt.solve(b.col(col));
@@ -315,7 +315,7 @@ Eigen::MatrixXd nnls(Eigen::MatrixXd a, Eigen::MatrixXd b, unsigned int cd_maxit
       }
       b.col(col) -= a * x.col(col); // adjust gradient for current solution
     }
-    
+
     // refine FAST solution by coordinate descent, or find solution from zero-initialized "x" matrix
     if (cd_maxit > 0) {
       double tol = 1;

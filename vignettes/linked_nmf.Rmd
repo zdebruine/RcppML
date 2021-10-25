@@ -1,0 +1,53 @@
+---
+title: "Linked NMF for learning shared latent spaces"
+author: "Zach DeBruine"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Linked NMF for learning shared latent spaces}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+
+Non-negative matrix factorization is a useful method for additive decomposition of signal within a dataset. However, NMF of concatenated datasets does not cleanly resolve batch effects, sources of heterogeneity, and shared signal. Linked NMF implicitly couples independent factorizations of multiple datasets to recover models describing shared and unique signal.
+
+## Linked NMF problem definition
+
+Consider the basic NMF objective:
+
+$$\tag{1} \min_{\{W, H\} \geq0} \lVert A - WH \rVert_F^2$$
+
+NMF seeks to minimize the Frobenius norm of the difference between a dataset $A$ and a lower-rank linear factor model $WH$.
+
+Now consider the linked NMF objective:
+
+$$\tag{2} \min_{\{W, H, U, V\} \geq 0} \sum_{k = 1}^K{\left\Vert A_k - \begin{pmatrix} W & U_k\end{pmatrix} \begin{pmatrix} H_k \\\ V_k\end{pmatrix} \right\Vert _F^2}$$
+
+Linked NMF is essentially two factorizations for each dataset $A_{1...K}$, one which is linked across all datasets ($WH_k$), and a second which is unique to the dataset itself ($U_kV_k$):
+
+* $W$ is the shared feature model across all datasets, mapped by $H_k$ for each dataset $A_k$.
+* $U_k$ is the unique feature model for each dataset, mapped by $V_k$ for each dataset $A_k$.
+
+The rank of $W$ does not need to equal the rank of $U_k$, and neither does the rank of $U_1$ need to equal the rank of $U_k$.
+
+The following perspective of lNMF illustrates the separability of the two linked matrix factorization subproblems:
+
+$$\tag{3} \min_{\{W, H, U, V\} \geq 0} \sum_{k = 1}^K{\left\Vert A_k - (WH_k + U_kV_k) \right\Vert_F^2}$$
+
+A separation of the two objectives in eqn. 3 makes clear that linked NMF implicitly links two factorization problems:
+
+$$\tag{4} \min_{\{W, H, U, V\} \geq 0} \sum_{k = 1}^K{\left\Vert A_k - WH_k \right\Vert _F^2} + \sum_{k = 1}^K{\left\Vert A_k - U_kV_k\right\Vert_F^2}$$
+
+Another way to look at the linked NMF objective, factorizing out the summation over all datasets $A_{1...K}$, is the following:
+
+$$\tag{5} \min_{W \geq 0} \left\Vert \begin{pmatrix} A_1 & \cdots & A_K\end{pmatrix} - \begin{pmatrix} W & U_1 & \cdots & U_K \end{pmatrix} \begin{pmatrix}H_1 & \cdots & H_K \\\ V_1 & 0 & 0 \\\ 0 & \ddots & 0 \\\ 0 & 0 & V_K \end{pmatrix}  \right\Vert _F^2$$
+
+Notice that this equation is in the form $\lVert A - WH \rVert$, and actually solvable in this form provided that the zeros are maintained in $H$.

@@ -18,6 +18,7 @@ namespace RcppML {
         T& A;
         T t_A;
         SparsePatternMatrix mask_matrix = SparsePatternMatrix(), t_mask_matrix;
+        SparsePatternMatrix link_matrix_w = SparsePatternMatrix(), link_matrix_h = SparsePatternMatrix();
         Eigen::MatrixXd w;
         Eigen::VectorXd d;
         Eigen::MatrixXd h;
@@ -51,15 +52,6 @@ namespace RcppML {
             isSymmetric();
         }
 
-        // constructor for initialization with an initial "w" matrix
-        nmf(T& A, Eigen::MatrixXd w, Eigen::MatrixXd h) : A(A), w(w), h(h) {
-            if (A.rows() != w.cols()) Rcpp::stop("dimensions of 'w' and 'A' are not compatible");
-            if (A.cols() != h.cols()) Rcpp::stop("dimensions of 'h' and 'A' are not compatible");
-            if (w.rows() != h.rows()) Rcpp::stop("rank of 'w' and 'h' are not equal!");
-            d = Eigen::VectorXd::Ones(w.rows());
-            isSymmetric();
-        }
-
         // constructor for initialization with a fully-specified model
         nmf(T& A, Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h) : A(A), w(w), d(d), h(h) {
             if (A.rows() != w.cols()) Rcpp::stop("dimensions of 'w' and 'A' are not compatible");
@@ -83,6 +75,18 @@ namespace RcppML {
             mask = true;
             mask_matrix = m;
             if (symmetric) symmetric = mask_matrix.isAppxSymmetric();
+        }
+
+        void linkH(SparsePatternMatrix& l) {
+            if(l.cols() == A.cols()) link_matrix_h = l;
+            else Rcpp::stop("dimensions of linking matrix and 'A' are not equivalent");
+            link[1] = true;
+        }
+
+        void linkW(SparsePatternMatrix& l) {
+            if(l.cols() == A.rows()) link_matrix_w = l;
+            else Rcpp::stop("dimensions of linking matrix and 'A' are not equivalent");
+            link[0] = true;
         }
 
         // GETTERS
@@ -130,19 +134,19 @@ namespace RcppML {
 
         // project "w" onto "A" to solve for "h" in the equation "A = wh"
         void predictH() {
-            predict(A, mask_matrix, w, h, nonneg, L1[1], L2[1], threads, mask_zeros, mask, link[1]);
+            predict(A, mask_matrix, link_matrix_h, w, h, nonneg, L1[1], L2[1], threads, mask_zeros, mask, link[1]);
         }
 
         // project "h" onto "t(A)" to solve for "w"
         void predictW() {
-            if (symmetric) predict(A, mask_matrix, h, w, nonneg, L1[0], L2[0], threads, mask_zeros, mask, link[0]);
+            if (symmetric) predict(A, mask_matrix, link_matrix_w, h, w, nonneg, L1[0], L2[0], threads, mask_zeros, mask, link[0]);
             else {
                 if (!transposed) {
                     t_A = A.transpose();
                     if (mask) t_mask_matrix = mask_matrix.transpose();
                     transposed = true;
                 }
-                predict(t_A, t_mask_matrix, h, w, nonneg, L1[0], L2[0], threads, mask_zeros, mask, link[0]);
+                predict(t_A, t_mask_matrix, link_matrix_w, h, w, nonneg, L1[0], L2[0], threads, mask_zeros, mask, link[0]);
             }
         };
 
