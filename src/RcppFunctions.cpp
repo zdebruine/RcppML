@@ -96,16 +96,18 @@ double Rcpp_mse_missing_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Eigen::
 //[[Rcpp::export]]
 Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, const double tol, const unsigned int maxit,
                            const bool verbose, const bool nonneg, const std::vector<double> L1, const std::vector<double> L2,
-                           const bool diag, const unsigned int threads, Rcpp::List w_init, const bool mask_zeros) {
+                           const bool diag, const unsigned int threads, Rcpp::List w_init, Eigen::MatrixXd h_, const bool mask_zeros,
+                           const bool link_h, const bool sort_model) {
   
   RcppML::SparseMatrix A_(A);
   RcppML::SparsePatternMatrix mask_(mask);
   Eigen::MatrixXd w_ = Rcpp::as<Eigen::MatrixXd>(w_init[0]);
-  RcppML::nmf<RcppML::SparseMatrix> m(A_, w_);
-  
+  RcppML::nmf<RcppML::SparseMatrix> m(A_, w_, h_);
+
   // set model parameters
   m.tol = tol; m.nonneg = nonneg; m.L1 = L1; m.L2 = L2; m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.threads = threads;
-  
+  m.sort_model = sort_model;
+  if(link_h) m.link[1] = true;
   if (mask_zeros) m.maskZeros();
   else if (mask_.rows() == A_.rows() && mask_.cols() == A_.cols()) m.maskMatrix(mask_);
   
@@ -124,14 +126,17 @@ Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, const double
 //[[Rcpp::export]]
 Rcpp::List Rcpp_nmf_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, const double tol, const unsigned int maxit,
                           const bool verbose, const bool nonneg, const std::vector<double> L1, const std::vector<double> L2,
-                          const bool diag, const unsigned int threads, Rcpp::List w_init, const bool mask_zeros) {
+                          const bool diag, const unsigned int threads, Rcpp::List w_init, Eigen::MatrixXd h_, const bool mask_zeros,
+                          const bool link_h, const bool sort_model) {
   
   RcppML::SparsePatternMatrix mask_(mask);
   Eigen::MatrixXd w_ = Rcpp::as<Eigen::MatrixXd>(w_init[0]);
-  RcppML::nmf<Eigen::MatrixXd> m(A_, w_);
+  RcppML::nmf<Eigen::MatrixXd> m(A_, w_, h_);
   
   // set model parameters
   m.tol = tol; m.nonneg = nonneg; m.L1 = L1; m.L2 = L2; m.maxit = maxit; m.diag = diag; m.verbose = verbose; m.threads = threads;
+  m.sort_model = sort_model;
+  if(link_h) m.link[1] = true;
   if (mask_zeros) m.maskZeros();
   else if (mask_.rows() == A_.rows() && mask_.cols() == A_.cols()) m.maskMatrix(mask_);
   
