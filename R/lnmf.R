@@ -74,14 +74,18 @@ lnmf <- function(data, k_wh, k_uv, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c
   colnames(w) <- paste0("w", 1:ncol(w))
   u <- v <- h <- d_wh <- d_uv <- list()
   for (i in 1:length(k_uv)) {
-    u[[i]] <- model@w[, (k_pointers[i] + 1):k_pointers[i + 1]]
-    d_uv[[i]] <- model@d[(k_pointers[i] + 1):k_pointers[i+1]]
+    u[[i]] <- as.matrix(model@w[, (k_pointers[i] + 1):k_pointers[i + 1]])
+    d_uv[[i]] <- model@d[(k_pointers[i] + 1):k_pointers[i + 1]]
     diag_order_uv <- order(d_uv[[i]], decreasing = TRUE)
     d_uv[[i]] <- d_uv[[i]][diag_order_uv]
-    v[[i]] <- model@h[ (k_pointers[i] + 1):k_pointers[i+1], (set_pointers[i] + 1):set_pointers[i + 1]]
-    v[[i]] <- v[[i]][diag_order_uv, ]
-    h[[i]] <- model@h[ , (set_pointers[i] + 1):set_pointers[i + 1]]
-    h[[i]] <- h[[i]][diag_order_wh, ]
+    v[[i]] <- as.matrix(model@h[(k_pointers[i] + 1):k_pointers[i + 1], (set_pointers[i] + 1):set_pointers[i + 1]])
+    if(ncol(v[[i]]) == 1) v[[i]] <- t(v[[i]])
+    if(nrow(v[[i]]) > 1){
+      v[[i]] <- v[[i]][diag_order_uv,]
+      u[[i]] <- u[[i]][, diag_order_uv]
+    }
+    h[[i]] <- as.matrix(model@h[diag_order_wh, (set_pointers[i] + 1):set_pointers[i + 1]])
+    if(ncol(h[[i]]) == 1) h[[i]] <- t(h[[i]])
     d_wh[[i]] <- model@d[diag_order_wh]
     scale_h <- rowSums(h[[i]])
     h[[i]] <- apply(h[[i]], 2, function(x) x / scale_h)
