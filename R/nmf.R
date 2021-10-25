@@ -86,7 +86,7 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), no
   start_time <- Sys.time()
   # apply defaults to development parameters
   p <- list(...)
-  defaults <- list("diag" = TRUE, "link_h_matrix" = new("ngCMatrix"), "link_h" = FALSE, "sort_model" = TRUE)
+  defaults <- list("diag" = TRUE, "link_matrix_h" = new("ngCMatrix"), "link_h" = FALSE, "sort_model" = TRUE)
   for (i in 1:length(defaults))
     if (is.null(p[[names(defaults)[[i]]]])) p[[names(defaults)[[i]]]] <- defaults[[i]]
 
