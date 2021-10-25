@@ -86,7 +86,7 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), no
   start_time <- Sys.time()
   # apply defaults to development parameters
   p <- list(...)
-  defaults <- list("diag" = TRUE)
+  defaults <- list("diag" = TRUE, "h_init" = NULL, "link_h" = FALSE, "sort_model" = TRUE)
   for (i in 1:length(defaults))
     if (is.null(p[[names(defaults)[[i]]]])) p[[names(defaults)[[i]]]] <- defaults[[i]]
 
@@ -171,12 +171,15 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), no
   } else {
     w_init[[1]] <- matrix(runif(k * nrow(data)), k, nrow(data))
   }
+  if(is.null(p$h_init)) {
+    p$h_init <- matrix(1, k, ncol(data))
+  }
 
   # call C++ routines
   if (class(data)[[1]] == "dgCMatrix") {
-    model <- Rcpp_nmf_sparse(data, mask_matrix, tol, maxit, getOption("RcppML.verbose"), nonneg, L1, L2, p$diag, getOption("RcppML.threads"), w_init, mask_zeros)
+    model <- Rcpp_nmf_sparse(data, mask_matrix, tol, maxit, getOption("RcppML.verbose"), nonneg, L1, L2, p$diag, getOption("RcppML.threads"), w_init, p$h_init, mask_zeros, p$link_h, p$sort_model)
   } else {
-    model <- Rcpp_nmf_dense(data, mask_matrix, tol, maxit, getOption("RcppML.verbose"), nonneg, L1, L2, p$diag, getOption("RcppML.threads"), w_init, mask_zeros)
+    model <- Rcpp_nmf_dense(data, mask_matrix, tol, maxit, getOption("RcppML.verbose"), nonneg, L1, L2, p$diag, getOption("RcppML.threads"), w_init, p$h_init, mask_zeros, p$link_h, p$sort_model)
   }
 
   # add back dimnames

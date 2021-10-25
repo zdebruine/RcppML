@@ -4,10 +4,11 @@
 #' @slot h sample factor matrix
 #' @slot misc list often containing components:
 #'  \itemize{
-#'    \item tol  : tolerance of fit
-#'    \item iter : number of fitting updates
+#'    \item tol     : tolerance of fit
+#'    \item iter    : number of fitting updates
 #'    \item runtime : runtime in seconds
-#'    \item mse  : mean squared error of model (calculated for multiple starts only)
+#'    \item mse     : mean squared error of model (calculated for multiple starts only)
+#'    \item w_init  : initial w matrix used for model fitting
 #'  }
 #' @name nmf
 #' @aliases nmf, nmf-class
@@ -27,9 +28,8 @@ setClass("nmf",
     if (is.null(msg)) TRUE else msg
   })
 
-#' 
 #' @method subset nmf
-#' @export
+#'@export
 setMethod("subset", signature("nmf"), function(x, i, ...) {
   validObject(x)
   x@w <- x@w[, i]
@@ -48,9 +48,8 @@ setMethod("[", signature("nmf"), function(x, i) {
   x
 })
 
-#' 
 #' @method head nmf
-#' @export
+#'@export
 setMethod("head", signature("nmf"), function(x, n = getOption("digits"), ...) {
   validObject(x)
   cat(nrow(x@w), "x", ncol(x@h), "x", length(x@d), "factor model of class \"nmf\"\n")
@@ -84,7 +83,7 @@ setMethod("head", signature("nmf"), function(x, n = getOption("digits"), ...) {
   }
   cat("\n@ misc\n")
   cat(str(x@misc))
-  
+
   invisible(x)
 })
 

@@ -25,12 +25,12 @@ Rcpp_mse_missing_dense <- function(A_, mask, w, d, h, threads) {
     .Call(`_RcppML_Rcpp_mse_missing_dense`, A_, mask, w, d, h, threads)
 }
 
-Rcpp_nmf_sparse <- function(A, mask, tol, maxit, verbose, nonneg, L1, L2, diag, threads, w_init, mask_zeros) {
-    .Call(`_RcppML_Rcpp_nmf_sparse`, A, mask, tol, maxit, verbose, nonneg, L1, L2, diag, threads, w_init, mask_zeros)
+Rcpp_nmf_sparse <- function(A, mask, tol, maxit, verbose, nonneg, L1, L2, diag, threads, w_init, h_, mask_zeros, link_h, sort_model) {
+    .Call(`_RcppML_Rcpp_nmf_sparse`, A, mask, tol, maxit, verbose, nonneg, L1, L2, diag, threads, w_init, h_, mask_zeros, link_h, sort_model)
 }
 
-Rcpp_nmf_dense <- function(A_, mask, tol, maxit, verbose, nonneg, L1, L2, diag, threads, w_init, mask_zeros) {
-    .Call(`_RcppML_Rcpp_nmf_dense`, A_, mask, tol, maxit, verbose, nonneg, L1, L2, diag, threads, w_init, mask_zeros)
+Rcpp_nmf_dense <- function(A_, mask, tol, maxit, verbose, nonneg, L1, L2, diag, threads, w_init, h_, mask_zeros, link_h, sort_model) {
+    .Call(`_RcppML_Rcpp_nmf_dense`, A_, mask, tol, maxit, verbose, nonneg, L1, L2, diag, threads, w_init, h_, mask_zeros, link_h, sort_model)
 }
 
 Rcpp_bipartition_sparse <- function(A, tol, maxit, nonneg, samples, seed, verbose = FALSE, calc_dist = FALSE, diag = TRUE) {

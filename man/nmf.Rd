@@ -76,10 +76,11 @@ Parallelization is applied with OpenMP using the number of threads in \code{getO
 
 \item{\code{misc}}{list often containing components:
 \itemize{
-  \item tol  : tolerance of fit
-  \item iter : number of fitting updates
+  \item tol     : tolerance of fit
+  \item iter    : number of fitting updates
   \item runtime : runtime in seconds
-  \item mse  : mean squared error of model (calculated for multiple starts only)
+  \item mse     : mean squared error of model (calculated for multiple starts only)
+  \item w_init  : initial w matrix used for model fitting
 }}
 }}
 
