@@ -33,7 +33,7 @@ lnmf <- function(data, k_wh, k_uv, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c
   set_pointers <- c(sapply(data, function(x) ncol(x)))
   for (i in 2:length(set_pointers))
     set_pointers[i] <- set_pointers[i] + set_pointers[i - 1]
-  set_pointers <- c(1, set_pointers)
+  set_pointers <- c(0, set_pointers)
   k_pointers <- c(k_wh, k_uv)
   for (i in 2:length(k_pointers))
     k_pointers[i] <- k_pointers[i] + k_pointers[i - 1]
@@ -68,7 +68,6 @@ lnmf <- function(data, k_wh, k_uv, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c
   model <- nmf(data, nrow(link_matrix), tol, maxit, L1, L2, nonneg, seed, mask, link_h = TRUE, h_init = link_matrix, sort_model = FALSE)
   diag_order_wh <- order(model@d[1:k_wh], decreasing = TRUE)
   w <- model@w[, diag_order_wh]
-  model@h <- model@h[diag_order_wh, ]
   rownames(model@h) <- paste0("h", 1:nrow(model@h))
   colnames(w) <- paste0("w", 1:ncol(w))
   u <- v <- h <- d_wh <- d_uv <- list()
@@ -77,8 +76,10 @@ lnmf <- function(data, k_wh, k_uv, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c
     d_uv[[i]] <- model@d[(k_pointers[i] + 1):k_pointers[i+1]]
     diag_order_uv <- order(d_uv[[i]], decreasing = TRUE)
     d_uv[[i]] <- d_uv[[i]][diag_order_uv]
-    v[[i]] <- model@h[diag_order_uv, (set_pointers[i] + 1):set_pointers[i + 1]]
-    h[[i]] <- model@h[1:k_wh, (set_pointers[i] + 1):set_pointers[i + 1]]
+    v[[i]] <- model@h[ (k_pointers[i] + 1):k_pointers[i+1], (set_pointers[i] + 1):set_pointers[i + 1]]
+    v[[i]] <- v[[i]][diag_order_uv, ]
+    h[[i]] <- model@h[ , (set_pointers[i] + 1):set_pointers[i + 1]]
+    h[[i]] <- h[[i]][diag_order_wh, ]
     d_wh[[i]] <- model@d[diag_order_wh]
     scale_h <- rowSums(h[[i]])
     h[[i]] <- apply(h[[i]], 2, function(x) x / scale_h)
