@@ -24,10 +24,6 @@ setClass("lnmf",
     # check that ranks of h are equal 
     if (!(all(sapply(object@h, function(x) nrow(x)) == ncol(object@w))))
       msg <- c(msg, "ranks of all 'h' matrices are not equal to rank of 'w'")
-    if (!(all(sapply(object@u, function(x) ncol(x)) == ncol(object@u[[1]]))))
-      msg <- c(msg, "ranks of all 'u' matrices are not equal")
-    if (!(all(sapply(object@v, function(x) nrow(x)) == nrow(object@v[[1]]))))
-      msg <- c(msg, "ranks of all 'v' matrices are not equal")
     if (!(all(sapply(object@v, function(x) nrow(x)) == sapply(object@u, function(x) ncol(x)))))
       msg <- c(msg, "ranks of all 'u' are not equal to all 'v'")
     if (!(all(sapply(object@d_uv, function(x) length(x)) == sapply(object@u, function(x) ncol(x)))))
