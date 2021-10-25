@@ -29,6 +29,9 @@ namespace RcppML {
         bool nonneg = true, diag = true, verbose = true;
         unsigned int maxit = 100, threads = 0;
         std::vector<double> L1 = std::vector<double>(2), L2 = std::vector<double>(2);
+        std::vector<bool> link = { false, false };
+        bool sort_model = true;
+
         double tol = 1e-4;
 
         // CONSTRUCTORS
@@ -41,10 +44,19 @@ namespace RcppML {
         }
 
         // constructor for initialization with an initial "w" matrix
-        nmf(T& A, Eigen::MatrixXd w_init) : A(A), w(w_init) {
-            if (A.rows() != w_init.cols()) Rcpp::stop("number of rows in 'A' and columns in 'w_init' are not equal!");
+        nmf(T& A, Eigen::MatrixXd w) : A(A), w(w) {
+            if (A.rows() != w.cols()) Rcpp::stop("number of rows in 'A' and columns in 'w' are not equal!");
             d = Eigen::VectorXd::Ones(w.rows());
             h = Eigen::MatrixXd(w.rows(), A.cols());
+            isSymmetric();
+        }
+
+        // constructor for initialization with an initial "w" matrix
+        nmf(T& A, Eigen::MatrixXd w, Eigen::MatrixXd h) : A(A), w(w), h(h) {
+            if (A.rows() != w.cols()) Rcpp::stop("dimensions of 'w' and 'A' are not compatible");
+            if (A.cols() != h.cols()) Rcpp::stop("dimensions of 'h' and 'A' are not compatible");
+            if (w.rows() != h.rows()) Rcpp::stop("rank of 'w' and 'h' are not equal!");
+            d = Eigen::VectorXd::Ones(w.rows());
             isSymmetric();
         }
 
@@ -118,19 +130,19 @@ namespace RcppML {
 
         // project "w" onto "A" to solve for "h" in the equation "A = wh"
         void predictH() {
-            predict(A, mask_matrix, w, h, nonneg, L1[1], L2[1], threads, mask_zeros, mask);
+            predict(A, mask_matrix, w, h, nonneg, L1[1], L2[1], threads, mask_zeros, mask, link[1]);
         }
 
         // project "h" onto "t(A)" to solve for "w"
         void predictW() {
-            if (symmetric) predict(A, mask_matrix, h, w, nonneg, L1[0], L2[0], threads, mask_zeros, mask);
+            if (symmetric) predict(A, mask_matrix, h, w, nonneg, L1[0], L2[0], threads, mask_zeros, mask, link[0]);
             else {
                 if (!transposed) {
                     t_A = A.transpose();
                     if (mask) t_mask_matrix = mask_matrix.transpose();
                     transposed = true;
                 }
-                predict(t_A, t_mask_matrix, h, w, nonneg, L1[0], L2[0], threads, mask_zeros, mask);
+                predict(t_A, t_mask_matrix, h, w, nonneg, L1[0], L2[0], threads, mask_zeros, mask, link[0]);
             }
         };
 
@@ -158,7 +170,7 @@ namespace RcppML {
             if (tol_ > tol && iter_ == maxit && verbose)
                 Rprintf(" convergence not reached in %d iterations\n  (actual tol = %4.2e, target tol = %4.2e)\n", iter_, tol_, tol);
 
-            if (diag) sortByDiagonal();
+            if (diag && sort_model) sortByDiagonal();
         }
 
         // fit the model multiple times and return the best one

@@ -15,12 +15,12 @@
 // solve for 'h' given sparse 'A' in 'A = wh'
 void predict(RcppML::SparseMatrix& A, RcppML::SparsePatternMatrix& m, const Eigen::MatrixXd& w,
              Eigen::MatrixXd& h, const bool nonneg, const double L1, const double L2,
-             const unsigned int threads, const bool mask_zeros, const bool mask) {
+             const unsigned int threads, const bool mask_zeros, const bool mask, const bool linked_update) {
 
   if (!mask_zeros && !mask) {
     int rank = w.rows();
     // RANK-1 IMPLEMENTATION
-    if (rank == 1) {
+    if (rank == 1 && !linked_update) {
       h.setZero();
       // calculate "a" in "ax = b" as the inner product of the "w" vector
       double a = 0;
@@ -35,7 +35,7 @@ void predict(RcppML::SparseMatrix& A, RcppML::SparsePatternMatrix& m, const Eige
     }
 
     // RANK-2 IMPLEMENTATION
-    else if (rank == 2) {
+    else if (rank == 2 && !linked_update) {
       // calculate "a" in "ax = b" as w^Tw
       Eigen::Matrix2d a = w * w.transpose();
       a.diagonal().array() += TINY_NUM + L2;
@@ -65,11 +65,24 @@ void predict(RcppML::SparseMatrix& A, RcppML::SparsePatternMatrix& m, const Eige
       for (unsigned int i = 0; i < h.cols(); ++i) {
         // calculate right-hand side of system of equations, "b"
         Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
-        for (RcppML::SparseMatrix::InnerIterator it(A, i); it; ++it)
-          b += it.value() * w.col(it.row());
 
-        // subtract L1 penalty from "b"
-        if (L1 != 0) b.array() -= L1;
+        // linked_update considers information corresponding to non-zero values in "h"
+        if (linked_update) {
+          for (RcppML::SparseMatrix::InnerIterator it(A, i); it; ++it)
+            for (unsigned int j = 0; j < h.rows(); ++j)
+              if (h(j, i) != 0)
+                b(j) += it.value() * w(j, it.row());
+          if (L1 != 0)
+            for (unsigned int j = 0; j < h.rows(); ++j)
+              if (h(j, i) != 0)
+                b(j) -= L1;
+        } else {
+          for (RcppML::SparseMatrix::InnerIterator it(A, i); it; ++it)
+            b += it.value() * w.col(it.row());
+
+          // subtract L1 penalty from "b"
+          if (L1 != 0) b.array() -= L1;
+        }
 
         // solve least squares equation, ax = b where x is h.col(i)
         h.col(i) = a_llt.solve(b);
@@ -95,9 +108,20 @@ void predict(RcppML::SparseMatrix& A, RcppML::SparsePatternMatrix& m, const Eige
         Eigen::MatrixXd a = w_ * w_.transpose();
         a.diagonal().array() += TINY_NUM + L2;
         Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
-        for (RcppML::SparseMatrix::InnerIterator it(A, i); it; ++it)
-          b += it.value() * w.col(it.row());
-        if (L1 != 0) b.array() -= L1;
+        if (linked_update) {
+          for (RcppML::SparseMatrix::InnerIterator it(A, i); it; ++it)
+            for (unsigned int j = 0; j < h.rows(); ++j)
+              if (h(j, i) != 0)
+                b(j) += it.value() * w(j, it.row());
+          if (L1 != 0)
+            for (unsigned int j = 0; j < h.rows(); ++j)
+              if (h(j, i) != 0)
+                b(j) -= L1;
+        } else {
+          for (RcppML::SparseMatrix::InnerIterator it(A, i); it; ++it)
+            b += it.value() * w.col(it.row());
+          if (L1 != 0) b.array() -= L1;
+        }
         if (!nonneg) h.col(i) = a.llt().solve(b);
         else c_nnls(a, b, h, i);
       }
@@ -122,9 +146,21 @@ void predict(RcppML::SparseMatrix& A, RcppML::SparsePatternMatrix& m, const Eige
         a_.diagonal().array() += TINY_NUM + L2;
 
         // calculate "b" for all non-masked rows
-        for (RcppML::SparseMatrix::InnerIteratorNotInRange it(A, i, masked_rows_); it; ++it)
-          b += it.value() * w.col(it.row());
-        if (L1 != 0) b.array() -= L1;
+        if (linked_update) {
+          for (RcppML::SparseMatrix::InnerIteratorNotInRange it(A, i, masked_rows_); it; ++it)
+            for (unsigned int j = 0; j < h.rows(); ++j)
+              if (h(j, i) != 0)
+                b(j) += it.value() * w(j, it.row());
+          if (L1 != 0)
+            for (unsigned int j = 0; j < h.rows(); ++j)
+              if (h(j, i) != 0)
+                b(j) -= L1;
+        } else {
+          for (RcppML::SparseMatrix::InnerIteratorNotInRange it(A, i, masked_rows_); it; ++it)
+            b += it.value() * w.col(it.row());
+          if (L1 != 0) b.array() -= L1;
+        }
+
         if (!nonneg) h.col(i) = a_.llt().solve(b);
         else c_nnls(a_, b, h, i);
       } else {
@@ -141,12 +177,12 @@ void predict(RcppML::SparseMatrix& A, RcppML::SparsePatternMatrix& m, const Eige
 // solve for 'h' given sparse 'A' in 'A = wh'
 void predict(Eigen::MatrixXd& A, RcppML::SparsePatternMatrix& m, const Eigen::MatrixXd& w,
              Eigen::MatrixXd& h, const bool nonneg, const double L1, const double L2,
-             const unsigned int threads, const bool mask_zeros, const bool mask) {
+             const unsigned int threads, const bool mask_zeros, const bool mask, const bool linked_update) {
 
   if (!mask_zeros && !mask) {
     int rank = w.rows();
     // RANK-1 IMPLEMENTATION
-    if (rank == 1) {
+    if (rank == 1 && !linked_update) {
       h.setZero();
       // calculate "a" in "ax = b" as the inner product of the "w" vector
       double a = 0;
@@ -161,7 +197,7 @@ void predict(Eigen::MatrixXd& A, RcppML::SparsePatternMatrix& m, const Eigen::Ma
     }
 
     // RANK-2 IMPLEMENTATION
-    else if (rank == 2) {
+    else if (rank == 2 && !linked_update) {
       // calculate "a" in "ax = b" as w^Tw
       Eigen::Matrix2d a = w * w.transpose();
       a.diagonal().array() += TINY_NUM + L2;
@@ -190,11 +226,20 @@ void predict(Eigen::MatrixXd& A, RcppML::SparsePatternMatrix& m, const Eigen::Ma
       for (unsigned int i = 0; i < h.cols(); ++i) {
         // calculate right-hand side of system of equations, "b"
         Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
-        for (unsigned int it = 0; it < A.rows(); ++it)
-          b += A(it, i) * w.col(it);
-
-        // subtract L1 penalty from "b"
-        if (L1 != 0) b.array() -= L1;
+        if (linked_update) {
+          for (unsigned int j = 0; j < h.rows(); ++j)
+            if (h(j, i) != 0)
+              for (unsigned int it = 0; it < A.rows(); ++it)
+                b(j) += A(it, i) * w(j, it);
+          if (L1 != 0)
+            for (unsigned int j = 0; j < h.rows(); ++j)
+              if (h(j, i) != 0)
+                b(j) -= L1;
+        } else {
+          b += w * A.col(i);
+          // subtract L1 penalty from "b"
+          if (L1 != 0) b.array() -= L1;
+        }
 
         // solve least squares equation, ax = b where x is h.col(i)
         h.col(i) = a_llt.solve(b);
@@ -220,13 +265,30 @@ void predict(Eigen::MatrixXd& A, RcppML::SparsePatternMatrix& m, const Eigen::Ma
         Eigen::MatrixXd a = w_ * w_.transpose();
         a.diagonal().array() += TINY_NUM + L2;
         Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
-        for (unsigned int it = 0; it < A.rows(); ++it) {
-          const double val = A(it, i);
-          if (val != 0) {
-            b += val * w.col(it);
+
+        if (linked_update) {
+          for (unsigned int it = 0; it < A.rows(); ++it) {
+            const double val = A(it, i);
+            if (val != 0) {
+              for (unsigned int j = 0; j < h.rows(); ++j)
+                if (h(j, i) != 0)
+                  b(j) += A(it, i) * w(j, it);
+            }
           }
+          if (L1 != 0)
+            for (unsigned int j = 0; j < h.rows(); ++j)
+              if (h(j, i) != 0)
+                b(j) -= L1;
+        } else {
+          for (unsigned int it = 0; it < A.rows(); ++it) {
+            const double val = A(it, i);
+            if (val != 0) {
+              b += val * w.col(it);
+            }
+          }
+          if (L1 != 0) b.array() -= L1;
         }
-        if (L1 != 0) b.array() -= L1;
+
         if (!nonneg) h.col(i) = a.llt().solve(b);
         else c_nnls(a, b, h, i);
       }
@@ -250,12 +312,29 @@ void predict(Eigen::MatrixXd& A, RcppML::SparsePatternMatrix& m, const Eigen::Ma
 
       // calculate "b" for all non-masked rows
       Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
-      b += w * A.col(i);
+      if (linked_update) {
+        for (unsigned int j = 0; j < h.rows(); ++j)
+          if (h(j, i) != 0)
+            for (unsigned int it = 0; it < A.rows(); ++it)
+              b(j) += A(it, i) * w(j, it);
+        // subtract contributions of masked rows from "b"
+        for (unsigned int it = 0; it < masked_rows_.size(); ++it)
+          for (unsigned int j = 0; j < h.rows(); ++j)
+            if (h(j, i) != 0)
+              b(j) -= A(masked_rows_[it], i) * w(j, masked_rows_[it]);
 
-      // subtract contributions of masked rows from "b"
-      for (unsigned int it = 0; it < masked_rows_.size(); ++it)
-        b -= A(masked_rows_[it], i) * w.col(masked_rows_[it]);
-      if (L1 != 0) b.array() -= L1;
+        if (L1 != 0) {
+          for (unsigned int j = 0; j < h.rows(); ++j)
+            if (h(j, i) != 0)
+              b(j) -= L1;
+        }
+      } else {
+        b += w * A.col(i);
+        // subtract contributions of masked rows from "b"
+        for (unsigned int it = 0; it < masked_rows_.size(); ++it)
+          b -= A(masked_rows_[it], i) * w.col(masked_rows_[it]);
+        if (L1 != 0) b.array() -= L1;
+      }
 
       // solve system with least squares
       if (!nonneg) h.col(i) = a_.llt().solve(b);
