@@ -264,7 +264,7 @@ void predict(Eigen::MatrixXd& A, RcppML::SparsePatternMatrix& m, RcppML::SparseP
             const double val = A(it, i);
             if (val != 0)
               for (RcppML::SparsePatternMatrix::InnerIterator j(l, i); j; ++j)
-                b(j.row()) += A(it, i) * w(j, it);
+                b(j.row()) += A(it, i) * w(j.row(), it);
           }
           if (L1 != 0)
             for (RcppML::SparsePatternMatrix::InnerIterator j(l, i); j; ++j)
