@@ -23,7 +23,6 @@
 #' @export
 #' @seealso \code{\link{nmf}}, \code{\link{predict.nmf}}, \code{\link{evaluate.nmf}}, \code{\link{nnls}}
 #' @md
-#' @examples
 lnmf <- function(data, k_wh, k_uv, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), nonneg = TRUE, seed = NULL, mask = NULL) {
 
   if (length(k_uv) != length(data)) stop("number of ranks specified in 'k_uv' must equal the length of the list of datasets in 'data'")

@@ -32,3 +32,13 @@
 - New vignette on random restarts
 - better "head" and "show" methods
 - return "w_init" with model
+
+## RcppML 0.5.2
+
+### Major changes
+- add linked NMF
+- update all documentation
+
+### Minor changes
+- clean up C++ API
+- C++ API gets meta-templating
