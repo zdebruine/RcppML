@@ -185,6 +185,11 @@ namespace RcppML {
       std::vector<unsigned int> zeros = get_diff(nonzeros, Dim[0]);
       return zeros;
     }
+    
+    // number of nonzeros in a column
+    unsigned int numNonzerosInCol(int col){
+      return p[col + 1] - p[col];
+    }
 
     // is approximately symmetric
     bool isAppxSymmetric() {
@@ -287,6 +292,11 @@ namespace RcppML {
       return zeros;
     }
 
+    // number of nonzeros in a column
+    unsigned int numNonzerosInCol(int col){
+      return p[col + 1] - p[col];
+    }
+    
     // is approximately symmetric
     bool isAppxSymmetric() {
       if (Dim[0] == Dim[1]) {
