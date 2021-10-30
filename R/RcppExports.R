@@ -130,3 +130,16 @@ Rcpp_bipartite_match <- function(x) {
     .Call(`_RcppML_Rcpp_bipartite_match`, x)
 }
 
+#' Fast NMF
+#'
+#' A basic implementation of NMF
+#'
+#' @param sparse matrix of features in rows and samples in columns, of class \code{dgCMatrix}
+#' @param w dense matrix of factors in rows and features in columns
+#' @param tol tolerance of the fit
+#' @param maxit maximum number of fitting iterations
+#' @export
+fastnmf <- function(data, w, tol = 1e-4, maxit = 100L) {
+    .Call(`_RcppML_fastnmf`, data, w, tol, maxit)
+}
+

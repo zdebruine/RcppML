@@ -249,6 +249,20 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// fastnmf
+Rcpp::List fastnmf(const Rcpp::S4& data, Eigen::MatrixXd w, const double tol, int maxit);
+RcppExport SEXP _RcppML_fastnmf(SEXP dataSEXP, SEXP wSEXP, SEXP tolSEXP, SEXP maxitSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Rcpp::S4& >::type data(dataSEXP);
+    Rcpp::traits::input_parameter< Eigen::MatrixXd >::type w(wSEXP);
+    Rcpp::traits::input_parameter< const double >::type tol(tolSEXP);
+    Rcpp::traits::input_parameter< int >::type maxit(maxitSEXP);
+    rcpp_result_gen = Rcpp::wrap(fastnmf(data, w, tol, maxit));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_RcppML_Rcpp_predict_sparse", (DL_FUNC) &_RcppML_Rcpp_predict_sparse, 8},
@@ -264,6 +278,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_RcppML_Rcpp_dclust_sparse", (DL_FUNC) &_RcppML_Rcpp_dclust_sparse, 9},
     {"_RcppML_nnls", (DL_FUNC) &_RcppML_nnls, 8},
     {"_RcppML_Rcpp_bipartite_match", (DL_FUNC) &_RcppML_Rcpp_bipartite_match, 1},
+    {"_RcppML_fastnmf", (DL_FUNC) &_RcppML_fastnmf, 4},
     {NULL, NULL, 0}
 };
 
