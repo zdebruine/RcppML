@@ -12,6 +12,7 @@ Description: Fast machine learning algorithms including matrix factorization
 License: GPL (>= 2)
 Imports:
     Rcpp, 
+    RcppClock,
     Matrix,
     RcppEigen,
     methods,
@@ -21,7 +22,8 @@ Imports:
     utils
 LinkingTo: 
     Rcpp, 
-    RcppEigen
+    RcppEigen,
+    RcppClock
 VignetteBuilder: rmarkdown
 RoxygenNote: 7.1.2
 Suggests: 
