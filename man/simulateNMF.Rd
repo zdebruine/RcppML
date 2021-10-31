@@ -20,7 +20,7 @@ simulateNMF(nrow, ncol, k, noise = 0.5, dropout = 0.5, seed = NULL)
 \item{seed}{seed for random number generation}
 }
 \value{
-dense matrix
+list of dense matrix \code{A} and true \code{w} and \code{h} models
 }
 \description{
 Generate a random matrix that follows some defined NMF model to test NMF factorizations. Adapts methods from \code{NMF::syntheticNMF}.
