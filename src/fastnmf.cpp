@@ -1,48 +1,53 @@
 // This file is a standalone RcppEigen demo for basic minimal NMF
 
 //[[Rcpp::depends(RcppEigen)]]
+//[[Rcpp::depends(RcppClock)]]
 //[[Rcpp::plugins(openmp)]]
 #include "RcppEigen.h"
+#include "chrono"
+#include "RcppClock.h"
 #include "omp.h"
 
+// objective: repeat a function multiple times to benchmark it
+
 namespace Rcpp {
-class SpMat {
-public:
-  Rcpp::IntegerVector i, p, Dim;
-  Rcpp::NumericVector x;
-
-  SpMat(Rcpp::S4 m) : i(m.slot("i")), p(m.slot("p")), Dim(m.slot("Dim")), x(m.slot("x")) {}
-  int rows() { return Dim[0]; }
-  int cols() { return Dim[1]; }
-
-  class ColIterator {
+  class SpMat {
   public:
-    ColIterator(SpMat& ptr, int col) :
-    ptr(ptr), col_(col), index(ptr.p[col]), max_index(ptr.p[col + 1]) {}
-    operator bool() const { return (index < max_index); }
-    ColIterator& operator++() { ++index; return *this; }
-    const double& value() const { return ptr.x[index]; }
-    int row() const { return ptr.i[index]; }
+    Rcpp::IntegerVector i, p, Dim;
+    Rcpp::NumericVector x;
 
-  private:
-    SpMat& ptr;
-    int col_, index, max_index;
+    SpMat(Rcpp::S4 m) : i(m.slot("i")), p(m.slot("p")), Dim(m.slot("Dim")), x(m.slot("x")) {}
+    int rows() { return Dim[0]; }
+    int cols() { return Dim[1]; }
+
+    class ColIterator {
+    public:
+      ColIterator(SpMat& ptr, int col) :
+        ptr(ptr), col_(col), index(ptr.p[col]), max_index(ptr.p[col + 1]) {}
+      operator bool() const { return (index < max_index); }
+      ColIterator& operator++() { ++index; return *this; }
+      const double& value() const { return ptr.x[index]; }
+      int row() const { return ptr.i[index]; }
+
+    private:
+      SpMat& ptr;
+      int col_, index, max_index;
+    };
+
+    // transpose
+    SpMat transpose() {
+      Rcpp::S4 s(std::string("dgCMatrix"));
+      s.slot("i") = i;
+      s.slot("p") = p;
+      s.slot("x") = x;
+      s.slot("Dim") = Dim;
+      Rcpp::Environment base = Rcpp::Environment::namespace_env("Matrix");
+      Rcpp::Function t_r = base["t"];
+      Rcpp::S4 At = t_r(Rcpp::_["x"] = s);
+      return SpMat(At);
+    }
+
   };
-
-  // transpose
-  SpMat transpose() {
-    Rcpp::S4 s(std::string("dgCMatrix"));
-    s.slot("i") = i;
-    s.slot("p") = p;
-    s.slot("x") = x;
-    s.slot("Dim") = Dim;
-    Rcpp::Environment base = Rcpp::Environment::namespace_env("Matrix");
-    Rcpp::Function t_r = base["t"];
-    Rcpp::S4 At = t_r(Rcpp::_["x"] = s);
-    return SpMat(At);
-  }
-
-};
 }
 
 // Pearson correlation between two matrices
@@ -90,7 +95,7 @@ void update(Rcpp::SpMat& A, const Eigen::MatrixXd& w, Eigen::MatrixXd& h) {
   Eigen::MatrixXd a = w * w.transpose();
   a.diagonal().array() += 1e-15;
   Eigen::LLT<Eigen::MatrixXd, 1> a_llt = a.llt();
-#pragma omp parallel for
+  #pragma omp parallel for
   for (int i = 0; i < h.cols(); ++i) {
     Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
     for (Rcpp::SpMat::ColIterator it(A, i); it; ++it)
@@ -118,34 +123,42 @@ Rcpp::List fastnmf(const Rcpp::S4& data, Eigen::MatrixXd w, const double tol = 1
   Rcpp::SpMat A(data);
   Rcpp::SpMat At = A.transpose();
 
-  if(w.cols() != A.rows()) Rcpp::stop("number of rows in 'A' and columns in 'w' are not equivalent");
+  if (w.cols() != A.rows()) Rcpp::stop("number of rows in 'A' and columns in 'w' are not equivalent");
   Eigen::MatrixXd h = Eigen::MatrixXd::Zero(w.rows(), A.cols());
   Eigen::VectorXd d = Eigen::VectorXd::Zero(w.rows());
-
   double tol_ = 1;
 
+  Rcpp::Clock clock;
+  
   while (maxit-- > 0 && tol_ > tol) {
+    clock.tick("update w_it");
     Eigen::MatrixXd w_it = w;
+
+    clock.tick("update h");
     update(A, w, h);
 
-    // scale H
+    clock.tick("scale h");
     d = h.rowwise().sum();
     d.array() += 1e-15;
     for (int i = 0; i < h.rows(); ++i)
       for (int j = 0; j < h.cols(); ++j)
         h(i, j) /= d(i);
 
+    clock.tick("update w");
     update(At, h, w);
 
     // scale W
+    clock.tick("scale w");
     d = w.rowwise().sum();
     d.array() += 1e-15;
     for (int i = 0; i < w.rows(); ++i)
       for (int j = 0; j < w.cols(); ++j)
         w(i, j) /= d(i);
 
+    clock.tick("calc tol");
     tol_ = cor(w, w_it);
   }
-
+  clock.tock();
+  clock.write("nmf_clock");
   return Rcpp::List::create(Rcpp::Named("w") = w.transpose(), Rcpp::Named("d") = d, Rcpp::Named("h") = h);
 }
