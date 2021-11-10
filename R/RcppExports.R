@@ -49,7 +49,7 @@ Rcpp_dclust_sparse <- function(A, min_samples, min_dist, verbose, tol, maxit, no
 #'
 #' @description Solves the equation \code{a %*% x = b} for \code{x} subject to \eqn{x > 0}.
 #'
-#' @details 
+#' @details
 #' This is a very fast implementation of non-negative least squares (NNLS), suitable for very small or very large systems.
 #'
 #' **Algorithm**. Sequential coordinate descent (CD) is at the core of this implementation, and requires an initialization of \eqn{x}. There are two supported methods for initialization of \eqn{x}:
@@ -59,23 +59,23 @@ Rcpp_dclust_sparse <- function(A, min_samples, min_dist, verbose, tol, maxit, no
 #' \code{a} must be symmetric positive definite if FAST NNLS is used, but this is not checked.
 #'
 #' See our BioRXiv manuscript (references) for benchmarking against Lawson-Hanson NNLS and for a more technical introduction to these methods.
-#' 
-#' **Coordinate Descent NNLS**. Least squares by **sequential coordinate descent** is used to ensure the solution returned is exact. This algorithm was 
+#'
+#' **Coordinate Descent NNLS**. Least squares by **sequential coordinate descent** is used to ensure the solution returned is exact. This algorithm was
 #' introduced by Franc et al. (2005), and our implementation is a vectorized and optimized rendition of that found in the NNLM R package by Xihui Lin (2020).
-#' 
-#' **FAST NNLS.** Forward active set tuning (FAST) is an exact or near-exact NNLS approximation initialized by an unconstrained 
-#' least squares solution. Negative values in this unconstrained solution are set to zero (the "active set"), and all 
-#' other values are added  to a "feasible set". An unconstrained least squares solution is then solved for the 
-#' "feasible set", any negative values in the resulting solution are set to zero, and the process is repeated until 
-#' the feasible set solution is strictly positive. 
-#' 
-#' The FAST algorithm has a definite convergence guarantee because the 
-#' feasible set will either converge or become smaller with each iteration. The result is generally exact or nearly 
+#'
+#' **FAST NNLS.** Forward active set tuning (FAST) is an exact or near-exact NNLS approximation initialized by an unconstrained
+#' least squares solution. Negative values in this unconstrained solution are set to zero (the "active set"), and all
+#' other values are added  to a "feasible set". An unconstrained least squares solution is then solved for the
+#' "feasible set", any negative values in the resulting solution are set to zero, and the process is repeated until
+#' the feasible set solution is strictly positive.
+#'
+#' The FAST algorithm has a definite convergence guarantee because the
+#' feasible set will either converge or become smaller with each iteration. The result is generally exact or nearly
 #' exact for small well-conditioned systems (< 50 variables) within 2 iterations and thus sets up coordinate
-#' descent for very rapid convergence. The FAST method is similar to the first phase of the so-called "TNT-NN" algorithm (Myre et al., 2017), 
-#' but the latter half of that method relies heavily on heuristics to refine the approximate active set, which we avoid by using 
+#' descent for very rapid convergence. The FAST method is similar to the first phase of the so-called "TNT-NN" algorithm (Myre et al., 2017),
+#' but the latter half of that method relies heavily on heuristics to refine the approximate active set, which we avoid by using
 #' coordinate descent instead.
-#' 
+#'
 #' @param a symmetric positive definite matrix giving coefficients of the linear system
 #' @param b matrix giving the right-hand side(s) of the linear system
 #' @param L1 L1/LASSO penalty to be subtracted from \code{b}
@@ -89,18 +89,18 @@ Rcpp_dclust_sparse <- function(A, min_samples, min_dist, verbose, tol, maxit, no
 #' @author Zach DeBruine
 #' @seealso \code{\link{nmf}}, \code{\link{predict.nmf}}
 #' @md
-#' 
+#'
 #' @references
-#' 
+#'
 #' DeBruine, ZJ, Melcher, K, and Triche, TJ. (2021). "High-performance non-negative matrix factorization for large single-cell data." BioRXiv.
-#' 
+#'
 #' Franc, VC, Hlavac, VC, and Navara, M. (2005). "Sequential Coordinate-Wise Algorithm for the Non-negative Least Squares Problem. Proc. Int'l Conf. Computer Analysis of Images and Patterns."
 #'
 #' Lin, X, and Boutros, PC (2020). "Optimization and expansion of non-negative matrix factorization." BMC Bioinformatics.
-#' 
+#'
 #' Myre, JM, Frahm, E, Lilja DJ, and Saar, MO. (2017) "TNT-NN: A Fast Active Set Method for Solving Large Non-Negative Least Squares Problems". Proc. Computer Science.
 #'
-#' @examples 
+#' @examples
 #' \dontrun{
 #' # compare solution to base::solve for a random system
 #' X <- matrix(runif(100), 10, 10)
@@ -113,7 +113,7 @@ Rcpp_dclust_sparse <- function(A, min_samples, min_dist, verbose, tol, maxit, no
 #' unconstrained_err
 #' nonnegative_err
 #' all.equal(solve(a, b), nnls(a, b))
-#' 
+#'
 #' # example adapted from multiway::fnnls example 1
 #' X <- matrix(1:100,50,2)
 #' y <- matrix(101:150,50,1)
@@ -128,18 +128,5 @@ nnls <- function(a, b, cd_maxit = 100L, cd_tol = 1e-8, fast_nnls = FALSE, L1 = 0
 
 Rcpp_bipartite_match <- function(x) {
     .Call(`_RcppML_Rcpp_bipartite_match`, x)
-}
-
-#' Fast NMF
-#'
-#' A basic implementation of NMF
-#'
-#' @param sparse matrix of features in rows and samples in columns, of class \code{dgCMatrix}
-#' @param w dense matrix of factors in rows and features in columns
-#' @param tol tolerance of the fit
-#' @param maxit maximum number of fitting iterations
-#' @export
-fastnmf <- function(data, w, tol = 1e-4, maxit = 100L) {
-    .Call(`_RcppML_fastnmf`, data, w, tol, maxit)
 }
 
