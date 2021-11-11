@@ -13,7 +13,7 @@
 #endif
 
 // solve for 'h' given sparse 'A' in 'A = wh'
-void predict(RcppML::SparseMatrix& A, RcppML::SparsePatternMatrix& m, RcppML::SparsePatternMatrix& l, const Eigen::MatrixXd& w,
+void predict(RcppSparse::Matrix& A, RcppML::SparsePatternMatrix& m, RcppML::SparsePatternMatrix& l, const Eigen::MatrixXd& w,
              Eigen::MatrixXd& h, const bool nonneg, const double L1, const double L2,
              const unsigned int threads, const bool mask_zeros, const bool mask, const bool link) {
 
@@ -27,7 +27,7 @@ void predict(RcppML::SparseMatrix& A, RcppML::SparsePatternMatrix& m, RcppML::Sp
       for (unsigned int i = 0; i < w.cols(); ++i) a += w(0, i) * w(0, i);
       for (unsigned int i = 0; i < h.cols(); ++i) {
         // calculate "b" in "ax = b" as "wA_j" for all columns "j" in "A"
-        for (RcppML::SparseMatrix::InnerIterator it(A, i); it; ++it)
+        for (RcppSparse::Matrix::InnerIterator it(A, i); it; ++it)
           h(0, i) += it.value() * w(0, it.row());
         // solve for "x" in "ax = b" directly
         h(0, i) /= a;
@@ -43,7 +43,7 @@ void predict(RcppML::SparseMatrix& A, RcppML::SparsePatternMatrix& m, RcppML::Sp
       for (unsigned int i = 0; i < h.cols(); ++i) {
         // calculate "b" in "ax = b" as w^Tw
         Eigen::Vector2d b(0, 0);
-        for (RcppML::SparseMatrix::InnerIterator it(A, i); it; ++it) {
+        for (RcppSparse::Matrix::InnerIterator it(A, i); it; ++it) {
           const double val = it.value();
           const unsigned int r = it.row();
           b(0) += val * w(0, r);
@@ -68,7 +68,7 @@ void predict(RcppML::SparseMatrix& A, RcppML::SparsePatternMatrix& m, RcppML::Sp
 
         // linked_update considers information corresponding to non-zero values in "h"
         if (link) {
-          for (RcppML::SparseMatrix::InnerIterator it(A, i); it; ++it)
+          for (RcppSparse::Matrix::InnerIterator it(A, i); it; ++it)
             for (RcppML::SparsePatternMatrix::InnerIterator j(l, i); j; ++j)
               b(j.row()) += it.value() * w(j.row(), it.row());
 
@@ -76,7 +76,7 @@ void predict(RcppML::SparseMatrix& A, RcppML::SparsePatternMatrix& m, RcppML::Sp
             for (RcppML::SparsePatternMatrix::InnerIterator j(l, i); j; ++j)
               b(j.row()) -= L1;
         } else {
-          for (RcppML::SparseMatrix::InnerIterator it(A, i); it; ++it)
+          for (RcppSparse::Matrix::InnerIterator it(A, i); it; ++it)
             b += it.value() * w.col(it.row());
 
           // subtract L1 penalty from "b"
@@ -108,14 +108,14 @@ void predict(RcppML::SparseMatrix& A, RcppML::SparsePatternMatrix& m, RcppML::Sp
         a.diagonal().array() += TINY_NUM + L2;
         Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
         if (link) {
-          for (RcppML::SparseMatrix::InnerIterator it(A, i); it; ++it)
+          for (RcppSparse::Matrix::InnerIterator it(A, i); it; ++it)
             for (RcppML::SparsePatternMatrix::InnerIterator j(l, i); j; ++j)
               b(j.row()) += it.value() * w(j.row(), it.row());
           if (L1 != 0)
             for (RcppML::SparsePatternMatrix::InnerIterator j(l, i); j; ++j)
               b(j.row()) -= L1;
         } else {
-          for (RcppML::SparseMatrix::InnerIterator it(A, i); it; ++it)
+          for (RcppSparse::Matrix::InnerIterator it(A, i); it; ++it)
             b += it.value() * w.col(it.row());
           if (L1 != 0) b.array() -= L1;
         }
@@ -145,14 +145,14 @@ void predict(RcppML::SparseMatrix& A, RcppML::SparsePatternMatrix& m, RcppML::Sp
           
           // calculate "b" for all non-masked rows
           if (link) {
-            for (RcppML::SparseMatrix::InnerIteratorNotInRange it(A, i, masked_rows_); it; ++it)
+            for (RcppSparse::Matrix::InnerIteratorNotInRange it(A, i, masked_rows_); it; ++it)
               for (RcppML::SparsePatternMatrix::InnerIterator j(l, i); j; ++j)
                 b(j.row()) += it.value() * w(j.row(), it.row());
             if (L1 != 0)
               for (RcppML::SparsePatternMatrix::InnerIterator j(l, i); j; ++j)
                 b(j.row()) -= L1;
           } else {
-            for (RcppML::SparseMatrix::InnerIteratorNotInRange it(A, i, masked_rows_); it; ++it)
+            for (RcppSparse::Matrix::InnerIteratorNotInRange it(A, i, masked_rows_); it; ++it)
               b += it.value() * w.col(it.row());
             if (L1 != 0) b.array() -= L1;
           }
@@ -160,7 +160,7 @@ void predict(RcppML::SparseMatrix& A, RcppML::SparsePatternMatrix& m, RcppML::Sp
           if (!nonneg) h.col(i) = a_.llt().solve(b);
           else c_nnls(a_, b, h, i);
         } else {
-          for (RcppML::SparseMatrix::InnerIterator it(A, i); it; ++it)
+          for (RcppSparse::Matrix::InnerIterator it(A, i); it; ++it)
             b += it.value() * w.col(it.row());
           if (L1 != 0) b.array() -= L1;
           if (!nonneg) h.col(i) = a.llt().solve(b);

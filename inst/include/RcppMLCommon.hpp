@@ -32,13 +32,14 @@
 #define EIGEN_INITIALIZE_MATRICES_BY_ZERO
 #endif
 
+//[[Rcpp::depends(RcppSparse)]]
+#ifndef RCPPSPARSE_H
+#include <RcppSparse.h>
+#endif
+
 //[[Rcpp::depends(RcppEigen)]]
 #ifndef RcppEigen__RcppEigen__h
 #include <RcppEigen.h>
-#endif
-
-#ifndef RcppML_sparsematrix
-#include <RcppML/SparseMatrix.hpp>
 #endif
 
 #ifndef RcppML_bits
