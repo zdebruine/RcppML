@@ -11,6 +11,7 @@
 #include "RcppMLCommon.hpp"
 
 #include <RcppML/bits.hpp>
+#include <RcppML/distance.hpp>
 #include <RcppML/nnls.hpp>
 #include <RcppML/predict.hpp>
 #include <RcppML/nmf.hpp>
