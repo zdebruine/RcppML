@@ -10,7 +10,7 @@
   if(is.null(getOption("RcppML.debug")))
     options(RcppML.debug = TRUE)
   
-  msg <- "RcppML v0.5.1 using 'options(RcppML.threads = "
+  msg <- "RcppML v0.5.4 using 'options(RcppML.threads = "
   threads <- getOption("RcppML.threads")
   if(threads == 0) {
     msg <- c(msg, "0)' (all available threads)")

@@ -5,15 +5,18 @@
 \alias{aml}
 \title{Acute Myelogenous Leukemia cells}
 \format{
-dense matrix of features (DMRs) as rows and samples ("AML sample", "GMP", "LMPP", or "MEP") as columns.
+list of dense matrix of features (methylated regions) as rows and samples ("AML" or "Control" samples, classified by putative cell of origin or reference cell type) as columns. The "metadata_h" maps to publicly available clinical metadata.
 }
 \usage{
 data(aml)
 }
 \description{
-~800 differentially methylated regions (DMRs) in 123 Acute Myelogenous Leukemia (AML) samples, and 5 samples for putative cells of origin (GMP, LMPP, MEP) giving healthy DMR signatures.
+DNA methylation in ~800 regions in 123 Acute Myelogenous Leukemia (AML) samples classified by probable cell of origin (GMP, L-MPP, or MEP), and
+5 samples from healthy references for each suspected cell of origin (GMP, L-MPP, MEP).
 }
 \details{
-AML methylation signatures differ from their cell of origin by additive methylation and subtractive methylation, in addition to tumor-specific heterogeneity. These AML tumors originated from one of three healthy cell types (GMP, LMPP, or MEP), the challenge is to classify the cell of origin based on these healthy cell type DMRs. The true answer is unknown.
+AML methylation signatures differ from their cell of origin by additive methylation and subtractive methylation,
+in addition to tumor-specific heterogeneity. These AML tumors likely originated from one of three healthy cell types (GMP, LMPP, or MEP),
+the challenge is to classify the cell of origin based on these healthy cell type DMRs.
 }
 \keyword{datasets}
