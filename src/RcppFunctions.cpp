@@ -10,12 +10,11 @@
 // PROJECT LINEAR FACTOR MODELS
 
 //[[Rcpp::export]]
-Eigen::MatrixXd Rcpp_predict_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eigen::MatrixXd w, const bool nonneg,
-                                    const double L1, const double L2,
+Eigen::MatrixXd Rcpp_predict_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eigen::MatrixXd w, const double L1, const double L2,
                                     const unsigned int threads, const bool mask_zeros) {
-    RcppML::SparseMatrix A_(A);
-    RcppML::SparsePatternMatrix mask_(mask);
-    RcppML::nmf<RcppML::SparseMatrix> m(A_, w);
+    RcppSparse::Matrix A_(A);
+    RcppSparse::Matrix mask_(mask);
+    RcppML::nmf<RcppSparse::Matrix> m(A_, w);
     if (mask_zeros)
         m.maskZeros();
     else if (mask_.rows() == A_.rows() && mask_.cols() == A_.cols())
@@ -23,15 +22,14 @@ Eigen::MatrixXd Rcpp_predict_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eig
     m.threads = threads;
     m.L1[1] = L1;
     m.L2[1] = L2;
-    m.nonneg = nonneg;
     m.predictH();
     return m.matrixH();
 }
 
 //[[Rcpp::export]]
-Eigen::MatrixXd Rcpp_predict_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Eigen::MatrixXd w, const bool nonneg,
+Eigen::MatrixXd Rcpp_predict_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Eigen::MatrixXd w,
                                    const double L1, const double L2, const unsigned int threads, const bool mask_zeros) {
-    RcppML::SparsePatternMatrix mask_(mask);
+    RcppSparse::Matrix mask_(mask);
     RcppML::nmf<Eigen::MatrixXd> m(A_, w);
     if (mask_zeros)
         m.maskZeros();
@@ -40,7 +38,6 @@ Eigen::MatrixXd Rcpp_predict_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Ei
     m.threads = threads;
     m.L1[1] = L1;
     m.L2[1] = L1;
-    m.nonneg = nonneg;
     m.predictH();
     return m.matrixH();
 }
@@ -50,9 +47,9 @@ Eigen::MatrixXd Rcpp_predict_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Ei
 //[[Rcpp::export]]
 double Rcpp_mse_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h,
                        const unsigned int threads, const bool mask_zeros) {
-    RcppML::SparseMatrix A_(A);
-    RcppML::SparsePatternMatrix mask_(mask);
-    RcppML::nmf<RcppML::SparseMatrix> m(A_, w, d, h);
+    RcppSparse::Matrix A_(A);
+    RcppSparse::Matrix mask_(mask);
+    RcppML::nmf<RcppSparse::Matrix> m(A_, w, d, h);
     if (mask_zeros)
         m.maskZeros();
     else if (mask_.rows() == A_.rows() && mask_.cols() == A_.cols())
@@ -64,7 +61,7 @@ double Rcpp_mse_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eigen::MatrixXd 
 //[[Rcpp::export]]
 double Rcpp_mse_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h,
                       const unsigned int threads, const bool mask_zeros) {
-    RcppML::SparsePatternMatrix mask_(mask);
+    RcppSparse::Matrix mask_(mask);
     RcppML::nmf<Eigen::MatrixXd> m(A_, w, d, h);
     if (mask_zeros)
         m.maskZeros();
@@ -77,9 +74,9 @@ double Rcpp_mse_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Eigen::MatrixXd
 //[[Rcpp::export]]
 double Rcpp_mse_missing_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h,
                                const unsigned int threads) {
-    RcppML::SparseMatrix A_(A);
-    RcppML::SparsePatternMatrix mask_(mask);
-    RcppML::nmf<RcppML::SparseMatrix> m(A_, w, d, h);
+    RcppSparse::Matrix A_(A);
+    RcppSparse::Matrix mask_(mask);
+    RcppML::nmf<RcppSparse::Matrix> m(A_, w, d, h);
     m.maskMatrix(mask_);
     m.threads = threads;
     return m.mse_masked();
@@ -88,7 +85,7 @@ double Rcpp_mse_missing_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eigen::M
 //[[Rcpp::export]]
 double Rcpp_mse_missing_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h,
                               const unsigned int threads) {
-    RcppML::SparsePatternMatrix mask_(mask);
+    RcppSparse::Matrix mask_(mask);
     RcppML::nmf<Eigen::MatrixXd> m(A_, w, d, h);
     m.maskMatrix(mask_);
     m.threads = threads;
@@ -99,21 +96,19 @@ double Rcpp_mse_missing_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Eigen::
 
 //[[Rcpp::export]]
 Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, const double tol, const unsigned int maxit,
-                           const bool verbose, const bool nonneg, const std::vector<double> L1, const std::vector<double> L2,
-                           const bool diag, const unsigned int threads, Rcpp::List w_init, const Rcpp::S4& link_matrix_h,
+                           const bool verbose, const std::vector<double> L1, const std::vector<double> L2,
+                           const unsigned int threads, Rcpp::List w_init, const Rcpp::S4& link_matrix_h,
                            const bool mask_zeros, const bool link_h, const bool sort_model) {
-    RcppML::SparseMatrix A_(A);
-    RcppML::SparsePatternMatrix mask_(mask), link_matrix_h_(link_matrix_h);
+    RcppSparse::Matrix A_(A);
+    RcppSparse::Matrix mask_(mask), link_matrix_h_(link_matrix_h);
     Eigen::MatrixXd w_ = Rcpp::as<Eigen::MatrixXd>(w_init[0]);
-    RcppML::nmf<RcppML::SparseMatrix> m(A_, w_);
+    RcppML::nmf<RcppSparse::Matrix> m(A_, w_);
 
     // set model parameters
     m.tol = tol;
-    m.nonneg = nonneg;
     m.L1 = L1;
     m.L2 = L2;
     m.maxit = maxit;
-    m.diag = diag;
     m.verbose = verbose;
     m.threads = threads;
     m.sort_model = sort_model;
@@ -139,20 +134,18 @@ Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, const double
 
 //[[Rcpp::export]]
 Rcpp::List Rcpp_nmf_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, const double tol, const unsigned int maxit,
-                          const bool verbose, const bool nonneg, const std::vector<double> L1, const std::vector<double> L2,
-                          const bool diag, const unsigned int threads, Rcpp::List w_init, const Rcpp::S4& link_matrix_h, const bool mask_zeros,
+                          const bool verbose, const std::vector<double> L1, const std::vector<double> L2,
+                          const unsigned int threads, Rcpp::List w_init, const Rcpp::S4& link_matrix_h, const bool mask_zeros,
                           const bool link_h, const bool sort_model) {
-    RcppML::SparsePatternMatrix mask_(mask), link_matrix_h_(link_matrix_h);
+    RcppSparse::Matrix mask_(mask), link_matrix_h_(link_matrix_h);
     Eigen::MatrixXd w_ = Rcpp::as<Eigen::MatrixXd>(w_init[0]);
     RcppML::nmf<Eigen::MatrixXd> m(A_, w_);
 
     // set model parameters
     m.tol = tol;
-    m.nonneg = nonneg;
     m.L1 = L1;
     m.L2 = L2;
     m.maxit = maxit;
-    m.diag = diag;
     m.verbose = verbose;
     m.threads = threads;
     m.sort_model = sort_model;
@@ -182,7 +175,7 @@ Rcpp::List Rcpp_nmf_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, const doubl
 Rcpp::List Rcpp_bipartition_sparse(const Rcpp::S4& A, const double tol, const unsigned int maxit, const bool nonneg,
                                    const std::vector<unsigned int>& samples, const unsigned int seed, const bool verbose = false,
                                    const bool calc_dist = false, const bool diag = true) {
-    RcppML::SparseMatrix A_(A);
+    RcppSparse::Matrix A_(A);
     Eigen::MatrixXd w = randomMatrix(2, A_.rows(), seed);
     bipartitionModel m = c_bipartition_sparse(A_, w, samples, tol, nonneg, calc_dist, maxit, verbose);
     return Rcpp::List::create(Rcpp::Named("v") = m.v, Rcpp::Named("dist") = m.dist, Rcpp::Named("size1") = m.size1,
@@ -206,7 +199,7 @@ Rcpp::List Rcpp_bipartition_dense(const Eigen::MatrixXd& A, const double tol, co
 //[[Rcpp::export]]
 Rcpp::List Rcpp_dclust_sparse(const Rcpp::S4& A, const unsigned int min_samples, const double min_dist, const bool verbose,
                               const double tol, const unsigned int maxit, const bool nonneg, const unsigned int seed, const unsigned int threads) {
-    RcppML::SparseMatrix A_(A);
+    RcppSparse::Matrix A_(A);
 
     RcppML::clusterModel m = RcppML::clusterModel(A_, min_samples, min_dist);
     m.nonneg = nonneg;

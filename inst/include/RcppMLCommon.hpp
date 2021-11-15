@@ -19,6 +19,7 @@
 
 #ifndef TINY_NUM
 #define TINY_NUM 1e-15 // epsilon for numerical stability
+#define TINY_NUM_FOR_STABILITY 1e-15
 #endif
 
 // parameters for coordinate descent

@@ -30,7 +30,7 @@ inline Eigen::MatrixXd distance(RcppSparse::Matrix& A, Eigen::MatrixXd& B, std::
 }
 
 // sparse/sparse column-wise distance calculation between two matrices
-inline Eigen::MatrixXd distance(RcppSparse::Matrix& A, Eigen::MatrixXd& B, std::string method, const unsigned int threads) {
+inline Eigen::MatrixXd distance(RcppSparse::Matrix& A, RcppSparse::Matrix& B, std::string method, const unsigned int threads) {
     Eigen::MatrixXd dists(A.cols(), B.cols());
     if (method == "euclidean") {
         #pragma omp parallel for num_threads(threads)

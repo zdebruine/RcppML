@@ -14,7 +14,6 @@ nmf(
   maxit = 100,
   L1 = c(0, 0),
   L2 = c(0, 0),
-  nonneg = TRUE,
   seed = NULL,
   mask = NULL,
   ...
@@ -33,13 +32,13 @@ nmf(
 
 \item{L2}{Ridge penalties greater than zero, single value or array of length two for \code{c(w, h)}}
 
-\item{nonneg}{enforce non-negativity}
-
 \item{seed}{single initialization seed or array, or a matrix or list of matrices giving initial \code{w}. For multiple initializations, the model with least mean squared error is returned.}
 
-\item{mask}{dense or sparse matrix of values in \code{data} to handle as missing. Prefer \code{Matrix::ngCMatrix}. Alternatively, specify "\code{zeros}" or "\code{NA}" to mask either all zeros or NA values.}
+\item{mask}{dense or sparse matrix of values in \code{data} to handle as missing. Prefer \code{Matrix::dgCMatrix}. Alternatively, specify "\code{zeros}" or "\code{NA}" to mask either all zeros or NA values.}
 
 \item{...}{development parameters}
+
+\item{nonneg}{enforce non-negativity}
 }
 \value{
 object of class \code{nmf}

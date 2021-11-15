@@ -7,7 +7,7 @@
 \usage{
 \S4method{predict}{nmf}(object, data, L1 = 0, L2 = 0, nonneg = TRUE, mask = NULL, ...)
 
-predict.nmf(w, data, L1 = 0, L2 = 0, nonneg = TRUE, mask = NULL, ...)
+predict.nmf(w, data, L1 = 0, L2 = 0, mask = NULL, ...)
 }
 \arguments{
 \item{object}{fitted model, class \code{nmf}, generally the result of calling \code{nmf}, with models of equal dimensions as \code{data}}
@@ -20,7 +20,7 @@ predict.nmf(w, data, L1 = 0, L2 = 0, nonneg = TRUE, mask = NULL, ...)
 
 \item{nonneg}{enforce non-negativity}
 
-\item{mask}{dense or sparse matrix of values in \code{data} to handle as missing. Prefer \code{Matrix::ngCMatrix}. Alternatively, specify "\code{zeros}" or "\code{NA}" to mask either all zeros or NA values.}
+\item{mask}{dense or sparse matrix of values in \code{data} to handle as missing. Prefer \code{Matrix::dgCMatrix}. Alternatively, specify "\code{zeros}" or "\code{NA}" to mask either all zeros or NA values.}
 
 \item{...}{arguments passed to or from other methods}
 

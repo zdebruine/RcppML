@@ -24,11 +24,11 @@ struct bipartitionModel {
 };
 
 // compute cluster centroid given an ipx sparse matrix and samples in the cluster center
-inline std::vector<double> centroid(RcppML::SparseMatrix& A, const std::vector<unsigned int>& samples) {
+inline std::vector<double> centroid(RcppSparse::Matrix& A, const std::vector<unsigned int>& samples) {
 
   std::vector<double> center(A.rows());
   for (unsigned int s = 0; s < samples.size(); ++s)
-    for (RcppML::SparseMatrix::InnerIterator it(A, samples[s]); it; ++it)
+    for (RcppSparse::Matrix::InnerIterator it(A, samples[s]); it; ++it)
       center[it.row()] += it.value();
   for (unsigned int j = 0; j < A.rows(); ++j) center[j] /= samples.size();
 
@@ -56,7 +56,7 @@ inline std::vector<double> centroid(const Eigen::MatrixXd& A, const std::vector<
 // cosine dist to c_j, dcj = sqrt(x cross c_j) / (sqrt(c_j cross c_j) * sqrt(x cross x))
 // tot_dist = (dci - dcj) / dci
 // this expression simplifies to 1 - (sqrt(c_j cross x) * sqrt(c_i cross c_i)) / (sqrt(c_i cross x) * sqrt(c_j cross c_j))
-inline double rel_cosine(RcppML::SparseMatrix& A, const std::vector<unsigned int>& samples1, const std::vector<unsigned int>& samples2,
+inline double rel_cosine(RcppSparse::Matrix& A, const std::vector<unsigned int>& samples1, const std::vector<unsigned int>& samples2,
                          const std::vector<double>& center1, const std::vector<double>& center2) {
 
   double center1_innerprod = std::sqrt(std::inner_product(center1.begin(), center1.end(), center1.begin(), (double)0));
@@ -64,7 +64,7 @@ inline double rel_cosine(RcppML::SparseMatrix& A, const std::vector<unsigned int
   double dist1 = 0, dist2 = 0;
   for (unsigned int s = 0; s < samples1.size(); ++s) {
     double x1_center1 = 0, x1_center2 = 0;
-    for (RcppML::SparseMatrix::InnerIterator it(A, samples1[s]); it; ++it) {
+    for (RcppSparse::Matrix::InnerIterator it(A, samples1[s]); it; ++it) {
       x1_center1 += center1[it.row()] * it.value();
       x1_center2 += center2[it.row()] * it.value();
     }
@@ -72,7 +72,7 @@ inline double rel_cosine(RcppML::SparseMatrix& A, const std::vector<unsigned int
   }
   for (unsigned int s = 0; s < samples2.size(); ++s) {
     double x2_center1 = 0, x2_center2 = 0;
-    for (RcppML::SparseMatrix::InnerIterator it(A, samples2[s]); it; ++it) {
+    for (RcppSparse::Matrix::InnerIterator it(A, samples2[s]); it; ++it) {
       x2_center1 += center1[it.row()] * it.value();
       x2_center2 += center2[it.row()] * it.value();
     }
@@ -115,7 +115,7 @@ void scale(Eigen::VectorXd& d, Eigen::MatrixXd& w) {
 }
 
 inline bipartitionModel c_bipartition_sparse(
-  RcppML::SparseMatrix& A,
+  RcppSparse::Matrix& A,
   Eigen::MatrixXd w,
   const std::vector<unsigned int> samples,
   const double tol,
@@ -137,7 +137,7 @@ inline bipartitionModel c_bipartition_sparse(
     double denom = a(0, 0) * a(1, 1) - a(0, 1) * a(0, 1);
     for (unsigned int i = 0; i < h.cols(); ++i) {
       Eigen::Vector2d b(0, 0);
-      for (RcppML::SparseMatrix::InnerIterator it(A, samples[i]); it; ++it) {
+      for (RcppSparse::Matrix::InnerIterator it(A, samples[i]); it; ++it) {
         const double val = it.value();
         const unsigned int r = it.row();
         b(0) += val * w(0, r);
@@ -152,7 +152,7 @@ inline bipartitionModel c_bipartition_sparse(
     denom = a(0, 0) * a(1, 1) - a(0, 1) * a(0, 1);
     w.setZero();
     for (unsigned int i = 0; i < h.cols(); ++i) {
-      for (RcppML::SparseMatrix::InnerIterator it(A, samples[i]); it; ++it)
+      for (RcppSparse::Matrix::InnerIterator it(A, samples[i]); it; ++it)
         for (unsigned int j = 0; j < 2; ++j)
           w(j, it.row()) += it.value() * h(j, i);
     }

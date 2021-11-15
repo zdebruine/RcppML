@@ -320,19 +320,19 @@ setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, missing_
   } else stop("'data' was not coercible to a matrix")
 
   if (is.null(mask)) {
-    mask_matrix <- new("ngCMatrix")
+    mask_matrix <- new("dgCMatrix")
     mask_zeros <- FALSE
   } else if (class(mask) == "character" && mask == "zeros") {
-    mask_matrix <- new("ngCMatrix")
+    mask_matrix <- new("dgCMatrix")
     mask_zeros <- TRUE
   } else {
     mask_zeros <- FALSE
-    if (!canCoerce(mask, "ngCMatrix")) {
+    if (!canCoerce(mask, "dgCMatrix")) {
       if (canCoerce(mask, "matrix")) {
         mask <- as.matrix(matrix)
-      } else stop("could not coerce the value of 'mask' to a sparse pattern matrix (ngCMatrix)")
+      } else stop("could not coerce the value of 'mask' to a sparse pattern matrix (dgCMatrix)")
     }
-    mask_matrix <- as(mask, "ngCMatrix")
+    mask_matrix <- as(mask, "dgCMatrix")
   }
 
   if (class(data)[[1]] == "dgCMatrix") {

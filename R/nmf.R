@@ -39,7 +39,7 @@
 #' @param L2 Ridge penalties greater than zero, single value or array of length two for \code{c(w, h)}
 #' @param seed single initialization seed or array, or a matrix or list of matrices giving initial \code{w}. For multiple initializations, the model with least mean squared error is returned.
 #' @param nonneg enforce non-negativity
-#' @param mask dense or sparse matrix of values in \code{data} to handle as missing. Prefer \code{Matrix::ngCMatrix}. Alternatively, specify "\code{zeros}" or "\code{NA}" to mask either all zeros or NA values.
+#' @param mask dense or sparse matrix of values in \code{data} to handle as missing. Prefer \code{Matrix::dgCMatrix}. Alternatively, specify "\code{zeros}" or "\code{NA}" to mask either all zeros or NA values.
 #' @param ... development parameters
 #' @return object of class \code{nmf}
 #' @importFrom methods is
@@ -81,12 +81,12 @@
 #' plot(model$w, t(model$h))
 #' # see package vignette for more examples
 #' }
-nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), nonneg = TRUE, seed = NULL, mask = NULL, ...) {
+nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), seed = NULL, mask = NULL, ...) {
 
   start_time <- Sys.time()
   # apply defaults to development parameters
   p <- list(...)
-  defaults <- list("diag" = TRUE, "link_matrix_h" = new("ngCMatrix"), "link_h" = FALSE, "sort_model" = TRUE)
+  defaults <- list("link_matrix_h" = new("dgCMatrix"), "link_h" = FALSE, "sort_model" = TRUE)
   for (i in 1:length(defaults))
     if (is.null(p[[names(defaults)[[i]]]])) p[[names(defaults)[[i]]]] <- defaults[[i]]
 
@@ -119,19 +119,19 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), no
   } else stop("'data' was not coercible to a matrix")
 
   if (is.null(mask)) {
-    mask_matrix <- new("ngCMatrix")
+    mask_matrix <- new("dgCMatrix")
     mask_zeros <- FALSE
   } else if (class(mask) == "character" && mask == "zeros") {
-    mask_matrix <- new("ngCMatrix")
+    mask_matrix <- new("dgCMatrix")
     mask_zeros <- TRUE
   } else {
     mask_zeros <- FALSE
-    if (!canCoerce(mask, "ngCMatrix")) {
+    if (!canCoerce(mask, "dgCMatrix")) {
       if (canCoerce(mask, "matrix")) {
         mask <- as.matrix(matrix)
-      } else stop("could not coerce the value of 'mask' to a sparse pattern matrix (ngCMatrix)")
+      } else stop("could not coerce the value of 'mask' to a sparse pattern matrix (dgCMatrix)")
     }
-    mask_matrix <- as(mask, "ngCMatrix")
+    mask_matrix <- as(mask, "dgCMatrix")
   }
 
   # randomly initialize "w", or check dimensions of provided initialization
@@ -174,9 +174,9 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), no
 
   # call C++ routines
   if (class(data)[[1]] == "dgCMatrix") {
-    model <- Rcpp_nmf_sparse(data, mask_matrix, tol, maxit, getOption("RcppML.verbose"), nonneg, L1, L2, p$diag, getOption("RcppML.threads"), w_init, p$link_matrix_h, mask_zeros, p$link_h, p$sort_model)
+    model <- Rcpp_nmf_sparse(data, mask_matrix, tol, maxit, getOption("RcppML.verbose"), L1, L2, getOption("RcppML.threads"), w_init, as(p$link_matrix_h, "dgCMatrix"), mask_zeros, p$link_h, p$sort_model)
   } else {
-    model <- Rcpp_nmf_dense(data, mask_matrix, tol, maxit, getOption("RcppML.verbose"), nonneg, L1, L2, p$diag, getOption("RcppML.threads"), w_init, p$link_matrix_h, mask_zeros, p$link_h, p$sort_model)
+    model <- Rcpp_nmf_dense(data, mask_matrix, tol, maxit, getOption("RcppML.verbose"), L1, L2, getOption("RcppML.threads"), w_init, as(p$link_matrix_h, "dgCMatrix"), mask_zeros, p$link_h, p$sort_model)
   }
 
   # add back dimnames

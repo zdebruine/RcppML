@@ -1,7 +1,7 @@
 options(RcppML.threads = 1)
 options(RcppML.verbose = FALSE)
 
-testConvergence <- function(A, k, mask = NULL, nonneg = TRUE, ...){
+testConvergence <- function(A, k, mask = NULL, ...){
   m0 <- nmf(A, k, tol = 1e-10, maxit = 1, mask = mask, ...)
   m1 <- nmf(A, k, tol = 1e-10, maxit = 20, mask = mask, ...)
   # test convergence
@@ -10,12 +10,10 @@ testConvergence <- function(A, k, mask = NULL, nonneg = TRUE, ...){
   # test that non-negativity constraints are enforced
   p <- list(...)
   if(k > 1) { # k == 1 of non-negative inputs gives non-negative results regardless of constraints
-    if(nonneg){
-      expect_equal(min(m0$w) >= 0, TRUE)
-      expect_equal(min(m0$h) >= 0, TRUE)
-      expect_equal(min(m1$w) >= 0, TRUE)
-      expect_equal(min(m1$h) >= 0, TRUE)
-    }
+    expect_equal(min(m0$w) >= 0, TRUE)
+    expect_equal(min(m0$h) >= 0, TRUE)
+    expect_equal(min(m1$w) >= 0, TRUE)
+    expect_equal(min(m1$h) >= 0, TRUE)
   }
 }
 
@@ -25,40 +23,18 @@ does_nmf_converge <- function(A, k){
     testConvergence(A, k, L1 = c(0.1, 0))
     testConvergence(A, k, L1 = c(0, 0.1))
     testConvergence(A, k, L1 = c(0.1, 0.1))
-    testConvergence(A, k, nonneg = F)
-    testConvergence(A, k, diag = F)
-    testConvergence(A, k, nonneg = F, diag = F)
 }
 
 library(Matrix)
 A <- simulateNMF(nrow = 50, ncol = 50, k = 5, noise = 0.5, dropout = 0.5, seed = 123)
-A <- as(A, "dgCMatrix")
-test_that("nmf converges over several iterations for sparse asymmetric inputs (k = 1)", { does_nmf_converge(A, 1) })
-test_that("nmf converges over several iterations for sparse asymmetric inputs (k = 2)", { does_nmf_converge(A, 2)})
+A <- as(A$A, "dgCMatrix")
 test_that("nmf converges over several iterations for sparse asymmetric inputs (k = 5)", { does_nmf_converge(A, 5)})
 A <- as.matrix(A)
-test_that("nmf converges over several iterations for dense asymmetric inputs (k = 1)", { does_nmf_converge(A, 1)})
-test_that("nmf converges over several iterations for dense asymmetric inputs (k = 2)", { does_nmf_converge(A, 2)})
 test_that("nmf converges over several iterations for dense asymmetric inputs (k = 5)", { does_nmf_converge(A, 5)})
 A <- as(crossprod(A), "dgCMatrix")
-test_that("nmf converges over several iterations for sparse symmetric inputs (k = 1)", { does_nmf_converge(A, 1)})
-test_that("nmf converges over several iterations for sparse symmetric inputs (k = 2)", { does_nmf_converge(A, 2)})
 test_that("nmf converges over several iterations for sparse symmetric inputs (k = 5)", { does_nmf_converge(A, 5)})
 A <- as.matrix(A)
-test_that("nmf converges over several iterations for dense symmetric inputs (k = 1)", { does_nmf_converge(A, 1)})
-test_that("nmf converges over several iterations for dense symmetric inputs (k = 2)", { does_nmf_converge(A, 2)})
 test_that("nmf converges over several iterations for dense symmetric inputs (k = 5)", { does_nmf_converge(A, 5)})
-
-test_that("diagonal scaling enforces symmetry in symmetric factorization", {
-  sim <- as(A, "dgCMatrix")
-  model <- nmf(sim, 5, diag = F, seed = 123, tol = 1e-3, v = F)
-  model2 <- nmf(sim, 5, diag = T, seed = 123, tol = 1e-3, v = F)
-  cor_model <- cor(as.vector(model$w), as.vector(t(model$h)))
-  cor_model2 <- cor(as.vector(model2$w), as.vector(t(model2$h)))
-  expect_lt(cor_model, cor_model2)
-  expect_equal(mean(model$d), 1)
-})
-
 
 A <- abs(Matrix::rsparsematrix(100, 100, 0.1))
 test_that("L1 regularization increases factor sparsity", {

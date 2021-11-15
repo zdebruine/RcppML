@@ -36,14 +36,14 @@ std::vector<unsigned int> indices_that_are_not_leaves(std::vector<cluster>& clus
 namespace RcppML {
   class clusterModel {
   public:
-    RcppML::SparseMatrix A;
+    RcppSparse::Matrix A;
     unsigned int min_samples;
     double min_dist, tol;
     bool nonneg, verbose;
     unsigned int seed, maxit, threads;
 
     // constructor requiring min_samples and min_dist. All other parameters must be set individually.
-    clusterModel(RcppML::SparseMatrix& A, const unsigned int min_samples, const double min_dist) : A(A), min_samples(min_samples), min_dist(min_dist) {
+    clusterModel(RcppSparse::Matrix& A, const unsigned int min_samples, const double min_dist) : A(A), min_samples(min_samples), min_dist(min_dist) {
       nonneg = true; verbose = true; tol = 1e-4; seed = 0; maxit = 100; threads = 0;
       w = randomMatrix(2, A.rows(), seed);
       calc_dist = (min_dist > 0);

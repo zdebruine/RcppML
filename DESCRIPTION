@@ -1,7 +1,7 @@
 Package: RcppML
 Type: Package
 Title: Rcpp Machine Learning Library
-Version: 0.5.3.1
+Version: 0.5.4
 Date: 2021-27-12
 Authors@R: person("Zach", "DeBruine", 
     email = "zacharydebruine@gmail.com", 
@@ -14,6 +14,7 @@ Imports:
     Rcpp, 
     Matrix,
     RcppEigen,
+    RcppSparse,
     methods,
     stats,
     ggplot2,
@@ -21,8 +22,9 @@ Imports:
     utils
 LinkingTo: 
     Rcpp, 
-    RcppEigen
-VignetteBuilder: rmarkdown
+    RcppEigen,
+    RcppSparse
+VignetteBuilder: knitr
 RoxygenNote: 7.1.2
 Suggests: 
     rmarkdown, 

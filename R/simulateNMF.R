@@ -49,5 +49,5 @@ simulateNMF <- function(nrow, ncol, k, noise = 0.5, dropout = 0.5, seed = NULL) 
     res <- res * d
   }
 
-  list(A = res, w = W, h = H)
+  list(A = res, w = w, h = h)
 }

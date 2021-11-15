@@ -80,19 +80,19 @@ setMethod("predict", signature = "nmf", function(object, data, L1 = 0, L2 = 0, n
   } else stop("'data' was not coercible to a matrix")
 
   if (is.null(mask)) {
-    mask_matrix <- new("ngCMatrix")
+    mask_matrix <- new("dgCMatrix")
     mask_zeros <- FALSE
   } else if (class(mask) == "character" && mask == "zeros") {
-    mask_matrix <- new("ngCMatrix")
+    mask_matrix <- new("dgCMatrix")
     mask_zeros <- TRUE
   } else {
     mask_zeros <- FALSE
-    if (!canCoerce(mask, "ngCMatrix")) {
+    if (!canCoerce(mask, "dgCMatrix")) {
       if (canCoerce(mask, "matrix")) {
         mask <- as.matrix(matrix)
-      } else stop("could not coerce the value of 'mask' to a sparse pattern matrix (ngCMatrix)")
+      } else stop("could not coerce the value of 'mask' to a sparse pattern matrix (dgCMatrix)")
     }
-    mask_matrix <- as(mask, "ngCMatrix")
+    mask_matrix <- as(mask, "dgCMatrix")
   }
 
   if (nrow(object@w) == nrow(data) && ncol(object@w) != nrow(data)) {
@@ -103,9 +103,9 @@ setMethod("predict", signature = "nmf", function(object, data, L1 = 0, L2 = 0, n
   if (ncol(w) != nrow(data)) stop("dimensions of 'object@w' and 'A' are not compatible")
 
   if (class(data)[[1]] == "dgCMatrix") {
-    h <- Rcpp_predict_sparse(data, mask_matrix, w, nonneg, L1[1], L2[1], getOption("RcppML.threads"), mask_zeros)
+    h <- Rcpp_predict_sparse(data, mask_matrix, w, L1[1], L2[1], getOption("RcppML.threads"), mask_zeros)
   } else {
-    h <- Rcpp_predict_dense(data, mask_matrix, w, nonneg, L1[1], L2[1], getOption("RcppML.threads"), mask_zeros)
+    h <- Rcpp_predict_dense(data, mask_matrix, w, L1[1], L2[1], getOption("RcppML.threads"), mask_zeros)
   }
   if (!is.null(colnames(data))) colnames(h) <- colnames(data)
   rownames(h) <- paste0("nmf", 1:nrow(h))
@@ -115,7 +115,7 @@ setMethod("predict", signature = "nmf", function(object, data, L1 = 0, L2 = 0, n
 #' @rdname predict.nmf
 #' @param w matrix of features (rows) by factors (columns), corresponding to rows in \code{data}
 #' @export
-predict.nmf <- function(w, data, L1 = 0, L2 = 0, nonneg = TRUE, mask = NULL, ...){
+predict.nmf <- function(w, data, L1 = 0, L2 = 0, mask = NULL, ...){
   m <- new("nmf", w = w, d = rep(1:ncol(w)), h = matrix(0, nrow = ncol(w), 1))
-  predict(m, data, L1 = L1, L2 = L2, nonneg = nonneg, mask = mask, ...)
+  predict(m, data, L1 = L1, L2 = L2, mask = as(mask, "dgCMatrix"), ...)
 }
