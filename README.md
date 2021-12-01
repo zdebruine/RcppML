@@ -102,3 +102,10 @@ Rcpp::List DivisiveCluster(const Rcpp::S4& A_, int min_samples, double min_dist)
    return result;
 }
 ```
+
+### Planned Development
+
+* Correlation distance between vectorized `w` models across consecutive iterations is unstable, especially when factorizing homoskedastic datasets because `w_{i - 1}` does not always correspond exactly to `w_i`. Thus, `w_{i-1}` must be aligned to `w` using bipartite matching on a correlation distance matrix.  The cost of bipartite matching / the number of factors then gives the tolerance.
+* Thresholding NNLS in coordiante descent - set to zero if below some threshold.
+* Masking NA values automatically
+* New sparse matrix classes and implementation
