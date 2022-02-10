@@ -117,5 +117,5 @@ setMethod("predict", signature = "nmf", function(object, data, L1 = 0, L2 = 0, n
 #' @export
 predict.nmf <- function(w, data, L1 = 0, L2 = 0, mask = NULL, ...){
   m <- new("nmf", w = w, d = rep(1:ncol(w)), h = matrix(0, nrow = ncol(w), 1))
-  predict(m, data, L1 = L1, L2 = L2, mask = as(mask, "dgCMatrix"), ...)
+  predict(m, data, L1 = L1, L2 = L2, mask = mask, ...)
 }
