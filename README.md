@@ -7,8 +7,9 @@
 `RcppML` is an R package for fast **non-negative matrix factorization** and **divisive clustering** using **large sparse matrices**. 
 
 RcppML NMF is:
-1. **more interpretable and robust** due to diagonal scaling
-2. The **fastest** NMF implementation in R, and possibly in any language
+ * The **fastest** NMF implementation in any language for sparse and dense matrices
+ * More **interpretable** than other implementations due to diagonal scaling
+ * Easy to **regularize** with an L1 penalty
 
 ## Installation
 
