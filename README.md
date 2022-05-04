@@ -16,8 +16,9 @@ RcppML NMF is:
 Install from [CRAN](https://cran.r-project.org/web/packages/RcppML/index.html) or the development version from GitHub:
 
 ```
-install.packages('RcppML')                   # install CRAN version
-devtools::install_github("zdebruine/RcppML") # compile dev version
+install.packages('RcppML')                       # install CRAN version
+devtools::install_github("zdebruine/RcppSparse") # dev version dependency
+devtools::install_github("zdebruine/RcppML")     # compile dev version
 ```
 
 NOTE: RcppML is being actively developed. Please check that your `packageVersion("RcppML")` is current before raising issues.
