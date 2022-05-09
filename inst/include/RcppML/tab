@@ -458,3 +458,99 @@ namespace Rcpp {
 
 #endif
 
+
+/*
+//[[Rcpp::depends(RcppEigen)]]
+#include <RcppEigen.h>
+
+namespace RcppML {
+class seed {
+public:
+
+  seed(uint32_t state) : state(state) {};
+  
+  uint32_t rand(uint32_t i, uint32_t j) {
+    // enforce transpose-identity
+    if(j >= i)
+      std::swap(i, j);
+    
+    // generate a unique hash of i and j, using (max(i, j))(max(i, j) + 1) / 2 + min(i, j)
+    // https://math.stackexchange.com/questions/882877/produce-unique-number-given-two-integers
+    // credit to user @JimmyK4542, and whoever published the original intuition
+    // also add 1 to i and j to avoid issues where i == 0 || j == 0
+    // transform to uint64_t to avoid issues with overflow during multiplication
+    uint64_t ij = (i + 1) * (i + 2) / 2 + j + 1;
+
+    // adapted from xorshift64, Marsaglia
+    // https://en.wikipedia.org/wiki/Xorshift
+    ij ^= ij << 13 | (i << 17);
+    ij ^= ij >> 7 | (j << 5);
+    ij ^= ij << 17;
+    
+    // adapted from xorshift128+
+    // https://xoshiro.di.unimi.it/xorshift128plus.c
+    uint64_t s = state ^ ij;
+    s ^= s << 23;
+    s = s ^ ij ^ (s >> 18) ^ (ij >> 5);
+    return (uint32_t) ((s + ij));
+  }
+  
+  uint32_t sample(uint32_t i, uint32_t j, uint32_t max){
+    return rand(i, j) % max;
+  }
+  
+  template <typename T>
+  T runif(uint32_t i, uint32_t j){
+    T y = (T) rand(i, j) / UINT32_MAX;
+    return y - std::floor(y);
+  }
+  
+private:
+  uint32_t state;
+};
+}
+
+template <typename T>
+Eigen::Matrix<T, -1, -1> randomMatrix(uint32_t nrow, uint32_t ncol, uint32_t seed){
+  Eigen::MatrixXd m(nrow, ncol);
+  RcppML::seed s(seed);
+  // symmetric part first
+  uint32_t n_sym = (nrow < ncol) ? nrow : ncol;
+
+  for(uint32_t i = 0; i < n_sym; ++i)
+    for(uint32_t j = (i + 1); j < n_sym; ++j)
+      m(i, j) = s.runif<T>(i, j);
+  
+  // populate the diagonal of the symmetric part
+  for(uint32_t i = 0; i < n_sym; ++i)
+    m(i, i) = s.runif<T>(i, i);
+  
+  // asymmetric part (but still transpose-identical)
+  if(nrow > ncol)
+    for(uint32_t i = n_sym; i < nrow; ++i)
+      for(uint32_t j = 0; j < ncol; ++j)
+        m(i, j) = s.runif<T>(i, j);
+  else if (ncol > nrow)
+    for(uint32_t i = 0; i < nrow; ++i)
+      for(uint32_t j = n_sym; j < ncol; ++j)
+        m(i, j) = s.runif<T>(i, j);
+
+  return m;
+}
+
+// make sparse matrix classes available in RcppML, ngCMatrix, dgCMatrix, and possibly even rlCMatrix
+
+// make seed class available in RcppML, with r_unif, r_sample, r_matrix, and r_sparsematrix functions
+
+//[[Rcpp::export]]
+Eigen::MatrixXd r_matrix(uint32_t nrow, uint32_t ncol, uint32_t seed){
+  return randomMatrix()
+  Eigen::MatrixXd m(nrow, ncol);
+  RcppML::seed s(seed);
+  for(uint32_t i = 0; i < nrow; ++i)
+    for(uint32_t j = 0; j < ncol; ++j)
+      m(i, j) = s.runif<double>(i, j);
+  return m;
+}
+
+*/
