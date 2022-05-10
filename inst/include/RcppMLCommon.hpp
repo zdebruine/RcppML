@@ -47,4 +47,8 @@
 #include <RcppML/bits.hpp>
 #endif
 
+#ifndef RcppML_rng
+#include <RcppML/rng.hpp>
+#endif
+
 #endif
