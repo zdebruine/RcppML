@@ -1,5 +1,8 @@
 .onAttach <- function(libname, pkgname) {
 
+  # ensure that RNG seed is initialized 
+  if(!exists(".Random.seed")) set.seed(NULL)
+
   # set threads
   if(is.null(getOption("RcppML.threads"))) 
     options(RcppML.threads = 0)
