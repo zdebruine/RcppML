@@ -1,12 +1,12 @@
 // This file is part of RcppML, a Rcpp Machine Learning library
 //
-// Copyright (C) 2021 Zach DeBruine <zacharydebruine@gmail.com>
+// Copyright (C) 2022 Zach DeBruine <zacharydebruine@gmail.com>
 //
 // This source code is subject to the terms of the GNU
 // Public License v. 2.0.
 
-#ifndef RcppML_nnls
-#define RcppML_nnls
+#ifndef RcppML_rng
+#define RcppML_rng
 
 #ifndef RcppML_common
 #include <RcppMLCommon.hpp>
