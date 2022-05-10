@@ -356,3 +356,170 @@ Eigen::MatrixXd nnls(Eigen::MatrixXd a, Eigen::MatrixXd b, unsigned int cd_maxit
     }
     return x;
 }
+
+//[[Rcpp::export]]
+Rcpp::NumericMatrix c_rmatrix(uint32_t nrow, uint32_t ncol, uint32_t rng){
+  Rcpp::NumericMatrix m(nrow, ncol);
+  RcppML::rng<false> s(rng);
+  for(uint32_t i = 0; i < nrow; ++i)
+    for(uint32_t j = 0; j < ncol; ++j)
+      m(i, j) = s.runif<float>(i, j);
+  return m;
+}
+
+//[[Rcpp::export]]
+Rcpp::NumericMatrix c_rtimatrix(uint32_t nrow, uint32_t ncol, uint32_t rng){
+  Rcpp::NumericMatrix m(nrow, ncol);
+  RcppML::rng<true> s(rng);
+ 
+  // symmetric part first
+  uint32_t n_sym = (nrow < ncol) ? nrow : ncol;
+ 
+  for(uint32_t i = 0; i < n_sym; ++i){
+    for(uint32_t j = (i + 1); j < n_sym; ++j){
+      float tmp = s.runif<float>(i, j);
+      m(i, j) = tmp;
+      m(j, i) = tmp;
+    }
+  }
+ 
+  // populate the diagonal of the symmetric part
+  for(uint32_t i = 0; i < n_sym; ++i)
+    m(i, i) = s.runif<float>(i, i);
+ 
+  // asymmetric part (but still transpose-identical)
+  if(nrow > ncol)
+    for(uint32_t i = n_sym; i < nrow; ++i)
+      for(uint32_t j = 0; j < ncol; ++j)
+        m(i, j) = s.runif<float>(i, j);
+  else if (ncol > nrow)
+    for(uint32_t i = 0; i < nrow; ++i)
+      for(uint32_t j = n_sym; j < ncol; ++j)
+        m(i, j) = s.runif<float>(i, j);
+ 
+  return m;
+}
+
+//[[Rcpp::export]]
+Rcpp::NumericVector c_runif(const uint32_t n, const float min, const float max, const uint32_t rng, const uint32_t rng2){
+  Rcpp::NumericVector result(n);
+  RcppML::rng<false> s(rng);
+  float scale = max - min;
+  for(uint32_t i = 0; i < n; ++i){
+    result[i] = s.runif<float>(i, rng2) * scale + min;
+  }
+  return result;
+}
+
+//[[Rcpp::export]]
+Rcpp::IntegerVector c_rbinom(const uint32_t n, uint32_t size, const uint32_t inv_probability, const uint32_t rng, const uint32_t rng2){
+  Rcpp::IntegerVector result(n);
+  RcppML::rng<false> s(rng);
+  for(; size > 0; --size){
+    for(uint32_t i = 0; i < n; ++i){
+      if(s.sample(i, rng2, inv_probability) == 0)
+        ++result[i];
+    }
+  }
+  return result;
+}
+
+//[[Rcpp::export]]
+std::vector<uint32_t> c_sample(const uint32_t n, const uint32_t size, const bool replace, const uint32_t rng, const uint32_t rng2){
+  RcppML::rng<false> s(rng);
+  if(size == 1){
+    return std::vector<uint32_t>(1, s.sample(1, 1, n));
+  }
+  if(replace){
+    std::vector<uint32_t> result(size);
+    for(uint32_t i = 0; i < size; ++i){
+      result[i] = s.sample(i, rng2, n);
+    }
+    return result;
+  } else {
+    if(size > n)
+      Rcpp::stop("cannot take a sample larger than the population when 'replace = FALSE'");
+    std::vector<uint32_t> result(n);
+    std::iota(result.begin(), result.end(), 0);
+    for(uint32_t i = 0; i < size; ++i){
+      std::swap(result[i], result[s.sample(i, rng2, n)]);
+    }
+    if(size < n)
+      result.resize(size);
+    return result;
+  }
+}
+
+//[[Rcpp::export]]
+Rcpp::S4 c_rtisparsematrix(const uint32_t nrow, const uint32_t ncol, const uint32_t inv_probability, const bool pattern_only, uint32_t rng){
+  RcppML::rng<true> s(rng);
+  Rcpp::S4 result = pattern_only ? Rcpp::S4(std::string("ngCMatrix")) : Rcpp::S4(std::string("dgCMatrix"));
+  Rcpp::IntegerVector p(ncol + 1);
+  std::vector<uint32_t> i;
+  i.reserve(nrow * ncol / inv_probability);
+  if(pattern_only){
+    for(uint32_t col = 0; col < ncol; ++col){
+      for(uint32_t row = 0; row < nrow; ++row){
+        if(s.sample(row, col, inv_probability) == 0)
+          i.push_back(row);
+      }
+      p[col + 1] = i.size();
+    }
+  } else {
+    std::vector<float> x;
+    x.reserve(nrow * ncol / inv_probability);
+    for(uint32_t col = 0; col < ncol; ++col){
+      for(uint32_t row = 0; row < nrow; ++row){
+        if(s.sample(row, col, inv_probability) == 0){
+          i.push_back(row);
+          x.push_back(s.runif<float>(row, col));
+        }
+      }
+      p[col + 1] = i.size();
+    }
+    Rcpp::NumericVector x_ = Rcpp::wrap(x);
+    result.slot("x") = x_;
+  }
+  Rcpp::IntegerVector i_ = Rcpp::wrap(i);
+  result.slot("Dim") = Rcpp::IntegerVector::create(nrow, ncol);
+  result.slot("i") = i_;
+  result.slot("p") = p;
+  return result;
+}
+
+//[[Rcpp::export]]
+Rcpp::S4 c_rsparsematrix(const uint32_t nrow, const uint32_t ncol, const uint32_t inv_probability, const bool pattern_only, uint32_t rng){
+  RcppML::rng<false> s(rng);
+  Rcpp::S4 result = pattern_only ? Rcpp::S4(std::string("ngCMatrix")) : Rcpp::S4(std::string("dgCMatrix"));
+  Rcpp::IntegerVector p(ncol + 1);
+  std::vector<uint32_t> i;
+  i.reserve(nrow * ncol / inv_probability);
+  if(pattern_only){
+    for(uint32_t col = 0; col < ncol; ++col){
+      for(uint32_t row = 0; row < nrow; ++row){
+        if(s.sample(row, col, inv_probability) == 0)
+          i.push_back(row);
+      }
+      p[col + 1] = i.size();
+    }
+  } else {
+    std::vector<float> x;
+    x.reserve(nrow * ncol / inv_probability);
+    for(uint32_t col = 0; col < ncol; ++col){
+      for(uint32_t row = 0; row < nrow; ++row){
+        if(s.sample(row, col, inv_probability) == 0){
+          i.push_back(row);
+          x.push_back(s.runif<float>(row, col));
+        }
+      }
+      p[col + 1] = i.size();
+    }
+    Rcpp::NumericVector x_ = Rcpp::wrap(x);
+    result.slot("x") = x_;
+  }
+  Rcpp::IntegerVector i_ = Rcpp::wrap(i);
+  result.slot("Dim") = Rcpp::IntegerVector::create(nrow, ncol);
+  result.slot("i") = i_;
+  result.slot("p") = p;
+  return result;
+}
