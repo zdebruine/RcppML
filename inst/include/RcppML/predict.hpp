@@ -5,6 +5,19 @@
 // This source code is subject to the terms of the GNU
 // Public License v. 2.0.
 
+/* 5/10/2022
+ * This approach to calculating w * w.transpose() significantly reduces compute time
+ *
+ * template <typename T>
+ * Eigen::Matrix<T, -1, -1> AAt(Eigen::Matrix<T, -1, -1> A){
+ *   Eigen::Matrix<T, -1, -1> a = Eigen::Matrix<T, -1, -1>::Zero(A.rows(), A.rows());
+ *   a.selfadjointView<Eigen::Lower>().rankUpdate(A);
+ *   a.triangularView<Eigen::Upper>() = a.transpose();
+ *   return a;
+ * }
+ *
+ */
+
 #ifndef RcppML_predict
 #define RcppML_predict
 
