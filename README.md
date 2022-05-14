@@ -17,6 +17,7 @@ Install from [CRAN](https://cran.r-project.org/web/packages/RcppML/index.html) o
 
 ```
 install.packages('RcppML')                       # install CRAN version
+devtools::install_github("zdebruine/RcppSparse") # dependency for RcppML
 devtools::install_github("zdebruine/RcppML")     # compile dev version
 ```
 
