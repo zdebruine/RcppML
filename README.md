@@ -53,7 +53,7 @@ The `RcppML::MatrixFactorization` class is an object-oriented interface with met
 
 //[[Rcpp::export]]
 Rcpp::List RunNMF(const Rcpp::S4& A_, int k){
-     RcppML::SparseMatrix A(A_); // zero-copy, unlike arma or Eigen equivalents
+     RcppML::Matrix A(A_); // zero-copy, unlike arma or Eigen equivalents
      RcppML::MatrixFactorization model(k, A.rows(), A.cols());
      model.tol = 1e-5;
      model.fit(A);
@@ -89,7 +89,7 @@ The `RcppML::clusterModel` class provides an interface to divisive clustering. I
 
 //[[Rcpp::export]]
 Rcpp::List DivisiveCluster(const Rcpp::S4& A_, int min_samples, double min_dist){
-   RcppML::SparseMatrix A(A_);
+   RcppML::Matrix A(A_);
    RcppML::clusterModel model(A, min_samples, min_dist);
    model.dclust();
    std::vector<RcppML::cluster> clusters = m.getClusters();
