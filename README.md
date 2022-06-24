@@ -45,26 +45,6 @@ h0 <- RcppML::project(A, w = model$w)
 RcppML::mse(A, model$w, model$d, model$h)
 ```
 
-#### C++ class
-The `RcppML::MatrixFactorization` class is an object-oriented interface with methods for fitting, projecting, and evaluating linear factor models. It also contains a sparse matrix class equivalent to `Matrix::dgCMatrix` in R.
-
-```{Rcpp}
-#include <RcppML.hpp>
-
-//[[Rcpp::export]]
-Rcpp::List RunNMF(const Rcpp::S4& A_, int k){
-     RcppML::Matrix A(A_); // zero-copy, unlike arma or Eigen equivalents
-     RcppML::MatrixFactorization model(k, A.rows(), A.cols());
-     model.tol = 1e-5;
-     model.fit(A);
-     return Rcpp::List::create(
-          Rcpp::Named("w") = model.w,
-          Rcpp::Named("d") = model.d,
-          Rcpp::Named("h") = model.h,
-          Rcpp::Named("mse") = model.mse(A));
-}
-```
-
 ## Divisive Clustering
 Divisive clustering by rank-2 spectral bipartitioning.
 * 2nd SVD vector is linearly related to the difference between factors in rank-2 matrix factorization.
@@ -79,27 +59,4 @@ The `dclust` function runs divisive clustering by recursive spectral bipartition
 A <- Matrix::rsparsematrix(A, 1000, 1000, 0.1) # sparse Matrix::dgcMatrix
 clusters <- dclust(A, min_dist = 0.001, min_samples = 5)
 cluster0 <- bipartition(A)
-```
-
-#### C++ class
-The `RcppML::clusterModel` class provides an interface to divisive clustering. In the future, more clustering algorithms may be added.
-
-```{Rcpp}
-#include <RcppML.hpp>
-
-//[[Rcpp::export]]
-Rcpp::List DivisiveCluster(const Rcpp::S4& A_, int min_samples, double min_dist){
-   RcppML::Matrix A(A_);
-   RcppML::clusterModel model(A, min_samples, min_dist);
-   model.dclust();
-   std::vector<RcppML::cluster> clusters = m.getClusters();
-   Rcpp::List result(clusters.size());
-   for (int i = 0; i < clusters.size(); ++i) {
-        result[i] = Rcpp::List::create(
-             Rcpp::Named("id") = clusters[i].id,
-             Rcpp::Named("samples") = clusters[i].samples,
-             Rcpp::Named("center") = clusters[i].center);
-   }
-   return result;
-}
 ```
