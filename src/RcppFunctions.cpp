@@ -266,7 +266,7 @@ Rcpp::List Rcpp_dclust_sparse(const Rcpp::S4& A, const unsigned int min_samples,
 //' @return vector or matrix giving solution for \code{x}
 //' @export
 //' @author Zach DeBruine
-//' @seealso \code{\link{nmf}}, \code{\link{predict.nmf}}
+//' @seealso \code{\link{nmf}}, \code{\link{project}}
 //' @md
 //'
 //' @references

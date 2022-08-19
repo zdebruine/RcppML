@@ -232,6 +232,107 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// c_rmatrix
+Rcpp::NumericMatrix c_rmatrix(uint32_t nrow, uint32_t ncol, uint32_t rng);
+RcppExport SEXP _RcppML_c_rmatrix(SEXP nrowSEXP, SEXP ncolSEXP, SEXP rngSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< uint32_t >::type nrow(nrowSEXP);
+    Rcpp::traits::input_parameter< uint32_t >::type ncol(ncolSEXP);
+    Rcpp::traits::input_parameter< uint32_t >::type rng(rngSEXP);
+    rcpp_result_gen = Rcpp::wrap(c_rmatrix(nrow, ncol, rng));
+    return rcpp_result_gen;
+END_RCPP
+}
+// c_rtimatrix
+Rcpp::NumericMatrix c_rtimatrix(uint32_t nrow, uint32_t ncol, uint32_t rng);
+RcppExport SEXP _RcppML_c_rtimatrix(SEXP nrowSEXP, SEXP ncolSEXP, SEXP rngSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< uint32_t >::type nrow(nrowSEXP);
+    Rcpp::traits::input_parameter< uint32_t >::type ncol(ncolSEXP);
+    Rcpp::traits::input_parameter< uint32_t >::type rng(rngSEXP);
+    rcpp_result_gen = Rcpp::wrap(c_rtimatrix(nrow, ncol, rng));
+    return rcpp_result_gen;
+END_RCPP
+}
+// c_runif
+Rcpp::NumericVector c_runif(const uint32_t n, const float min, const float max, const uint32_t rng, const uint32_t rng2);
+RcppExport SEXP _RcppML_c_runif(SEXP nSEXP, SEXP minSEXP, SEXP maxSEXP, SEXP rngSEXP, SEXP rng2SEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const uint32_t >::type n(nSEXP);
+    Rcpp::traits::input_parameter< const float >::type min(minSEXP);
+    Rcpp::traits::input_parameter< const float >::type max(maxSEXP);
+    Rcpp::traits::input_parameter< const uint32_t >::type rng(rngSEXP);
+    Rcpp::traits::input_parameter< const uint32_t >::type rng2(rng2SEXP);
+    rcpp_result_gen = Rcpp::wrap(c_runif(n, min, max, rng, rng2));
+    return rcpp_result_gen;
+END_RCPP
+}
+// c_rbinom
+Rcpp::IntegerVector c_rbinom(const uint32_t n, uint32_t size, const uint32_t inv_probability, const uint32_t rng, const uint32_t rng2);
+RcppExport SEXP _RcppML_c_rbinom(SEXP nSEXP, SEXP sizeSEXP, SEXP inv_probabilitySEXP, SEXP rngSEXP, SEXP rng2SEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const uint32_t >::type n(nSEXP);
+    Rcpp::traits::input_parameter< uint32_t >::type size(sizeSEXP);
+    Rcpp::traits::input_parameter< const uint32_t >::type inv_probability(inv_probabilitySEXP);
+    Rcpp::traits::input_parameter< const uint32_t >::type rng(rngSEXP);
+    Rcpp::traits::input_parameter< const uint32_t >::type rng2(rng2SEXP);
+    rcpp_result_gen = Rcpp::wrap(c_rbinom(n, size, inv_probability, rng, rng2));
+    return rcpp_result_gen;
+END_RCPP
+}
+// c_sample
+std::vector<uint32_t> c_sample(const uint32_t n, const uint32_t size, const bool replace, const uint32_t rng, const uint32_t rng2);
+RcppExport SEXP _RcppML_c_sample(SEXP nSEXP, SEXP sizeSEXP, SEXP replaceSEXP, SEXP rngSEXP, SEXP rng2SEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const uint32_t >::type n(nSEXP);
+    Rcpp::traits::input_parameter< const uint32_t >::type size(sizeSEXP);
+    Rcpp::traits::input_parameter< const bool >::type replace(replaceSEXP);
+    Rcpp::traits::input_parameter< const uint32_t >::type rng(rngSEXP);
+    Rcpp::traits::input_parameter< const uint32_t >::type rng2(rng2SEXP);
+    rcpp_result_gen = Rcpp::wrap(c_sample(n, size, replace, rng, rng2));
+    return rcpp_result_gen;
+END_RCPP
+}
+// c_rtisparsematrix
+Rcpp::S4 c_rtisparsematrix(const uint32_t nrow, const uint32_t ncol, const uint32_t inv_probability, const bool pattern_only, uint32_t rng);
+RcppExport SEXP _RcppML_c_rtisparsematrix(SEXP nrowSEXP, SEXP ncolSEXP, SEXP inv_probabilitySEXP, SEXP pattern_onlySEXP, SEXP rngSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const uint32_t >::type nrow(nrowSEXP);
+    Rcpp::traits::input_parameter< const uint32_t >::type ncol(ncolSEXP);
+    Rcpp::traits::input_parameter< const uint32_t >::type inv_probability(inv_probabilitySEXP);
+    Rcpp::traits::input_parameter< const bool >::type pattern_only(pattern_onlySEXP);
+    Rcpp::traits::input_parameter< uint32_t >::type rng(rngSEXP);
+    rcpp_result_gen = Rcpp::wrap(c_rtisparsematrix(nrow, ncol, inv_probability, pattern_only, rng));
+    return rcpp_result_gen;
+END_RCPP
+}
+// c_rsparsematrix
+Rcpp::S4 c_rsparsematrix(const uint32_t nrow, const uint32_t ncol, const uint32_t inv_probability, const bool pattern_only, uint32_t rng);
+RcppExport SEXP _RcppML_c_rsparsematrix(SEXP nrowSEXP, SEXP ncolSEXP, SEXP inv_probabilitySEXP, SEXP pattern_onlySEXP, SEXP rngSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const uint32_t >::type nrow(nrowSEXP);
+    Rcpp::traits::input_parameter< const uint32_t >::type ncol(ncolSEXP);
+    Rcpp::traits::input_parameter< const uint32_t >::type inv_probability(inv_probabilitySEXP);
+    Rcpp::traits::input_parameter< const bool >::type pattern_only(pattern_onlySEXP);
+    Rcpp::traits::input_parameter< uint32_t >::type rng(rngSEXP);
+    rcpp_result_gen = Rcpp::wrap(c_rsparsematrix(nrow, ncol, inv_probability, pattern_only, rng));
+    return rcpp_result_gen;
+END_RCPP
+}
 // Rcpp_bipartite_match
 Rcpp::List Rcpp_bipartite_match(Rcpp::NumericMatrix x);
 RcppExport SEXP _RcppML_Rcpp_bipartite_match(SEXP xSEXP) {
@@ -257,6 +358,13 @@ static const R_CallMethodDef CallEntries[] = {
     {"_RcppML_Rcpp_bipartition_dense", (DL_FUNC) &_RcppML_Rcpp_bipartition_dense, 9},
     {"_RcppML_Rcpp_dclust_sparse", (DL_FUNC) &_RcppML_Rcpp_dclust_sparse, 9},
     {"_RcppML_nnls", (DL_FUNC) &_RcppML_nnls, 8},
+    {"_RcppML_c_rmatrix", (DL_FUNC) &_RcppML_c_rmatrix, 3},
+    {"_RcppML_c_rtimatrix", (DL_FUNC) &_RcppML_c_rtimatrix, 3},
+    {"_RcppML_c_runif", (DL_FUNC) &_RcppML_c_runif, 5},
+    {"_RcppML_c_rbinom", (DL_FUNC) &_RcppML_c_rbinom, 5},
+    {"_RcppML_c_sample", (DL_FUNC) &_RcppML_c_sample, 5},
+    {"_RcppML_c_rtisparsematrix", (DL_FUNC) &_RcppML_c_rtisparsematrix, 5},
+    {"_RcppML_c_rsparsematrix", (DL_FUNC) &_RcppML_c_rsparsematrix, 5},
     {"_RcppML_Rcpp_bipartite_match", (DL_FUNC) &_RcppML_Rcpp_bipartite_match, 1},
     {NULL, NULL, 0}
 };
