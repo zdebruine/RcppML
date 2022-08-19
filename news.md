@@ -42,3 +42,13 @@
 ### Minor changes
 - clean up C++ API
 - C++ API gets meta-templating
+
+## RcppML 1.0
+
+### Major changes:
+- better cross-validation, now exclusively using the mean squared error of missing value imputation (random speckled patterns of missing values)
+- complete migration to the S4 system, with backwards compatibility for CRAN version 0.5.0
+- new vignettes and built-in datasets
+
+### Minor changes:
+- compatibility with latest version of the `Matrix` package
