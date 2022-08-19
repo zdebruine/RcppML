@@ -4,7 +4,7 @@ author: "Zach DeBruine"
 date: "`r Sys.Date()`"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Getting Started with NMF}
+  %\VignetteIndexEntry{Robust NMF with random initializations}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -20,27 +20,26 @@ Non-negative matrix factorization (NMF) is NP-hard ([Vavasis, 2007](https://arxi
 
 Non-negative Double SVD (NNDSVD) has previously been proposed as a "head-start" for NMF ([Boutsidis, 2008](https://www.sciencedirect.com/science/article/abs/pii/S0031320307004359)), but never does better than random initializations and often does worse (see my [blog post](https://www.zachdebruine.com/post/learning-optimal-nmf-models-from-random-restarts/) on this).
 
+## Reproducibility
+
+Simply, set the seed when calling the function.
+
+```{R}
+library(RcppML)
+A <- r_sparsematrix(1000, 1000, inv_density = 16)
+not_reproducible_model <- nmf(A, k = 10, seed = NULL) # default
+reproducible_model <- nmf(A, k = 10, seed = 123)
+```
+
 ## Random initialization
 
-Random initializations are the best initializations because they are not local minima, unlike SVD-based initializations. There are two types of random initialization which work well for NMF:
-
-* uniform distributions. (i.e. `runif(min, max)`)
-* normal distributions (i.e. `rnorm(mean, sd)`)
-
-In general, the type of data dicates which type of initialization will discover the best minima. Here are a couple takeaways:
-
-* very large data (>10,000 samples and features) often needs few random restarts -- the best solutions are found repeatedly.
-* small, clean data benefits from `rnorm`
-* small, dirty data benefits from `runif`
-
-To make things even more subjective and complicated, the bounds of the uniform distribution can affect the best discoverable solution.
+Random uniform initializations are the best initializations because they are not local minima and do not assume prior distribution information. Using non-random initializations (like NNDSVD, first proposed by Boutsidis) can trap models in dangerous local minima and mandate a model inspired by orthogonality rather than colinearity.
 
 ## Random restarts with RcppML
 
 Let's see how multiple restarts can improve a model. In RcppML, we simply specify multiple seeds to run multiple restarts:
 
 ```{R, message = FALSE, warning = FALSE}
-library(RcppML)
 data(hawaiibirds)
 m1 <- nmf(hawaiibirds$counts, k = 10, seed = 1)
 m2 <- nmf(hawaiibirds$counts, k = 10, seed = 1:10)
@@ -54,7 +53,7 @@ evaluate(m1, hawaiibirds$counts)
 evaluate(m2, hawaiibirds$counts)
 ```
 
-Multiple random restarts were able to lower the error of the model! 
+Multiple random restarts help discover better models.
 
 What happens when only a single seed is specified? RcppML uses `runif` to generate a uniform distribution in a randomly selected range. `rnorm` is not used just to be safe, because sometimes `rnorm` can actually give worse results.
 
@@ -64,28 +63,29 @@ What happens when multiple seeds are specified? RcppML generates multiple initia
 
 Suppose we learn an NMF model and want to come back later and fit it further. Alternatively, we might learn a model from one set of samples, and simply want to fit it to another set of samples.
 
-Here we learn an NMF model on half of all movie users in the `movielens` dataset, and then fit it further on the other half:
+Here we learn an NMF model on half of all survey grids in the `hawaiibirds` dataset, and then fit it further on the other half:
 
 ```{R}
-data(movielens)
-A <- movielens$ratings
-users1 <- sample(1:ncol(A), floor(ncol(A)/2))
-users2 <- (1:ncol(A))[-users1]
+A <- hawaiibirds$counts
+grids1 <- sample(1:ncol(A), floor(ncol(A)/2))
+grids2 <- (1:ncol(A))[-grids1]
 
-model1 <- nmf(A[, users1], k = 7, mask = "zeros", seed = 1:10)
-model2 <- nmf(A[, users2], k = 7, mask = "zeros", seed = model1@w)
+model1 <- nmf(A[, grids1], k = 15, seed = 123)
+model2 <- nmf(A[, grids2], k = 15, seed = model1@w)
 
 cat("model 1 iterations: ", model1@misc$iter,
     ", model 2 iterations: ", model2@misc$iter)
 ```
 
-Here use used model1 as a "warm start" for training model2, and thus not as many iterations were needed to refine model2. But suppose we trained model2 from a "cold start", would we have done better (as measured by MSE)?
+Here use used model1 as a "warm start" for training model2, but this was not particularly helpful. Suppose we trained model2 from a "cold start", would we have done better (as measured by MSE)?
 
 ```{R}
-model2_new <- nmf(A[, users2], k = 7, mask = "zeros", seed = 1:10)
+model2_new <- nmf(A[, grids2], k = 15, seed = 123)
 
-cat("model 2 warm-start", evaluate(model2_new, A[, users2], mask = "zeros"),
-    ", model 2 random start: ", evaluate(model2, A[, users2], mask = "zeros"))
+cat("model 2 warm-start", evaluate(model2_new, A[, grids2]),
+    ", model 2 random start: ", evaluate(model2, A[, grids2]))
 ```
 
-Surprisingly, we don't do better! This, of course, could be different depending on the dataset and training methodology.
+We only do slightly better.
+
+In conclusion, it is almost always better to start from a random initialization. Using prior information is rarely helpful and does not appreciably speed up the fitting process.

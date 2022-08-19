@@ -22,12 +22,9 @@ This vignette demonstrates basic usage of the `RcppML::nmf` function and visuali
 
 Install the RcppML R package from CRAN or the development version from GitHub. 
 
-Also install the accompanying Machine Learning datasets (MLdata) package:
-
 ```{R, eval = FALSE}
 install.packages('RcppML')                     # install CRAN version
 # devtools::install_github("zdebruine/RcppML") # compile dev version
-devtools::install_github("zdebruine/MLdata")
 ```
 
 ## What is NMF?
@@ -54,7 +51,6 @@ Run NMF on the `iris` dataset. We need to specify a rank (`k`) for the factoriza
 ```{R, message = FALSE, warning = FALSE, results = "hide"}
 library(RcppML)
 library(Matrix)
-library(MLdata)
 library(ggplot2)
 library(cowplot)
 
@@ -68,7 +64,7 @@ model
 
 ## Visualizing NMF Models
 
-The result of `RcppML::nmf` is an S3 object of class `nmf`. The `nmf` class has many useful methods:
+The result of `RcppML::nmf` is an S34object of class `nmf`. The `nmf` class has many useful methods:
 
 ```{R, warning = FALSE}
 methods(class = "nmf")
@@ -80,6 +76,7 @@ One of these useful methods is `summary` (which in turn has a `plot` method):
 species_stats <- summary(model, group_by = iris$Species)
 species_stats
 ```
+
 ```{R, fig.height = 2.5, fig.width = 3}
 plot(species_stats, stat = "sum")
 ```
@@ -110,7 +107,7 @@ evaluate(model, iris[,1:4])
 evaluate(model2, iris[,1:4])
 ```
 
-The second model is slightly better.
+The second model is better.
 
 ## L1 Regularization
 
@@ -178,6 +175,8 @@ bipartiteMatch(1 - cosine(model_no_L1$w, model_low_L1$w))$cost / 10
 bipartiteMatch(1 - cosine(model_no_L1$w, model_L1$w))$cost / 10
 ```
 
+These cosine angles (range 0 to 1) are very small -- in other words, the models are very similar.
+
 See `?RcppML::cosine` for details on very fast computation of cosine similarity.
 
 In the above code, we computed cosine distance by subtracting cosine similarity from 1, matched on this cost matrix, and divided by 10 to find the mean cosine distance between matched factors. In both cases, factors correspond well.
@@ -186,74 +185,62 @@ Thus, regularized `RcppML::nmf` increases factor sparsity without significantly 
 
 ## Prediction/Recommendation with NMF
 
-NMF models learned on some samples can be projected to other samples, a common routine in recommender systems or transfer learning. 
+NMF models learned on some samples can be projected to other samples, a common routine in recommendation systems or transfer learning.
 
-For instance, we may train a model on movie ratings from many users in the `movielens` dataset (training users) and predict ratings for the remaining users (test users).
+For instance, we may train a model on some samples and then use it to predict the values in other samples. For instance, in this dataset we predict what bird species are likely to be encountered in a grid of land given information about just a fraction of the species.
 
-```{R, results = "hide"}
-train_users <- sample(1:ncol(ratings), 500)
+```{R, results = "hide", fig.width = 6, fig.height = 3}
+data(hawaiibirds)
+A <- hawaiibirds$counts
 
-# remove movies with fewer than 5 ratings in the training set
-movies <- which(rowSums(ratings[, train_users]) > 5)
-model <- nmf(ratings[movies, train_users], k = 10, mask_zeros = TRUE)
-predictions <- predict(model, ratings[movies, -train_users])
-```
+test_grids <- sample(1:ncol(A), ncol(A) / 5)
+test_species <- sample(1:nrow(A), nrow(A) * 0.5)
 
-Now we can assess the ability of our model to predict movie ratings by users in the test set. Because we trained the model with `mask_zeros = TRUE`, we also need to do the same when calculating mean squared error:
+# construct a sparse masking matrix for these species and grids
+mask <- matrix(0, nrow(A), ncol(A))
+mask[test_species, test_grids] <- 1
+mask <- as(mask, "dgCMatrix")
 
-```{R}
-evaluate(new("nmf", w = model@w, d = rep(1, 10), h = predictions), ratings[movies, -train_users], mask = "zeros")
+model <- nmf(A, k = 15, mask = mask, tol = 1e-6, seed = 123)
+
+df <- rbind(
+  data.frame(
+    "observed" = as.vector(A[test_species, test_grids]),
+    "predicted" = as.vector(prod(model)[test_species, test_grids]),
+    "set" = "test"
+  ), data.frame(
+    "observed" = as.vector(A[-test_species, -test_grids]),
+    "predicted" = as.vector(prod(model)[-test_species, -test_grids]),
+    "set" = "train"
+  )
+)
+
+ggplot(df, aes(observed, predicted, color = set)) + 
+  theme_classic() + 
+  theme(aspect.ratio = 1) + 
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 1), trans = "sqrt") + 
+  scale_x_continuous(expand = c(0, 0), limits = c(0, 1), trans = "sqrt") + 
+  geom_point(size = 0.5) + 
+  facet_grid(cols = vars(set)) + 
+  theme(legend.position = "none")
 ```
 
 ## Cross-validation for rank determination
 
-Cross-validation can assist in finding a reasonable factorization rank. However, like many dimensional reductions, a single "best" rank rarely exists.
+Cross-validation can assist in finding a reasonable factorization rank. 
 
-We will demonstrate cross-validation using two simulated datasets generated with `simulateNMF`:
-
-1. `data_clean` will have no noise or signal dropout
-2. `data_dirty` contains the same signal as `data_clean`, but with a bit of noise and a lot of dropout
+Here we determine the optimal rank for the `aml` dataset using cross-validation across three random replicates:
 
 ```{R}
-data_clean <- simulateNMF(nrow = 100, ncol = 100, k = 5, noise = 0, dropout = 0, seed = 123)
-data_dirty <- simulateNMF(nrow = 100, ncol = 100, k = 5, noise = 0.25, dropout = 0.4, seed = 123)
+data(aml)
+cv_data <- crossValidate(aml$data, k = 1:10, reps = 3)
+head(cv_data)
 ```
 
-Notice how `data_clean` contains only 5 non-zero singular values, while `data_dirty` does not:
+Use the S4 `plot` method for the `nmfCrossValidation` class to visualize:
 
-```{R, fig.width = 3, fig.height = 3, echo = FALSE}
-df <- data.frame("singular_value" = svd(data_clean)$d[1:10], "k" = 1:10, "dataset" = rep("clean", 10))
-df2 <- data.frame("singular_value" = svd(data_dirty)$d[1:10], "k" = 1:10, "dataset" = rep("dirty", 10))
-
-ggplot(rbind(df, df2), aes(x = k, y = singular_value, color = dataset)) + 
-  geom_point() + 
-  geom_line() + 
-  theme_classic() + 
-  scale_x_continuous(breaks = c(2, 4, 6, 8, 10)) + 
-  labs(x = "singular value", y = "standard deviation") +
-  theme(aspect.ratio = 1)
+```{R}
+plot(cv_data)
 ```
 
-We can use `RcppML::crossValidate` to determine the rank of each dataset. The default method uses "bi-cross-validation". See `?crossValidate` for details.
-
-```{R, fig.width = 6, fig.height = 3}
-cv_clean <- crossValidate(data_clean, k = 1:10, seed = 123)
-cv_dirty <- crossValidate(data_dirty, k = 1:10, seed = 123)
-plot_grid(
-  plot(cv_clean) + ggtitle("cross-validation on\nclean dataset") + scale_y_continuous(limits = c(0, 0.5)),
-  plot(cv_dirty) + ggtitle("cross-validation on\ndirty dataset"), nrow = 1)
-```
-
-`crossValidate` also supports another method which compares robustness of two factorizations on independent sample subsets.
-
-```{R, fig.width = 6, fig.height = 3, warning = FALSE}
-cv_clean <- crossValidate(data_clean, k = 2:10, method = "robust", seed = 123)
-cv_dirty <- crossValidate(data_dirty, k = 2:10, method = "robust", seed = 123)
-plot_grid(
-  plot(cv_clean) + ggtitle("cross-validation on\nclean dataset"),
-  plot(cv_dirty) + ggtitle("cross-validation on\ndirty dataset"), nrow = 1)
-```
-
-For real datasets, it is important to experiment with all cross-validation methods and to explore multi-resolution analysis or other objectives where appropriate.
-
-`crossValidate` does not support an objective against the mean squared error of imputed missing values because this method is slow, tends to under-estimate the true rank, and does not handle noisy data well.
+The optimal rank is around `k = 8`.
