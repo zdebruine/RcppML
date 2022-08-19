@@ -37,8 +37,6 @@ nmf(
 \item{mask}{dense or sparse matrix of values in \code{data} to handle as missing. Prefer \code{Matrix::dgCMatrix}. Alternatively, specify "\code{zeros}" or "\code{NA}" to mask either all zeros or NA values.}
 
 \item{...}{development parameters}
-
-\item{nonneg}{enforce non-negativity}
 }
 \value{
 object of class \code{nmf}
@@ -87,13 +85,13 @@ Parallelization is applied with OpenMP using the number of threads in \code{getO
 
 S4 methods available for the \code{nmf} class:
 \itemize{
-\item \code{\link{predict.nmf}}: project an NMF model (or partial model) onto new samples
-\item \code{\link{`evaluate-nmf-method`}}: calculate mean squared error loss of an NMF model
-\item \code{\link{`summary-nmf-method`}}: \code{data.frame} giving \code{fractional}, \code{total}, or \code{mean} representation of factors in samples or features grouped by some criteria
-\item \code{\link{`align-nmf-method`}}: find an ordering of factors in one \code{nmf} model that best matches those in another \code{nmf} model
-\item \code{\link{prod.nmf}}: compute the dense approximation of input data
-\item \code{\link{sparsity.nmf}}: compute the sparsity of each factor in \eqn{w} and \eqn{h}
-\item \code{\link{subset.nmf}}: subset, reorder, select, or extract factors (same as \code{[})
+\item \code{predict}: project an NMF model (or partial model) onto new samples
+\item \code{evaluate}: calculate mean squared error loss of an NMF model
+\item \code{summary}: \code{data.frame} giving \code{fractional}, \code{total}, or \code{mean} representation of factors in samples or features grouped by some criteria
+\item \code{align}: find an ordering of factors in one \code{nmf} model that best matches those in another \code{nmf} model
+\item \code{prod}: compute the dense approximation of input data
+\item \code{sparsity}: compute the sparsity of each factor in \eqn{w} and \eqn{h}
+\item \code{subset}: subset, reorder, select, or extract factors (same as \code{[})
 \item generics such as \code{dim}, \code{dimnames}, \code{t}, \code{show}, \code{head}
 }
 }
@@ -132,7 +130,7 @@ Lee, D, and Seung, HS (1999). "Learning the parts of objects by non-negative mat
 Franc, VC, Hlavac, VC, Navara, M. (2005). "Sequential Coordinate-Wise Algorithm for the Non-negative Least Squares Problem". Proc. Int'l Conf. Computer Analysis of Images and Patterns. Lecture Notes in Computer Science.
 }
 \seealso{
-\code{\link{predict.nmf}}, \code{\link{evaluate.nmf}}, \code{\link{nnls}}
+\code{\link{project}}, \code{\link{mse}}, \code{\link{nnls}}
 }
 \author{
 Zach DeBruine

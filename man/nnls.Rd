@@ -100,7 +100,7 @@ Lin, X, and Boutros, PC (2020). "Optimization and expansion of non-negative matr
 Myre, JM, Frahm, E, Lilja DJ, and Saar, MO. (2017) "TNT-NN: A Fast Active Set Method for Solving Large Non-Negative Least Squares Problems". Proc. Computer Science.
 }
 \seealso{
-\code{\link{nmf}}, \code{\link{predict.nmf}}
+\code{\link{nmf}}, \code{\link{project}}
 }
 \author{
 Zach DeBruine

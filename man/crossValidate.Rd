@@ -5,7 +5,7 @@
 \alias{plot.nmfCrossValidate}
 \title{Cross-validation for NMF}
 \usage{
-crossValidate(data, k, method = "impute", reps = 5, n = 0.05, ...)
+crossValidate(data, k, reps = 3, n = 0.05, verbose = FALSE, ...)
 
 \method{plot}{nmfCrossValidate}(x, ...)
 }
@@ -14,28 +14,24 @@ crossValidate(data, k, method = "impute", reps = 5, n = 0.05, ...)
 
 \item{k}{array of factorization ranks to test}
 
-\item{method}{algorithm to use for cross-validation: "\code{predict}" = bi-cross-validation on equally sized feature/sample subsets, "\code{impute}" = MSE of missing value imputation, "\code{robust}" = mean cost of bipartite matching between models trained on equally sized non-overlapping sample sets.}
-
 \item{reps}{number of independent replicates to run}
 
-\item{n}{for \code{method = "impute"} and \code{"perturb"}, fraction of values to handle as missing}
+\item{n}{fraction of values to handle as missing (default is 5\%, or \code{0.05})}
+
+\item{verbose}{should updates be displayed when each factorization is completed}
 
 \item{...}{parameters to \code{RcppML::nmf}, not including \code{data} or \code{k}}
 
 \item{x}{\code{nmfCrossValidate} object, the result of \code{crossValidate}}
 }
 \value{
-\code{data.frame} with columns \code{rep}, \code{k}, and \code{value}, where \code{value} depends on the \code{method} selected (i.e. MSE, cost of bipartite matching)
+\code{data.frame} with class \code{nmfCrossValidate} with columns \code{rep}, \code{k}, and \code{value}
 }
 \description{
-Find an "optimal" rank for a Non-Negative Matrix Factorization using cross-validation. Returns a \code{data.frame} with class \code{nmfCrossValidate}. Plot results using the \code{plot} S3 method.
+Find an "optimal" rank for a Non-Negative Matrix Factorization using cross-validation. Returns a \code{data.frame} with class \code{nmfCrossValidate}. Plot results using the \code{plot} class method.
 }
 \details{
-Two algorithms are available for cross-validation and can be selected using the \code{method} parameter:
-\enumerate{
-\item \strong{Bi-cross-validation}: Data is split into an equally-sized 2x2 grid (A1, A2, B1, and B2). Data is trained on A1 and projected to A2 to B2 where the mean squared error of the model on B2 is measured.
-\item \strong{Cost of bipartite matching} between independent replicates. Samples are partitioned into two sets and independently factorized, then correlation between factors in both \code{w} models is computed, factors are matched using bipartite matching on a cosine similarity cost matrix, and the mean cost of matched factors is returned.
-}
+A random speckled pattern of values is masked off during model fitting, and the mean squared error of prediction is evaluated after the model has reached the desired tolerance. The rank at which the model achieves the lowest error (best prediction accuracy) is the optimal rank.
 }
 \seealso{
 \code{\link{nmf}}
