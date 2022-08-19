@@ -87,7 +87,7 @@ Rcpp_dclust_sparse <- function(A, min_samples, min_dist, verbose, tol, maxit, no
 #' @return vector or matrix giving solution for \code{x}
 #' @export
 #' @author Zach DeBruine
-#' @seealso \code{\link{nmf}}, \code{\link{predict.nmf}}
+#' @seealso \code{\link{nmf}}, \code{\link{project}}
 #' @md
 #'
 #' @references
@@ -124,6 +124,34 @@ Rcpp_dclust_sparse <- function(A, min_samples, min_dist, verbose, tol, maxit, no
 #' }
 nnls <- function(a, b, cd_maxit = 100L, cd_tol = 1e-8, fast_nnls = FALSE, L1 = 0, L2 = 0, PE = 0) {
     .Call(`_RcppML_nnls`, a, b, cd_maxit, cd_tol, fast_nnls, L1, L2, PE)
+}
+
+c_rmatrix <- function(nrow, ncol, rng) {
+    .Call(`_RcppML_c_rmatrix`, nrow, ncol, rng)
+}
+
+c_rtimatrix <- function(nrow, ncol, rng) {
+    .Call(`_RcppML_c_rtimatrix`, nrow, ncol, rng)
+}
+
+c_runif <- function(n, min, max, rng, rng2) {
+    .Call(`_RcppML_c_runif`, n, min, max, rng, rng2)
+}
+
+c_rbinom <- function(n, size, inv_probability, rng, rng2) {
+    .Call(`_RcppML_c_rbinom`, n, size, inv_probability, rng, rng2)
+}
+
+c_sample <- function(n, size, replace, rng, rng2) {
+    .Call(`_RcppML_c_sample`, n, size, replace, rng, rng2)
+}
+
+c_rtisparsematrix <- function(nrow, ncol, inv_probability, pattern_only, rng) {
+    .Call(`_RcppML_c_rtisparsematrix`, nrow, ncol, inv_probability, pattern_only, rng)
+}
+
+c_rsparsematrix <- function(nrow, ncol, inv_probability, pattern_only, rng) {
+    .Call(`_RcppML_c_rsparsematrix`, nrow, ncol, inv_probability, pattern_only, rng)
 }
 
 Rcpp_bipartite_match <- function(x) {

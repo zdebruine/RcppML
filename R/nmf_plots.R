@@ -21,7 +21,8 @@ plot.nmfCrossValidate <- function(x, ...){
     geom_line() + 
     theme_classic() +
     theme(plot.title = element_text(hjust = 0.5)) +
-    theme(aspect.ratio = 1)
+    theme(aspect.ratio = 1) +
+    scale_y_continuous(trans = "log10")
 }
 
 #' Biplot for NMF factors

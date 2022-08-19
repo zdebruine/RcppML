@@ -22,13 +22,13 @@
 #'
 #' @section Methods:
 #' S4 methods available for the \code{nmf} class:
-#' * \code{\link{predict.nmf}}: project an NMF model (or partial model) onto new samples
-#' * \code{\link{`evaluate-nmf-method`}}: calculate mean squared error loss of an NMF model
-#' * \code{\link{`summary-nmf-method`}}: \code{data.frame} giving \code{fractional}, \code{total}, or \code{mean} representation of factors in samples or features grouped by some criteria
-#' * \code{\link{`align-nmf-method`}}: find an ordering of factors in one \code{nmf} model that best matches those in another \code{nmf} model
-#' * \code{\link{prod.nmf}}: compute the dense approximation of input data
-#' * \code{\link{sparsity.nmf}}: compute the sparsity of each factor in \eqn{w} and \eqn{h}
-#' * \code{\link{subset.nmf}}: subset, reorder, select, or extract factors (same as `[`)
+#' * \code{predict}: project an NMF model (or partial model) onto new samples
+#' * \code{evaluate}: calculate mean squared error loss of an NMF model
+#' * \code{summary}: \code{data.frame} giving \code{fractional}, \code{total}, or \code{mean} representation of factors in samples or features grouped by some criteria
+#' * \code{align}: find an ordering of factors in one \code{nmf} model that best matches those in another \code{nmf} model
+#' * \code{prod}: compute the dense approximation of input data
+#' * \code{sparsity}: compute the sparsity of each factor in \eqn{w} and \eqn{h}
+#' * \code{subset}: subset, reorder, select, or extract factors (same as `[`)
 #' * generics such as \code{dim}, \code{dimnames}, \code{t}, \code{show}, \code{head}
 #' 
 #' @param data dense or sparse matrix of features in rows and samples in columns. Prefer \code{matrix} or \code{Matrix::dgCMatrix}, respectively
@@ -38,7 +38,6 @@
 #' @param L1 LASSO penalties in the range (0, 1], single value or array of length two for \code{c(w, h)}
 #' @param L2 Ridge penalties greater than zero, single value or array of length two for \code{c(w, h)}
 #' @param seed single initialization seed or array, or a matrix or list of matrices giving initial \code{w}. For multiple initializations, the model with least mean squared error is returned.
-#' @param nonneg enforce non-negativity
 #' @param mask dense or sparse matrix of values in \code{data} to handle as missing. Prefer \code{Matrix::dgCMatrix}. Alternatively, specify "\code{zeros}" or "\code{NA}" to mask either all zeros or NA values.
 #' @param ... development parameters
 #' @return object of class \code{nmf}
@@ -56,17 +55,16 @@
 #' @author Zach DeBruine
 #'
 #' @export
-#' @seealso \code{\link{predict.nmf}}, \code{\link{evaluate.nmf}}, \code{\link{nnls}}
+#' @seealso \code{\link{project}}, \code{\link{mse}}, \code{\link{nnls}}
 #' @md
 #' @examples
 #' \dontrun{
-#' library(Matrix)
 #' # basic NMF
 #' model <- nmf(rsparsematrix(1000, 100, 0.1), k = 10)
 #' 
 #' # compare rank-2 NMF to second left vector in an SVD
 #' data(iris)
-#' A <- as(as.matrix(iris[,1:4]), "dgCMatrix")
+#' A <- Matrix::as(as.matrix(iris[,1:4]), "dgCMatrix")
 #' nmf_model <- nmf(A, 2, tol = 1e-5)
 #' bipartitioning_vector <- apply(nmf_model$w, 1, diff)
 #' second_left_svd_vector <- base::svd(A, 2)$u[,2]
