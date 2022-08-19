@@ -1,0 +1,210 @@
+---
+title: "Learning and Annotating NMF Models"
+author: "Zach DeBruine"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Learning and Annotating NMF Models}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = "left")
+options(ggrepel.max.overlaps = Inf)
+```
+
+## Annotating NMF factors
+
+NMF learns an interpretable low-rank representation of data. However, how do we make sense of the factors in this low-rank latent model? A great way to begin annotating a latent space is to simply map it back to known sample and feature traits.
+
+This vignette demonstrates these concepts using an NMF model of bird species communities throughout the Hawaiian islands.
+
+## Install RcppML
+
+Install the RcppML R package from CRAN or the development version from GitHub. 
+
+```{R, eval = FALSE}
+install.packages('RcppML')                     # install CRAN version
+# devtools::install_github("zdebruine/RcppML") # compile dev version
+```
+
+```{R, message = FALSE, warning = FALSE}
+library(RcppML)
+library(ggplot2)
+library(cowplot)
+library(viridis)
+library(ggrepel)
+library(uwot)
+```
+
+## The hawaiibirds dataset
+
+The `hawaiibirds` dataset gives the frequency of bird species in small geographical grids throughout the state of Hawaii. 
+
+```{R}
+data(hawaiibirds)
+hawaiibirds$counts[1:4, 1:4]
+```
+
+A separate `metadata_h` matrix gives the geographical coordinates and the corresponding island for each grid.
+
+```{R}
+head(hawaiibirds$metadata_h)
+```
+
+And a separate `metadata_w` matrix gives taxonomic information about each species in the database.
+
+```{R}
+head(hawaiibirds$metadata_w)
+```
+
+## Cross-validation for Rank Determination
+
+We can learn an NMF model to describe linear combinations of species across geographical grids. First we need to choose a rank. 
+
+The rank of a factorization is a crucial hyperparameter. One way to help decide on a rank is cross-validation. This is made easy using the `crossValidate` function. See `?crossValidate` for details on methods.
+
+For many applications, there is no "optimal" rank. In this case, we do expect some amount of distinct biodiversity across the various islands, but within the islands there will be a continuum of habitat niches confounding rank of the signal. Additionally, there may be a number of "missing" observations where surveys were incomplete, which will confound signal separation.
+
+Here we cross-validate across 3 independent replicates and plot the result (this code is not evaluated in this vignette since it takes about a minute to execute):
+
+```{R, fig.width = 4, fig.height = 3, eval = FALSE}
+plot(crossValidate(hawaiibirds$counts, k = c(1:20), reps = 3)) + scale_y_continuous(trans = "log10")
+```
+
+We'll choose a rank of `k = 15` since this seems to return the best prediction accuracy.
+
+## Run robust NMF
+
+Let's generate a high-quality NMF model across 3 random restarts at very low tolerance:
+
+```{R, results = "hide"}
+model <- nmf(hawaiibirds$counts, k = 15, seed = 1:3, tol = 1e-6)
+```
+
+```{R}
+model
+```
+
+In the `w` matrix we have factors describing communities of co-occuring bird species.
+
+In the `h` matrix we have the association of these bird communities in each surveyed geographical grid.
+
+## Geographic focus on NMF factors
+
+What does each NMF factor tell us?
+
+The sample embeddings matrix (`h`) gives information about the geographical representation of each NMF factor across all grids. We'll look at just the first four factors:
+
+```{R, warning = FALSE, message = FALSE, fig.width = 4, fig.height = 4}
+plots <- list()
+for(i in 1:4){
+  df <- data.frame(
+    "lat" = hawaiibirds$metadata_h$lat,
+    "lng" = hawaiibirds$metadata_h$lng,
+    "nmf_factor" = model$h[i, ])
+  plots[[i]] <- ggplot(df, aes(x = lng, y = lat, color = nmf_factor)) +
+    geom_point() +
+    scale_color_viridis(option = "B") +
+    theme_void() +
+    theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) + 
+    ggtitle(paste0("Factor ", i))
+}
+plot_grid(plotlist = plots, nrow = 2)
+```
+
+## Metadata enrichment in factors
+
+Factors can capture both island-restricted bird species information and also information shared across islands.
+
+Quantitatively, the `summary` method for the `nmf` S4 class makes it easy to annotate factors using metadata about samples or features.
+
+In this case, we will use `summary` to map factor enrichment in grids corresponding to each Hawaiian island, and species enrichment corresponding to each type of species.
+
+```{R, fig.width = 4, fig.height = 3}
+plot(summary(model, group_by = hawaiibirds$metadata_h$island, stat = "mean"))
+```
+
+In general, grids separate based on island -- consistent with the expectation that islands contain distinct species communities.
+
+```{R, fig.width = 4, fig.height = 3}
+plot(summary(model, group_by = hawaiibirds$metadata_w$type, stat = "mean"))
+```
+
+Notice what type of bird species tend to co-occur -- waders with perching birds and waterfowl, waterfowl with waders, seabirds with shorebirds, and many different perching bird contexts.
+
+## NMF biplots
+
+Compare species composition in any two factors, for instance factor 2 and 3:
+
+```{R, message = FALSE, warning = FALSE, fig.width = 5.5, fig.height = 4}
+biplot(model, factors = c(2, 3), matrix = "w", group_by = hawaiibirds$metadata_w$type) + 
+  scale_y_continuous(trans = "sqrt") + 
+  scale_x_continuous(trans = "sqrt") +
+  geom_text_repel(size = 2.5, seed = 123, max.overlaps = 15) +
+  theme(aspect.ratio = 1)
+```
+
+## UMAP on NMF embeddings
+
+We might also be interested in visualizing how factors in `w` capture similarities among bird species using UMAP.
+
+```{R, warning = FALSE, message = FALSE, fig.width = 8, fig.height = 2.5}
+set.seed(123)
+umap <- data.frame(uwot::umap(model$w))
+umap$taxon <- hawaiibirds$metadata_w$type
+umap$status <- hawaiibirds$metadata_w$status
+plot_grid(
+  ggplot(umap, aes(x = umap[,1], y = umap[,2], color = taxon)) +
+    geom_point() + theme_void(),
+  ggplot(umap, aes(x = umap[,1], y = umap[,2], color = status)) +
+    geom_point() + theme_void(),
+  nrow = 1
+)
+```
+
+Species are classified based on habitat niche and taxonomic membership. There are also two groups of "waterfowl", consistent with ocean shoreline and inland wetland niches.
+
+Hawaii is bird species extinction kingdom:  more than 20 species of endemic honeycreeper have gone extinct in the past two centuries due to the establishment of introduced species and habitat devastation. Few remain. In the UMAP plot above on the right, we can observe that introduced species dominate habitat niches occupied by native perching and non-perching birds, a problem underlying historic and ongoing mass extinction events.
+
+```{R, warning = FALSE, message = FALSE, fig.width = 4, fig.height = 2.5}
+set.seed(123)
+umap <- data.frame(uwot::umap(t(model$h), metric = "cosine"))
+umap$group <- hawaiibirds$metadata_h$island
+ggplot(umap, aes(x = umap[,1], y = umap[,2], color = group)) +
+  geom_point() + theme_void() + theme(aspect.ratio = 1)
+```
+
+Islands are also well-defined by the NMF model.
+
+## Defining the "Palila" species niche
+
+The [Palila](https://ebird.org/media/catalog?taxonCode=palila&mediaType=p&sort=rating_rank_desc&q=Palila%20-%20Loxioides%20bailleui) is a highly endangered species that survives in small numbers on the southwestern slopes of Mauna Kea in a shrubby dry "rainforest" biome, characterized by the last stands of endemic Mamame trees.
+
+What species coexist with the Palila?
+
+Let's have a look at the species composition in the factor with the highest Palila representation, specifically identifying which species are introduced and which are native:
+
+```{R}
+ggplot(data.frame("value" = model$w["Palila", ], "factor" = 1:ncol(model$w)), aes(factor, value)) + 
+  geom_point() + 
+  theme_classic() + 
+  theme(aspect.ratio = 1) + 
+  labs(x = "NMF factor", y = "Palila weight in NMF factor")
+
+df <- data.frame("value" = model$w[, which.max(model$w["Palila", ])])
+df$status <- hawaiibirds$metadata_w$status
+df <- df[order(-df$value), ]
+df <- df[df$value > 0.001, ]
+df
+```
+
+The diet of the Palilla is largely seeds from the "mamame" tree, but also naio berries and mamame flowers, buds, and young leaves. What introduced perching birds may be competing with the Palila for these resources?
+
+```{R}
+perching_birds <- hawaiibirds$metadata_w$species[hawaiibirds$metadata_w$type == "perching birds"]
+df[which(rownames(df) %in% perching_birds & df$status == "introduced"), ]
+```
+
+The "House Finch" and "Yellow-fronted Canary" seem to be the most significant competitors in the Palila habitat niche.
