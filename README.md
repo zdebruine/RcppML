@@ -6,6 +6,7 @@
 
 `RcppML` is an R package for fast **non-negative matrix factorization** and **divisive clustering** using **large sparse matrices**. 
 
+See `pkgdown` site here: [https://zdebruine.github.io/RcppML/](https://zdebruine.github.io/RcppML/)
 RcppML NMF is:
  * The **fastest** NMF implementation in any language for sparse and dense matrices
  * More **interpretable** than other implementations due to diagonal scaling
@@ -39,10 +40,11 @@ Read (and cite) our [bioRXiv manuscript](https://www.biorxiv.org/content/10.1101
 The `nmf` function runs matrix factorization by alternating least squares in the form `A = WDH`. The `project` function updates `w` or `h` given the other, while the `mse` function calculates mean squared error of the factor model.
 
 ```{R}
+library(RcppML)
 A <- Matrix::rsparsematrix(1000, 100, 0.1) # sparse Matrix::dgCMatrix
-model <- RcppML::nmf(A, k = 10, nonneg = TRUE)
-h0 <- RcppML::project(A, w = model$w)
-RcppML::mse(A, model$w, model$d, model$h)
+model <- RcppML::nmf(A, k = 10)
+h0 <- predict(model, A)
+evaluate(model, A) # calculate mean squared error
 ```
 
 ## Divisive Clustering
@@ -56,7 +58,8 @@ Divisive clustering by rank-2 spectral bipartitioning.
 The `dclust` function runs divisive clustering by recursive spectral bipartitioning, while the `bipartition` function exposes the rank-2 NMF specialization and returns statistics of the bipartition.
 
 ```{R}
-A <- Matrix::rsparsematrix(A, 1000, 1000, 0.1) # sparse Matrix::dgcMatrix
+library(RcppML)
+A <- Matrix::rsparsematrix(1000, 1000, 0.1) # sparse Matrix::dgcMatrix
 clusters <- dclust(A, min_dist = 0.001, min_samples = 5)
 cluster0 <- bipartition(A)
 ```
