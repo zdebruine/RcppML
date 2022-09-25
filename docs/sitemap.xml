@@ -1,66 +1,45 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://zdebruine.github.io/RcppML/index.html</loc>
+    <loc>/404.html</loc>
   </url>
   <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/align.nmf.html</loc>
+    <loc>/articles/index.html</loc>
   </url>
   <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/aml.html</loc>
+    <loc>/articles/introduction.html</loc>
   </url>
   <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/bipartiteMatch.html</loc>
+    <loc>/authors.html</loc>
   </url>
   <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/bipartition.html</loc>
+    <loc>/index.html</loc>
   </url>
   <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/biplot-nmf-method.html</loc>
+    <loc>/LICENSE.html</loc>
   </url>
   <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/cosine.html</loc>
+    <loc>/reference/benchmark.html</loc>
   </url>
   <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/crossValidate.html</loc>
+    <loc>/reference/calc_redundancy.html</loc>
   </url>
   <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/dclust.html</loc>
+    <loc>/reference/colsums.html</loc>
   </url>
   <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/evaluate.nmf.html</loc>
+    <loc>/reference/index.html</loc>
   </url>
   <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/hawaiibirds.html</loc>
+    <loc>/reference/inspect.html</loc>
   </url>
   <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/movielens.html</loc>
+    <loc>/reference/memuse.html</loc>
   </url>
   <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/nmf.html</loc>
+    <loc>/reference/tcrossprod.html</loc>
   </url>
   <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/nnls.html</loc>
-  </url>
-  <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/predict.nmf.html</loc>
-  </url>
-  <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/RcppML.html</loc>
-  </url>
-  <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/simulateNMF.html</loc>
-  </url>
-  <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/sparsity.html</loc>
-  </url>
-  <url>
-    <loc>https://zdebruine.github.io/RcppML/reference/summary-nmf-method.html</loc>
-  </url>
-  <url>
-    <loc>https://zdebruine.github.io/RcppML/articles/getting_started.html</loc>
-  </url>
-  <url>
-    <loc>https://zdebruine.github.io/RcppML/articles/robust_nmf.html</loc>
+    <loc>/reference/VSE.html</loc>
   </url>
 </urlset>
