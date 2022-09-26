@@ -13,7 +13,6 @@ License: GPL-3 + file LICENSE
 Imports:
     Rcpp, 
     Matrix,
-    RcppEigen,
     methods,
     stats,
     knitr,
