@@ -97,7 +97,6 @@ r_binom <- function(n, size = 1, inv_prob = 2) {
 #' @param transpose_identical should the matrix be transpose-identical?
 #'
 #' @seealso \code{\link{r_unif}}
-#' @rdname random_matrix
 #' @export
 #' @seealso \code{\link{r_matrix}}, \code{\link{r_unif}}, \code{\link{r_binom}}
 #' @examples
@@ -117,7 +116,7 @@ r_binom <- function(n, size = 1, inv_prob = 2) {
 #' set.seed(123)
 #' A <- r_sparsematrix(100, 10, inv_density = 10, transpose_identical = TRUE)
 #' all.equal(t(A), A)
-#' isSymmetric(A[1:10, 1:10])
+#' Matrix::isSymmetric(A[1:10, 1:10])
 #' heatmap(as.matrix(A), scale = "none", Rowv = NA, Colv = NA)
 #'
 #' # note that density is probabilistic, not absolute
@@ -136,12 +135,12 @@ r_matrix <- function(nrow, ncol, transpose_identical = FALSE) {
   v
 }
 
-#' @rdname random_matrix
+#' @rdname r_matrix
 #' @param inv_density an integer giving the inverse density of the matrix (i.e. 10 percent density corresponds to \code{inv_density = 10}). Density is probabilistic, not exact. See examples.
 #' @param pattern should a pattern matrix (\code{Matrix::ngCMatrix}) be returned? If not, a \code{Matrix::dgCMatrix} with random uniform values will be returned.
 #' @export
 r_sparsematrix <- function(nrow, ncol, inv_density, transpose_identical = FALSE, pattern = FALSE) {
-  requireNamespace(Matrix)
+  requireNamespace("Matrix")
   if (inv_density < 1) stop("inv_density must be an integer >= 1")
   inv_density <- as.integer(inv_density)
   if (transpose_identical) {

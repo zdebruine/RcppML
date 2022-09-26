@@ -4,3 +4,5 @@
 ^docs$
 ^pkgdown$
 ^\.github$
+^LICENSE\.md$
+^news\.md$

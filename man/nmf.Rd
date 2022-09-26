@@ -98,13 +98,12 @@ S4 methods available for the \code{nmf} class:
 
 \examples{
 \dontrun{
-library(Matrix)
 # basic NMF
 model <- nmf(rsparsematrix(1000, 100, 0.1), k = 10)
 
 # compare rank-2 NMF to second left vector in an SVD
 data(iris)
-A <- as(as.matrix(iris[,1:4]), "dgCMatrix")
+A <- Matrix::as(as.matrix(iris[,1:4]), "dgCMatrix")
 nmf_model <- nmf(A, 2, tol = 1e-5)
 bipartitioning_vector <- apply(nmf_model$w, 1, diff)
 second_left_svd_vector <- base::svd(A, 2)$u[,2]

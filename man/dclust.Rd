@@ -67,9 +67,8 @@ Other than setting the seed, reproducibility may be improved by setting \code{to
 }
 \examples{
 \dontrun{
-library(Matrix)
 data(USArrests)
-A <- as(as.matrix(t(USArrests)), "dgCMatrix")
+A <- Matrix::as(as.matrix(t(USArrests)), "dgCMatrix")
 clusters <- dclust(A, min_samples = 2, min_dist = 0.001)
 str(clusters)
 }

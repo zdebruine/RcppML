@@ -80,7 +80,7 @@
 #' # see package vignette for more examples
 #' }
 nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), seed = NULL, mask = NULL, ...) {
-
+  
   start_time <- Sys.time()
   # apply defaults to development parameters
   p <- list(...)
@@ -119,7 +119,7 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), se
   if (is.null(mask)) {
     mask_matrix <- new("dgCMatrix")
     mask_zeros <- FALSE
-  } else if (class(mask) == "character" && mask == "zeros") {
+  } else if (class(mask)[[1]] == "character" && mask == "zeros") {
     mask_matrix <- new("dgCMatrix")
     mask_zeros <- TRUE
   } else {

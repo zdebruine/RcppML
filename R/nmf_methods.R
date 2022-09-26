@@ -187,17 +187,17 @@ setMethod("coerce", signature(from = "nmf", to = "list"), function(from, to) {
   list("w" = slot(from, "w"), "d" = slot(from, "d"), "h" = slot(from, "h"), "misc" = slot(from, "misc"))
 })
 
-setGeneric("sparsity", function(object, ...) standardGeneric("sparsity"))
-
 #' Compute the sparsity of each NMF factor
 #'
 #' @details
 #' For \code{\link{nmf}} models, the sparsity of each factor is computed and summarized
 #' or \eqn{w} and \eqn{h} matrices. A long \code{data.frame} with columns \code{factor}, \code{sparsity}, and \code{model} is returned.
 #' @export
-#' @rdname nmf-class-methods
 #' @param object object of class \code{nmf}.
 #' @param ... additional parameters
+setGeneric("sparsity", function(object, ...) standardGeneric("sparsity"))
+
+#' @rdname sparsity
 #' @method sparsity nmf
 setMethod("sparsity", signature = "nmf", function(object, ...) {
   validObject(object)
@@ -212,8 +212,6 @@ setMethod("sparsity", signature = "nmf", function(object, ...) {
   result
 })
 
-setGeneric("align", function(object, ...) standardGeneric("align"))
-
 #' Align two NMF models
 #'
 #' @details
@@ -227,9 +225,11 @@ setGeneric("align", function(object, ...) standardGeneric("align"))
 #' @param ... arguments passed to or from other methods
 #' @export
 #' @importFrom stats cor
-#' @rdname nmf-class-methods
-#' @method align nmf
 #'
+setGeneric("align", function(object, ...) standardGeneric("align"))
+
+#' @rdname align
+#' @method align nmf
 setMethod("align", signature = "nmf", function(object, ref, method = "cosine", ...) {
   validObject(object)
   if (all(dim(ref$w) != dim(object$w))) stop("dimensions of object$w and ref$w are not identical")
@@ -248,6 +248,7 @@ setMethod("align", signature = "nmf", function(object, ref, method = "cosine", .
 #' 
 #' @param w matrix with columns to be aligned to columns in \code{wref}
 #' @param wref reference matrix to which columns in \code{w} will be aligned
+#' @param method distance metric (either \code{cor} or \code{cosine}) to use for constructing the cost matrix
 #' @param ... additional arguments
 align_models <- function(w, wref, method = "cosine", ...) {
   if (all(dim(wref) != dim(w))) stop("dimensions of 'w' and 'wref' are not identical")
@@ -302,8 +303,6 @@ setMethod("summary", signature = "nmf", function(object, group_by, stat = "sum",
   result
 })
 
-setGeneric("evaluate", function(x, ...) standardGeneric("evaluate"))
-
 #' Evaluate an NMF model
 #'
 #' Calculate mean squared error for an NMF model, accounting for any masking schemes requested during fitting.
@@ -313,7 +312,10 @@ setGeneric("evaluate", function(x, ...) standardGeneric("evaluate"))
 #' @param missing_only calculate mean squared error only for missing values specified as a matrix in \code{mask}
 #' @importFrom methods is
 #' @export
-#' @rdname nmf-class-methods
+setGeneric("evaluate", function(x, ...) standardGeneric("evaluate"))
+
+#' @rdname evaluate
+#' @method evaluate nmf
 setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, missing_only = FALSE, ...) {
   validObject(x)
 
@@ -338,7 +340,7 @@ setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, missing_
   if (is.null(mask)) {
     mask_matrix <- new("dgCMatrix")
     mask_zeros <- FALSE
-  } else if (class(mask) == "character" && mask == "zeros") {
+  } else if (class(mask)[[1]] == "character" && mask == "zeros") {
     mask_matrix <- new("dgCMatrix")
     mask_zeros <- TRUE
   } else {
@@ -373,6 +375,8 @@ setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, missing_
 #' @param w feature factor matrix (features as rows)
 #' @param h sample factor matrix (samples as columns)
 #' @param d scaling diagonal vector (if applicable)
+#' @inheritParams nmf
+#' @param missing_only only calculate mean squared error at masked values
 #' @param ... additional arguments
 mse <- function(w, d = NULL, h, data, mask = NULL, missing_only = FALSE, ...) {
   if (is.null(d)) d <- rep(1, nrow(h))

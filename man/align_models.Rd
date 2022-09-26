@@ -11,6 +11,8 @@ align_models(w, wref, method = "cosine", ...)
 
 \item{wref}{reference matrix to which columns in \code{w} will be aligned}
 
+\item{method}{distance metric (either \code{cor} or \code{cosine}) to use for constructing the cost matrix}
+
 \item{...}{additional arguments}
 }
 \description{

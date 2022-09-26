@@ -7,6 +7,6 @@
 # * https://testthat.r-lib.org/reference/test_package.html#special-files
 
 library(testthat)
-library(VSE)
+library(RcppML)
 
-test_check("VSE")
+test_check("RcppML")

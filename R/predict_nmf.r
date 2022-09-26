@@ -73,7 +73,7 @@ setMethod("predict", signature = "nmf", function(object, data, L1 = 0, L2 = 0, m
   if (is.null(mask)) {
     mask_matrix <- new("dgCMatrix")
     mask_zeros <- FALSE
-  } else if (class(mask) == "character" && mask == "zeros") {
+  } else if (class(mask)[[1]] == "character" && mask == "zeros") {
     mask_matrix <- new("dgCMatrix")
     mask_zeros <- TRUE
   } else {
@@ -116,6 +116,7 @@ setMethod("predict", signature = "nmf", function(object, data, L1 = 0, L2 = 0, m
 #' @param L1 L1/LASSO penalty
 #' @param L2 L2/Ridge penalty
 #' @param mask masking on data values
+#' @param ... arguments passed to \code{predict.nmf}
 #' @export
 project <- function(w, data, L1 = 0, L2 = 0, mask = NULL, ...){
   m <- new("nmf", w = w, d = rep(1:ncol(w)), h = matrix(0, nrow = ncol(w), 1))

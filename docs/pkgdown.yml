@@ -2,6 +2,8 @@ pandoc: '2.18'
 pkgdown: 2.0.6
 pkgdown_sha: ~
 articles:
-  introduction: introduction.html
-last_built: 2022-09-25T14:33Z
+  annotating_nmf_models: annotating_nmf_models.html
+  getting_started: getting_started.html
+  robust_nmf: robust_nmf.html
+last_built: 2022-09-26T13:09Z
 

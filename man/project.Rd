@@ -16,6 +16,8 @@ project(w, data, L1 = 0, L2 = 0, mask = NULL, ...)
 \item{L2}{L2/Ridge penalty}
 
 \item{mask}{masking on data values}
+
+\item{...}{arguments passed to \code{predict.nmf}}
 }
 \description{
 Equivalent to \code{predict} method for NMF, but requires only the \code{w} matrix to be supplied and not the entire NMF model. Use NNLS to project a basis factor model onto new samples.

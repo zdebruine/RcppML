@@ -5,14 +5,16 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<meta name="description" content="Proof-of-concept implementation of vectorized sparse encodings for scalable and compressed structures for sparse data.">
-<title>Vectorized Sparse Encodings • VSE</title>
+<meta name="description" content="Fast machine learning algorithms including matrix factorization 
+    and divisive clustering for large sparse and dense matrices.">
+<title>Rcpp Machine Learning Library • RcppML</title>
 <script src="deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="deps/bootstrap-5.1.3/bootstrap.min.css" rel="stylesheet">
 <script src="deps/bootstrap-5.1.3/bootstrap.bundle.min.js"></script><!-- Font Awesome icons --><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.1/css/all.min.css" integrity="sha256-mmgLkCYLUQbXn0B1SRqzHar6dCnv9oZFPEC1g1cwlkk=" crossorigin="anonymous">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.1/css/v4-shims.min.css" integrity="sha256-wZjR52fzng1pJHwx4aV2AO3yyTOXrcDW7jBpJtTwVxw=" crossorigin="anonymous">
-<!-- bootstrap-toc --><script src="https://cdn.rawgit.com/afeld/bootstrap-toc/v1.0.1/dist/bootstrap-toc.min.js"></script><!-- headroom.js --><script src="https://cdnjs.cloudflare.com/ajax/libs/headroom/0.11.0/headroom.min.js" integrity="sha256-AsUX4SJE1+yuDu5+mAVzJbuYNPHj/WroHuZ8Ir/CkE0=" crossorigin="anonymous"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/headroom/0.11.0/jQuery.headroom.min.js" integrity="sha256-ZX/yNShbjqsohH1k95liqY9Gd8uOiE1S4vZc+9KQ1K4=" crossorigin="anonymous"></script><!-- clipboard.js --><script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.6/clipboard.min.js" integrity="sha256-inc5kl9MA1hkeYUt+EC3BhlIgyp/2jDIyBLS6k3UxPI=" crossorigin="anonymous"></script><!-- search --><script src="https://cdnjs.cloudflare.com/ajax/libs/fuse.js/6.4.6/fuse.js" integrity="sha512-zv6Ywkjyktsohkbp9bb45V6tEMoWhzFzXis+LrMehmJZZSys19Yxf1dopHx7WzIKxr5tK2dVcYmaCk2uqdjF4A==" crossorigin="anonymous"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/autocomplete.js/0.38.0/autocomplete.jquery.min.js" integrity="sha512-GU9ayf+66Xx2TmpxqJpliWbT5PiGYxpaG8rfnBEk1LL8l1KGkRShhngwdXK1UgqhAzWpZHSiYPc09/NwDQIGyg==" crossorigin="anonymous"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/mark.js/8.11.1/mark.min.js" integrity="sha512-5CYOlHXGh6QpOFA/TeTylKLWfB3ftPsde7AnmhuitiTX4K5SqCLBeKro6sPS8ilsz1Q4NRx3v8Ko2IBiszzdww==" crossorigin="anonymous"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="Vectorized Sparse Encodings">
-<meta property="og:description" content="Proof-of-concept implementation of vectorized sparse encodings for scalable and compressed structures for sparse data.">
+<!-- bootstrap-toc --><script src="https://cdn.rawgit.com/afeld/bootstrap-toc/v1.0.1/dist/bootstrap-toc.min.js"></script><!-- headroom.js --><script src="https://cdnjs.cloudflare.com/ajax/libs/headroom/0.11.0/headroom.min.js" integrity="sha256-AsUX4SJE1+yuDu5+mAVzJbuYNPHj/WroHuZ8Ir/CkE0=" crossorigin="anonymous"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/headroom/0.11.0/jQuery.headroom.min.js" integrity="sha256-ZX/yNShbjqsohH1k95liqY9Gd8uOiE1S4vZc+9KQ1K4=" crossorigin="anonymous"></script><!-- clipboard.js --><script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.6/clipboard.min.js" integrity="sha256-inc5kl9MA1hkeYUt+EC3BhlIgyp/2jDIyBLS6k3UxPI=" crossorigin="anonymous"></script><!-- search --><script src="https://cdnjs.cloudflare.com/ajax/libs/fuse.js/6.4.6/fuse.js" integrity="sha512-zv6Ywkjyktsohkbp9bb45V6tEMoWhzFzXis+LrMehmJZZSys19Yxf1dopHx7WzIKxr5tK2dVcYmaCk2uqdjF4A==" crossorigin="anonymous"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/autocomplete.js/0.38.0/autocomplete.jquery.min.js" integrity="sha512-GU9ayf+66Xx2TmpxqJpliWbT5PiGYxpaG8rfnBEk1LL8l1KGkRShhngwdXK1UgqhAzWpZHSiYPc09/NwDQIGyg==" crossorigin="anonymous"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/mark.js/8.11.1/mark.min.js" integrity="sha512-5CYOlHXGh6QpOFA/TeTylKLWfB3ftPsde7AnmhuitiTX4K5SqCLBeKro6sPS8ilsz1Q4NRx3v8Ko2IBiszzdww==" crossorigin="anonymous"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="Rcpp Machine Learning Library">
+<meta property="og:description" content="Fast machine learning algorithms including matrix factorization 
+    and divisive clustering for large sparse and dense matrices.">
 <!-- mathjax --><script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js" integrity="sha256-nvJJv9wWKEm88qvoQl9ekL2J+k/RWIsaSScxxlsrv8k=" crossorigin="anonymous"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/config/TeX-AMS-MML_HTMLorMML.js" integrity="sha256-84DKXVJXs0/F8OTMzX4UR909+jtl4G7SPypPavF+GfA=" crossorigin="anonymous"></script><!--[if lt IE 9]>
 <script src="https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js"></script>
 <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
@@ -24,9 +26,9 @@
 
     <nav class="navbar fixed-top navbar-light navbar-expand-lg bg-light"><div class="container">
     
-    <a class="navbar-brand me-2" href="index.html">VSE</a>
+    <a class="navbar-brand me-2" href="index.html">RcppML</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.0.99</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.5</small>
 
     
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -41,15 +43,27 @@
 <li class="nav-item dropdown">
   <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" role="button" aria-expanded="false" aria-haspopup="true" id="dropdown-articles">Articles</a>
   <div class="dropdown-menu" aria-labelledby="dropdown-articles">
-    <a class="dropdown-item" href="articles/introduction.html">Vectorized Sparse Encoding</a>
+    <a class="dropdown-item" href="articles/annotating_nmf_models.html">Learning and Annotating NMF Models</a>
+    <a class="dropdown-item" href="articles/getting_started.html">Getting Started with NMF</a>
+    <a class="dropdown-item" href="articles/robust_nmf.html">Robust NMF with random initializations</a>
   </div>
+</li>
+<li class="nav-item">
+  <a class="nav-link" href="news/index.html">Changelog</a>
 </li>
       </ul>
 <form class="form-inline my-2 my-lg-0" role="search">
         <input type="search" class="form-control me-sm-2" aria-label="Toggle navigation" name="search-input" data-search-index="search.json" id="search-input" placeholder="Search for" autocomplete="off">
 </form>
 
-      <ul class="navbar-nav"></ul>
+      <ul class="navbar-nav">
+<li class="nav-item">
+  <a class="external-link nav-link" href="https://github.com/zdebruine/RcppML/" aria-label="github">
+    <span class="fab fa fab fa-github fa-lg"></span>
+     
+  </a>
+</li>
+      </ul>
 </div>
 
     
@@ -57,26 +71,67 @@
 </nav><div class="container template-home">
 <div class="row">
   <main id="main" class="col-md-9"><div class="section level1">
-<div class="page-header"><h1 id="vse-vectorized-sparse-encodings">VSE: Vectorized Sparse Encodings<a class="anchor" aria-label="anchor" href="#vse-vectorized-sparse-encodings"></a>
+<div class="page-header"><h1 id="rcpp-machine-learning-library">Rcpp Machine Learning Library<a class="anchor" aria-label="anchor" href="#rcpp-machine-learning-library"></a>
 </h1></div>
-<p>VSEs are vectorized encodings of sparse data, and are intended to make two key improvements over conventional sparse storage: 1. Efficiently compress redundant discrete and integral data far more than traditional CSC sparse data structures 2. Vectorize sparse data effectively to reduce time spent iterating over multiple vectors</p>
-<p>VSEs are containers that behave like sparse vector classes, and offer a consistent vocabulary of sparse random access iterators that make it easy to develop generic sparse matrix wrapper classes or other templated containers relying on the VSEs.</p>
-<p>This project is just getting started!</p>
-<p>To learn more about VSEs, check out the <a href="https://zdebruine.github.io/VSE/articles/introduction.html" class="external-link">package vignette</a>!</p>
-<p>This work is covered under the terms of the GPL-2 v3 license. This work is independent of Sparse Run-length Encoding, a non-vectorized form of discrete sparse data compression, made available under the MIT license in the <code>singlet</code> R package.</p>
+<p>OOPS: Accidental commit, will restore version from 9/24/2022 by 9/26/2022 6pm EST.</p>
+<p><a href="https://cran.r-project.org/package=RcppML" class="external-link"><img src="https://cranlogs.r-pkg.org/badges/grand-total/RcppML"></a> <a href="https://cran.r-project.org/package=RcppML" class="external-link"><img src="https://www.r-pkg.org/badges/version-last-release/RcppML"></a> <a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html" class="external-link"><img src="https://img.shields.io/badge/License-GPL%20v2-blue.svg" alt="License: GPL v2"></a></p>
+<p><code>RcppML</code> is an R package for fast <strong>non-negative matrix factorization</strong> and <strong>divisive clustering</strong> using <strong>large sparse matrices</strong>.</p>
+<p>See <code>pkgdown</code> site here: <a href="https://zdebruine.github.io/RcppML/" class="external-link">https://zdebruine.github.io/RcppML/</a></p>
+<p>RcppML NMF is: * The <strong>fastest</strong> NMF implementation in any language for sparse and dense matrices * More <strong>interpretable</strong> than other implementations due to diagonal scaling * Easy to <strong>regularize</strong> with an L1 penalty</p>
+<div class="section level2">
+<h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
+</h2>
+<p>Install from <a href="https://cran.r-project.org/web/packages/RcppML/index.html" class="external-link">CRAN</a> or the development version from GitHub:</p>
+<pre><code><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">'RcppML'</span><span class="op">)</span>                       <span class="co"># install CRAN version</span></span>
+<span><span class="fu">devtools</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"zdebruine/RcppML"</span><span class="op">)</span>     <span class="co"># compile dev version</span></span></code></pre>
+<p>NOTE: RcppML is being actively developed. Please check that your <code>packageVersion("RcppML")</code> is current before raising issues.</p>
+<p>Check out the <a href="https://cran.r-project.org/web/packages/RcppML/RcppML.pdf" class="external-link">CRAN manual</a>.</p>
+<p>Once installed and loaded, RcppML C++ headers defining classes can be used in C++ files for any R package using <code>#include &lt;RcppML.hpp&gt;</code>.</p>
+</div>
+<div class="section level2">
+<h2 id="matrix-factorization">Matrix Factorization<a class="anchor" aria-label="anchor" href="#matrix-factorization"></a>
+</h2>
+<p>Sparse matrix factorization by alternating least squares: * Non-negativity constraints * L1 regularization * Diagonal scaling * Rank-1 and Rank-2 specializations (~2x faster than <em>irlba</em> SVD equivalents)</p>
+<p>Read (and cite) our <a href="https://www.biorxiv.org/content/10.1101/2021.09.01.458620v1" class="external-link">bioRXiv manuscript</a> on NMF for single-cell experiments.</p>
+<div class="section level4">
+<h4 id="r-functions">R functions<a class="anchor" aria-label="anchor" href="#r-functions"></a>
+</h4>
+<p>The <code>nmf</code> function runs matrix factorization by alternating least squares in the form <code>A = WDH</code>. The <code>project</code> function updates <code>w</code> or <code>h</code> given the other, while the <code>mse</code> function calculates mean squared error of the factor model.</p>
+<pre class="{r}"><code><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/zdebruine/RcppML" class="external-link">RcppML</a></span><span class="op">)</span></span>
+<span><span class="va">A</span> <span class="op">&lt;-</span> <span class="fu">Matrix</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/rsparsematrix.html" class="external-link">rsparsematrix</a></span><span class="op">(</span><span class="fl">1000</span>, <span class="fl">100</span>, <span class="fl">0.1</span><span class="op">)</span> <span class="co"># sparse Matrix::dgCMatrix</span></span>
+<span><span class="va">model</span> <span class="op">&lt;-</span> <span class="fu">RcppML</span><span class="fu">::</span><span class="fu"><a href="reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">A</span>, k <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span>
+<span><span class="va">h0</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">model</span>, <span class="va">A</span><span class="op">)</span></span>
+<span><span class="fu">evaluate</span><span class="op">(</span><span class="va">model</span>, <span class="va">A</span><span class="op">)</span> <span class="co"># calculate mean squared error</span></span></code></pre>
+</div>
+</div>
+<div class="section level2">
+<h2 id="divisive-clustering">Divisive Clustering<a class="anchor" aria-label="anchor" href="#divisive-clustering"></a>
+</h2>
+<p>Divisive clustering by rank-2 spectral bipartitioning. * 2nd SVD vector is linearly related to the difference between factors in rank-2 matrix factorization. * Rank-2 matrix factorization (optional non-negativity constraints) for spectral bipartitioning <strong>~2x faster</strong> than <em>irlba</em> SVD * Sensitive distance-based stopping criteria similar to Newman-Girvan modularity, but orders of magnitude faster * Stopping criteria based on minimum number of samples</p>
+<div class="section level4">
+<h4 id="r-functions-1">R functions<a class="anchor" aria-label="anchor" href="#r-functions-1"></a>
+</h4>
+<p>The <code>dclust</code> function runs divisive clustering by recursive spectral bipartitioning, while the <code>bipartition</code> function exposes the rank-2 NMF specialization and returns statistics of the bipartition.</p>
+<pre class="{r}"><code><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/zdebruine/RcppML" class="external-link">RcppML</a></span><span class="op">)</span></span>
+<span><span class="va">A</span> <span class="op">&lt;-</span> <span class="fu">Matrix</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/rsparsematrix.html" class="external-link">rsparsematrix</a></span><span class="op">(</span><span class="fl">1000</span>, <span class="fl">1000</span>, <span class="fl">0.1</span><span class="op">)</span> <span class="co"># sparse Matrix::dgcMatrix</span></span>
+<span><span class="va">clusters</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/dclust.html">dclust</a></span><span class="op">(</span><span class="va">A</span>, min_dist <span class="op">=</span> <span class="fl">0.001</span>, min_samples <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span>
+<span><span class="va">cluster0</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/bipartition.html">bipartition</a></span><span class="op">(</span><span class="va">A</span><span class="op">)</span></span></code></pre>
+</div>
+</div>
 </div>
   </main><aside class="col-md-3"><div class="links">
 <h2 data-toc-skip>Links</h2>
 <ul class="list-unstyled">
-<li><a href="https://cloud.r-project.org/package=VSE" class="external-link">View on CRAN</a></li>
+<li><a href="https://cloud.r-project.org/package=RcppML" class="external-link">View on CRAN</a></li>
+<li><a href="https://github.com/zdebruine/RcppML/" class="external-link">Browse source code</a></li>
+<li><a href="https://github.com/zdebruine/RcppML/issues" class="external-link">Report a bug</a></li>
 </ul>
 </div>
 
 <div class="license">
 <h2 data-toc-skip>License</h2>
 <ul class="list-unstyled">
-<li><a href="LICENSE.html">Full license</a></li>
-<li><small>GPL (&gt;= 3)</small></li>
+<li>GPL (&gt;= 2)</li>
 </ul>
 </div>
 
@@ -84,14 +139,14 @@
 <div class="citation">
 <h2 data-toc-skip>Citation</h2>
 <ul class="list-unstyled">
-<li><a href="authors.html#citation">Citing VSE</a></li>
+<li><a href="authors.html#citation">Citing RcppML</a></li>
 </ul>
 </div>
 
 <div class="developers">
 <h2 data-toc-skip>Developers</h2>
 <ul class="list-unstyled">
-<li>Zach DeBruine <br><small class="roles"> Maintainer </small>  </li>
+<li>Zach DeBruine <br><small class="roles"> Author, maintainer </small> <a href="https://orcid.org/0000-0003-2234-4827" target="orcid.widget" aria-label="ORCID" class="external-link"><span class="fab fa-orcid orcid" aria-hidden="true"></span></a> </li>
 </ul>
 </div>
 

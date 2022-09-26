@@ -27,7 +27,7 @@ r_sparsematrix(
 \item{pattern}{should a pattern matrix (\code{Matrix::ngCMatrix}) be returned? If not, a \code{Matrix::dgCMatrix} with random uniform values will be returned.}
 }
 \description{
-Generate a random sparse matrix, just like \code{Matrix::rsparsematrix} or \code{(matrix(runif(nrow * ncol), nrow,))}, but much faster. 
+Generate a random sparse matrix, just like \code{Matrix::rsparsematrix} or \code{(matrix(runif(nrow * ncol), nrow,))}, but much faster.
 Generation of transpose-identical matrices is also supported without additional computational cost.
 }
 \examples{
@@ -47,7 +47,7 @@ A <- r_sparsematrix(10, 100, inv_density = 10, transpose_identical = TRUE)
 set.seed(123)
 A <- r_sparsematrix(100, 10, inv_density = 10, transpose_identical = TRUE)
 all.equal(t(A), A)
-isSymmetric(A[1:10,1:10])
+Matrix::isSymmetric(A[1:10, 1:10])
 heatmap(as.matrix(A), scale = "none", Rowv = NA, Colv = NA)
 
 # note that density is probabilistic, not absolute

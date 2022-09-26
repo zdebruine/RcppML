@@ -13,9 +13,6 @@
 \alias{prod,nmf-method}
 \alias{$,nmf-method}
 \alias{coerce,nmf,list-method}
-\alias{sparsity,nmf-method}
-\alias{align,nmf-method}
-\alias{evaluate,nmf-method}
 \alias{[[,nmf-method}
 \alias{predict,nmf-method}
 \title{nmf class methods}
@@ -42,18 +39,12 @@
 
 \S4method{coerce}{nmf,list}(from, to)
 
-\S4method{sparsity}{nmf}(object, ...)
-
-\S4method{align}{nmf}(object, ref, method = "cosine", ...)
-
-\S4method{evaluate}{nmf}(x, data, mask = NULL, missing_only = FALSE, ...)
-
 \S4method{[[}{nmf}(x, i)
 
 \S4method{predict}{nmf}(object, data, L1 = 0, L2 = 0, mask = NULL, ...)
 }
 \arguments{
-\item{x}{fitted model, class \code{nmf}, generally the result of calling \code{nmf}, with models of equal dimensions as \code{data}}
+\item{x}{object of class \code{nmf}.}
 
 \item{i}{indices}
 
@@ -73,36 +64,21 @@
 
 \item{to}{class which the coerce method should perform coercion to}
 
-\item{ref}{reference nmf model to which \code{object} will be aligned}
-
-\item{method}{either \code{cosine} or \code{cor}}
-
 \item{data}{dense or sparse matrix of features in rows and samples in columns. Prefer \code{matrix} or \code{Matrix::dgCMatrix}, respectively}
-
-\item{mask}{dense or sparse matrix of values in \code{data} to handle as missing. Prefer \code{Matrix::dgCMatrix}. Alternatively, specify "\code{zeros}" or "\code{NA}" to mask either all zeros or NA values.}
-
-\item{missing_only}{calculate mean squared error only for missing values specified as a matrix in \code{mask}}
 
 \item{L1}{a single LASSO penalty in the range (0, 1]}
 
 \item{L2}{a single Ridge penalty greater than zero}
+
+\item{mask}{dense or sparse matrix of values in \code{data} to handle as missing. Prefer \code{Matrix::dgCMatrix}. Alternatively, specify "\code{zeros}" or "\code{NA}" to mask either all zeros or NA values.}
 }
 \value{
 object of class \code{\link{nmf}}
 }
 \description{
-Calculate mean squared error for an NMF model, accounting for any masking schemes requested during fitting.
-
 Given an NMF model in the form \eqn{A = wdh}, \code{project} projects \code{w} onto \code{A} to solve for \code{h}.
 }
 \details{
-For \code{\link{nmf}} models, the sparsity of each factor is computed and summarized
-or \eqn{w} and \eqn{h} matrices. A long \code{data.frame} with columns \code{factor}, \code{sparsity}, and \code{model} is returned.
-
-For \code{\link{nmf}} models, factors in \code{object} are reordered to minimize the cost of bipartite matching
-(see \code{\link{bipartiteMatch}}) on a \code{\link{cosine}} or correlation distance matrix. The \eqn{w} matrix is used for matching, and
-must be equidimensional in \code{object} and \code{ref}.
-
 TO DO: add documentation
 For the alternating least squares matrix factorization update problem \eqn{A = wh}, the updates 
 (or projection) of \eqn{h} is given by the equation: \deqn{w^Twh = wA_j} 
@@ -114,11 +90,10 @@ There are specializations for dense and sparse input matrices, symmetric input m
 }
 \examples{
 \dontrun{
-library(Matrix)
 w <- matrix(runif(1000 * 10), 1000, 10)
 h_true <- matrix(runif(10 * 100), 10, 100)
 # A is the crossproduct of "w" and "h" with 10\% signal dropout
-A <- (w \%*\% h_true) * (rsparsematrix(1000, 100, 0.9) > 0)
+A <- (w \%*\% h_true) * (r_sparsematrix(1000, 100, 10) > 0)
 h <- project(w, A)
 cor(as.vector(h_true), as.vector(h))
 

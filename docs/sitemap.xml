@@ -4,10 +4,16 @@
     <loc>/404.html</loc>
   </url>
   <url>
+    <loc>/articles/annotating_nmf_models.html</loc>
+  </url>
+  <url>
+    <loc>/articles/getting_started.html</loc>
+  </url>
+  <url>
     <loc>/articles/index.html</loc>
   </url>
   <url>
-    <loc>/articles/introduction.html</loc>
+    <loc>/articles/robust_nmf.html</loc>
   </url>
   <url>
     <loc>/authors.html</loc>
@@ -16,30 +22,78 @@
     <loc>/index.html</loc>
   </url>
   <url>
-    <loc>/LICENSE.html</loc>
+    <loc>/LICENSE-text.html</loc>
   </url>
   <url>
-    <loc>/reference/benchmark.html</loc>
+    <loc>/news/index.html</loc>
   </url>
   <url>
-    <loc>/reference/calc_redundancy.html</loc>
+    <loc>/news.html</loc>
   </url>
   <url>
-    <loc>/reference/colsums.html</loc>
+    <loc>/reference/align_models.html</loc>
+  </url>
+  <url>
+    <loc>/reference/aml.html</loc>
+  </url>
+  <url>
+    <loc>/reference/bipartiteMatch.html</loc>
+  </url>
+  <url>
+    <loc>/reference/bipartition.html</loc>
+  </url>
+  <url>
+    <loc>/reference/biplot-nmf-method.html</loc>
+  </url>
+  <url>
+    <loc>/reference/cosine.html</loc>
+  </url>
+  <url>
+    <loc>/reference/crossValidate.html</loc>
+  </url>
+  <url>
+    <loc>/reference/dclust.html</loc>
+  </url>
+  <url>
+    <loc>/reference/hawaiibirds.html</loc>
   </url>
   <url>
     <loc>/reference/index.html</loc>
   </url>
   <url>
-    <loc>/reference/inspect.html</loc>
+    <loc>/reference/lnmf.html</loc>
   </url>
   <url>
-    <loc>/reference/memuse.html</loc>
+    <loc>/reference/movielens.html</loc>
   </url>
   <url>
-    <loc>/reference/tcrossprod.html</loc>
+    <loc>/reference/mse.html</loc>
   </url>
   <url>
-    <loc>/reference/VSE.html</loc>
+    <loc>/reference/nmf-class-methods.html</loc>
+  </url>
+  <url>
+    <loc>/reference/nmf.html</loc>
+  </url>
+  <url>
+    <loc>/reference/nnls.html</loc>
+  </url>
+  <url>
+    <loc>/reference/project.html</loc>
+  </url>
+  <url>
+    <loc>/reference/random.html</loc>
+  </url>
+  <url>
+    <loc>/reference/RcppML.html</loc>
+  </url>
+  <url>
+    <loc>/reference/r_matrix.html</loc>
+  </url>
+  <url>
+    <loc>/reference/simulateNMF.html</loc>
+  </url>
+  <url>
+    <loc>/reference/summary-nmf-method.html</loc>
   </url>
 </urlset>

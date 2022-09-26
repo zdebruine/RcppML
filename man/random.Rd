@@ -28,7 +28,7 @@ r_binom(n, size = 1, inv_prob = 2)
 \item{inv_prob}{inverse probability of success for each trial, must be integral (e.g. 50 percent success = 2, 10 percent success = 10)}
 }
 \description{
-\code{r_sample} is just like \code{base::sample}, only faster. 
+\code{r_sample} is just like \code{base::sample}, only faster.
 \code{r_sample} takes a sample of the specified size from the elements of \code{x} using replacement if indicated.
 
 These functions generate random distributions (uniform, normal, or binomial) just like their base R counterparts (\code{runif}, \code{rnorm}, and \code{rbinom}), but faster.
@@ -49,7 +49,7 @@ v_ <- sample(v)
 v_
 
 # draw values from a vector
-sample(r_unif(100), 3) 
+sample(r_unif(100), 3)
 
 # draw some integers between 1 and 1000
 sample(1000, 3)

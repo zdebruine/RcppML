@@ -13,6 +13,12 @@ mse(w, d = NULL, h, data, mask = NULL, missing_only = FALSE, ...)
 
 \item{h}{sample factor matrix (samples as columns)}
 
+\item{data}{dense or sparse matrix of features in rows and samples in columns. Prefer \code{matrix} or \code{Matrix::dgCMatrix}, respectively}
+
+\item{mask}{dense or sparse matrix of values in \code{data} to handle as missing. Prefer \code{Matrix::dgCMatrix}. Alternatively, specify "\code{zeros}" or "\code{NA}" to mask either all zeros or NA values.}
+
+\item{missing_only}{only calculate mean squared error at masked values}
+
 \item{...}{additional arguments}
 }
 \description{

@@ -21,9 +21,9 @@
 #' @author Zach DeBruine
 #'
 #' @export
-#' @seealso \code{\link{nmf}}, \code{\link{predict.nmf}}, \code{\link{evaluate.nmf}}, \code{\link{nnls}}
+#' @seealso \code{\link{nmf}}, \code{\link{nnls}}
 #' @md
-lnmf <- function(data, k_wh, k_uv, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), nonneg = TRUE, seed = NULL, mask = NULL) {
+lnmf <- function(data, k_wh, k_uv, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), seed = NULL, mask = NULL) {
 
   if (length(k_uv) != length(data)) stop("number of ranks specified in 'k_uv' must equal the length of the list of datasets in 'data'")
   if (length(data) == 1) stop("only one dataset was provided, linked NMF is only useful for multiple datasets")
@@ -66,7 +66,7 @@ lnmf <- function(data, k_wh, k_uv, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c
 
   link_matrix <- as(link_matrix, "ngCMatrix")
 
-  model <- nmf(data, nrow(link_matrix), tol, maxit, L1, L2, nonneg, seed, mask, link_h = TRUE, link_matrix_h = link_matrix, sort_model = FALSE)
+  model <- nmf(data, nrow(link_matrix), tol, maxit, L1, L2, seed, mask, link_h = TRUE, link_matrix_h = link_matrix, sort_model = FALSE)
   diag_order_wh <- order(model@d[1:k_wh], decreasing = TRUE)
   w <- model@w[, diag_order_wh]
   rownames(model@h) <- paste0("h", 1:nrow(model@h))
