@@ -96,8 +96,8 @@ class nmf {
     }
 
     // impose upper maximum limit on NNLS solutions
-    void upperBound(const double upper_bound) {
-        upper_bound = upper_bound;
+    void upperBound(double upperbound) {
+        upper_bound = upperbound;
     }
 
     // GETTERS
