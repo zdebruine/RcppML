@@ -33,6 +33,7 @@ class nmf {
     std::vector<double> L1 = std::vector<double>(2), L2 = std::vector<double>(2);
     std::vector<bool> link = {false, false};
     bool sort_model = true;
+    double upper_bound = 0;  // set to 0 or negative to not impose upper bound limit
 
     double tol = 1e-4;
 
@@ -94,6 +95,11 @@ class nmf {
         link[0] = true;
     }
 
+    // impose upper maximum limit on NNLS solutions
+    void upperBound(const double upper_bound) {
+        upper_bound = upper_bound;
+    }
+
     // GETTERS
     Eigen::MatrixXd matrixW() { return w; }
     Eigen::VectorXd vectorD() { return d; }
@@ -139,20 +145,20 @@ class nmf {
 
     // project "w" onto "A" to solve for "h" in the equation "A = wh"
     void predictH() {
-        predict(A, mask_matrix, link_matrix_h, w, h, L1[1], L2[1], threads, mask_zeros, mask, link[1]);
+        predict(A, mask_matrix, link_matrix_h, w, h, L1[1], L2[1], threads, mask_zeros, mask, link[1], upper_bound);
     }
 
     // project "h" onto "t(A)" to solve for "w"
     void predictW() {
         if (symmetric)
-            predict(A, mask_matrix, link_matrix_w, h, w, L1[0], L2[0], threads, mask_zeros, mask, link[0]);
+            predict(A, mask_matrix, link_matrix_w, h, w, L1[0], L2[0], threads, mask_zeros, mask, link[0], upper_bound);
         else {
             if (!transposed) {
                 t_A = A.transpose();
                 if (mask) t_mask_matrix = mask_matrix.transpose();
                 transposed = true;
             }
-            predict(t_A, t_mask_matrix, link_matrix_w, h, w, L1[0], L2[0], threads, mask_zeros, mask, link[0]);
+            predict(t_A, t_mask_matrix, link_matrix_w, h, w, L1[0], L2[0], threads, mask_zeros, mask, link[0], upper_bound);
         }
     };
 

@@ -4,16 +4,7 @@
 \alias{nnls}
 \title{Non-negative least squares}
 \usage{
-nnls(
-  a,
-  b,
-  cd_maxit = 100L,
-  cd_tol = 1e-08,
-  fast_nnls = FALSE,
-  L1 = 0,
-  L2 = 0,
-  PE = 0
-)
+nnls(a, b, cd_maxit = 100L, cd_tol = 1e-08, L1 = 0, L2 = 0, upper_bound = 0)
 }
 \arguments{
 \item{a}{symmetric positive definite matrix giving coefficients of the linear system}
@@ -24,13 +15,11 @@ nnls(
 
 \item{cd_tol}{stopping criteria, difference in \eqn{x} across consecutive solutions over the sum of \eqn{x}}
 
-\item{fast_nnls}{initialize coordinate descent with a FAST NNLS approximation}
-
 \item{L1}{L1/LASSO penalty to be subtracted from \code{b}}
 
-\item{L2}{Ridge penalty to be added to diagonal of \code{a}}
+\item{L2}{Ridge penalty by which to shrink the diagonal of \code{a}}
 
-\item{PE}{Pattern Extraction (angular) penalty to be added to off-diagonal values of \code{a}}
+\item{upper_bound}{maximum value permitted in solution, set to \code{0} to impose no upper bound}
 }
 \value{
 vector or matrix giving solution for \code{x}
@@ -39,33 +28,11 @@ vector or matrix giving solution for \code{x}
 Solves the equation \code{a \%*\% x = b} for \code{x} subject to \eqn{x > 0}.
 }
 \details{
-This is a very fast implementation of non-negative least squares (NNLS), suitable for very small or very large systems.
+This is a very fast implementation of sequential coordinate descent non-negative least squares (NNLS), suitable for very small or very large systems.
+The algorithm begins with a zero-filled initialization of \code{x}.
 
-\strong{Algorithm}. Sequential coordinate descent (CD) is at the core of this implementation, and requires an initialization of \eqn{x}. There are two supported methods for initialization of \eqn{x}:
-\enumerate{
-\item \strong{Zero-filled initialization} when \code{fast_nnls = FALSE} and \code{cd_maxit > 0}. This is generally very efficient for well-conditioned and small systems.
-\item \strong{Approximation with FAST} when \code{fast_nnls = TRUE}. Forward active set tuning (FAST), described below, finds an approximate active set using unconstrained least squares solutions found by Cholesky decomposition and substitution. To use only FAST approximation, set \code{cd_maxit = 0}.
-}
-
-\code{a} must be symmetric positive definite if FAST NNLS is used, but this is not checked.
-
-See our BioRXiv manuscript (references) for benchmarking against Lawson-Hanson NNLS and for a more technical introduction to these methods.
-
-\strong{Coordinate Descent NNLS}. Least squares by \strong{sequential coordinate descent} is used to ensure the solution returned is exact. This algorithm was
+Least squares by \strong{sequential coordinate descent} is used to ensure the solution returned is exact. This algorithm was
 introduced by Franc et al. (2005), and our implementation is a vectorized and optimized rendition of that found in the NNLM R package by Xihui Lin (2020).
-
-\strong{FAST NNLS.} Forward active set tuning (FAST) is an exact or near-exact NNLS approximation initialized by an unconstrained
-least squares solution. Negative values in this unconstrained solution are set to zero (the "active set"), and all
-other values are added  to a "feasible set". An unconstrained least squares solution is then solved for the
-"feasible set", any negative values in the resulting solution are set to zero, and the process is repeated until
-the feasible set solution is strictly positive.
-
-The FAST algorithm has a definite convergence guarantee because the
-feasible set will either converge or become smaller with each iteration. The result is generally exact or nearly
-exact for small well-conditioned systems (< 50 variables) within 2 iterations and thus sets up coordinate
-descent for very rapid convergence. The FAST method is similar to the first phase of the so-called "TNT-NN" algorithm (Myre et al., 2017),
-but the latter half of that method relies heavily on heuristics to refine the approximate active set, which we avoid by using
-coordinate descent instead.
 }
 \examples{
 \dontrun{

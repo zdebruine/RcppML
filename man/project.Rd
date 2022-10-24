@@ -4,7 +4,7 @@
 \alias{project}
 \title{Project a model onto new data}
 \usage{
-project(w, data, L1 = 0, L2 = 0, mask = NULL, ...)
+project(w, data, L1 = 0, L2 = 0, mask = NULL, upper_bound = 0, ...)
 }
 \arguments{
 \item{w}{matrix of features (rows) by factors (columns), corresponding to rows in \code{data}}

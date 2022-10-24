@@ -103,14 +103,14 @@ model <- nmf(rsparsematrix(1000, 100, 0.1), k = 10)
 
 # compare rank-2 NMF to second left vector in an SVD
 data(iris)
-A <- Matrix::as(as.matrix(iris[,1:4]), "dgCMatrix")
+A <- Matrix::as(as.matrix(iris[, 1:4]), "dgCMatrix")
 nmf_model <- nmf(A, 2, tol = 1e-5)
 bipartitioning_vector <- apply(nmf_model$w, 1, diff)
-second_left_svd_vector <- base::svd(A, 2)$u[,2]
+second_left_svd_vector <- base::svd(A, 2)$u[, 2]
 abs(cor(bipartitioning_vector, second_left_svd_vector))
 
 # compare rank-1 NMF with first singular vector in an SVD
-abs(cor(nmf(A, 1)$w[,1], base::svd(A, 2)$u[,1]))
+abs(cor(nmf(A, 1)$w[, 1], base::svd(A, 2)$u[, 1]))
 
 # symmetric NMF
 A <- crossprod(rsparsematrix(100, 100, 0.02))

@@ -41,7 +41,7 @@
 
 \S4method{[[}{nmf}(x, i)
 
-\S4method{predict}{nmf}(object, data, L1 = 0, L2 = 0, mask = NULL, ...)
+\S4method{predict}{nmf}(object, data, L1 = 0, L2 = 0, mask = NULL, upper_bound = NULL, ...)
 }
 \arguments{
 \item{x}{object of class \code{nmf}.}
@@ -71,6 +71,8 @@
 \item{L2}{a single Ridge penalty greater than zero}
 
 \item{mask}{dense or sparse matrix of values in \code{data} to handle as missing. Prefer \code{Matrix::dgCMatrix}. Alternatively, specify "\code{zeros}" or "\code{NA}" to mask either all zeros or NA values.}
+
+\item{upper_bound}{maximum value permitted in least squares solutions, essentially a bounded-variable least squares problem between 0 and \code{upper_bound}}
 }
 \value{
 object of class \code{\link{nmf}}
@@ -79,9 +81,8 @@ object of class \code{\link{nmf}}
 Given an NMF model in the form \eqn{A = wdh}, \code{project} projects \code{w} onto \code{A} to solve for \code{h}.
 }
 \details{
-TO DO: add documentation
-For the alternating least squares matrix factorization update problem \eqn{A = wh}, the updates 
-(or projection) of \eqn{h} is given by the equation: \deqn{w^Twh = wA_j} 
+For the alternating least squares matrix factorization update problem \eqn{A = wh}, the updates
+(or projection) of \eqn{h} is given by the equation: \deqn{w^Twh = wA_j}
 which is in the form \eqn{ax = b} where \eqn{a = w^Tw} \eqn{x = h} and \eqn{b = wA_j} for all columns \eqn{j} in \eqn{A}.
 
 Any L1 penalty is subtracted from \eqn{b} and should generally be scaled to \code{max(b)}, where \eqn{b = WA_j} for all columns \eqn{j} in \eqn{A}. An easy way to properly scale an L1 penalty is to normalize all columns in \eqn{w} to sum to the same value (e.g. 1). No scaling is applied in this function. Such scaling guarantees that \code{L1 = 1} gives a completely sparse solution.

@@ -11,7 +11,7 @@
 
 //[[Rcpp::export]]
 Eigen::MatrixXd Rcpp_predict_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eigen::MatrixXd w, const double L1, const double L2,
-                                    const unsigned int threads, const bool mask_zeros) {
+                                    const unsigned int threads, const bool mask_zeros, const double upper_bound = 0) {
     RcppSparse::Matrix A_(A);
     RcppSparse::Matrix mask_(mask);
     RcppML::nmf<RcppSparse::Matrix> m(A_, w);
@@ -22,13 +22,14 @@ Eigen::MatrixXd Rcpp_predict_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eig
     m.threads = threads;
     m.L1[1] = L1;
     m.L2[1] = L2;
+    m.upper_bound = upper_bound;
     m.predictH();
     return m.matrixH();
 }
 
 //[[Rcpp::export]]
 Eigen::MatrixXd Rcpp_predict_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Eigen::MatrixXd w,
-                                   const double L1, const double L2, const unsigned int threads, const bool mask_zeros) {
+                                   const double L1, const double L2, const unsigned int threads, const bool mask_zeros, const double upper_bound = 0) {
     RcppSparse::Matrix mask_(mask);
     RcppML::nmf<Eigen::MatrixXd> m(A_, w);
     if (mask_zeros)
@@ -38,6 +39,7 @@ Eigen::MatrixXd Rcpp_predict_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Ei
     m.threads = threads;
     m.L1[1] = L1;
     m.L2[1] = L1;
+    m.upper_bound = upper_bound;
     m.predictH();
     return m.matrixH();
 }
@@ -98,7 +100,7 @@ double Rcpp_mse_missing_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Eigen::
 Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, const double tol, const unsigned int maxit,
                            const bool verbose, const std::vector<double> L1, const std::vector<double> L2,
                            const unsigned int threads, Rcpp::List w_init, const Rcpp::S4& link_matrix_h,
-                           const bool mask_zeros, const bool link_h, const bool sort_model) {
+                           const bool mask_zeros, const bool link_h, const bool sort_model, const double upper_bound = 0) {
     RcppSparse::Matrix A_(A);
     RcppSparse::Matrix mask_(mask), link_matrix_h_(link_matrix_h);
     Eigen::MatrixXd w_ = Rcpp::as<Eigen::MatrixXd>(w_init[0]);
@@ -112,6 +114,7 @@ Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, const double
     m.verbose = verbose;
     m.threads = threads;
     m.sort_model = sort_model;
+    m.upper_bound = upper_bound;
     if (link_h) m.linkH(link_matrix_h_);
     if (mask_zeros)
         m.maskZeros();
@@ -136,7 +139,7 @@ Rcpp::List Rcpp_nmf_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, const double
 Rcpp::List Rcpp_nmf_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, const double tol, const unsigned int maxit,
                           const bool verbose, const std::vector<double> L1, const std::vector<double> L2,
                           const unsigned int threads, Rcpp::List w_init, const Rcpp::S4& link_matrix_h, const bool mask_zeros,
-                          const bool link_h, const bool sort_model) {
+                          const bool link_h, const bool sort_model, const double upper_bound = 0) {
     RcppSparse::Matrix mask_(mask), link_matrix_h_(link_matrix_h);
     Eigen::MatrixXd w_ = Rcpp::as<Eigen::MatrixXd>(w_init[0]);
     RcppML::nmf<Eigen::MatrixXd> m(A_, w_);
@@ -149,6 +152,7 @@ Rcpp::List Rcpp_nmf_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, const doubl
     m.verbose = verbose;
     m.threads = threads;
     m.sort_model = sort_model;
+    m.upper_bound = upper_bound;
     if (link_h) m.linkH(link_matrix_h_);
     if (mask_zeros)
         m.maskZeros();
@@ -229,40 +233,19 @@ Rcpp::List Rcpp_dclust_sparse(const Rcpp::S4& A, const unsigned int min_samples,
 //' @description Solves the equation \code{a %*% x = b} for \code{x} subject to \eqn{x > 0}.
 //'
 //' @details
-//' This is a very fast implementation of non-negative least squares (NNLS), suitable for very small or very large systems.
+//' This is a very fast implementation of sequential coordinate descent non-negative least squares (NNLS), suitable for very small or very large systems.
+//' The algorithm begins with a zero-filled initialization of \code{x}.
 //'
-//' **Algorithm**. Sequential coordinate descent (CD) is at the core of this implementation, and requires an initialization of \eqn{x}. There are two supported methods for initialization of \eqn{x}:
-//' 1. **Zero-filled initialization** when \code{fast_nnls = FALSE} and \code{cd_maxit > 0}. This is generally very efficient for well-conditioned and small systems.
-//' 2. **Approximation with FAST** when \code{fast_nnls = TRUE}. Forward active set tuning (FAST), described below, finds an approximate active set using unconstrained least squares solutions found by Cholesky decomposition and substitution. To use only FAST approximation, set \code{cd_maxit = 0}.
-//'
-//' \code{a} must be symmetric positive definite if FAST NNLS is used, but this is not checked.
-//'
-//' See our BioRXiv manuscript (references) for benchmarking against Lawson-Hanson NNLS and for a more technical introduction to these methods.
-//'
-//' **Coordinate Descent NNLS**. Least squares by **sequential coordinate descent** is used to ensure the solution returned is exact. This algorithm was
+//' Least squares by **sequential coordinate descent** is used to ensure the solution returned is exact. This algorithm was
 //' introduced by Franc et al. (2005), and our implementation is a vectorized and optimized rendition of that found in the NNLM R package by Xihui Lin (2020).
-//'
-//' **FAST NNLS.** Forward active set tuning (FAST) is an exact or near-exact NNLS approximation initialized by an unconstrained
-//' least squares solution. Negative values in this unconstrained solution are set to zero (the "active set"), and all
-//' other values are added  to a "feasible set". An unconstrained least squares solution is then solved for the
-//' "feasible set", any negative values in the resulting solution are set to zero, and the process is repeated until
-//' the feasible set solution is strictly positive.
-//'
-//' The FAST algorithm has a definite convergence guarantee because the
-//' feasible set will either converge or become smaller with each iteration. The result is generally exact or nearly
-//' exact for small well-conditioned systems (< 50 variables) within 2 iterations and thus sets up coordinate
-//' descent for very rapid convergence. The FAST method is similar to the first phase of the so-called "TNT-NN" algorithm (Myre et al., 2017),
-//' but the latter half of that method relies heavily on heuristics to refine the approximate active set, which we avoid by using
-//' coordinate descent instead.
 //'
 //' @param a symmetric positive definite matrix giving coefficients of the linear system
 //' @param b matrix giving the right-hand side(s) of the linear system
 //' @param L1 L1/LASSO penalty to be subtracted from \code{b}
-//' @param L2 Ridge penalty to be added to diagonal of \code{a}
-//' @param PE Pattern Extraction (angular) penalty to be added to off-diagonal values of \code{a}
-//' @param fast_nnls initialize coordinate descent with a FAST NNLS approximation
+//' @param L2 Ridge penalty by which to shrink the diagonal of \code{a}
 //' @param cd_maxit maximum number of coordinate descent iterations
 //' @param cd_tol stopping criteria, difference in \eqn{x} across consecutive solutions over the sum of \eqn{x}
+//' @param upper_bound maximum value permitted in solution, set to \code{0} to impose no upper bound
 //' @return vector or matrix giving solution for \code{x}
 //' @export
 //' @author Zach DeBruine
@@ -303,223 +286,207 @@ Rcpp::List Rcpp_dclust_sparse(const Rcpp::S4& A, const unsigned int min_samples,
 //' }
 //[[Rcpp::export]]
 Eigen::MatrixXd nnls(Eigen::MatrixXd a, Eigen::MatrixXd b, unsigned int cd_maxit = 100,
-                     const double cd_tol = 1e-8, const bool fast_nnls = false, const double L1 = 0, const double L2 = 0, const double PE = 0) {
+                     const double cd_tol = 1e-8, const double L1 = 0, const double L2 = 0, const double upper_bound = 0) {
     if (a.rows() != a.cols()) Rcpp::stop("'a' is not symmetric");
     if (a.rows() != b.rows()) Rcpp::stop("dimensions of 'b' and 'a' are not compatible!");
-    if (L1 != 0) b.array() -= L1;
-    if (L2 != 0) a.diagonal().array() += L2;
-    if (PE != 0) {
-        a.array() += PE;
-        a.diagonal().array() -= PE;
-    }
-
-    Eigen::LLT<Eigen::MatrixXd> a_llt;
-    Eigen::MatrixXd x(b.rows(), b.cols());
-    if (fast_nnls) a_llt = a.llt();
-    for (unsigned int col = 0; col < b.cols(); ++col) {
-        if (fast_nnls) {
-            // initialize with unconstrained least squares solution
-            x.col(col) = a_llt.solve(b.col(col));
-            // iterative feasible set reduction while unconstrained least squares solutions at feasible indices contain negative values
-            while ((x.col(col).array() < 0).any()) {
-                Eigen::VectorXi gtz_ind = find_gtz(x, col);      // get indices in "x" greater than zero (the "feasible set")
-                Eigen::VectorXd bsub = subvec(b, gtz_ind, col);  // subset "a" and "b" to those indices in the feasible set
-                Eigen::MatrixXd asub = submat(a, gtz_ind, gtz_ind);
-                Eigen::VectorXd xsub = asub.llt().solve(bsub);  // solve for those indices in "x"
-                x.setZero();
-                for (unsigned int i = 0; i < gtz_ind.size(); ++i) x(gtz_ind(i), col) = xsub(i);
-            }
-            b.col(col) -= a * x.col(col);  // adjust gradient for current solution
-        }
-
-        // refine FAST solution by coordinate descent, or find solution from zero-initialized "x" matrix
-        if (cd_maxit > 0) {
-            double tol = 1;
-            for (unsigned int it = 0; it < cd_maxit && (tol / b.rows()) > cd_tol; ++it) {
-                tol = 0;
-                for (unsigned int i = 0; i < b.rows(); ++i) {
-                    double diff = b(i, col) / a(i, i);
-                    if (-diff > x(i, col)) {
-                        if (x(i, col) != 0) {
-                            b.col(col) -= a.col(i) * -x(i, col);
-                            tol = 1;
-                            x(i, col) = 0;
-                        }
-                    } else if (diff != 0) {
-                        x(i, col) += diff;
-                        b.col(col) -= a.col(i) * diff;
-                        tol += std::abs(diff / (x(i, col) + TINY_NUM));
+    a.diagonal().array() *= (1 - L2);
+    b.array() -= L1;
+    Eigen::MatrixXd h(b.rows(), b.cols());
+    for (size_t sample = 0; sample < b.cols(); ++sample) {
+        double tol = 1;
+        for (unsigned int it = 0; it < cd_maxit && (tol / b.rows()) > cd_tol; ++it) {
+            tol = 0;
+            for (unsigned int i = 0; i < h.rows(); ++i) {
+                double diff = b(i, sample) / a(i, i);
+                if (-diff > h(i, sample)) {
+                    if (h(i, sample) != 0) {
+                        b.col(sample) -= a.col(i) * -h(i, sample);
+                        tol = 1;
+                        h(i, sample) = 0;
                     }
+                } else if (diff != 0) {
+                    if (upper_bound > 0) {
+                        if (h(i, sample) + diff > upper_bound) {
+                            diff = upper_bound - h(i, sample);
+                            h(i, sample) = upper_bound;
+                        } else {
+                            h(i, sample) += diff;
+                        }
+                    } else {
+                        h(i, sample) += diff;
+                    }
+                    b.col(sample) -= a.col(i) * diff;
+                    tol += std::abs(diff / (h(i, sample) + TINY_NUM));
                 }
             }
         }
     }
-    return x;
+    return h;
 }
 
 //[[Rcpp::export]]
-Rcpp::NumericMatrix c_rmatrix(uint32_t nrow, uint32_t ncol, uint32_t rng){
-  Rcpp::NumericMatrix m(nrow, ncol);
-  RcppML::rng<false> s(rng);
-  for(uint32_t i = 0; i < nrow; ++i)
-    for(uint32_t j = 0; j < ncol; ++j)
-      m(i, j) = s.runif<float>(i, j);
-  return m;
+Rcpp::NumericMatrix c_rmatrix(uint32_t nrow, uint32_t ncol, uint32_t rng) {
+    Rcpp::NumericMatrix m(nrow, ncol);
+    RcppML::rng<false> s(rng);
+    for (uint32_t i = 0; i < nrow; ++i)
+        for (uint32_t j = 0; j < ncol; ++j)
+            m(i, j) = s.runif<float>(i, j);
+    return m;
 }
 
 //[[Rcpp::export]]
-Rcpp::NumericMatrix c_rtimatrix(uint32_t nrow, uint32_t ncol, uint32_t rng){
-  Rcpp::NumericMatrix m(nrow, ncol);
-  RcppML::rng<true> s(rng);
- 
-  // symmetric part first
-  uint32_t n_sym = (nrow < ncol) ? nrow : ncol;
- 
-  for(uint32_t i = 0; i < n_sym; ++i){
-    for(uint32_t j = (i + 1); j < n_sym; ++j){
-      float tmp = s.runif<float>(i, j);
-      m(i, j) = tmp;
-      m(j, i) = tmp;
+Rcpp::NumericMatrix c_rtimatrix(uint32_t nrow, uint32_t ncol, uint32_t rng) {
+    Rcpp::NumericMatrix m(nrow, ncol);
+    RcppML::rng<true> s(rng);
+
+    // symmetric part first
+    uint32_t n_sym = (nrow < ncol) ? nrow : ncol;
+
+    for (uint32_t i = 0; i < n_sym; ++i) {
+        for (uint32_t j = (i + 1); j < n_sym; ++j) {
+            float tmp = s.runif<float>(i, j);
+            m(i, j) = tmp;
+            m(j, i) = tmp;
+        }
     }
-  }
- 
-  // populate the diagonal of the symmetric part
-  for(uint32_t i = 0; i < n_sym; ++i)
-    m(i, i) = s.runif<float>(i, i);
- 
-  // asymmetric part (but still transpose-identical)
-  if(nrow > ncol)
-    for(uint32_t i = n_sym; i < nrow; ++i)
-      for(uint32_t j = 0; j < ncol; ++j)
-        m(i, j) = s.runif<float>(i, j);
-  else if (ncol > nrow)
-    for(uint32_t i = 0; i < nrow; ++i)
-      for(uint32_t j = n_sym; j < ncol; ++j)
-        m(i, j) = s.runif<float>(i, j);
- 
-  return m;
+
+    // populate the diagonal of the symmetric part
+    for (uint32_t i = 0; i < n_sym; ++i)
+        m(i, i) = s.runif<float>(i, i);
+
+    // asymmetric part (but still transpose-identical)
+    if (nrow > ncol)
+        for (uint32_t i = n_sym; i < nrow; ++i)
+            for (uint32_t j = 0; j < ncol; ++j)
+                m(i, j) = s.runif<float>(i, j);
+    else if (ncol > nrow)
+        for (uint32_t i = 0; i < nrow; ++i)
+            for (uint32_t j = n_sym; j < ncol; ++j)
+                m(i, j) = s.runif<float>(i, j);
+
+    return m;
 }
 
 //[[Rcpp::export]]
-Rcpp::NumericVector c_runif(const uint32_t n, const float min, const float max, const uint32_t rng, const uint32_t rng2){
-  Rcpp::NumericVector result(n);
-  RcppML::rng<false> s(rng);
-  float scale = max - min;
-  for(uint32_t i = 0; i < n; ++i){
-    result[i] = s.runif<float>(i, rng2) * scale + min;
-  }
-  return result;
-}
-
-//[[Rcpp::export]]
-Rcpp::IntegerVector c_rbinom(const uint32_t n, uint32_t size, const uint32_t inv_probability, const uint32_t rng, const uint32_t rng2){
-  Rcpp::IntegerVector result(n);
-  RcppML::rng<false> s(rng);
-  for(; size > 0; --size){
-    for(uint32_t i = 0; i < n; ++i){
-      if(s.sample(i, rng2, inv_probability) == 0)
-        ++result[i];
-    }
-  }
-  return result;
-}
-
-//[[Rcpp::export]]
-std::vector<uint32_t> c_sample(const uint32_t n, const uint32_t size, const bool replace, const uint32_t rng, const uint32_t rng2){
-  RcppML::rng<false> s(rng);
-  if(size == 1){
-    return std::vector<uint32_t>(1, s.sample(1, 1, n));
-  }
-  if(replace){
-    std::vector<uint32_t> result(size);
-    for(uint32_t i = 0; i < size; ++i){
-      result[i] = s.sample(i, rng2, n);
+Rcpp::NumericVector c_runif(const uint32_t n, const float min, const float max, const uint32_t rng, const uint32_t rng2) {
+    Rcpp::NumericVector result(n);
+    RcppML::rng<false> s(rng);
+    float scale = max - min;
+    for (uint32_t i = 0; i < n; ++i) {
+        result[i] = s.runif<float>(i, rng2) * scale + min;
     }
     return result;
-  } else {
-    if(size > n)
-      Rcpp::stop("cannot take a sample larger than the population when 'replace = FALSE'");
-    std::vector<uint32_t> result(n);
-    std::iota(result.begin(), result.end(), 0);
-    for(uint32_t i = 0; i < size; ++i){
-      std::swap(result[i], result[s.sample(i, rng2, n)]);
+}
+
+//[[Rcpp::export]]
+Rcpp::IntegerVector c_rbinom(const uint32_t n, uint32_t size, const uint32_t inv_probability, const uint32_t rng, const uint32_t rng2) {
+    Rcpp::IntegerVector result(n);
+    RcppML::rng<false> s(rng);
+    for (; size > 0; --size) {
+        for (uint32_t i = 0; i < n; ++i) {
+            if (s.sample(i, rng2, inv_probability) == 0)
+                ++result[i];
+        }
     }
-    if(size < n)
-      result.resize(size);
     return result;
-  }
 }
 
 //[[Rcpp::export]]
-Rcpp::S4 c_rtisparsematrix(const uint32_t nrow, const uint32_t ncol, const uint32_t inv_probability, const bool pattern_only, uint32_t rng){
-  RcppML::rng<true> s(rng);
-  Rcpp::S4 result = pattern_only ? Rcpp::S4(std::string("ngCMatrix")) : Rcpp::S4(std::string("dgCMatrix"));
-  Rcpp::IntegerVector p(ncol + 1);
-  std::vector<uint32_t> i;
-  i.reserve(nrow * ncol / inv_probability);
-  if(pattern_only){
-    for(uint32_t col = 0; col < ncol; ++col){
-      for(uint32_t row = 0; row < nrow; ++row){
-        if(s.sample(row, col, inv_probability) == 0)
-          i.push_back(row);
-      }
-      p[col + 1] = i.size();
+std::vector<uint32_t> c_sample(const uint32_t n, const uint32_t size, const bool replace, const uint32_t rng, const uint32_t rng2) {
+    RcppML::rng<false> s(rng);
+    if (size == 1) {
+        return std::vector<uint32_t>(1, s.sample(1, 1, n));
     }
-  } else {
-    std::vector<float> x;
-    x.reserve(nrow * ncol / inv_probability);
-    for(uint32_t col = 0; col < ncol; ++col){
-      for(uint32_t row = 0; row < nrow; ++row){
-        if(s.sample(row, col, inv_probability) == 0){
-          i.push_back(row);
-          x.push_back(s.runif<float>(row, col));
+    if (replace) {
+        std::vector<uint32_t> result(size);
+        for (uint32_t i = 0; i < size; ++i) {
+            result[i] = s.sample(i, rng2, n);
         }
-      }
-      p[col + 1] = i.size();
+        return result;
+    } else {
+        if (size > n)
+            Rcpp::stop("cannot take a sample larger than the population when 'replace = FALSE'");
+        std::vector<uint32_t> result(n);
+        std::iota(result.begin(), result.end(), 0);
+        for (uint32_t i = 0; i < size; ++i) {
+            std::swap(result[i], result[s.sample(i, rng2, n)]);
+        }
+        if (size < n)
+            result.resize(size);
+        return result;
     }
-    Rcpp::NumericVector x_ = Rcpp::wrap(x);
-    result.slot("x") = x_;
-  }
-  Rcpp::IntegerVector i_ = Rcpp::wrap(i);
-  result.slot("Dim") = Rcpp::IntegerVector::create(nrow, ncol);
-  result.slot("i") = i_;
-  result.slot("p") = p;
-  return result;
 }
 
 //[[Rcpp::export]]
-Rcpp::S4 c_rsparsematrix(const uint32_t nrow, const uint32_t ncol, const uint32_t inv_probability, const bool pattern_only, uint32_t rng){
-  RcppML::rng<false> s(rng);
-  Rcpp::S4 result = pattern_only ? Rcpp::S4(std::string("ngCMatrix")) : Rcpp::S4(std::string("dgCMatrix"));
-  Rcpp::IntegerVector p(ncol + 1);
-  std::vector<uint32_t> i;
-  i.reserve(nrow * ncol / inv_probability);
-  if(pattern_only){
-    for(uint32_t col = 0; col < ncol; ++col){
-      for(uint32_t row = 0; row < nrow; ++row){
-        if(s.sample(row, col, inv_probability) == 0)
-          i.push_back(row);
-      }
-      p[col + 1] = i.size();
-    }
-  } else {
-    std::vector<float> x;
-    x.reserve(nrow * ncol / inv_probability);
-    for(uint32_t col = 0; col < ncol; ++col){
-      for(uint32_t row = 0; row < nrow; ++row){
-        if(s.sample(row, col, inv_probability) == 0){
-          i.push_back(row);
-          x.push_back(s.runif<float>(row, col));
+Rcpp::S4 c_rtisparsematrix(const uint32_t nrow, const uint32_t ncol, const uint32_t inv_probability, const bool pattern_only, uint32_t rng) {
+    RcppML::rng<true> s(rng);
+    Rcpp::S4 result = pattern_only ? Rcpp::S4(std::string("ngCMatrix")) : Rcpp::S4(std::string("dgCMatrix"));
+    Rcpp::IntegerVector p(ncol + 1);
+    std::vector<uint32_t> i;
+    i.reserve(nrow * ncol / inv_probability);
+    if (pattern_only) {
+        for (uint32_t col = 0; col < ncol; ++col) {
+            for (uint32_t row = 0; row < nrow; ++row) {
+                if (s.sample(row, col, inv_probability) == 0)
+                    i.push_back(row);
+            }
+            p[col + 1] = i.size();
         }
-      }
-      p[col + 1] = i.size();
+    } else {
+        std::vector<float> x;
+        x.reserve(nrow * ncol / inv_probability);
+        for (uint32_t col = 0; col < ncol; ++col) {
+            for (uint32_t row = 0; row < nrow; ++row) {
+                if (s.sample(row, col, inv_probability) == 0) {
+                    i.push_back(row);
+                    x.push_back(s.runif<float>(row, col));
+                }
+            }
+            p[col + 1] = i.size();
+        }
+        Rcpp::NumericVector x_ = Rcpp::wrap(x);
+        result.slot("x") = x_;
     }
-    Rcpp::NumericVector x_ = Rcpp::wrap(x);
-    result.slot("x") = x_;
-  }
-  Rcpp::IntegerVector i_ = Rcpp::wrap(i);
-  result.slot("Dim") = Rcpp::IntegerVector::create(nrow, ncol);
-  result.slot("i") = i_;
-  result.slot("p") = p;
-  return result;
+    Rcpp::IntegerVector i_ = Rcpp::wrap(i);
+    result.slot("Dim") = Rcpp::IntegerVector::create(nrow, ncol);
+    result.slot("i") = i_;
+    result.slot("p") = p;
+    return result;
+}
+
+//[[Rcpp::export]]
+Rcpp::S4 c_rsparsematrix(const uint32_t nrow, const uint32_t ncol, const uint32_t inv_probability, const bool pattern_only, uint32_t rng) {
+    RcppML::rng<false> s(rng);
+    Rcpp::S4 result = pattern_only ? Rcpp::S4(std::string("ngCMatrix")) : Rcpp::S4(std::string("dgCMatrix"));
+    Rcpp::IntegerVector p(ncol + 1);
+    std::vector<uint32_t> i;
+    i.reserve(nrow * ncol / inv_probability);
+    if (pattern_only) {
+        for (uint32_t col = 0; col < ncol; ++col) {
+            for (uint32_t row = 0; row < nrow; ++row) {
+                if (s.sample(row, col, inv_probability) == 0)
+                    i.push_back(row);
+            }
+            p[col + 1] = i.size();
+        }
+    } else {
+        std::vector<float> x;
+        x.reserve(nrow * ncol / inv_probability);
+        for (uint32_t col = 0; col < ncol; ++col) {
+            for (uint32_t row = 0; row < nrow; ++row) {
+                if (s.sample(row, col, inv_probability) == 0) {
+                    i.push_back(row);
+                    x.push_back(s.runif<float>(row, col));
+                }
+            }
+            p[col + 1] = i.size();
+        }
+        Rcpp::NumericVector x_ = Rcpp::wrap(x);
+        result.slot("x") = x_;
+    }
+    Rcpp::IntegerVector i_ = Rcpp::wrap(i);
+    result.slot("Dim") = Rcpp::IntegerVector::create(nrow, ncol);
+    result.slot("i") = i_;
+    result.slot("p") = p;
+    return result;
 }

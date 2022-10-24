@@ -3,21 +3,21 @@
 #' @description High-performance NMF of the form \eqn{A = wdh} for large dense or sparse matrices, returns an object of class \code{nmf}.
 #'
 #' @details
-#' This fast NMF implementation decomposes a matrix \eqn{A} into lower-rank non-negative matrices \eqn{w} and \eqn{h}, 
+#' This fast NMF implementation decomposes a matrix \eqn{A} into lower-rank non-negative matrices \eqn{w} and \eqn{h},
 #' with columns of \eqn{w} and rows of \eqn{h} scaled to sum to 1 via multiplication by a diagonal, \eqn{d}: \deqn{A = wdh}
 #'
 #' The scaling diagonal ensures convex L1 regularization, consistent factor scalings regardless of random initialization, and model symmetry in factorizations of symmetric matrices.
-#' 
+#'
 #' The factorization model is randomly initialized.  \eqn{w} and \eqn{h} are updated by alternating least squares.
-#' 
+#'
 #' RcppML achieves high performance using the Eigen C++ linear algebra library, OpenMP parallelization, a dedicated Rcpp sparse matrix class, and fast sequential coordinate descent non-negative least squares initialized by Cholesky least squares solutions.
 #'
 #' Sparse optimization is automatically applied if the input matrix \code{A} is a sparse matrix (i.e. \code{Matrix::dgCMatrix}). There are also specialized back-ends for symmetric, rank-1, and rank-2 factorizations.
-#' 
+#'
 #' L1 penalization can be used for increasing the sparsity of factors and assisting interpretability. Penalty values should range from 0 to 1, where 1 gives complete sparsity.
 #'
 #' Set \code{options(RcppML.verbose = TRUE)} to print model tolerances to the console after each iteration.
-#' 
+#'
 #' Parallelization is applied with OpenMP using the number of threads in \code{getOption("RcppML.threads")} and set by \code{option(RcppML.threads = 0)}, for example. \code{0} corresponds to all threads, let OpenMP decide.
 #'
 #' @section Methods:
@@ -30,7 +30,7 @@
 #' * \code{sparsity}: compute the sparsity of each factor in \eqn{w} and \eqn{h}
 #' * \code{subset}: subset, reorder, select, or extract factors (same as `[`)
 #' * generics such as \code{dim}, \code{dimnames}, \code{t}, \code{show}, \code{head}
-#' 
+#'
 #' @param data dense or sparse matrix of features in rows and samples in columns. Prefer \code{matrix} or \code{Matrix::dgCMatrix}, respectively
 #' @param k rank
 #' @param tol tolerance of the fit
@@ -43,11 +43,11 @@
 #' @return object of class \code{nmf}
 #' @importFrom methods is
 #' @references
-#' 
+#'
 #' DeBruine, ZJ, Melcher, K, and Triche, TJ. (2021). "High-performance non-negative matrix factorization for large single-cell data." BioRXiv.
-#' 
+#'
 #' Lin, X, and Boutros, PC (2020). "Optimization and expansion of non-negative matrix factorization." BMC Bioinformatics.
-#' 
+#'
 #' Lee, D, and Seung, HS (1999). "Learning the parts of objects by non-negative matrix factorization." Nature.
 #'
 #' Franc, VC, Hlavac, VC, Navara, M. (2005). "Sequential Coordinate-Wise Algorithm for the Non-negative Least Squares Problem". Proc. Int'l Conf. Computer Analysis of Images and Patterns. Lecture Notes in Computer Science.
@@ -61,17 +61,17 @@
 #' \dontrun{
 #' # basic NMF
 #' model <- nmf(rsparsematrix(1000, 100, 0.1), k = 10)
-#' 
+#'
 #' # compare rank-2 NMF to second left vector in an SVD
 #' data(iris)
-#' A <- Matrix::as(as.matrix(iris[,1:4]), "dgCMatrix")
+#' A <- Matrix::as(as.matrix(iris[, 1:4]), "dgCMatrix")
 #' nmf_model <- nmf(A, 2, tol = 1e-5)
 #' bipartitioning_vector <- apply(nmf_model$w, 1, diff)
-#' second_left_svd_vector <- base::svd(A, 2)$u[,2]
+#' second_left_svd_vector <- base::svd(A, 2)$u[, 2]
 #' abs(cor(bipartitioning_vector, second_left_svd_vector))
-#' 
+#'
 #' # compare rank-1 NMF with first singular vector in an SVD
-#' abs(cor(nmf(A, 1)$w[,1], base::svd(A, 2)$u[,1]))
+#' abs(cor(nmf(A, 1)$w[, 1], base::svd(A, 2)$u[, 1]))
 #'
 #' # symmetric NMF
 #' A <- crossprod(rsparsematrix(100, 100, 0.02))
@@ -80,13 +80,13 @@
 #' # see package vignette for more examples
 #' }
 nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), seed = NULL, mask = NULL, ...) {
-  
   start_time <- Sys.time()
   # apply defaults to development parameters
   p <- list(...)
-  defaults <- list("link_matrix_h" = new("dgCMatrix"), "link_h" = FALSE, "sort_model" = TRUE)
-  for (i in 1:length(defaults))
+  defaults <- list("link_matrix_h" = new("dgCMatrix"), "link_h" = FALSE, "sort_model" = TRUE, "upper_bound" = 0)
+  for (i in 1:length(defaults)) {
     if (is.null(p[[names(defaults)[[i]]]])) p[[names(defaults)[[i]]]] <- defaults[[i]]
+  }
 
   if (length(L1) == 1) {
     L1 <- rep(L1, 2)
@@ -114,7 +114,9 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), se
       warning("NA values were detected in the data. Setting \"mask = 'NA'\"")
       mask <- is.na(as(data, "dgCMatrix"))
     }
-  } else stop("'data' was not coercible to a matrix")
+  } else {
+    stop("'data' was not coercible to a matrix")
+  }
 
   if (is.null(mask)) {
     mask_matrix <- new("dgCMatrix")
@@ -127,7 +129,9 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), se
     if (!canCoerce(mask, "dgCMatrix")) {
       if (canCoerce(mask, "matrix")) {
         mask <- as.matrix(matrix)
-      } else stop("could not coerce the value of 'mask' to a sparse pattern matrix (dgCMatrix)")
+      } else {
+        stop("could not coerce the value of 'mask' to a sparse pattern matrix (dgCMatrix)")
+      }
     }
     mask_matrix <- as(mask, "dgCMatrix")
   }
@@ -142,13 +146,15 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), se
           w_init[[i]] <- seed[[i]]
         } else if (nrow(seed[[i]]) == nrow(data) && ncol(seed[[i]]) == k) {
           w_init[[i]] <- t(seed[[i]])
-        } else stop("dimensions of provided initial 'w' matrices in 'seed' were incompatible with dimensions of 'data' and/or 'k'")
+        } else {
+          stop("dimensions of provided initial 'w' matrices in 'seed' were incompatible with dimensions of 'data' and/or 'k'")
+        }
       }
     } else if (is.numeric(seed[[1]])) {
       for (i in 1:length(seed)) {
         # randomly select runif or rnorm
         set.seed(seed[[i]])
-        if(i == 1 || sample(c(FALSE, TRUE), 1)){
+        if (i == 1 || sample(c(FALSE, TRUE), 1)) {
           # runif
           # randomly set lower and upper bounds from pre-determined array
           # surprisingly, different bounds can affect the best possible discoverable solution from the initialization
@@ -172,9 +178,9 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), se
 
   # call C++ routines
   if (class(data)[[1]] == "dgCMatrix") {
-    model <- Rcpp_nmf_sparse(data, mask_matrix, tol, maxit, getOption("RcppML.verbose"), L1, L2, getOption("RcppML.threads"), w_init, as(p$link_matrix_h, "dgCMatrix"), mask_zeros, p$link_h, p$sort_model)
+    model <- Rcpp_nmf_sparse(data, mask_matrix, tol, maxit, getOption("RcppML.verbose"), L1, L2, getOption("RcppML.threads"), w_init, as(p$link_matrix_h, "dgCMatrix"), mask_zeros, p$link_h, p$sort_model, p$upper_bound)
   } else {
-    model <- Rcpp_nmf_dense(data, mask_matrix, tol, maxit, getOption("RcppML.verbose"), L1, L2, getOption("RcppML.threads"), w_init, as(p$link_matrix_h, "dgCMatrix"), mask_zeros, p$link_h, p$sort_model)
+    model <- Rcpp_nmf_dense(data, mask_matrix, tol, maxit, getOption("RcppML.verbose"), L1, L2, getOption("RcppML.threads"), w_init, as(p$link_matrix_h, "dgCMatrix"), mask_zeros, p$link_h, p$sort_model, p$upper_bound)
   }
 
   # add back dimnames
