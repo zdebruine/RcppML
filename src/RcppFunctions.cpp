@@ -283,6 +283,13 @@ Rcpp::List Rcpp_dclust_sparse(const Rcpp::S4& A, const unsigned int min_samples,
 //' beta
 //' beta <- nnls(crossprod(X), crossprod(X, y))
 //' beta
+//' 
+//' # learn nmf model and do bvls projection
+//' data(hawaiibirds)
+//' w <- nmf(hawaiibirds$counts, 10)@w
+//' h <- project(w, hawaiibirds$counts)
+//' # now impose upper bound on solutions
+//' h2 <- project(w, hawaiibirds$counts, upper_bound = 2)
 //' }
 //[[Rcpp::export]]
 Eigen::MatrixXd nnls(Eigen::MatrixXd a, Eigen::MatrixXd b, unsigned int cd_maxit = 100,

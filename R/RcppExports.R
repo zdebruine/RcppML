@@ -100,6 +100,13 @@ Rcpp_dclust_sparse <- function(A, min_samples, min_dist, verbose, tol, maxit, no
 #' beta
 #' beta <- nnls(crossprod(X), crossprod(X, y))
 #' beta
+#' 
+#' # learn nmf model and do bvls projection
+#' data(hawaiibirds)
+#' w <- nmf(hawaiibirds$counts, 10)@w
+#' h <- project(w, hawaiibirds$counts)
+#' # now impose upper bound on solutions
+#' h2 <- project(w, hawaiibirds$counts, upper_bound = 2)
 #' }
 nnls <- function(a, b, cd_maxit = 100L, cd_tol = 1e-8, L1 = 0, L2 = 0, upper_bound = 0) {
     .Call(`_RcppML_nnls`, a, b, cd_maxit, cd_tol, L1, L2, upper_bound)

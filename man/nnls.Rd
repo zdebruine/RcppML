@@ -55,6 +55,13 @@ beta <- solve(crossprod(X)) \%*\% crossprod(X, y)
 beta
 beta <- nnls(crossprod(X), crossprod(X, y))
 beta
+
+# learn nmf model and do bvls projection
+data(hawaiibirds)
+w <- nmf(hawaiibirds$counts, 10)@w
+h <- project(w, hawaiibirds$counts)
+# now impose upper bound on solutions
+h2 <- project(w, hawaiibirds$counts, upper_bound = 2)
 }
 }
 \references{
