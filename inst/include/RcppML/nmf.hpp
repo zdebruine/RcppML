@@ -18,8 +18,8 @@ class nmf {
    private:
     T& A;
     T t_A;
-    RcppSparse::Matrix mask_matrix = RcppSparse::Matrix(), t_mask_matrix;
-    RcppSparse::Matrix link_matrix_w = RcppSparse::Matrix(), link_matrix_h = RcppSparse::Matrix();
+    Rcpp::SparseMatrix mask_matrix = Rcpp::SparseMatrix(), t_mask_matrix;
+    Rcpp::SparseMatrix link_matrix_w = Rcpp::SparseMatrix(), link_matrix_h = Rcpp::SparseMatrix();
     Eigen::MatrixXd w;
     Eigen::VectorXd d;
     Eigen::MatrixXd h;
@@ -70,7 +70,7 @@ class nmf {
         mask_zeros = true;
     }
 
-    void maskMatrix(RcppSparse::Matrix& m) {
+    void maskMatrix(Rcpp::SparseMatrix& m) {
         if (mask) Rcpp::stop("a masking function has already been specified");
         if (m.rows() != A.rows() || m.cols() != A.cols()) Rcpp::stop("dimensions of masking matrix and 'A' are not equivalent");
         if (mask_zeros) Rcpp::stop("you already specified to mask zeros. You cannot also supply a masking matrix.");
@@ -79,7 +79,7 @@ class nmf {
         if (symmetric) symmetric = mask_matrix.isAppxSymmetric();
     }
 
-    void linkH(RcppSparse::Matrix& l) {
+    void linkH(Rcpp::SparseMatrix& l) {
         if (l.cols() == A.cols())
             link_matrix_h = l;
         else
@@ -87,7 +87,7 @@ class nmf {
         link[1] = true;
     }
 
-    void linkW(RcppSparse::Matrix& l) {
+    void linkW(Rcpp::SparseMatrix& l) {
         if (l.cols() == A.rows())
             link_matrix_w = l;
         else
@@ -227,7 +227,7 @@ class nmf {
 
 // nmf class methods with specialized dense/sparse backends
 template <>
-void nmf<RcppSparse::Matrix>::isSymmetric() {
+void nmf<Rcpp::SparseMatrix>::isSymmetric() {
     symmetric = A.isAppxSymmetric();
 }
 
@@ -237,7 +237,7 @@ void nmf<Eigen::MatrixXd>::isSymmetric() {
 }
 
 template <>
-double nmf<RcppSparse::Matrix>::mse() {
+double nmf<Rcpp::SparseMatrix>::mse() {
     Eigen::MatrixXd w0 = w.transpose();
     // multiply w by diagonal
     for (unsigned int i = 0; i < w0.cols(); ++i)
@@ -252,10 +252,10 @@ double nmf<RcppSparse::Matrix>::mse() {
     for (unsigned int i = 0; i < h.cols(); ++i) {
         Eigen::VectorXd wh_i = w0 * h.col(i);
         if (mask_zeros) {
-            for (RcppSparse::Matrix::InnerIterator iter(A, i); iter; ++iter)
+            for (Rcpp::SparseMatrix::InnerIterator iter(A, i); iter; ++iter)
                 losses(i) += std::pow(wh_i(iter.row()) - iter.value(), 2);
         } else {
-            for (RcppSparse::Matrix::InnerIterator iter(A, i); iter; ++iter)
+            for (Rcpp::SparseMatrix::InnerIterator iter(A, i); iter; ++iter)
                 wh_i(iter.row()) -= iter.value();
             if (mask) {
                 std::vector<unsigned int> m = mask_matrix.InnerIndices(i);
@@ -314,7 +314,7 @@ double nmf<Eigen::MatrixXd>::mse() {
 };
 
 template <>
-double nmf<RcppSparse::Matrix>::mse_masked() {
+double nmf<Rcpp::SparseMatrix>::mse_masked() {
     if (!mask) Rcpp::stop("'mse_masked' can only be run when a masking matrix has been specified");
 
     Eigen::MatrixXd w0 = w.transpose();
@@ -329,7 +329,7 @@ double nmf<RcppSparse::Matrix>::mse_masked() {
     for (unsigned int i = 0; i < h.cols(); ++i) {
         std::vector<unsigned int> masked_rows = mask_matrix.InnerIndices(i);
         if (masked_rows.size() > 0) {
-            for (RcppSparse::Matrix::InnerIteratorInRange iter(A, i, masked_rows); iter; ++iter) {
+            for (Rcpp::SparseMatrix::InnerIteratorInRange iter(A, i, masked_rows); iter; ++iter) {
                 losses(i) += std::pow((w0.row(iter.row()) * h.col(i)) - iter.value(), 2);
             }
             // get masked rows that are also zero in A.col(i)

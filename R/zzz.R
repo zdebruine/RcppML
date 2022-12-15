@@ -30,11 +30,6 @@
     msg <- c(msg, "FALSE)'")
   }
 
-  #  msg <- c(msg, " and 'options(RcppML.debug = ")
-  #  if(getOption("RcppML.debug")) {
-  #    msg <- c(msg, "TRUE)'\n")
-  #  } else msg <- c(msg, "FALSE)'")
-
   packageStartupMessage(msg)
   invisible()
 }

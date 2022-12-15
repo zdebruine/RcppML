@@ -18,7 +18,7 @@
 #endif
 
 #ifndef TINY_NUM
-#define TINY_NUM 1e-15 // epsilon for numerical stability
+#define TINY_NUM 1e-15  // epsilon for numerical stability
 #define TINY_NUM_FOR_STABILITY 1e-15
 #endif
 
@@ -33,21 +33,9 @@
 #define EIGEN_INITIALIZE_MATRICES_BY_ZERO
 #endif
 
-#ifndef RcppML_sparseMatrix
-#include <RcppML/sparseMatrix.hpp>
-#endif
-
-//[[Rcpp::depends(RcppEigen)]]
-#ifndef RcppEigen__RcppEigen__h
-#include <RcppEigen.h>
-#endif
-
-#ifndef RcppML_bits
-#include <RcppML/bits.hpp>
-#endif
-
-#ifndef RcppML_rng
-#include <RcppML/rng.hpp>
-#endif
+#include "RcppEigen_bits.h"
+#include "RcppML/SparseMatrix.h"
+#include "RcppML/bits.hpp"
+#include "RcppML/rng.hpp"
 
 #endif

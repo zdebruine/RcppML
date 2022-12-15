@@ -26,7 +26,7 @@
 #endif
 
 // solve for 'h' given sparse 'A' in 'A = wh'
-void predict(RcppSparse::Matrix A, RcppSparse::Matrix mask_A, RcppSparse::Matrix& mask_h, const Eigen::MatrixXd& w,
+void predict(Rcpp::SparseMatrix A, Rcpp::SparseMatrix mask_A, Rcpp::SparseMatrix& mask_h, const Eigen::MatrixXd& w,
              Eigen::MatrixXd& h, const double L1, const double L2, const int threads, const bool mask_zeros,
              const bool masking_A, const bool masking_h, const double upper_bound) {
     // set upper_bound = 0 to not impose an upper bound
@@ -56,12 +56,12 @@ void predict(RcppSparse::Matrix A, RcppSparse::Matrix mask_A, RcppSparse::Matrix
             Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
             if (num_masked == 0) {
                 // calculate "b" without masking on "A"
-                for (RcppSparse::Matrix::InnerIterator it(A, i); it; ++it)
+                for (Rcpp::SparseMatrix::InnerIterator it(A, i); it; ++it)
                     b += it.value() * w.col(it.row());
             } else {
                 // calculate "b" with weighted masking on "A"
                 //  * traverse both A.col(i) and mask_A.col(i) similar to a boost ForwardTraversalIterator
-                RcppSparse::Matrix::InnerIterator it_A(A, i), it_mask(mask_A, i);
+                Rcpp::SparseMatrix::InnerIterator it_A(A, i), it_mask(mask_A, i);
                 while (it_A) {
                     if (!it_mask || it_A.row() < it_mask.row()) {
                         b += it_A.value() * w.col(it_A.row());
@@ -80,7 +80,7 @@ void predict(RcppSparse::Matrix A, RcppSparse::Matrix mask_A, RcppSparse::Matrix
                 //      this code block does not consider the masked_zeros case
                 Eigen::MatrixXd w_(w.rows(), num_masked);
                 int j = 0;
-                for (RcppSparse::Matrix::InnerIterator it(mask_A, i); it; ++it, ++j)
+                for (Rcpp::SparseMatrix::InnerIterator it(mask_A, i); it; ++it, ++j)
                     w_.col(j) = w.col(it.row()) * it.value();
                 Eigen::MatrixXd a_ = w_ * w_.transpose();
                 a_i = a - a_;
@@ -121,11 +121,11 @@ void predict(RcppSparse::Matrix A, RcppSparse::Matrix mask_A, RcppSparse::Matrix
 
             Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
             if (num_masked == 0) {
-                for (RcppSparse::Matrix::InnerIterator it(A, i); it; ++it)
+                for (Rcpp::SparseMatrix::InnerIterator it(A, i); it; ++it)
                     b += it.value() * w.col(it.row());
             } else {
                 // subset "w" at non-masked indices in A.col(i) to calculate "a"
-                RcppSparse::Matrix::InnerIterator it_mask(mask_A, i), it_A(A, i);
+                Rcpp::SparseMatrix::InnerIterator it_mask(mask_A, i), it_A(A, i);
                 int j = 0;
                 while (it_mask && it_A) {
                     if (it_mask.row() == it_A.row()) {
@@ -141,7 +141,7 @@ void predict(RcppSparse::Matrix A, RcppSparse::Matrix mask_A, RcppSparse::Matrix
                 }
 
                 // calculate "b" with masking on "A"
-                RcppSparse::Matrix::InnerIterator it_mask2(mask_A, i), it_A2(A, i);
+                Rcpp::SparseMatrix::InnerIterator it_mask2(mask_A, i), it_A2(A, i);
                 while (it_A) {
                     if (!it_mask2 || it_A2.row() < it_mask2.row()) {
                         b += it_A2.value() * w.col(it_A2.row());
@@ -175,14 +175,13 @@ void predict(RcppSparse::Matrix A, RcppSparse::Matrix mask_A, RcppSparse::Matrix
 }
 
 // solve for 'h' given dense 'A' in 'A = wh'
-void predict(Eigen::MatrixXd& A, RcppSparse::Matrix& m, RcppSparse::Matrix& l, const Eigen::MatrixXd& w,
+void predict(Eigen::MatrixXd& A, Rcpp::SparseMatrix& m, Rcpp::SparseMatrix& l, const Eigen::MatrixXd& w,
              Eigen::MatrixXd& h, const double L1, const double L2,
              const unsigned int threads, const bool mask_zeros, const bool mask, const bool link, const double upper_bound = 0) {
     if (!mask_zeros && !mask) {
         // GENERAL RANK IMPLEMENTATION
         Eigen::MatrixXd a = w * w.transpose();
         a.diagonal().array() += TINY_NUM + L2;
-        Eigen::LLT<Eigen::MatrixXd, 1> a_llt = a.llt();
 #ifdef _OPENMP
 #pragma omp parallel for num_threads(threads) schedule(dynamic)
 #endif
@@ -190,11 +189,11 @@ void predict(Eigen::MatrixXd& A, RcppSparse::Matrix& m, RcppSparse::Matrix& l, c
             // calculate right-hand side of system of equations, "b"
             Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
             if (link) {
-                for (RcppSparse::Matrix::InnerIterator j(l, i); j; ++j)
+                for (Rcpp::SparseMatrix::InnerIterator j(l, i); j; ++j)
                     for (unsigned int it = 0; it < A.rows(); ++it)
                         b(j.row()) += A(it, i) * w(j.row(), it);
                 if (L1 != 0)
-                    for (RcppSparse::Matrix::InnerIterator j(l, i); j; ++j)
+                    for (Rcpp::SparseMatrix::InnerIterator j(l, i); j; ++j)
                         b(j.row()) -= L1;
             } else {
                 b += w * A.col(i);
@@ -202,13 +201,7 @@ void predict(Eigen::MatrixXd& A, RcppSparse::Matrix& m, RcppSparse::Matrix& l, c
                 if (L1 != 0) b.array() -= L1;
             }
 
-            // solve least squares equation, ax = b where x is h.col(i)
-            h.col(i) = a_llt.solve(b);
-            // if unconstrained solution contains negative values, refine by NNLS coordinate descent
-            if ((h.col(i).array() < 0).any()) {
-                b -= a * h.col(i);
-                (upper_bound > 0) ? c_bnnls(a, b, h, i, upper_bound) : c_nnls(a, b, h, i);
-            }
+            (upper_bound > 0) ? c_bnnls(a, b, h, i, upper_bound) : c_nnls(a, b, h, i);
         }
     } else if (mask_zeros) {
         h.setZero();
@@ -230,11 +223,11 @@ void predict(Eigen::MatrixXd& A, RcppSparse::Matrix& m, RcppSparse::Matrix& l, c
                     for (unsigned int it = 0; it < A.rows(); ++it) {
                         const double val = A(it, i);
                         if (val != 0)
-                            for (RcppSparse::Matrix::InnerIterator j(l, i); j; ++j)
+                            for (Rcpp::SparseMatrix::InnerIterator j(l, i); j; ++j)
                                 b(j.row()) += A(it, i) * w(j.row(), it);
                     }
                     if (L1 != 0)
-                        for (RcppSparse::Matrix::InnerIterator j(l, i); j; ++j)
+                        for (Rcpp::SparseMatrix::InnerIterator j(l, i); j; ++j)
                             b(j.row()) -= L1;
                 } else {
                     for (unsigned int it = 0; it < A.rows(); ++it) {
@@ -268,16 +261,16 @@ void predict(Eigen::MatrixXd& A, RcppSparse::Matrix& m, RcppSparse::Matrix& l, c
             // calculate "b" for all non-masked rows
             Eigen::VectorXd b = Eigen::VectorXd::Zero(h.rows());
             if (link) {
-                for (RcppSparse::Matrix::InnerIterator j(l, i); j; ++j)
+                for (Rcpp::SparseMatrix::InnerIterator j(l, i); j; ++j)
                     for (unsigned int it = 0; it < A.rows(); ++it)
                         b(j.row()) += A(it, i) * w(j.row(), it);
                 // subtract contributions of masked rows from "b"
                 for (unsigned int it = 0; it < masked_rows_.size(); ++it)
-                    for (RcppSparse::Matrix::InnerIterator j(l, i); j; ++j)
+                    for (Rcpp::SparseMatrix::InnerIterator j(l, i); j; ++j)
                         b(j.row()) -= A(masked_rows_[it], i) * w(j.row(), masked_rows_[it]);
 
                 if (L1 != 0) {
-                    for (RcppSparse::Matrix::InnerIterator j(l, i); j; ++j)
+                    for (Rcpp::SparseMatrix::InnerIterator j(l, i); j; ++j)
                         b(j.row()) -= L1;
                 }
             } else {

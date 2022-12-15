@@ -1,25 +1,24 @@
 Package: RcppML
 Type: Package
 Title: Rcpp Machine Learning Library
-Version: 0.5.5
-Date: 2022-26-09
+Version: 0.5.6
+Date: 2022-15-12
 Authors@R: person("Zach", "DeBruine", 
-    email = "debruinz@gvsu.edu", 
+    email = "zacharydebruine@gmail.com", 
     role = c("aut", "cre"), 
     comment = c(ORCID = "0000-0003-2234-4827"))
 Description: Fast machine learning algorithms including matrix factorization 
     and divisive clustering for large sparse and dense matrices.
 License: GPL-3 + file LICENSE
 Imports:
-    Rcpp, 
+    Rcpp,
     Matrix,
     methods,
     stats,
     knitr,
     utils
 LinkingTo: 
-    Rcpp, 
-    RcppEigen
+    Rcpp
 VignetteBuilder: knitr
 RoxygenNote: 7.2.1
 Suggests: 

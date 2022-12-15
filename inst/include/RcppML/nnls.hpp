@@ -37,6 +37,31 @@ inline void c_nnls(Eigen::MatrixXd& a, Eigen::VectorXd& b, Eigen::MatrixXd& h, c
 
 // Upper-bounded Non-Negative Least Squares solver
 // solve ax = b given "a", "b", and h.col(sample) giving "x", subject to non-negativity. Coordinate descent.
+inline void c_bnnls2(Eigen::MatrixXd& a, Eigen::VectorXd& b, Eigen::MatrixXd& h, const unsigned int sample, const double upper_bound) {
+    double tol = 1;
+    for (unsigned int it = 0; it < CD_MAXIT && (tol / b.size()) > CD_TOL; ++it) {
+        tol = 0;
+        for (unsigned int i = 0; i < h.rows(); ++i) {
+            double diff = b(i) / a(i, i);
+            if (diff != 0) {
+                h(i, sample) += diff;
+                b -= a.col(i) * diff;
+                tol += std::abs(diff / h(i, sample) + TINY_NUM);
+            }
+
+            if (h(i, sample) < 0) {
+                h(i, sample) = 0;
+                tol = 1;
+            } else if (h(i, sample) > upper_bound) {
+                h(i, sample) = upper_bound;
+                tol = 1;
+            }
+        }
+    }
+}
+
+// Upper-bounded Non-Negative Least Squares solver
+// solve ax = b given "a", "b", and h.col(sample) giving "x", subject to non-negativity. Coordinate descent.
 inline void c_bnnls(Eigen::MatrixXd& a, Eigen::VectorXd& b, Eigen::MatrixXd& h, const unsigned int sample, const double upper_bound = 1) {
     double tol = 1;
     for (unsigned int it = 0; it < CD_MAXIT && (tol / b.size()) > CD_TOL; ++it) {
@@ -51,7 +76,6 @@ inline void c_bnnls(Eigen::MatrixXd& a, Eigen::VectorXd& b, Eigen::MatrixXd& h, 
                 }
             } else if (diff != 0) {
                 if (h(i, sample) + diff > upper_bound) {
-                    diff = upper_bound - h(i, sample);
                     h(i, sample) = upper_bound;
                 } else {
                     h(i, sample) += diff;

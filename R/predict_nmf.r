@@ -120,7 +120,7 @@ setMethod("predict", signature = "nmf", function(object, data, L1 = 0, L2 = 0, m
 #' @param data a dense or sparse matrix
 #' @param L1 L1/LASSO penalty
 #' @param L2 L2/Ridge penalty
-#' @inheritParams nmf
+#' @param upper_bound maximum value permitted in least squares solutions, essentially a bounded-variable least squares problem between 0 and \code{upper_bound}
 #' @param mask masking on data values
 #' @param ... arguments passed to \code{predict.nmf}
 #' @export

@@ -17,6 +17,8 @@ project(w, data, L1 = 0, L2 = 0, mask = NULL, upper_bound = 0, ...)
 
 \item{mask}{masking on data values}
 
+\item{upper_bound}{maximum value permitted in least squares solutions, essentially a bounded-variable least squares problem between 0 and \code{upper_bound}}
+
 \item{...}{arguments passed to \code{predict.nmf}}
 }
 \description{

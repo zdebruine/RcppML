@@ -100,7 +100,7 @@ Rcpp_dclust_sparse <- function(A, min_samples, min_dist, verbose, tol, maxit, no
 #' beta
 #' beta <- nnls(crossprod(X), crossprod(X, y))
 #' beta
-#' 
+#'
 #' # learn nmf model and do bvls projection
 #' data(hawaiibirds)
 #' w <- nmf(hawaiibirds$counts, 10)@w
