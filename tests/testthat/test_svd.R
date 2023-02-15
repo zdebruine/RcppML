@@ -1,0 +1,57 @@
+options(RcppML.threads = 1)
+options(RcppML.verbose = FALSE)
+
+testConvergence <- function(A, k, mask = NULL, ...){
+  m0 <- svd(A, k, tol = 1e-10, maxit = 1, mask = mask, ...)
+  m1 <- svd(A, k, tol = 1e-10, maxit = 20, mask = mask, ...)
+  # test convergence
+  expect_gt(evaluate(m0, A, mask), evaluate(m1, A, mask))
+  
+}
+
+does_svd_converge <- function(A, k){
+    testConvergence(A, k)
+    testConvergence(A, k, mask = "zeros")
+    testConvergence(A, k, L1 = c(0.1, 0))
+    testConvergence(A, k, L1 = c(0, 0.1))
+    testConvergence(A, k, L1 = c(0.1, 0.1))
+}
+
+library(Matrix)
+A <- simulateNMF(nrow = 50, ncol = 50, k = 5, noise = 0.5, dropout = 0.5, seed = 123)
+A <- as(A$A, "dgCMatrix")
+test_that("svd converges over several iterations for sparse asymmetric inputs (k = 5)", { does_svd_converge(A, 5)})
+A <- as.matrix(A)
+test_that("svd converges over several iterations for dense asymmetric inputs (k = 5)", { does_svd_converge(A, 5)})
+A <- as(crossprod(A), "dgCMatrix")
+test_that("svd converges over several iterations for sparse symmetric inputs (k = 5)", { does_svd_converge(A, 5)})
+A <- as.matrix(A)
+test_that("svd converges over several iterations for dense symmetric inputs (k = 5)", { does_svd_converge(A, 5)})
+
+A <- abs(Matrix::rsparsematrix(100, 100, 0.1))
+test_that("L1 regularization increases factor sparsity", {
+  L1_ <- svd(A, 5, maxit = 5, L1 = c(0, 0), seed = 123, v = F)
+  L1_w <- svd(A, 5, maxit = 5, L1 = c(0.1, 0), seed = 123, v = F)
+  L1_h <- svd(A, 5, maxit = 5, L1 = c(0, 0.1), seed = 123, v = F)
+  L1_wh <- svd(A, 5, maxit = 5, L1 = c(0.1, 0.1), seed = 123, v = F)
+  expect_gt(sum(L1_w$w == 0), sum(L1_$w == 0))
+  expect_gt(sum(L1_w$w == 0), sum(L1_w$h == 0))
+  expect_gt(sum(L1_h$h == 0), sum(L1_$h == 0))
+  expect_gt(sum(L1_h$h == 0), sum(L1_h$w == 0))
+  expect_gt(sum(L1_wh$h == 0), sum(L1_$h == 0))
+  expect_gt(sum(L1_wh$w == 0), sum(L1_$w == 0))
+})
+
+set.seed(123)
+w_ <- matrix(runif(500), 5, 100)
+test_that("setting the random seed gives identical models (sparse)", {
+  expect_equal(svd(A, 5, maxit = 3, seed = 123, v = F)$w, svd(A, 5, maxit = 3, seed = 123, v = F)$w)
+  expect_equal(svd(A, 5, maxit = 3, seed = list(w_), v = F)$w, svd(A, 5, maxit = 3, seed = w_, v = F)$w)
+  expect_equal(all(nmf(A, 5, maxit = 3, seed = 123, v = F)$w == svd(A, 5, maxit = 3, seed = 234, v = F)$w), FALSE)
+})
+A <- as.matrix(A)
+test_that("setting the random seed gives identical models (dense)", {
+  expect_equal(svd(A, 5, maxit = 3, seed = 123, v = F)$w, svd(A, 5, maxit = 3, seed = 123, v = F)$w)
+  expect_equal(svd(A, 5, maxit = 3, seed = w_, v = F)$w, svd(A, 5, maxit = 3, seed = w_, v = F)$w)
+  expect_equal(all(svd(A, 5, maxit = 3, seed = 123, v = F)$w == svd(A, 5, maxit = 3, seed = 234, v = F)$w), FALSE)
+})
