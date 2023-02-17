@@ -5,12 +5,9 @@
 // This source code is subject to the terms of the GNU
 // Public License v. 2.0.
 
-#ifndef RcppML_nmfSparse
-#define RcppML_nmfSparse
+#ifndef RcppML_svd
+#define RcppML_svd
 
-#ifndef RcppML_predict
-#include <RcppML/predict.hpp>
-#endif
 
 namespace RcppML {
 template <class T>
@@ -94,7 +91,7 @@ class svd {
     double mse();
     double mse_masked();
 
-    double norm(Eigen::Vector in) {return std::sqrt(in.dot(in));}
+    double norm(Eigen::MatrixXd in) {return std::sqrt(in.dot(in));}
 
 
     // fit the model by alternating least squares projections
@@ -108,6 +105,8 @@ class svd {
 
             // alternating least squares updates
             for (; iter_ < maxit; ++iter_) {
+                Eigen::MatrixXd u_it = u.col(k);
+
                 // Update V
                 a_k = u(Eigen::placeholders::all, Eigen::seq(0, k)).transpose() * u(Eigen::placeholders::all, Eigen::seq(0, k));
                 b_k = u(Eigen::placeholders::all, k).transpose() * A;
@@ -314,3 +313,5 @@ double svd<Eigen::MatrixXd>::mse_masked() {
 }  // namespace RcppML
 
 
+
+#endif
