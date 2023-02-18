@@ -521,7 +521,6 @@ Rcpp::List Rcpp_svd_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, const doubl
     m.verbose = verbose;
     m.threads = threads;
     m.upper_bound = upper_bound;
-    if (link_v) m.linkV(link_matrix_v_);
     if (mask_zeros)
         m.maskZeros();
     else if (mask_.rows() == A_.rows() && mask_.cols() == A_.cols())

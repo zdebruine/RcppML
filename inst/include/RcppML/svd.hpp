@@ -33,6 +33,8 @@ class svd {
 
     double tol = 1e-4;
 
+    std::vector<double> debug_errs;
+
     // CONSTRUCTORS
     // constructor for initialization with a randomly generated "w" matrix
     svd(T& A, const unsigned int k, const unsigned int seed = 0) : A(A) {
@@ -91,49 +93,62 @@ class svd {
     double mse();
     double mse_masked();
 
-    double norm(Eigen::MatrixXd in) {return std::sqrt(in.dot(in));}
+    double norm(Eigen::MatrixXd in) {
+        Eigen::ArrayXd sum = in.array() * in.array();
+        return std::sqrt(sum.sum());
+    }
 
 
     // fit the model by alternating least squares projections
     void fit() {
         if (verbose) Rprintf("\n%4s | %8s \n---------------\n", "iter", "tol");
 
-        for(int k = 0; k < w.rows(); ++k){
-            Eigen::MatrixXd a_k(k+1, k+1);
-            Eigen::MatrixXd b_k(A.rows(), 1);
+        debug_errs.push_back(mse());
+
+        // Preallocate fixed sized
+        Eigen::MatrixXd b_u(A.rows(), 1);
+        Eigen::MatrixXd b_v(A.cols(), 1);
+        for(int k = 0; k < u.rows(); ++k){
+            // Preallocate k-sized matrices
+            Eigen::MatrixXd a(k+1, 1);
+            Eigen::MatrixXd b_u_adj(A.rows(), k+1);
+            Eigen::MatrixXd b_v_adj(A.cols(), k+1);
+            
             double d_k;
+
 
             // alternating least squares updates
             for (; iter_ < maxit; ++iter_) {
                 Eigen::MatrixXd u_it = u.col(k);
 
                 // Update V
-                a_k = u(Eigen::placeholders::all, Eigen::seq(0, k)).transpose() * u(Eigen::placeholders::all, Eigen::seq(0, k));
-                b_k = u(Eigen::placeholders::all, k).transpose() * A;
+                a = u(Eigen::all, Eigen::seq(0, k)).transpose() * u(Eigen::all, k);
+                b_u = A.transpose() * u(Eigen::all, k);
+                b_u = b_u.array() - L1[1];
 
                 if(k > 0){
-                    Eigen::MatrixXd s = a_k(Eigen::placeholders::all, Eigen::seq(0, k)) * v(Eigen::placeholders::all, Eigen::seq(0, k)).transpose();
-                    b_k -= s.colwise().sum();
+                    b_u_adj = a * v(Eigen::all, Eigen::seq(0, k)); 
+                    b_u -= b_u_adj.rowwise().sum();
                 }
-                v.col(k) = b_k / a_k(k, k);
 
                 // Scale V
-                v.col(k) /= norm(v.row(k));
+                v(Eigen::all, k) /= norm(v.row(k));
 
                 // Update U
-                a_k = v * v(Eigen::placeholders::all, k).transpose();
-                b_k = A.transpose() * v(Eigen::placeholders::all, k);
+                a = v(k, Eigen::all) * v(Eigen::seq(0, k), Eigen::all).transpose();
+                b_v = A * v(k, Eigen::all).transpose();
+                b_v = b_v.array() - L1[0];
 
                 if(k > 0){
-                    Eigen::MatrixXd s = a_k(Eigen::placeholders::all, Eigen::seq(0, k)) * u(Eigen::placeholders::all, Eigen::seq(0, k)).transpose();
-                    b_k -= s.colwise().sum();
+                    b_v_adj = a * v(Eigen::seq(0, k), Eigen::all); 
+                    b_v -= b_v_adj.colwise().sum();
                 }
-                u.col(k) = b_k / a_k(k, k);
 
                 // Scale U
-                d_k = norm(v.row(k));
-                u.col(k) /= d_k;
+                d_k = norm(u.col(k));
+                u(Eigen::all, k) /= d_k;
 
+                // Check exit criteria
                 tol_ = cor(u, u_it);  // correlation between "u" across consecutive iterations
                 if (verbose) Rprintf("%4d | %8.2e\n", iter_ + 1, tol_);
                 if (tol_ < tol) break;
@@ -144,8 +159,9 @@ class svd {
                 Rprintf(" convergence not reached in %d iterations\n  (actual tol = %4.2e, target tol = %4.2e)\n", iter_, tol_, tol);
         
             // 'Unscale' U
-            u(Eigen::placeholders::all, Eigen::seq(0, k)) *= d_k;
+            u(Eigen::all, Eigen::seq(0, k)) *= d_k;
         
+            debug_errs.push_back(mse());
         }
     }
 
@@ -157,7 +173,7 @@ class svd {
         double mse_best = 0;
         for (unsigned int i = 0; i < u_init.length(); ++i) {
             if (verbose) Rprintf("Fitting model %i/%i:", i + 1, u_init.length());
-            w = Rcpp::as<Eigen::MatrixXd>(u_init[i]);
+            u = Rcpp::as<Eigen::MatrixXd>(u_init[i]);
             tol_ = 1;
             iter_ = 0;
             if (u.rows() != v.rows()) Rcpp::stop("rank of 'u' is not equal to rank of 'v'");
@@ -173,7 +189,7 @@ class svd {
                 mse_best = mse_;
             }
         }
-        if (best_model_ != (w_init.length() - 1)) {
+        if (best_model_ != (u_init.length() - 1)) {
             u = u_best;
             v = v_best;
             tol_ = tol_best;
@@ -225,7 +241,7 @@ double svd<Rcpp::SparseMatrix>::mse() {
     else if (mask_zeros)
         return losses.sum() / A.x.size();
     return losses.sum() / ((v.cols() * u.cols()));
-};
+}
 
 template <>
 double svd<Eigen::MatrixXd>::mse() {
@@ -260,7 +276,7 @@ double svd<Eigen::MatrixXd>::mse() {
     else if (mask_zeros)
         return losses.sum() / n_nonzeros(A);
     return losses.sum() / ((v.cols() * u.cols()));
-};
+}
 
 template <>
 double svd<Rcpp::SparseMatrix>::mse_masked() {
@@ -289,7 +305,7 @@ double svd<Rcpp::SparseMatrix>::mse_masked() {
         }
     }
     return losses.sum() / mask_matrix.i.size();
-};
+}
 
 template <>
 double svd<Eigen::MatrixXd>::mse_masked() {
@@ -309,7 +325,7 @@ double svd<Eigen::MatrixXd>::mse_masked() {
         }
     }
     return losses.sum() / mask_matrix.i.size();
-};
+}
 }  // namespace RcppML
 
 

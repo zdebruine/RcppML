@@ -132,7 +132,7 @@ class nmf {
         for (unsigned int i = 0; i < w.rows(); ++i)
             for (unsigned int j = 0; j < w.cols(); ++j)
                 w(i, j) /= d(i);
-    };
+    }
 
     // scale rows in "h" to sum to 1, where "d" is rowsums of "h"
     void scaleH() {
@@ -141,7 +141,7 @@ class nmf {
         for (unsigned int i = 0; i < h.rows(); ++i)
             for (unsigned int j = 0; j < h.cols(); ++j)
                 h(i, j) /= d(i);
-    };
+    }
 
     // project "w" onto "A" to solve for "h" in the equation "A = wh"
     void predictH() {
@@ -160,7 +160,7 @@ class nmf {
             }
             predict(t_A, t_mask_matrix, link_matrix_w, h, w, L1[0], L2[0], threads, mask_zeros, mask, link[0], upper_bound);
         }
-    };
+    }
 
     // requires specialized dense and sparse backends
     double mse();
@@ -272,7 +272,7 @@ double nmf<Rcpp::SparseMatrix>::mse() {
     else if (mask_zeros)
         return losses.sum() / A.x.size();
     return losses.sum() / ((h.cols() * w.cols()));
-};
+}
 
 template <>
 double nmf<Eigen::MatrixXd>::mse() {
@@ -311,7 +311,7 @@ double nmf<Eigen::MatrixXd>::mse() {
     else if (mask_zeros)
         return losses.sum() / n_nonzeros(A);
     return losses.sum() / ((h.cols() * w.cols()));
-};
+}
 
 template <>
 double nmf<Rcpp::SparseMatrix>::mse_masked() {
@@ -343,7 +343,7 @@ double nmf<Rcpp::SparseMatrix>::mse_masked() {
         }
     }
     return losses.sum() / mask_matrix.i.size();
-};
+}
 
 template <>
 double nmf<Eigen::MatrixXd>::mse_masked() {
@@ -366,7 +366,7 @@ double nmf<Eigen::MatrixXd>::mse_masked() {
         }
     }
     return losses.sum() / mask_matrix.i.size();
-};
+}
 }  // namespace RcppML
 
 #endif
