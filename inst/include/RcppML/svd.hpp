@@ -8,6 +8,7 @@
 #ifndef RcppML_svd
 #define RcppML_svd
 
+#define DIV_OFFSET 0
 
 namespace RcppML {
 template <class T>
@@ -18,7 +19,6 @@ class svd {
     Rcpp::SparseMatrix mask_matrix = Rcpp::SparseMatrix(), t_mask_matrix;
     Rcpp::SparseMatrix link_matrix_u = Rcpp::SparseMatrix(), link_matrix_v = Rcpp::SparseMatrix();
     Eigen::MatrixXd u;
-    Eigen::VectorXd s;
     Eigen::MatrixXd v;
     double tol_ = -1, mse_ = 0;
     unsigned int iter_ = 0, best_model_ = 0;
@@ -38,15 +38,15 @@ class svd {
     // CONSTRUCTORS
     // constructor for initialization with a randomly generated "w" matrix
     svd(T& A, const unsigned int k, const unsigned int seed = 0) : A(A) {
-        u = randomMatrix(k, A.rows(), seed);
+        u = randomMatrix(A.rows(), k, seed);
         v = Eigen::MatrixXd(k, A.cols());
         isSymmetric();
     }
 
-    // constructor for initialization with an initial "w" matrix
+    // constructor for initialization with an initial "u" matrix
     svd(T& A, Eigen::MatrixXd u) : A(A), u(u) {
-        if (A.rows() != u.cols()) Rcpp::stop("number of rows in 'A' and columns in 'u' are not equal!");
-        v = Eigen::MatrixXd(u.rows(), A.cols());
+        if (A.rows() != u.rows()) Rcpp::stop("number of rows in 'A' and 'u' are not equal!");
+        v = Eigen::MatrixXd(u.cols(), A.cols());
         isSymmetric();
     }
 
@@ -103,55 +103,59 @@ class svd {
     void fit() {
         if (verbose) Rprintf("\n%4s | %8s \n---------------\n", "iter", "tol");
 
-        debug_errs.push_back(mse());
-
+        //debug_errs.push_back(mse());
+        if (verbose) Rprintf("Test point 0");
         // Preallocate fixed sized
         Eigen::MatrixXd b_u(A.rows(), 1);
         Eigen::MatrixXd b_v(A.cols(), 1);
+        
+        if (verbose) Rprintf("Test point 1");
+        
         for(int k = 0; k < u.rows(); ++k){
             // Preallocate k-sized matrices
             Eigen::MatrixXd a(k+1, 1);
             Eigen::MatrixXd b_u_adj(A.rows(), k+1);
             Eigen::MatrixXd b_v_adj(A.cols(), k+1);
-            
+            if (verbose) Rprintf("Test point 2");
             double d_k;
 
 
             // alternating least squares updates
             for (; iter_ < maxit; ++iter_) {
                 Eigen::MatrixXd u_it = u.col(k);
-
+                if (verbose) Rprintf("Test point 3");
                 // Update V
                 a = u(Eigen::all, Eigen::seq(0, k)).transpose() * u(Eigen::all, k);
                 b_u = A.transpose() * u(Eigen::all, k);
-                b_u = b_u.array() - L1[1];
-
+                b_u = b_u.array() - L1[1]; 
+                if (verbose) Rprintf("Test point 4");
                 if(k > 0){
                     b_u_adj = a * v(Eigen::all, Eigen::seq(0, k)); 
                     b_u -= b_u_adj.rowwise().sum();
                 }
-
+                if (verbose) Rprintf("Test point 5");
                 // Scale V
-                v(Eigen::all, k) /= norm(v.row(k));
-
+                v(Eigen::all, k) /= (norm(v.row(k)) + DIV_OFFSET);
+                if (verbose) Rprintf("Test point 6");
                 // Update U
                 a = v(k, Eigen::all) * v(Eigen::seq(0, k), Eigen::all).transpose();
                 b_v = A * v(k, Eigen::all).transpose();
                 b_v = b_v.array() - L1[0];
-
+                if (verbose) Rprintf("Test point 7");
                 if(k > 0){
                     b_v_adj = a * v(Eigen::seq(0, k), Eigen::all); 
                     b_v -= b_v_adj.colwise().sum();
                 }
-
+                if (verbose) Rprintf("Test point 8");
                 // Scale U
                 d_k = norm(u.col(k));
-                u(Eigen::all, k) /= d_k;
-
+                u(Eigen::all, k) /= (d_k + DIV_OFFSET);
+                if (verbose) Rprintf("Test point 9");
                 // Check exit criteria
                 tol_ = cor(u, u_it);  // correlation between "u" across consecutive iterations
                 if (verbose) Rprintf("%4d | %8.2e\n", iter_ + 1, tol_);
                 if (tol_ < tol) break;
+                if (verbose) Rprintf("Test point 10");
                 Rcpp::checkUserInterrupt();
             }
 
@@ -161,7 +165,7 @@ class svd {
             // 'Unscale' U
             u(Eigen::all, Eigen::seq(0, k)) *= d_k;
         
-            debug_errs.push_back(mse());
+            //debug_errs.push_back(mse());
         }
     }
 
@@ -245,36 +249,54 @@ double svd<Rcpp::SparseMatrix>::mse() {
 
 template <>
 double svd<Eigen::MatrixXd>::mse() {
+    if (verbose) Rprintf("mse: Test point 0\n");
     Eigen::MatrixXd u0 = u.transpose();
-
+    if (verbose) Rprintf("mse: Test point 1\n");
     // compute losses across all samples in parallel
     Eigen::ArrayXd losses(v.cols());
+    if (verbose) Rprintf("mse: Test point 2\n");
 #ifdef _OPENMP
 #pragma omp parallel for num_threads(threads) schedule(dynamic)
 #endif
     for (unsigned int i = 0; i < v.cols(); ++i) {
         Eigen::VectorXd uv_i = u0 * v.col(i);
+        if (verbose) Rprintf("mse: Test point 3\n");
         if (mask_zeros) {
+            if (verbose) Rprintf("mse: Test point 4\n");
             for (unsigned int iter = 0; iter < A.rows(); ++iter)
                 if (A(iter, i) != 0)
                     losses(i) += std::pow(uv_i(iter) - A(iter, i), 2);
         } else {
-            for (unsigned int iter = 0; iter < A.rows(); ++iter)
+            if (verbose) Rprintf("mse: Test point 5\n");
+            for (unsigned int iter = 0; iter < A.rows(); ++iter){
+                if (verbose) Rprintf("mse: Test point 5.1\n");
                 uv_i(iter) -= A(iter, i);
-            if (mask) {
-                std::vector<unsigned int> m = mask_matrix.InnerIndices(i);
-                for (unsigned int it = 0; it < m.size(); ++it)
-                    uv_i(m[it]) = 0;
+                if (verbose) Rprintf("mse: Test point 5.2\n");
             }
+            if (mask) {
+                if (verbose) Rprintf("mse: Test point 5.3\n");
+                std::vector<unsigned int> m = mask_matrix.InnerIndices(i);
+                if (verbose) Rprintf("mse: Test point 5.4\n");
+                for (unsigned int it = 0; it < m.size(); ++it){
+                    if (verbose) Rprintf("mse: Test point 5.5\n");
+                    uv_i(m[it]) = 0;
+                }
+            }
+            if (verbose) Rprintf("mse: Test point 5.6\n");
             losses(i) += uv_i.array().square().sum();
         }
     }
 
     // divide total loss by number of applicable measurements
-    if (mask)
+    if (verbose) Rprintf("mse: Test point 6\n");
+    if (mask){
+        if (verbose) Rprintf("mse: Test point 6.1\n");
         return losses.sum() / ((v.cols() * u.cols()) - mask_matrix.i.size());
-    else if (mask_zeros)
+    } else if (mask_zeros) {
+        if (verbose) Rprintf("mse: Test point 6.2\n");
         return losses.sum() / n_nonzeros(A);
+    }
+    if (verbose) Rprintf("mse: Test point 6.3\n");
     return losses.sum() / ((v.cols() * u.cols()));
 }
 

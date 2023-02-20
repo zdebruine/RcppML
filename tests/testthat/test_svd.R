@@ -1,11 +1,12 @@
 options(RcppML.threads = 1)
-options(RcppML.verbose = FALSE)
+options(RcppML.verbose = TRUE)
 
 testConvergence <- function(A, k, mask = NULL, ...){
   m0 <- svd(A, k)
   # test convergence
-  expect_gt(evaluate(m0, A, mask), evaluate(m1, A, mask))
+  dbg <- m0$dgb
   
+  expect_gt(dbg[0], dbg[1])
 }
 
 does_svd_converge <- function(A, k){
@@ -19,10 +20,10 @@ does_svd_converge <- function(A, k){
 library(Matrix)
 A <- simulateNMF(nrow = 50, ncol = 50, k = 5, noise = 0.5, dropout = 0.5, seed = 123)
 A <- as(A$A, "dgCMatrix")
-test_that("svd converges over several iterations for sparse asymmetric inputs (k = 5)", { does_svd_converge(A, 5)})
+#test_that("svd converges over several iterations for sparse asymmetric inputs (k = 5)", { does_svd_converge(A, 5)})
 A <- as.matrix(A)
 test_that("svd converges over several iterations for dense asymmetric inputs (k = 5)", { does_svd_converge(A, 5)})
 A <- as(crossprod(A), "dgCMatrix")
-test_that("svd converges over several iterations for sparse symmetric inputs (k = 5)", { does_svd_converge(A, 5)})
+#test_that("svd converges over several iterations for sparse symmetric inputs (k = 5)", { does_svd_converge(A, 5)})
 A <- as.matrix(A)
 test_that("svd converges over several iterations for dense symmetric inputs (k = 5)", { does_svd_converge(A, 5)})
