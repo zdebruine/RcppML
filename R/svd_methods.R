@@ -4,7 +4,7 @@ setClass("svd",
   validity = function(object) {
     msg <- NULL
     if (ncol(object@u) != nrow(object@v))
-      msg <- c(msg, "ranks of 'v' and 'v' are not equal")
+      msg <- c(msg, "ranks of 'u' and 'v' are not equal")
     if (is.null(msg)) TRUE else msg
   })
 
