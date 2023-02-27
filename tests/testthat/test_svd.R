@@ -4,7 +4,7 @@ options(RcppML.verbose = TRUE)
 testConvergence <- function(A, k, mask = NULL, ...){
   m0 <- svd(A, k)
   # test convergence
-  dbg <- m0$dgb
+  dbg <- m0$dbg
   
   expect_gt(dbg[0], dbg[1])
 }

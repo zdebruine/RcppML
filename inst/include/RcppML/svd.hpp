@@ -52,9 +52,9 @@ class svd {
 
     // constructor for initialization with a fully-specified model
     svd(T& A, Eigen::MatrixXd u, Eigen::MatrixXd v) : A(A), u(u), v(v) {
-        if (A.rows() != u.cols()) Rcpp::stop("dimensions of 'u' and 'A' are not compatible");
+        if (A.rows() != u.rows()) Rcpp::stop("dimensions of 'u' and 'A' are not compatible");
         if (A.cols() != v.cols()) Rcpp::stop("dimensions of 'v' and 'A' are not compatible");
-        if (u.rows() != v.rows()) Rcpp::stop("rank of 'u' and 'v' are not equal!");
+        if (u.cols() != v.rows()) Rcpp::stop("rank of 'u' and 'v' are not equal!");
         isSymmetric();
     }
 
@@ -93,9 +93,8 @@ class svd {
     double mse();
     double mse_masked();
 
-    double norm(Eigen::MatrixXd in) {
-        Eigen::ArrayXd sum = in.array() * in.array();
-        return std::sqrt(sum.sum());
+    double norm(Eigen::VectorXd in) {
+        return std::sqrt(in.dot(in));
     }
 
 
@@ -104,58 +103,61 @@ class svd {
         if (verbose) Rprintf("\n%4s | %8s \n---------------\n", "iter", "tol");
 
         //debug_errs.push_back(mse());
-        if (verbose) Rprintf("Test point 0");
         // Preallocate fixed sized
         Eigen::MatrixXd b_u(A.rows(), 1);
-        Eigen::MatrixXd b_v(A.cols(), 1);
+        Eigen::MatrixXd b_v(A.cols(), 1);        
         
-        if (verbose) Rprintf("Test point 1");
-        
-        for(int k = 0; k < u.rows(); ++k){
+        for(int k = 0; k < u.cols(); ++k){
             // Preallocate k-sized matrices
             Eigen::MatrixXd a(k+1, 1);
-            Eigen::MatrixXd b_u_adj(A.rows(), k+1);
-            Eigen::MatrixXd b_v_adj(A.cols(), k+1);
-            if (verbose) Rprintf("Test point 2");
             double d_k;
-
+            double a_k;
 
             // alternating least squares updates
+            iter_ = 0;
             for (; iter_ < maxit; ++iter_) {
                 Eigen::MatrixXd u_it = u.col(k);
-                if (verbose) Rprintf("Test point 3");
                 // Update V
-                a = u(Eigen::all, Eigen::seq(0, k)).transpose() * u(Eigen::all, k);
-                b_u = A.transpose() * u(Eigen::all, k);
-                b_u = b_u.array() - L1[1]; 
-                if (verbose) Rprintf("Test point 4");
-                if(k > 0){
-                    b_u_adj = a * v(Eigen::all, Eigen::seq(0, k)); 
-                    b_u -= b_u_adj.rowwise().sum();
+                a_k =  u.col(k).dot(u.col(k));
+                b_v = u.col(k).transpose() * A ;
+                for(int i = 0; i < b_v.size(); ++i){
+                    b_v(i, 0) -= L1[1];
                 }
-                if (verbose) Rprintf("Test point 5");
+                if(k > 0){
+                    for(int _k = 0; _k < k; ++_k){
+                        b_v -= u.col(k).dot(u.col(_k)) * v.row(_k);
+                    } 
+                }
+
+                v.row(k) = b_v / (a_k + DIV_OFFSET);
+
                 // Scale V
-                v(Eigen::all, k) /= (norm(v.row(k)) + DIV_OFFSET);
-                if (verbose) Rprintf("Test point 6");
+                v.row(k) /= (norm(v.row(k)) + DIV_OFFSET);
+
                 // Update U
-                a = v(k, Eigen::all) * v(Eigen::seq(0, k), Eigen::all).transpose();
-                b_v = A * v(k, Eigen::all).transpose();
-                b_v = b_v.array() - L1[0];
-                if (verbose) Rprintf("Test point 7");
-                if(k > 0){
-                    b_v_adj = a * v(Eigen::seq(0, k), Eigen::all); 
-                    b_v -= b_v_adj.colwise().sum();
+                a_k = v.row(k).dot(v.row(k));
+                b_u = A * v.row(k).transpose();
+                for(int i = 0; i < b_u.size(); ++i){
+                    b_u(i, 0) -= L1[0];
                 }
-                if (verbose) Rprintf("Test point 8");
+                if(k > 0){
+                    for(int _k = 0; _k < k; ++_k){
+                        b_u -= v.row(k).dot(v.row(_k)) * u.col(_k);
+                    } 
+                }
+                
+                u.col(k) = b_u / (a_k + DIV_OFFSET);
+
                 // Scale U
-                d_k = norm(u.col(k));
-                u(Eigen::all, k) /= (d_k + DIV_OFFSET);
-                if (verbose) Rprintf("Test point 9");
+                d_k = norm(u.row(k));
+                u.row(k) /= (d_k + DIV_OFFSET);
+
                 // Check exit criteria
-                tol_ = cor(u, u_it);  // correlation between "u" across consecutive iterations
+                Eigen::MatrixXd u_post_it = u.col(k);
+                tol_ = cor(u_post_it, u_it);  // correlation between "u" across consecutive iterations
                 if (verbose) Rprintf("%4d | %8.2e\n", iter_ + 1, tol_);
+
                 if (tol_ < tol) break;
-                if (verbose) Rprintf("Test point 10");
                 Rcpp::checkUserInterrupt();
             }
 
