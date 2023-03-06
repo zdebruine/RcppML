@@ -116,7 +116,5 @@ svd <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), se
     misc$u_init <- u_init[[1]]
   }
 
-  misc$dgb <- model$dbg
-
-  new("svd", u = model$u, v = model$v, misc = misc)
+  new("svd", u = model$u, v = model$v, d = model$d, misc = misc)
 }

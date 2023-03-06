@@ -533,9 +533,9 @@ Rcpp::List Rcpp_svd_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, const doubl
 
     return Rcpp::List::create(Rcpp::Named("u") = m.matrixU(),
                               Rcpp::Named("v") = m.matrixV(),
+                              Rcpp::Named("d") = m.vectorD(),
                               Rcpp::Named("tol") = m.fit_tol(),
                               Rcpp::Named("iter") = m.fit_iter(),
                               Rcpp::Named("mse") = m.fit_mse(),
-                              Rcpp::Named("dbg") = m.debug_errs,
                               Rcpp::Named("best_model") = m.best_model());
 }

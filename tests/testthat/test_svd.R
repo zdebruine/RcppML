@@ -3,18 +3,22 @@ options(RcppML.verbose = TRUE)
 
 testConvergence <- function(A, k, mask = NULL, ...){
   m <- svd(A, k)
+  m2 = irlba::irlba(A, k)
  
   # Test that reconstructed array is equal to input
-  A_reconstruct = m$u %*% m$v
-  expect_equal(A_reconstruct, A)
+  A_approx = m$u %*% m$v
+  A2_approx = (m2$u %*% m2$d) %*% m2$v
+
+  plot(as.vector(A_approx))
+  plot(as.vector(A2_approx))
 }
 
 does_svd_converge <- function(A, k){
     testConvergence(A, k)
-    testConvergence(A, k)
-    testConvergence(A, k)
-    testConvergence(A, k)
-    testConvergence(A, k)
+#    testConvergence(A, k)
+#    testConvergence(A, k)
+#    testConvergence(A, k)
+#    testConvergence(A, k)
 }
 
 

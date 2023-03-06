@@ -8,7 +8,7 @@
 #ifndef RcppML_svd
 #define RcppML_svd
 
-#define DIV_OFFSET 0
+#define DIV_OFFSET 0.000000000000000000001
 
 namespace RcppML {
 template <class T>
@@ -20,6 +20,7 @@ class svd {
     Rcpp::SparseMatrix link_matrix_u = Rcpp::SparseMatrix(), link_matrix_v = Rcpp::SparseMatrix();
     Eigen::MatrixXd u;
     Eigen::MatrixXd v;
+    Eigen::VectorXd d;
     double tol_ = -1, mse_ = 0;
     unsigned int iter_ = 0, best_model_ = 0;
     bool mask = false, mask_zeros = false, symmetric = false, transposed = false;
@@ -40,6 +41,7 @@ class svd {
     svd(T& A, const unsigned int k, const unsigned int seed = 0) : A(A) {
         u = randomMatrix(A.rows(), k, seed);
         v = Eigen::MatrixXd(k, A.cols());
+        d = Eigen::VectorXd::Ones(k);
         isSymmetric();
     }
 
@@ -47,6 +49,7 @@ class svd {
     svd(T& A, Eigen::MatrixXd u) : A(A), u(u) {
         if (A.rows() != u.rows()) Rcpp::stop("number of rows in 'A' and 'u' are not equal!");
         v = Eigen::MatrixXd(u.cols(), A.cols());
+        d = Eigen::VectorXd::Ones(u.cols());
         isSymmetric();
     }
 
@@ -55,6 +58,7 @@ class svd {
         if (A.rows() != u.rows()) Rcpp::stop("dimensions of 'u' and 'A' are not compatible");
         if (A.cols() != v.cols()) Rcpp::stop("dimensions of 'v' and 'A' are not compatible");
         if (u.cols() != v.rows()) Rcpp::stop("rank of 'u' and 'v' are not equal!");
+        d = Eigen::VectorXd::Ones(u.cols());
         isSymmetric();
     }
 
@@ -83,6 +87,7 @@ class svd {
     // GETTERS
     Eigen::MatrixXd matrixU() { return u; }
     Eigen::MatrixXd matrixV() { return v; }
+    Eigen::VectorXd vectorD() { return d; }
     double fit_tol() { return tol_; }
     unsigned int fit_iter() { return iter_; }
     double fit_mse() { return mse_; }
@@ -108,11 +113,7 @@ class svd {
         Eigen::MatrixXd b_v(A.cols(), 1);        
         
         for(int k = 0; k < u.cols(); ++k){
-            // Preallocate k-sized matrices
-            Eigen::MatrixXd a(k+1, 1);
-            double d_k;
             double a_k;
-
             // alternating least squares updates
             iter_ = 0;
             for (; iter_ < maxit; ++iter_) {
@@ -120,8 +121,8 @@ class svd {
                 // Update V
                 a_k =  u.col(k).dot(u.col(k));
                 b_v = u.col(k).transpose() * A ;
-                for(int i = 0; i < b_v.size(); ++i){
-                    b_v(i, 0) -= L1[1];
+                for(int i = 0; i < b_v.cols(); ++i){
+                    b_v(0, i) -= L1[1];
                 }
                 if(k > 0){
                     for(int _k = 0; _k < k; ++_k){
@@ -137,7 +138,7 @@ class svd {
                 // Update U
                 a_k = v.row(k).dot(v.row(k));
                 b_u = A * v.row(k).transpose();
-                for(int i = 0; i < b_u.size(); ++i){
+                for(int i = 0; i < b_u.rows(); ++i){
                     b_u(i, 0) -= L1[0];
                 }
                 if(k > 0){
@@ -149,8 +150,8 @@ class svd {
                 u.col(k) = b_u / (a_k + DIV_OFFSET);
 
                 // Scale U
-                d_k = norm(u.row(k));
-                u.row(k) /= (d_k + DIV_OFFSET);
+                d(k) = norm(u.col(k));
+                u.col(k) /= (d(k) + DIV_OFFSET);
 
                 // Check exit criteria
                 Eigen::MatrixXd u_post_it = u.col(k);
@@ -163,9 +164,7 @@ class svd {
 
             if (tol_ > tol && iter_ == maxit && verbose)
                 Rprintf(" convergence not reached in %d iterations\n  (actual tol = %4.2e, target tol = %4.2e)\n", iter_, tol_, tol);
-        
-            // 'Unscale' U
-            u(Eigen::all, Eigen::seq(0, k)) *= d_k;
+
         
             //debug_errs.push_back(mse());
         }
