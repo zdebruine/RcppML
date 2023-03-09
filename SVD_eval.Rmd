@@ -1,6 +1,8 @@
 Generate rank 5 matrix for testing
 
 ```{r}
+options(RcppML.threads = 1)
+options(RcppML.verbose = FALSE)
 A <- matrix(1:100, nrow=10, ncol=10)
 ```
 
@@ -13,9 +15,11 @@ source("R/svd.R")
 
 Now generate and compare approximations based on IRLBA and RcppML
 ```{r}
-m_rcppml <- svd(A, 5)
+m_rcppml <- svd(A, 2)
+#A_rcppml <- (m_rcppml$u * m_rcppml$d) %*% m_rcppml$v
 A_rcppml <- (m_rcppml$u %*% diag(m_rcppml$d)) %*% m_rcppml$v
-m_irlba <- irlba::irlba(A, 5)
+m_irlba <- irlba::irlba(A, 2)
+#A_irlba <- (m_irlba$u * m_irlba$d) %*% t(m_irlba$v)
 A_irlba <- (m_irlba$u %*% diag(m_irlba$d)) %*% t(m_irlba$v)
 plot(1:length(as.vector(A_irlba)), as.vector(A_irlba), type='l', col='green')
 lines(1:length(as.vector(A_rcppml)), as.vector(A_rcppml), col='red')

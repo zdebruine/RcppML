@@ -106,51 +106,40 @@ class svd {
     // fit the model by alternating least squares projections
     void fit() {
         if (verbose) Rprintf("\n%4s | %8s \n---------------\n", "iter", "tol");
-
-        //debug_errs.push_back(mse());
-        // Preallocate fixed sized
-        Eigen::MatrixXd b_u(A.rows(), 1);
-        Eigen::MatrixXd b_v(A.cols(), 1);        
-        
+               
         for(int k = 0; k < u.cols(); ++k){
-            double a_k;
             // alternating least squares updates
-            iter_ = 0;
             for (; iter_ < maxit; ++iter_) {
                 Eigen::MatrixXd u_it = u.col(k);
                 // Update V
-                a_k =  u.col(k).dot(u.col(k));
-                b_v = u.col(k).transpose() * A ;
-                for(int i = 0; i < b_v.cols(); ++i){
-                    b_v(0, i) -= L1[1];
-                }
+                v.row(k) = u.col(k).transpose() * A ;
+                v.row(k).array() -= L1[1];
+
                 if(k > 0){
-                    for(int _k = 0; _k < k; ++_k){
-                        b_v -= u.col(k).dot(u.col(_k)) * v.row(_k);
+                    for(int _k = k-1; _k >= 0; --_k){
+                        v.row(k) -= ((u.col(k).dot(u.col(_k))) * v.row(_k));
                     } 
                 }
 
-                v.row(k) = b_v / (a_k + DIV_OFFSET);
+                v.row(k) /= (u.col(k).dot(u.col(k)) + DIV_OFFSET);
 
                 // Scale V
-                v.row(k) /= (norm(v.row(k)) + DIV_OFFSET);
+                //v.row(k) /= v.row(k).norm() + DIV_OFFSET;
 
                 // Update U
-                a_k = v.row(k).dot(v.row(k));
-                b_u = A * v.row(k).transpose();
-                for(int i = 0; i < b_u.rows(); ++i){
-                    b_u(i, 0) -= L1[0];
-                }
+                u.col(k) = A * v.row(k).transpose();
+                u.col(k).array() -= L1[0];
+
                 if(k > 0){
-                    for(int _k = 0; _k < k; ++_k){
-                        b_u -= v.row(k).dot(v.row(_k)) * u.col(_k);
+                    for(int _k = k-1; _k >= 0; --_k){
+                        u.col(k) -= ((v.row(k).dot(v.row(_k))) * u.col(_k));
                     } 
                 }
                 
-                u.col(k) = b_u / (a_k + DIV_OFFSET);
+                u.col(k) /= (v.row(k).dot(v.row(k)) + DIV_OFFSET);
 
                 // Scale U
-                d(k) = norm(u.col(k));
+                d(k) = u.col(k).norm();
                 u.col(k) /= (d(k) + DIV_OFFSET);
 
                 // Check exit criteria
@@ -165,8 +154,6 @@ class svd {
             if (tol_ > tol && iter_ == maxit && verbose)
                 Rprintf(" convergence not reached in %d iterations\n  (actual tol = %4.2e, target tol = %4.2e)\n", iter_, tol_, tol);
 
-        
-            //debug_errs.push_back(mse());
         }
     }
 
