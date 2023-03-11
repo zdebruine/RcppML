@@ -109,6 +109,7 @@ class svd {
                
         for(int k = 0; k < u.cols(); ++k){
             // alternating least squares updates
+            double d_k;
             for (; iter_ < maxit; ++iter_) {
                 Eigen::MatrixXd u_it = u.col(k);
                 // Update V
@@ -124,7 +125,7 @@ class svd {
                 v.row(k) /= (u.col(k).dot(u.col(k)) + DIV_OFFSET);
 
                 // Scale V
-                //v.row(k) /= v.row(k).norm() + DIV_OFFSET;
+                v.row(k) /= v.row(k).norm() + DIV_OFFSET;
 
                 // Update U
                 u.col(k) = A * v.row(k).transpose();
@@ -139,8 +140,8 @@ class svd {
                 u.col(k) /= (v.row(k).dot(v.row(k)) + DIV_OFFSET);
 
                 // Scale U
-                d(k) = u.col(k).norm();
-                u.col(k) /= (d(k) + DIV_OFFSET);
+                d_k = u.col(k).norm();
+                u.col(k) /= (d_k + DIV_OFFSET);
 
                 // Check exit criteria
                 Eigen::MatrixXd u_post_it = u.col(k);
@@ -151,9 +152,17 @@ class svd {
                 Rcpp::checkUserInterrupt();
             }
 
+            // "unscale" U
+            u.col(k) *= d_k;
+
             if (tol_ > tol && iter_ == maxit && verbose)
                 Rprintf(" convergence not reached in %d iterations\n  (actual tol = %4.2e, target tol = %4.2e)\n", iter_, tol_, tol);
+        }
 
+        // Calculate diagonal
+        for(int i = 0; i < u.cols(); ++i){
+            d(i) = u.col(i).norm();
+            u.col(i) /= d(i);
         }
     }
 

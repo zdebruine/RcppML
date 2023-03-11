@@ -21,6 +21,28 @@ A_rcppml <- (m_rcppml$u %*% diag(m_rcppml$d)) %*% m_rcppml$v
 m_irlba <- irlba::irlba(A, 3)
 #A_irlba <- (m_irlba$u * m_irlba$d) %*% t(m_irlba$v)
 A_irlba <- (m_irlba$u %*% diag(m_irlba$d)) %*% t(m_irlba$v)
+
+diff <- sum(A_irlba - A_rcppml)
+print(diff)
+
 plot(1:length(as.vector(A_irlba)), as.vector(A_irlba), type='l', col='green')
 lines(1:length(as.vector(A_rcppml)), as.vector(A_rcppml), col='red')
 ```
+
+Compare the runtime of RcppML vs irlba
+Check average time over 10 restarts, using the same data. 
+
+```{r}
+library(microbenchmark)
+
+mbm <- microbenchmark(
+  "RcppML" = {
+    model <- svd(A, 3)
+  },
+  "irlba" = {
+    model <- irlba::irlba(A, 3)
+  }
+)
+print(format(mbm)0
+```
+
