@@ -3,7 +3,7 @@ setClass("svd",
   prototype(u = matrix(), v = matrix(), d = NA_real_, misc = list()),
   validity = function(object) {
     msg <- NULL
-    if (ncol(object@u) != nrow(object@v))
+    if (ncol(object@u) != ncol(object@v))
       msg <- c(msg, "ranks of 'u' and 'v' are not equal")
     if (is.null(msg)) TRUE else msg
   })

@@ -40,7 +40,7 @@ class svd {
     // constructor for initialization with a randomly generated "w" matrix
     svd(T& A, const unsigned int k, const unsigned int seed = 0) : A(A) {
         u = randomMatrix(A.rows(), k, seed);
-        v = Eigen::MatrixXd(k, A.cols());
+        v = Eigen::MatrixXd(A.cols(), k);
         d = Eigen::VectorXd::Ones(k);
         isSymmetric();
     }
@@ -48,7 +48,7 @@ class svd {
     // constructor for initialization with an initial "u" matrix
     svd(T& A, Eigen::MatrixXd u) : A(A), u(u) {
         if (A.rows() != u.rows()) Rcpp::stop("number of rows in 'A' and 'u' are not equal!");
-        v = Eigen::MatrixXd(u.cols(), A.cols());
+        v = Eigen::MatrixXd(A.cols(), u.cols());
         d = Eigen::VectorXd::Ones(u.cols());
         isSymmetric();
     }
@@ -56,8 +56,8 @@ class svd {
     // constructor for initialization with a fully-specified model
     svd(T& A, Eigen::MatrixXd u, Eigen::MatrixXd v) : A(A), u(u), v(v) {
         if (A.rows() != u.rows()) Rcpp::stop("dimensions of 'u' and 'A' are not compatible");
-        if (A.cols() != v.cols()) Rcpp::stop("dimensions of 'v' and 'A' are not compatible");
-        if (u.cols() != v.rows()) Rcpp::stop("rank of 'u' and 'v' are not equal!");
+        if (A.cols() != v.rows()) Rcpp::stop("dimensions of 'v' and 'A' are not compatible");
+        if (u.cols() != v.cols()) Rcpp::stop("rank of 'u' and 'v' are not equal!");
         d = Eigen::VectorXd::Ones(u.cols());
         isSymmetric();
     }
@@ -113,31 +113,31 @@ class svd {
             for (; iter_ < maxit; ++iter_) {
                 Eigen::MatrixXd u_it = u.col(k);
                 // Update V
-                v.row(k) = u.col(k).transpose() * A ;
-                v.row(k).array() -= L1[1];
+                v.col(k) = u.col(k).transpose() * A ;
+                v.col(k).array() -= L1[1];
 
                 if(k > 0){
                     for(int _k = k-1; _k >= 0; --_k){
-                        v.row(k) -= ((u.col(k).dot(u.col(_k))) * v.row(_k));
+                        v.col(k) -= ((u.col(k).dot(u.col(_k))) * v.col(_k));
                     } 
                 }
 
-                v.row(k) /= (u.col(k).dot(u.col(k)) + DIV_OFFSET);
+                v.col(k) /= (u.col(k).dot(u.col(k)) + DIV_OFFSET);
 
                 // Scale V
-                v.row(k) /= v.row(k).norm() + DIV_OFFSET;
+                v.col(k) /= v.col(k).norm() + DIV_OFFSET;
 
                 // Update U
-                u.col(k) = A * v.row(k).transpose();
+                u.col(k) = A * v.col(k);
                 u.col(k).array() -= L1[0];
 
                 if(k > 0){
                     for(int _k = k-1; _k >= 0; --_k){
-                        u.col(k) -= ((v.row(k).dot(v.row(_k))) * u.col(_k));
+                        u.col(k) -= ((v.col(k).dot(v.col(_k))) * u.col(_k));
                     } 
                 }
                 
-                u.col(k) /= (v.row(k).dot(v.row(k)) + DIV_OFFSET);
+                u.col(k) /= (v.col(k).dot(v.col(k)) + DIV_OFFSET);
 
                 // Scale U
                 d_k = u.col(k).norm();

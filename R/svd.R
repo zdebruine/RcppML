@@ -55,7 +55,7 @@ svd <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), se
     mask_matrix <- as(mask, "dgCMatrix")
   }
 
-  # randomly initialize "w", or check dimensions of provided initialization
+  # randomly initialize "u", or check dimensions of provided initialization
   u_init <- list()
   if (is.matrix(seed)) seed <- list(seed)
   if (!is.null(seed)) {

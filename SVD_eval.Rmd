@@ -17,7 +17,7 @@ Now generate and compare approximations based on IRLBA and RcppML
 ```{r}
 m_rcppml <- svd(A, 3)
 #A_rcppml <- (m_rcppml$u * m_rcppml$d) %*% m_rcppml$v
-A_rcppml <- (m_rcppml$u %*% diag(m_rcppml$d)) %*% m_rcppml$v
+A_rcppml <- (m_rcppml$u %*% diag(m_rcppml$d)) %*% t(m_rcppml$v)
 m_irlba <- irlba::irlba(A, 3)
 #A_irlba <- (m_irlba$u * m_irlba$d) %*% t(m_irlba$v)
 A_irlba <- (m_irlba$u %*% diag(m_irlba$d)) %*% t(m_irlba$v)
@@ -43,6 +43,6 @@ mbm <- microbenchmark(
     model <- irlba::irlba(A, 3)
   }
 )
-print(format(mbm)0
+mbm
 ```
 
