@@ -8,7 +8,7 @@
 #ifndef RcppML_svd
 #define RcppML_svd
 
-#define DIV_OFFSET 0.000000000000000000001
+#define DIV_OFFSET 1e-15
 
 namespace RcppML {
 template <class T>
@@ -24,6 +24,11 @@ class svd {
     double tol_ = -1, mse_ = 0;
     unsigned int iter_ = 0, best_model_ = 0;
     bool mask = false, mask_zeros = false, symmetric = false, transposed = false;
+    
+    // Specific rank update functions
+    void fit_rank_one();
+    void fit_rank_two();
+    void fit_rank_k(int);
 
    public:
     bool verbose = true;
@@ -108,55 +113,9 @@ class svd {
         if (verbose) Rprintf("\n%4s | %8s \n---------------\n", "iter", "tol");
                
         for(int k = 0; k < u.cols(); ++k){
-            // alternating least squares updates
-            double d_k;
-            for (; iter_ < maxit; ++iter_) {
-                Eigen::MatrixXd u_it = u.col(k);
-                // Update V
-                v.col(k) = u.col(k).transpose() * A ;
-                v.col(k).array() -= L1[1];
-
-                if(k > 0){
-                    for(int _k = k-1; _k >= 0; --_k){
-                        v.col(k) -= ((u.col(k).dot(u.col(_k))) * v.col(_k));
-                    } 
-                }
-
-                v.col(k) /= (u.col(k).dot(u.col(k)) + DIV_OFFSET);
-
-                // Scale V
-                v.col(k) /= v.col(k).norm() + DIV_OFFSET;
-
-                // Update U
-                u.col(k) = A * v.col(k);
-                u.col(k).array() -= L1[0];
-
-                if(k > 0){
-                    for(int _k = k-1; _k >= 0; --_k){
-                        u.col(k) -= ((v.col(k).dot(v.col(_k))) * u.col(_k));
-                    } 
-                }
-                
-                u.col(k) /= (v.col(k).dot(v.col(k)) + DIV_OFFSET);
-
-                // Scale U
-                d_k = u.col(k).norm();
-                u.col(k) /= (d_k + DIV_OFFSET);
-
-                // Check exit criteria
-                Eigen::MatrixXd u_post_it = u.col(k);
-                tol_ = cor(u_post_it, u_it);  // correlation between "u" across consecutive iterations
-                if (verbose) Rprintf("%4d | %8.2e\n", iter_ + 1, tol_);
-
-                if (tol_ < tol) break;
-                Rcpp::checkUserInterrupt();
-            }
-
-            // "unscale" U
-            u.col(k) *= d_k;
-
-            if (tol_ > tol && iter_ == maxit && verbose)
-                Rprintf(" convergence not reached in %d iterations\n  (actual tol = %4.2e, target tol = %4.2e)\n", iter_, tol_, tol);
+            if(k == 0) fit_rank_one();
+            else if(k == 1) fit_rank_two();
+            else fit_rank_k(k);
         }
 
         // Calculate diagonal
@@ -166,6 +125,8 @@ class svd {
         }
     }
 
+
+    
     // fit the model multiple times and return the best one
     void fit_restarts(Rcpp::List& u_init) {
         Eigen::MatrixXd u_best = u;
@@ -345,7 +306,176 @@ double svd<Eigen::MatrixXd>::mse_masked() {
     }
     return losses.sum() / mask_matrix.i.size();
 }
+
+template <>
+void svd<Eigen::MatrixXd>::fit_rank_one() {
+    double d;
+    for (; iter_ < maxit; ++iter_) {
+        Eigen::MatrixXd u_it = u.col(0);
+
+        // Update V
+        double a = u.col(0).dot(u.col(0)) + DIV_OFFSET;
+#ifdef _OPENMP
+#pragma omp parallel for num_threads(threads) schedule(static)
+#endif
+        for(int i = 0; i < v.rows(); ++i){
+            v.col(0)(i) = u.col(0).dot(A.col(i));
+            if(L1[1] > 0) v.col(0)(i) -= L1[1];
+            v.col(0)(i) /= a;
+        }
+
+        // Scale V
+        v.col(0) /= v.col(0).norm() + DIV_OFFSET;
+
+        // Update U
+        a = v.col(0).dot(v.col(0)) + DIV_OFFSET;
+#ifdef _OPENMP
+#pragma omp parallel for num_threads(threads) schedule(static)
+#endif
+        for(int i = 0; i < u.rows(); ++i){
+            u.col(0)(i) = v.col(0).dot(A.row(i));
+            if(L1[0] > 0) u.col(0)(i) -= L1[0];
+            u.col(0)(i) /= a;
+        }
+
+        // Scale U
+        d = u.col(0).norm();
+        u.col(0) /= (d + DIV_OFFSET);
+
+        // Check exit criteria
+        Eigen::MatrixXd u_post_it = u.col(0);
+        tol_ = cor(u_post_it, u_it);  // correlation between "u" across consecutive iterations
+        if (verbose) Rprintf("%4d | %8.2e\n", iter_ + 1, tol_);
+
+        if (tol_ < tol) break;
+        Rcpp::checkUserInterrupt();
+    }
+
+    // "unscale" U
+    u.col(0) *= d;
+
+    if (tol_ > tol && iter_ == maxit && verbose)
+        Rprintf(" convergence not reached in %d iterations\n  (actual tol = %4.2e, target tol = %4.2e)\n", iter_, tol_, tol);
+}
+
+template <>
+void svd<Eigen::MatrixXd>::fit_rank_two() {
+    double d;
+    for (; iter_ < maxit; ++iter_) {
+        Eigen::MatrixXd u_it = u.col(1);
+
+        double a0 =  u.col(1).dot(u.col(0)) + DIV_OFFSET;
+        double a1 =  u.col(1).dot(u.col(1)) + DIV_OFFSET;
+#ifdef _OPENMP
+#pragma omp parallel for num_threads(threads) schedule(static)
+#endif
+        for(int i = 0; i < v.rows(); ++i){
+            v.col(1)(i) = (u.col(1).dot(A.col(i))) - (u.col(0)(i) * a0);
+            if(L1[1] > 0) v.col(1)(i) -= L1[1];
+            v.col(1)(i) /= a1;
+        }
+
+        // Scale V
+        v.col(1) /= v.col(1).norm() + DIV_OFFSET;
+
+        a0 = v.col(1).dot(v.col(0)) + DIV_OFFSET;
+        a1 = v.col(1).dot(v.col(1)) + DIV_OFFSET;
+#ifdef _OPENMP
+#pragma omp parallel for num_threads(threads) schedule(static)
+#endif
+        for(int i = 0; i < u.rows(); ++i){
+            u.col(1)(i) = (v.col(1).dot(A.row(i))) - (v.col(0)(i) * a0);
+            if(L1[0] > 0) u.col(1)(i) -= L1[0];
+            u.col(1)(i) /= a1;
+        }
+
+        // Scale U
+        d = u.col(1).norm();
+        u.col(1) /= (d + DIV_OFFSET);
+
+        // Check exit criteria
+        Eigen::MatrixXd u_post_it = u.col(1);
+        tol_ = cor(u_post_it, u_it);  // correlation between "u" across consecutive iterations
+        if (verbose) Rprintf("%4d | %8.2e\n", iter_ + 1, tol_);
+
+        if (tol_ < tol) break;
+        Rcpp::checkUserInterrupt();
+    }
+
+    // "unscale" U
+    u.col(1) *= d;
+
+    if (tol_ > tol && iter_ == maxit && verbose)
+        Rprintf(" convergence not reached in %d iterations\n  (actual tol = %4.2e, target tol = %4.2e)\n", iter_, tol_, tol);
+}
+
+template <>
+void svd<Eigen::MatrixXd>::fit_rank_k(int k) {
+    // alternating least squares updates
+    double d_k;
+    for (; iter_ < maxit; ++iter_) {
+        Eigen::MatrixXd u_it = u.col(k);
+
+        double a =  u.col(k).dot(u.col(k)) + DIV_OFFSET;
+#ifdef _OPENMP
+#pragma omp parallel for num_threads(threads) schedule(static)
+#endif
+        for(int i = 0; i < v.rows(); ++i){
+            v.col(k)(i) = (u.col(k).dot(A.col(i)));
+            if(L1[1] > 0) v.col(k)(i) -= L1[1];
+
+            for(int _k = k-1; _k >= 0; --_k){
+                // TODO: Precalculate a, so that dot product is not recalculated each loop
+                v.col(k)(i) -= u.col(k).dot(u.col(_k)) * v.col(_k)(i);
+            } 
+
+            v.col(k)(i) /= a;
+        }
+
+        v.col(k) /= (u.col(k).dot(u.col(k)) + DIV_OFFSET);
+
+        // Scale V
+        v.col(k) /= v.col(k).norm() + DIV_OFFSET;
+
+        // Update U
+        a = v.col(k).dot(v.col(k)) + DIV_OFFSET;
+#ifdef _OPENMP
+#pragma omp parallel for num_threads(threads) schedule(static)
+#endif
+        for(int i = 0; i < u.rows(); ++i){
+            u.col(k)(i) = v.col(k).dot(A.row(i));
+            if(L1[0] > 0) u.col(k)(i) -= L1[0];
+
+            for(int _k = k-1; _k >= 0; --_k){
+                // TODO: Precalculate a, so that dot product is not recalculated each loop
+                u.col(k)(i) -= v.col(k).dot(v.col(_k)) * u.col(_k)(i);
+            }
+
+            u.col(k)(i) /= a;
+        }
+
+        // Scale U
+        d_k = u.col(k).norm();
+        u.col(k) /= (d_k + DIV_OFFSET);
+
+        // Check exit criteria
+        Eigen::MatrixXd u_post_it = u.col(k);
+        tol_ = cor(u_post_it, u_it);  // correlation between "u" across consecutive iterations
+        if (verbose) Rprintf("%4d | %8.2e\n", iter_ + 1, tol_);
+
+        if (tol_ < tol) break;
+        Rcpp::checkUserInterrupt();
+    }
+
+    // "unscale" U
+    u.col(k) *= d_k;
+
+    if (tol_ > tol && iter_ == maxit && verbose)
+        Rprintf(" convergence not reached in %d iterations\n  (actual tol = %4.2e, target tol = %4.2e)\n", iter_, tol_, tol);
+}
 }  // namespace RcppML
+
+
 
 
 
