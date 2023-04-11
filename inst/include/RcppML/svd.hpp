@@ -367,7 +367,7 @@ void svd<Eigen::MatrixXd>::fit_rank_two() {
         double a0 =  u.col(1).dot(u.col(0)) + DIV_OFFSET;
         double a1 =  u.col(1).dot(u.col(1)) + DIV_OFFSET;
 #ifdef _OPENMP
-#pragma omp parallel for num_threads(threads) schedule(static)
+#pragma omp parallel for num_threads(threads) 
 #endif
         for(int i = 0; i < v.rows(); ++i){
             v.col(1)(i) = (u.col(1).dot(A.col(i))) - (v.col(0)(i) * a0);
@@ -381,7 +381,7 @@ void svd<Eigen::MatrixXd>::fit_rank_two() {
         a0 = v.col(1).dot(v.col(0)) + DIV_OFFSET;
         a1 = v.col(1).dot(v.col(1)) + DIV_OFFSET;
 #ifdef _OPENMP
-#pragma omp parallel for num_threads(threads) schedule(static)
+#pragma omp parallel for num_threads(threads) 
 #endif
         for(int i = 0; i < u.rows(); ++i){
             u.col(1)(i) = (v.col(1).dot(A.row(i))) - (u.col(0)(i) * a0);

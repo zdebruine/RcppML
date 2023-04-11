@@ -337,25 +337,14 @@ BEGIN_RCPP
 END_RCPP
 }
 // Rcpp_svd_dense
-Rcpp::List Rcpp_svd_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, const double tol, const unsigned int maxit, const bool verbose, const std::vector<double> L1, const std::vector<double> L2, const unsigned int threads, Rcpp::List u_init, const Rcpp::S4& link_matrix_v, const bool mask_zeros, const bool link_v, const double upper_bound);
-RcppExport SEXP _RcppML_Rcpp_svd_dense(SEXP A_SEXP, SEXP maskSEXP, SEXP tolSEXP, SEXP maxitSEXP, SEXP verboseSEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP threadsSEXP, SEXP u_initSEXP, SEXP link_matrix_vSEXP, SEXP mask_zerosSEXP, SEXP link_vSEXP, SEXP upper_boundSEXP) {
+Rcpp::List Rcpp_svd_dense(Eigen::MatrixXd& A_, int k);
+RcppExport SEXP _RcppML_Rcpp_svd_dense(SEXP A_SEXP, SEXP kSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type A_(A_SEXP);
-    Rcpp::traits::input_parameter< const Rcpp::S4& >::type mask(maskSEXP);
-    Rcpp::traits::input_parameter< const double >::type tol(tolSEXP);
-    Rcpp::traits::input_parameter< const unsigned int >::type maxit(maxitSEXP);
-    Rcpp::traits::input_parameter< const bool >::type verbose(verboseSEXP);
-    Rcpp::traits::input_parameter< const std::vector<double> >::type L1(L1SEXP);
-    Rcpp::traits::input_parameter< const std::vector<double> >::type L2(L2SEXP);
-    Rcpp::traits::input_parameter< const unsigned int >::type threads(threadsSEXP);
-    Rcpp::traits::input_parameter< Rcpp::List >::type u_init(u_initSEXP);
-    Rcpp::traits::input_parameter< const Rcpp::S4& >::type link_matrix_v(link_matrix_vSEXP);
-    Rcpp::traits::input_parameter< const bool >::type mask_zeros(mask_zerosSEXP);
-    Rcpp::traits::input_parameter< const bool >::type link_v(link_vSEXP);
-    Rcpp::traits::input_parameter< const double >::type upper_bound(upper_boundSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_svd_dense(A_, mask, tol, maxit, verbose, L1, L2, threads, u_init, link_matrix_v, mask_zeros, link_v, upper_bound));
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_svd_dense(A_, k));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -391,7 +380,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_RcppML_c_sample", (DL_FUNC) &_RcppML_c_sample, 5},
     {"_RcppML_c_rtisparsematrix", (DL_FUNC) &_RcppML_c_rtisparsematrix, 5},
     {"_RcppML_c_rsparsematrix", (DL_FUNC) &_RcppML_c_rsparsematrix, 5},
-    {"_RcppML_Rcpp_svd_dense", (DL_FUNC) &_RcppML_Rcpp_svd_dense, 13},
+    {"_RcppML_Rcpp_svd_dense", (DL_FUNC) &_RcppML_Rcpp_svd_dense, 2},
     {"_RcppML_Rcpp_bipartite_match", (DL_FUNC) &_RcppML_Rcpp_bipartite_match, 1},
     {NULL, NULL, 0}
 };

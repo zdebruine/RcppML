@@ -505,37 +505,20 @@ Rcpp::S4 c_rsparsematrix(const uint32_t nrow, const uint32_t ncol, const uint32_
 }
 
 //[[Rcpp::export]]
-Rcpp::List Rcpp_svd_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, const double tol, const unsigned int maxit,
-                          const bool verbose, const std::vector<double> L1, const std::vector<double> L2,
-                          const unsigned int threads, Rcpp::List u_init, const Rcpp::S4& link_matrix_v, const bool mask_zeros,
-                          const bool link_v, const double upper_bound = 0) {
-    Rcpp::SparseMatrix mask_(mask), link_matrix_v_(link_matrix_v);
-    Eigen::MatrixXd u_ = Rcpp::as<Eigen::MatrixXd>(u_init[0]);
-    RcppML::svd<Eigen::MatrixXd> m(A_, u_);
-
-    // set model parameters
-    m.tol = tol;
-    m.L1 = L1;
-    m.L2 = L2;
-    m.maxit = maxit;
-    m.verbose = verbose;
-    m.threads = threads;
-    m.upper_bound = upper_bound;
-    if (mask_zeros)
-        m.maskZeros();
-    else if (mask_.rows() == A_.rows() && mask_.cols() == A_.cols())
-        m.maskMatrix(mask_);
-
-    if (u_init.length() == 1)
-        m.fit();
-    else
-        m.fit_restarts(u_init);
-
-    return Rcpp::List::create(Rcpp::Named("u") = m.matrixU(),
-                              Rcpp::Named("v") = m.matrixV(),
-                              Rcpp::Named("d") = m.vectorD(),
-                              Rcpp::Named("tol") = m.fit_tol(),
-                              Rcpp::Named("iter") = m.fit_iter(),
-                              Rcpp::Named("mse") = m.fit_mse(),
-                              Rcpp::Named("best_model") = m.best_model());
+Rcpp::List Rcpp_svd_dense(Eigen::MatrixXd& A_, int k) {
+  RcppML::svd<Eigen::MatrixXd> m(A_, k);
+  
+  // set model parameters
+  m.tol = 1e-9;
+  m.maxit = 100;
+  
+  m.fit();
+  
+  return Rcpp::List::create(Rcpp::Named("u") = m.matrixU(),
+                            Rcpp::Named("d") = m.vectorD(),
+                            Rcpp::Named("v") = m.matrixV(),
+                            Rcpp::Named("tol") = m.fit_tol(),
+                            Rcpp::Named("iter") = m.fit_iter(),
+                            Rcpp::Named("mse") = m.fit_mse(),
+                            Rcpp::Named("best_model") = m.best_model());
 }
