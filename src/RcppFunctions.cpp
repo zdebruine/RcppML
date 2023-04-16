@@ -505,8 +505,11 @@ Rcpp::S4 c_rsparsematrix(const uint32_t nrow, const uint32_t ncol, const uint32_
 }
 
 //[[Rcpp::export]]
-Rcpp::List Rcpp_svd_dense(Eigen::MatrixXd& A_, int k) {
-  RcppML::svd<Eigen::MatrixXd> m(A_, k);
+Rcpp::List Rcpp_svd_dense(Eigen::MatrixXd& A_, const unsigned int k) {
+  
+  Eigen::MatrixXd u = Eigen::MatrixXd::Random(A_.rows(), k);
+  Eigen::MatrixXd v(A_.cols(), k);
+  RcppML::svd<Eigen::MatrixXd> m(A_, u, v);
   
   // set model parameters
   m.tol = 1e-9;

@@ -1,9 +1,8 @@
 Build RcppML functions
 ```{r}
 #Rcpp::sourceCpp("src/RcppFunctions.cpp")
-#source("R/svd_methods.R")
 #source("R/svd.R")
-library("RcppML")
+library(RcppML)
 ```
 
 Generate rank 5 matrix for testing

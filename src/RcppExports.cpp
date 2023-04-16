@@ -337,13 +337,13 @@ BEGIN_RCPP
 END_RCPP
 }
 // Rcpp_svd_dense
-Rcpp::List Rcpp_svd_dense(Eigen::MatrixXd& A_, int k);
+Rcpp::List Rcpp_svd_dense(Eigen::MatrixXd& A_, const unsigned int k);
 RcppExport SEXP _RcppML_Rcpp_svd_dense(SEXP A_SEXP, SEXP kSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type A_(A_SEXP);
-    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< const unsigned int >::type k(kSEXP);
     rcpp_result_gen = Rcpp::wrap(Rcpp_svd_dense(A_, k));
     return rcpp_result_gen;
 END_RCPP
