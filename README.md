@@ -4,7 +4,7 @@
 [![](https://www.r-pkg.org/badges/version-last-release/RcppML)](https://cran.r-project.org/package=RcppML)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
 
-`RcppML` is an R package for fast **non-negative matrix factorization** and **divisive clustering** using **large sparse matrices**. 
+`RcppML` is an R package for fast **non-negative matrix factorization** and **divisive clustering** using **large sparse matrices**. For the single-cell analysis version of functionality in RcppML, check out [https:://zdebruine.github.io/singlet/](zdebruine/singlet).
 
 See `pkgdown` site here: [https://zdebruine.github.io/RcppML/](https://zdebruine.github.io/RcppML/)
 
