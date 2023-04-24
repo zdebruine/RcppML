@@ -505,13 +505,15 @@ Rcpp::S4 c_rsparsematrix(const uint32_t nrow, const uint32_t ncol, const uint32_
 }
 
 //[[Rcpp::export]]
-Rcpp::List Rcpp_svd_dense(Eigen::MatrixXd& A_, const unsigned int k) {
+Rcpp::List Rcpp_svd_dense(Eigen::MatrixXd& A_, const unsigned int k, const double tol, const int maxit, const int threads, const bool verbose) {
   
   RcppML::svd<Eigen::MatrixXd> m(A_, k);
   
   // set model parameters
-  m.tol = 1e-9;
-  m.maxit = 100;
+  m.tol = tol;
+  m.maxit = maxit;
+  m.threads = threads;
+  m.verbose = verbose;
   
   m.fit();
   
@@ -525,13 +527,15 @@ Rcpp::List Rcpp_svd_dense(Eigen::MatrixXd& A_, const unsigned int k) {
 }
 
 //[[Rcpp::export]]
-Rcpp::List Rcpp_svd_sparse(const Rcpp::S4& A_, const unsigned int k) {
+Rcpp::List Rcpp_svd_sparse(const Rcpp::S4& A_, const unsigned int k, const double tol, const int maxit, const int threads, const bool verbose) {
   Rcpp::SparseMatrix A(A_);
   RcppML::svd<Rcpp::SparseMatrix> m(A, k);
   
   // set model parameters
-  m.tol = 1e-9;
-  m.maxit = 100;
+  m.tol = tol;
+  m.maxit = maxit;
+  m.threads = threads;
+  m.verbose = verbose;
   
   m.fit();
   

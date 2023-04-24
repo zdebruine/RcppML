@@ -8,14 +8,14 @@ library(RcppML)
 Generate rank 5 matrix for testing
 
 ```{r}
-options(RcppML.threads = 1)
+options(RcppML.threads = 7)
 options(RcppML.verbose = FALSE)
 A <- matrix(1:100, nrow=10, ncol=10)
 ```
 
 Now generate and compare approximations based on IRLBA and RcppML
 ```{r}
-m_rcppml <- svd(A, 3)
+m_rcppml <- svd_rcppml(A, 3)
 #A_rcppml <- (m_rcppml$u * m_rcppml$d) %*% t(m_rcppml$v)
 A_rcppml <- (m_rcppml$u %*% diag(m_rcppml$d)) %*% t(m_rcppml$v)
 m_irlba <- irlba::irlba(A, 3)
@@ -34,15 +34,29 @@ Check average time over 10 restarts, using the same data.
 
 ```{r}
 library(microbenchmark)
-A <- matrix(1:10000, nrow=100, ncol=100)
+data("hawaiibirds")
+A <- hawaiibirds$counts
 mbm <- microbenchmark(
   "RcppML" = {
-    model <- svd(A, 3)
+    model <- svd_rcppml(A, 10)
   },
   "irlba" = {
-    model <- irlba::irlba(A, 3)
+    model <- irlba::irlba(A, 10)
   }
 )
 mbm
 ```
 
+```{r}
+data("aml")
+A <- aml$data
+mbm <- microbenchmark(
+  "RcppML" = {
+    model <- svd_rcppml(A, 10)
+  },
+  "irlba" = {
+    model <- irlba::irlba(A, 10)
+  }
+)
+mbm
+```
