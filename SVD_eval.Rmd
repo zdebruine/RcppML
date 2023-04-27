@@ -1,41 +1,61 @@
 Build RcppML functions
 ```{r}
-#Rcpp::sourceCpp("src/RcppFunctions.cpp")
-#source("R/svd.R")
 library(RcppML)
-```
+library(microbenchmark)
 
-Generate rank 5 matrix for testing
 
-```{r}
-options(RcppML.threads = 7)
-options(RcppML.verbose = FALSE)
-A <- matrix(1:100, nrow=10, ncol=10)
+options(RcppML.threads = 0)
+options(RcppML.verbose = TRUE)
+
+data("aml")
+A_dense <- aml$data
+
+data("hawaiibirds")
+A_sparse <- hawaiibirds$counts
 ```
 
 Now generate and compare approximations based on IRLBA and RcppML
 ```{r}
-m_rcppml <- svd_rcppml(A, 3)
-#A_rcppml <- (m_rcppml$u * m_rcppml$d) %*% t(m_rcppml$v)
+m_rcppml <- svd_rcppml(A_dense, 10, tol = 1e-6, maxit = 1000)
 A_rcppml <- (m_rcppml$u %*% diag(m_rcppml$d)) %*% t(m_rcppml$v)
-m_irlba <- irlba::irlba(A, 3)
-#A_irlba <- (m_irlba$u * m_irlba$d) %*% t(m_irlba$v)
+
+m_irlba <- irlba::irlba(A_dense, 10, tol = 1e-6, maxit = 1000)
 A_irlba <- (m_irlba$u %*% diag(m_irlba$d)) %*% t(m_irlba$v)
 
-diff <- sum(A_irlba - A_rcppml)
-print(diff)
+diff <- norm((A_irlba - A_rcppml), "F")
+print("")
+print("% difference between irlba and RcppML reconstructions")
+print(diff / norm(A_irlba, "F"))
 
-plot(1:length(as.vector(A_irlba)), as.vector(A_irlba), type='l', col='green')
-lines(1:length(as.vector(A_rcppml)), as.vector(A_rcppml), col='red')
+plot(1:100, A_irlba[1:100,1], type='l', col='green')
+lines(1:100, A_rcppml[1:100,1], col='red')
+
+plot(m_irlba$d, m_rcppml$d, type='l', col='green')
 ```
+
+```{r}
+m_rcppml <- svd_rcppml(A_sparse, 10)
+A_rcppml <- (m_rcppml$u %*% diag(m_rcppml$d)) %*% t(m_rcppml$v)
+
+m_irlba <- irlba::irlba(A_sparse, 10)
+A_irlba <- (m_irlba$u %*% diag(m_irlba$d)) %*% t(m_irlba$v)
+
+diff <- norm((A_irlba - A_rcppml), "F")
+print("")
+print("% difference between irlba and RcppML reconstructions")
+print(diff / norm(A_irlba, "F"))
+
+plot(1:100, A_irlba[1:100,1], type='l', col='green')
+lines(1:100, A_rcppml[1:100,1], col='red')
+
+plot(m_irlba$d, m_rcppml$d, type='l', col='green')
+```
+
 
 Compare the runtime of RcppML vs irlba
 Check average time over 10 restarts, using the same data. 
 
 ```{r}
-library(microbenchmark)
-data("hawaiibirds")
-A <- hawaiibirds$counts
 mbm <- microbenchmark(
   "RcppML" = {
     model <- svd_rcppml(A, 10)
@@ -48,14 +68,38 @@ mbm
 ```
 
 ```{r}
-data("aml")
-A <- aml$data
+# Check that RcppML reconstructs accurate data
+m_rcppml <- svd_rcppml(A, 50)
+A_rcppml <- (m_rcppml$u %*% diag(m_rcppml$d)) %*% t(m_rcppml$v)
+m_irlba <- irlba::irlba(A, 50)
+A_irlba <- (m_irlba$u %*% diag(m_irlba$d)) %*% t(m_irlba$v)
+diff <- norm((A_irlba - A_rcppml), "F")
+print(diff / norm(A_irlba, "F"))
+
+```
+
+
+```{r}
 mbm <- microbenchmark(
-  "RcppML" = {
+  "RcppML Rank 10" = {
     model <- svd_rcppml(A, 10)
   },
-  "irlba" = {
+  "irlba Rank 10" = {
     model <- irlba::irlba(A, 10)
+  },
+  
+  "RcppML Rank 50" = {
+    model <- svd_rcppml(A, 50)
+  },
+  "irlba Rank 50" = {
+    model <- irlba::irlba(A, 50)
+  },
+  
+  "RcppML Rank 100" = {
+    model <- svd_rcppml(A, 100)
+  },
+  "irlba Rank 100" = {
+    model <- irlba::irlba(A, 100)
   }
 )
 mbm
