@@ -140,8 +140,12 @@ c_rsparsematrix <- function(nrow, ncol, inv_probability, pattern_only, rng) {
     .Call(`_RcppML_c_rsparsematrix`, nrow, ncol, inv_probability, pattern_only, rng)
 }
 
-Rcpp_svd_dense <- function(A_, k) {
-    .Call(`_RcppML_Rcpp_svd_dense`, A_, k)
+Rcpp_svd_dense <- function(A_, k, tol, maxit, threads, verbose) {
+    .Call(`_RcppML_Rcpp_svd_dense`, A_, k, tol, maxit, threads, verbose)
+}
+
+Rcpp_svd_sparse <- function(A_, k, tol, maxit, threads, verbose) {
+    .Call(`_RcppML_Rcpp_svd_sparse`, A_, k, tol, maxit, threads, verbose)
 }
 
 Rcpp_bipartite_match <- function(x) {

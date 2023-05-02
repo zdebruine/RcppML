@@ -167,11 +167,589 @@ namespace RcppML
     return losses.sum() / ((v.cols() * u.cols()));
   }
 
+  // Recursive static rank update for dense data
   template <>
   template <int k>
   void svd<Eigen::MatrixXd>::fit_rank_k()
   {
     fit_rank_k<k - 1>();
+    // alternating least squares updates
+    double d_k;
+    for (; iter_ < maxit; ++iter_)
+    {
+      // Save current value of u to track convergence
+      Eigen::VectorXd u_it = u.col(k);
+
+      // Calculate relevant values of 'a' matrix
+      double akk = u.col(k).dot(u.col(k));
+      Eigen::Vector<double, k> a;
+      for (int _k = 0; _k < k; ++_k)
+        a(_k) = u.col(k).dot(u.col(_k));
+
+      // Update each row of v
+#ifdef _OPENMP
+#pragma omp parallel for num_threads(threads) schedule(dynamic)
+#endif
+      for (int i = 0; i < v.rows(); ++i)
+      {
+        // Calculate b
+        v(i, k) = (u.col(k).dot(A.col(i)));
+        // Apply L1 penalty
+        if (L1[1] > 0)
+          v(i, k) -= L1[1];
+        
+        // Remove contribution of lower ranks from b
+        for (int _k = 0; _k < k; ++_k)
+        {
+          v(i, k) -= a(_k) * v(i, _k);
+        }
+
+        // Calculate x
+        v(i, k) /= (akk + DIV_OFFSET);
+      }
+
+      // Scale V
+      v.col(k) /= v.col(k).norm() + DIV_OFFSET;
+
+      // Calculate relevant values of a for update of u
+      akk = v.col(k).dot(v.col(k));
+      for (int _k = 0; _k < k; ++_k)
+        a(_k) = v.col(k).dot(v.col(_k));
+
+      // Update each row of u
+#ifdef _OPENMP
+#pragma omp parallel for num_threads(threads) schedule(dynamic)
+#endif
+      for (int i = 0; i < u.rows(); ++i)
+      {
+        // Calculate b
+        u(i, k) = v.col(k).dot(A.row(i));
+        // Apply L1 penalty
+        if (L1[0] > 0)
+          u(i, k) -= L1[0];
+
+        // Remove contribution of lower ranks from b
+        for (int _k = 0; _k < k; ++_k)
+        {
+          u(i, k) -= a(_k) * u(i, _k);
+        }
+
+        // Calculate x
+        u(i, k) /= (akk + DIV_OFFSET);
+      }
+
+      // Scale U
+      d_k = u.col(k).norm();
+      u.col(k) /= (d_k + DIV_OFFSET);
+
+      // Check early exit criteria
+      if (d_k < tol)
+      {
+        d_k = 0.0;
+        break;
+      }
+
+      // Check exit criteria
+      tol_ = (u.col(k) - u_it).norm();
+      if (verbose)
+        Rprintf("iteration %4d, rank %4d | %8.2e\n", iter_ + 1, k + 1, tol_);
+
+      if (tol_ < tol)
+        break;
+      Rcpp::checkUserInterrupt();
+    }
+
+    // Undo scaling of U to allow for calculation of next ranks, set d[k]
+    u.col(k) *= d_k;
+    d(k) = d_k;
+  };
+
+  // First rank specialization for dense data
+  template <>
+  template <>
+  void svd<Eigen::MatrixXd>::fit_rank_k<0>()
+  {
+    // alternating least squares updates
+    double d_k;
+    for (; iter_ < maxit; ++iter_)
+    {
+      Eigen::VectorXd u_it = u.col(0);
+
+      // Calculate scalar a
+      double akk = u.col(0).dot(u.col(0));
+#ifdef _OPENMP
+#pragma omp parallel for num_threads(threads) schedule(dynamic)
+#endif
+      for (int i = 0; i < v.rows(); ++i)
+      {
+        // Calculate b and apply L1 penalty
+        v(i, 0) = (u.col(0).dot(A.col(i)));
+        if (L1[1] > 0)
+          v(i, 0) -= L1[1];
+        // Calculate x
+        v(i, 0) /= akk + DIV_OFFSET;
+      }
+
+      // Scale V
+      v.col(0) /= v.col(0).norm() + DIV_OFFSET;
+
+      // Calculate scalar a for update of u
+      akk = v.col(0).dot(v.col(0));
+#ifdef _OPENMP
+#pragma omp parallel for num_threads(threads) schedule(dynamic)
+#endif
+      for (int i = 0; i < u.rows(); ++i)
+      {
+        // Calculate b and apply L1 penalty
+        u(i, 0) = v.col(0).dot(A.row(i));\
+        if (L1[0] > 0)
+          u(i, 0) -= L1[0];
+        // Calculate x
+        u(i, 0) /= akk + DIV_OFFSET;
+      }
+
+      // Scale U
+      d_k = u.col(0).norm();
+      u.col(0) /= (d_k + DIV_OFFSET);
+
+      // Check early exit criteria
+      if (d_k < tol)
+      {
+        d_k = 0.0;
+        break;
+      }
+
+      // Check exit criteria
+      tol_ = (u.col(0) - u_it).norm();
+      if (verbose)
+        Rprintf("iteration %4d, rank %4d | %8.2e\n", iter_ + 1, 1, tol_);
+
+      if (tol_ < tol)
+        break;
+      Rcpp::checkUserInterrupt();
+    }
+
+    // "unscale" U
+    u.col(0) *= d_k;
+    d(0) = d_k;
+  };
+
+  // General fit method for dense data of any rank
+  template <>
+  void svd<Eigen::MatrixXd>::fit()
+  {
+    // Use static method for ranks 1 to 100
+    switch (u.cols())
+    {
+    case 1:
+      fit_rank_k<0>();
+    case 2:
+      fit_rank_k<1>();
+      break;
+    case 3:
+      fit_rank_k<2>();
+      break;
+    case 4:
+      fit_rank_k<3>();
+      break;
+    case 5:
+      fit_rank_k<4>();
+      break;
+    case 6:
+      fit_rank_k<5>();
+      break;
+    case 7:
+      fit_rank_k<6>();
+      break;
+    case 8:
+      fit_rank_k<7>();
+      break;
+    case 9:
+      fit_rank_k<8>();
+      break;
+    case 10:
+      fit_rank_k<9>();
+      break;
+    case 11:
+      fit_rank_k<10>();
+      break;
+    case 12:
+      fit_rank_k<11>();
+      break;
+    case 13:
+      fit_rank_k<12>();
+      break;
+    case 14:
+      fit_rank_k<13>();
+      break;
+    case 15:
+      fit_rank_k<14>();
+      break;
+    case 16:
+      fit_rank_k<15>();
+      break;
+    case 17:
+      fit_rank_k<16>();
+      break;
+    case 18:
+      fit_rank_k<17>();
+      break;
+    case 19:
+      fit_rank_k<18>();
+      break;
+    case 20:
+      fit_rank_k<19>();
+      break;
+    case 21:
+      fit_rank_k<20>();
+      break;
+    case 22:
+      fit_rank_k<21>();
+      break;
+    case 23:
+      fit_rank_k<22>();
+      break;
+    case 24:
+      fit_rank_k<23>();
+      break;
+    case 25:
+      fit_rank_k<24>();
+      break;
+    case 26:
+      fit_rank_k<25>();
+      break;
+    case 27:
+      fit_rank_k<26>();
+      break;
+    case 28:
+      fit_rank_k<27>();
+      break;
+    case 29:
+      fit_rank_k<28>();
+      break;
+    case 30:
+      fit_rank_k<29>();
+      break;
+    case 31:
+      fit_rank_k<30>();
+      break;
+    case 32:
+      fit_rank_k<31>();
+      break;
+    case 33:
+      fit_rank_k<32>();
+      break;
+    case 34:
+      fit_rank_k<33>();
+      break;
+    case 35:
+      fit_rank_k<34>();
+      break;
+    case 36:
+      fit_rank_k<35>();
+      break;
+    case 37:
+      fit_rank_k<36>();
+      break;
+    case 38:
+      fit_rank_k<37>();
+      break;
+    case 39:
+      fit_rank_k<38>();
+      break;
+    case 40:
+      fit_rank_k<39>();
+      break;
+    case 41:
+      fit_rank_k<40>();
+      break;
+    case 42:
+      fit_rank_k<41>();
+      break;
+    case 43:
+      fit_rank_k<42>();
+      break;
+    case 44:
+      fit_rank_k<43>();
+      break;
+    case 45:
+      fit_rank_k<44>();
+      break;
+    case 46:
+      fit_rank_k<45>();
+      break;
+    case 47:
+      fit_rank_k<46>();
+      break;
+    case 48:
+      fit_rank_k<47>();
+      break;
+    case 49:
+      fit_rank_k<48>();
+      break;
+    case 50:
+      fit_rank_k<49>();
+      break;
+    case 51:
+      fit_rank_k<50>();
+      break;
+    case 52:
+      fit_rank_k<51>();
+      break;
+    case 53:
+      fit_rank_k<52>();
+      break;
+    case 54:
+      fit_rank_k<53>();
+      break;
+    case 55:
+      fit_rank_k<54>();
+      break;
+    case 56:
+      fit_rank_k<55>();
+      break;
+    case 57:
+      fit_rank_k<56>();
+      break;
+    case 58:
+      fit_rank_k<57>();
+      break;
+    case 59:
+      fit_rank_k<58>();
+      break;
+    case 60:
+      fit_rank_k<59>();
+      break;
+    case 61:
+      fit_rank_k<60>();
+      break;
+    case 62:
+      fit_rank_k<61>();
+      break;
+    case 63:
+      fit_rank_k<62>();
+      break;
+    case 64:
+      fit_rank_k<63>();
+      break;
+    case 65:
+      fit_rank_k<64>();
+      break;
+    case 66:
+      fit_rank_k<65>();
+      break;
+    case 67:
+      fit_rank_k<66>();
+      break;
+    case 68:
+      fit_rank_k<67>();
+      break;
+    case 69:
+      fit_rank_k<68>();
+      break;
+    case 70:
+      fit_rank_k<69>();
+      break;
+    case 71:
+      fit_rank_k<70>();
+      break;
+    case 72:
+      fit_rank_k<71>();
+      break;
+    case 73:
+      fit_rank_k<72>();
+      break;
+    case 74:
+      fit_rank_k<73>();
+      break;
+    case 75:
+      fit_rank_k<74>();
+      break;
+    case 76:
+      fit_rank_k<75>();
+      break;
+    case 77:
+      fit_rank_k<76>();
+      break;
+    case 78:
+      fit_rank_k<77>();
+      break;
+    case 79:
+      fit_rank_k<78>();
+      break;
+    case 80:
+      fit_rank_k<79>();
+      break;
+    case 81:
+      fit_rank_k<80>();
+      break;
+    case 82:
+      fit_rank_k<81>();
+      break;
+    case 83:
+      fit_rank_k<82>();
+      break;
+    case 84:
+      fit_rank_k<83>();
+      break;
+    case 85:
+      fit_rank_k<84>();
+      break;
+    case 86:
+      fit_rank_k<85>();
+      break;
+    case 87:
+      fit_rank_k<86>();
+      break;
+    case 88:
+      fit_rank_k<87>();
+      break;
+    case 89:
+      fit_rank_k<88>();
+      break;
+    case 90:
+      fit_rank_k<89>();
+      break;
+    case 91:
+      fit_rank_k<90>();
+      break;
+    case 92:
+      fit_rank_k<91>();
+      break;
+    case 93:
+      fit_rank_k<92>();
+      break;
+    case 94:
+      fit_rank_k<93>();
+      break;
+    case 95:
+      fit_rank_k<94>();
+      break;
+    case 96:
+      fit_rank_k<95>();
+      break;
+    case 97:
+      fit_rank_k<96>();
+      break;
+    case 98:
+      fit_rank_k<97>();
+      break;
+    case 99:
+      fit_rank_k<98>();
+      break;
+    case 100:
+      fit_rank_k<99>();
+      break;
+    default:
+      fit_rank_k<99>();
+      // General case for rank 101+
+      for (int k = 100; k < u.cols(); ++k)
+      {
+        // alternating least squares updates
+        double d_k;
+        for (; iter_ < maxit; ++iter_)
+        {
+          Eigen::VectorXd u_it = u.col(k);
+
+          // Calculate values of a for update of v
+          double akk = u.col(k).dot(u.col(k));
+          Eigen::VectorXd a(k);
+          for (int _k = 0; _k < k; ++_k)
+            a(_k) = u.col(k).dot(u.col(_k));
+
+#ifdef _OPENMP
+#pragma omp parallel for num_threads(threads) schedule(dynamic)
+#endif
+          for (int i = 0; i < v.rows(); ++i)
+          {
+            // Calculate b
+            v(i, k) = (u.col(k).dot(A.col(i)));
+            if (L1[1] > 0)
+              v(i, k) -= L1[1];
+
+            // Remove contributions of previous ranks
+            for (int _k = 0; _k < k; ++_k)
+            {
+              v(i, k) -= a(_k) * v(i, _k);
+            }
+
+            // Calculate x
+            v(i, k) /= (akk + DIV_OFFSET);
+          }
+
+          // Scale V
+          v.col(k) /= v.col(k).norm() + DIV_OFFSET;
+
+          // Update U
+          akk = v.col(k).dot(v.col(k));
+          for (int _k = 0; _k < k; ++_k)
+            a(_k) = v.col(k).dot(v.col(_k));
+
+#ifdef _OPENMP
+#pragma omp parallel for num_threads(threads) schedule(dynamic)
+#endif
+          for (int i = 0; i < u.rows(); ++i)
+          {
+            // Calculate b
+            u(i, k) = v.col(k).dot(A.row(i));
+            if (L1[0] > 0)
+              u(i, k) -= L1[0];
+
+            // Remove contribution of previous ranks
+            for (int _k = 0; _k < k; ++_k)
+            {
+              u(i, k) -= a(_k) * u(i, _k);
+            }
+
+            // Calculate x
+            u(i, k) /= (akk + DIV_OFFSET);
+          }
+
+          // Scale U
+          d_k = u.col(k).norm();
+          u.col(k) /= (d_k + DIV_OFFSET);
+
+          // Check early exit criteria
+          if (d_k < tol)
+          {
+            d_k = 0.0;
+            break;
+          }
+
+          // Check exit criteria
+          tol_ = (u.col(k) - u_it).cwiseAbs().sum();
+          if (verbose)
+            Rprintf("iteration %4d, rank %4d | %8.2e\n", iter_ + 1, k + 1, tol_);
+
+          if (tol_ < tol)
+            break;
+          Rcpp::checkUserInterrupt();
+        }
+
+        // "unscale" U
+        u.col(k) *= d_k;
+        d(k) = d_k;
+      }
+      break;
+    }
+
+    // Scale u, since this is undone after each rank update
+    for (int i = 0; i < u.cols(); ++i)
+      u.col(i) /= (d(i) + DIV_OFFSET);
+
+    if (tol_ > tol && iter_ == maxit && verbose)
+      Rprintf(" convergence not reached in %d iterations\n  (actual tol = %4.2e, target tol = %4.2e)\n", iter_, tol_, tol);
+  };
+
+  // Recursive static rank update for sparse data
+  template <>
+  template <int k>
+  void svd<Rcpp::SparseMatrix>::fit_rank_k()
+  {
+    fit_rank_k<k - 1>();
+
+    Rcpp::SparseMatrix At = A.transpose();
+
     // alternating least squares updates
     double d_k;
     for (; iter_ < maxit; ++iter_)
@@ -188,17 +766,20 @@ namespace RcppML
 #endif
       for (int i = 0; i < v.rows(); ++i)
       {
-        v(i, k) = (u.col(k).dot(A.col(i)));
+        // Calculate b element-by-element
+        v(i, k) = 0.0;
+        for (Rcpp::SparseMatrix::InnerIterator iter(A, i); iter; ++iter)
+          v(i, k) += u(iter.row(), k) * iter.value();
+
+        if (L1[1] > 0)
+          v(i, k) -= L1[1];
 
         for (int _k = 0; _k < k; ++_k)
         {
           v(i, k) -= a(_k) * v(i, _k);
         }
 
-        if (L1[1] > 0)
-          v(i, k) -= L1[1];
-
-        v(i, k) /= (akk + DIV_OFFSET);
+        v(i, k) /= akk + DIV_OFFSET;
       }
 
       // Scale V
@@ -214,17 +795,20 @@ namespace RcppML
 #endif
       for (int i = 0; i < u.rows(); ++i)
       {
-        u(i, k) = v.col(k).dot(A.row(i));
+        // Calculate b element-by-element
+        u(i, k) = 0.0;
+        for (Rcpp::SparseMatrix::InnerIterator iter(At, i); iter; ++iter)
+          u(i, k) += v(iter.row(), k) * iter.value();
+
+        if (L1[0] > 0)
+          u(i, k) -= L1[0];
 
         for (int _k = 0; _k < k; ++_k)
         {
           u(i, k) -= a(_k) * u(i, _k);
         }
 
-        if (L1[0] > 0)
-          u(i, k) -= L1[0];
-
-        u(i, k) /= (akk + DIV_OFFSET);
+        u(i, k) /= akk + DIV_OFFSET;
       }
 
       // Scale U
@@ -253,10 +837,13 @@ namespace RcppML
     d(k) = d_k;
   };
 
+  // First rank specialization for sparse data
   template <>
   template <>
-  void svd<Eigen::MatrixXd>::fit_rank_k<0>()
+  void svd<Rcpp::SparseMatrix>::fit_rank_k<0>()
   {
+    Rcpp::SparseMatrix At = A.transpose();
+
     // alternating least squares updates
     double d_k;
     for (; iter_ < maxit; ++iter_)
@@ -269,8 +856,9 @@ namespace RcppML
 #endif
       for (int i = 0; i < v.rows(); ++i)
       {
-        v(i, 0) = (u.col(0).dot(A.col(i)));
-
+        v(i, 0) = 0.0;
+        for (Rcpp::SparseMatrix::InnerIterator iter(A, i); iter; ++iter)
+          v(i, 0) += u(iter.row(), 0) * iter.value();
         if (L1[1] > 0)
           v(i, 0) -= L1[1];
 
@@ -282,12 +870,15 @@ namespace RcppML
 
       // Update U
       akk = v.col(0).dot(v.col(0));
+
 #ifdef _OPENMP
 #pragma omp parallel for num_threads(threads) schedule(dynamic)
 #endif
       for (int i = 0; i < u.rows(); ++i)
       {
-        u(i, 0) = v.col(0).dot(A.row(i));
+        u(i, 0) = 0.0;
+        for (Rcpp::SparseMatrix::InnerIterator iter(At, i); iter; ++iter)
+          u(i, 0) += v(iter.row(), 0) * iter.value();
 
         if (L1[0] > 0)
           u(i, 0) -= L1[0];
@@ -319,1070 +910,317 @@ namespace RcppML
     // "unscale" U
     u.col(0) *= d_k;
     d(0) = d_k;
-  };
-
-  template <>
-  void svd<Eigen::MatrixXd>::fit()
-  {
-    if (u.cols() == 1)
-    {
-      fit_rank_k<0>();
-    }
-    else if (u.cols() == 2)
-    {
-      fit_rank_k<1>();
-    }
-    else if (u.cols() == 3)
-    {
-      fit_rank_k<2>();
-    }
-    else if (u.cols() == 4)
-    {
-      fit_rank_k<3>();
-    }
-    else if (u.cols() == 5)
-    {
-      fit_rank_k<4>();
-    }
-    else if (u.cols() == 6)
-    {
-      fit_rank_k<5>();
-    }
-    else if (u.cols() == 7)
-    {
-      fit_rank_k<6>();
-    }
-    else if (u.cols() == 8)
-    {
-      fit_rank_k<7>();
-    }
-    else if (u.cols() == 9)
-    {
-      fit_rank_k<8>();
-    }
-    else if (u.cols() == 10)
-    {
-      fit_rank_k<9>();
-    }
-    else if (u.cols() == 11)
-    {
-      fit_rank_k<10>();
-    }
-    else if (u.cols() == 12)
-    {
-      fit_rank_k<11>();
-    }
-    else if (u.cols() == 13)
-    {
-      fit_rank_k<12>();
-    }
-    else if (u.cols() == 14)
-    {
-      fit_rank_k<13>();
-    }
-    else if (u.cols() == 15)
-    {
-      fit_rank_k<14>();
-    }
-    else if (u.cols() == 16)
-    {
-      fit_rank_k<15>();
-    }
-    else if (u.cols() == 17)
-    {
-      fit_rank_k<16>();
-    }
-    else if (u.cols() == 18)
-    {
-      fit_rank_k<17>();
-    }
-    else if (u.cols() == 19)
-    {
-      fit_rank_k<18>();
-    }
-    else if (u.cols() == 20)
-    {
-      fit_rank_k<19>();
-    }
-    else if (u.cols() == 21)
-    {
-      fit_rank_k<20>();
-    }
-    else if (u.cols() == 22)
-    {
-      fit_rank_k<21>();
-    }
-    else if (u.cols() == 23)
-    {
-      fit_rank_k<22>();
-    }
-    else if (u.cols() == 24)
-    {
-      fit_rank_k<23>();
-    }
-    else if (u.cols() == 25)
-    {
-      fit_rank_k<24>();
-    }
-    else if (u.cols() == 26)
-    {
-      fit_rank_k<25>();
-    }
-    else if (u.cols() == 27)
-    {
-      fit_rank_k<26>();
-    }
-    else if (u.cols() == 28)
-    {
-      fit_rank_k<27>();
-    }
-    else if (u.cols() == 29)
-    {
-      fit_rank_k<28>();
-    }
-    else if (u.cols() == 30)
-    {
-      fit_rank_k<29>();
-    }
-    else if (u.cols() == 31)
-    {
-      fit_rank_k<30>();
-    }
-    else if (u.cols() == 32)
-    {
-      fit_rank_k<31>();
-    }
-    else if (u.cols() == 33)
-    {
-      fit_rank_k<32>();
-    }
-    else if (u.cols() == 34)
-    {
-      fit_rank_k<33>();
-    }
-    else if (u.cols() == 35)
-    {
-      fit_rank_k<34>();
-    }
-    else if (u.cols() == 36)
-    {
-      fit_rank_k<35>();
-    }
-    else if (u.cols() == 37)
-    {
-      fit_rank_k<36>();
-    }
-    else if (u.cols() == 38)
-    {
-      fit_rank_k<37>();
-    }
-    else if (u.cols() == 39)
-    {
-      fit_rank_k<38>();
-    }
-    else if (u.cols() == 40)
-    {
-      fit_rank_k<39>();
-    }
-    else if (u.cols() == 41)
-    {
-      fit_rank_k<40>();
-    }
-    else if (u.cols() == 42)
-    {
-      fit_rank_k<41>();
-    }
-    else if (u.cols() == 43)
-    {
-      fit_rank_k<42>();
-    }
-    else if (u.cols() == 44)
-    {
-      fit_rank_k<43>();
-    }
-    else if (u.cols() == 45)
-    {
-      fit_rank_k<44>();
-    }
-    else if (u.cols() == 46)
-    {
-      fit_rank_k<45>();
-    }
-    else if (u.cols() == 47)
-    {
-      fit_rank_k<46>();
-    }
-    else if (u.cols() == 48)
-    {
-      fit_rank_k<47>();
-    }
-    else if (u.cols() == 49)
-    {
-      fit_rank_k<48>();
-    }
-    else if (u.cols() == 50)
-    {
-      fit_rank_k<49>();
-    }
-    else if (u.cols() == 51)
-    {
-      fit_rank_k<50>();
-    }
-    else if (u.cols() == 52)
-    {
-      fit_rank_k<51>();
-    }
-    else if (u.cols() == 53)
-    {
-      fit_rank_k<52>();
-    }
-    else if (u.cols() == 54)
-    {
-      fit_rank_k<53>();
-    }
-    else if (u.cols() == 55)
-    {
-      fit_rank_k<54>();
-    }
-    else if (u.cols() == 56)
-    {
-      fit_rank_k<55>();
-    }
-    else if (u.cols() == 57)
-    {
-      fit_rank_k<56>();
-    }
-    else if (u.cols() == 58)
-    {
-      fit_rank_k<57>();
-    }
-    else if (u.cols() == 59)
-    {
-      fit_rank_k<58>();
-    }
-    else if (u.cols() == 60)
-    {
-      fit_rank_k<59>();
-    }
-    else if (u.cols() == 61)
-    {
-      fit_rank_k<60>();
-    }
-    else if (u.cols() == 62)
-    {
-      fit_rank_k<61>();
-    }
-    else if (u.cols() == 63)
-    {
-      fit_rank_k<62>();
-    }
-    else if (u.cols() == 64)
-    {
-      fit_rank_k<63>();
-    }
-    else if (u.cols() == 65)
-    {
-      fit_rank_k<64>();
-    }
-    else if (u.cols() == 66)
-    {
-      fit_rank_k<65>();
-    }
-    else if (u.cols() == 67)
-    {
-      fit_rank_k<66>();
-    }
-    else if (u.cols() == 68)
-    {
-      fit_rank_k<67>();
-    }
-    else if (u.cols() == 69)
-    {
-      fit_rank_k<68>();
-    }
-    else if (u.cols() == 70)
-    {
-      fit_rank_k<69>();
-    }
-    else if (u.cols() == 71)
-    {
-      fit_rank_k<70>();
-    }
-    else if (u.cols() == 72)
-    {
-      fit_rank_k<71>();
-    }
-    else if (u.cols() == 73)
-    {
-      fit_rank_k<72>();
-    }
-    else if (u.cols() == 74)
-    {
-      fit_rank_k<73>();
-    }
-    else if (u.cols() == 75)
-    {
-      fit_rank_k<74>();
-    }
-    else if (u.cols() == 76)
-    {
-      fit_rank_k<75>();
-    }
-    else if (u.cols() == 77)
-    {
-      fit_rank_k<76>();
-    }
-    else if (u.cols() == 78)
-    {
-      fit_rank_k<77>();
-    }
-    else if (u.cols() == 79)
-    {
-      fit_rank_k<78>();
-    }
-    else if (u.cols() == 80)
-    {
-      fit_rank_k<79>();
-    }
-    else if (u.cols() == 81)
-    {
-      fit_rank_k<80>();
-    }
-    else if (u.cols() == 82)
-    {
-      fit_rank_k<81>();
-    }
-    else if (u.cols() == 83)
-    {
-      fit_rank_k<82>();
-    }
-    else if (u.cols() == 84)
-    {
-      fit_rank_k<83>();
-    }
-    else if (u.cols() == 85)
-    {
-      fit_rank_k<84>();
-    }
-    else if (u.cols() == 86)
-    {
-      fit_rank_k<85>();
-    }
-    else if (u.cols() == 87)
-    {
-      fit_rank_k<86>();
-    }
-    else if (u.cols() == 88)
-    {
-      fit_rank_k<87>();
-    }
-    else if (u.cols() == 89)
-    {
-      fit_rank_k<88>();
-    }
-    else if (u.cols() == 90)
-    {
-      fit_rank_k<89>();
-    }
-    else if (u.cols() == 91)
-    {
-      fit_rank_k<90>();
-    }
-    else if (u.cols() == 92)
-    {
-      fit_rank_k<91>();
-    }
-    else if (u.cols() == 93)
-    {
-      fit_rank_k<92>();
-    }
-    else if (u.cols() == 94)
-    {
-      fit_rank_k<93>();
-    }
-    else if (u.cols() == 95)
-    {
-      fit_rank_k<94>();
-    }
-    else if (u.cols() == 96)
-    {
-      fit_rank_k<95>();
-    }
-    else if (u.cols() == 97)
-    {
-      fit_rank_k<96>();
-    }
-    else if (u.cols() == 98)
-    {
-      fit_rank_k<97>();
-    }
-    else if (u.cols() == 99)
-    {
-      fit_rank_k<98>();
-    }
-    else
-    {
-      for (int k = 0; k < u.cols(); ++k)
-      {
-        // alternating least squares updates
-        double d_k;
-        for (; iter_ < maxit; ++iter_)
-        {
-          Eigen::VectorXd u_it = u.col(k);
-
-          double akk = u.col(k).dot(u.col(k));
-          Eigen::VectorXd a(k);
-          for (int _k = 0; _k < k; ++_k)
-            a(_k) = u.col(k).dot(u.col(_k));
-
-#ifdef _OPENMP
-#pragma omp parallel for num_threads(threads) schedule(dynamic)
-#endif
-          for (int i = 0; i < v.rows(); ++i)
-          {
-            v(i, k) = (u.col(k).dot(A.col(i)));
-
-            for (int _k = 0; _k < k; ++_k)
-            {
-              v(i, k) -= a(_k) * v(i, _k);
-            }
-
-            if (L1[1] > 0)
-              v(i, k) -= L1[1];
-
-            v(i, k) /= (akk + DIV_OFFSET);
-          }
-
-          // Scale V
-          v.col(k) /= v.col(k).norm() + DIV_OFFSET;
-
-          // Update U
-          akk = v.col(k).dot(v.col(k));
-          for (int _k = 0; _k < k; ++_k)
-            a(_k) = v.col(k).dot(v.col(_k));
-
-#ifdef _OPENMP
-#pragma omp parallel for num_threads(threads) schedule(dynamic)
-#endif
-          for (int i = 0; i < u.rows(); ++i)
-          {
-            u(i, k) = v.col(k).dot(A.row(i));
-
-            for (int _k = 0; _k < k; ++_k)
-            {
-              u(i, k) -= a(_k) * u(i, _k);
-            }
-
-            if (L1[0] > 0)
-              u(i, k) -= L1[0];
-
-            u(i, k) /= (akk + DIV_OFFSET);
-          }
-
-          // Scale U
-          d_k = u.col(k).norm();
-          u.col(k) /= (d_k + DIV_OFFSET);
-
-          // Check early exit criteria
-          if (d_k < tol)
-          {
-            d_k = 0.0;
-            break;
-          }
-
-          // Check exit criteria
-          tol_ = (u.col(k) - u_it).cwiseAbs().sum();
-          if (verbose)
-            Rprintf("iteration %4d, rank %4d | %8.2e\n", iter_ + 1, k + 1, tol_);
-
-          if (tol_ < tol)
-            break;
-          Rcpp::checkUserInterrupt();
-        }
-
-        // "unscale" U
-        u.col(k) *= d_k;
-        d(k) = d_k;
-      }
-    }
-
-    // Scale u
-    for (int i = 0; i < u.cols(); ++i)
-      u.col(i) /= (d(i) + DIV_OFFSET);
-
-    if (tol_ > tol && iter_ == maxit && verbose)
-      Rprintf(" convergence not reached in %d iterations\n  (actual tol = %4.2e, target tol = %4.2e)\n", iter_, tol_, tol);
-  };
-
-  template <>
-  template <int k>
-  void svd<Rcpp::SparseMatrix>::fit_rank_k()
-  {
-    fit_rank_k<k - 1>();
-
-    Rcpp::SparseMatrix At = A.transpose();
-
-    // alternating least squares updates
-    double d_k;
-    for (; iter_ < maxit; ++iter_)
-    {
-      Eigen::VectorXd u_it = u.col(k);
-
-      double akk = u.col(k).dot(u.col(k));
-      Eigen::Vector<double, k> a;
-      for (int _k = 0; _k < k; ++_k)
-        a(_k) = u.col(k).dot(u.col(_k));
-
-#ifdef _OPENMP
-#pragma omp parallel for num_threads(threads) schedule(dynamic)
-#endif
-      for (int i = 0; i < v.rows(); ++i)
-      {
-        v(i, k) = 0.0;
-        for (Rcpp::SparseMatrix::InnerIterator iter(A, i); iter; ++iter)
-          v(i, k) += u(iter.row(), k) * iter.value();
-
-        for (int _k = 0; _k < k; ++_k)
-        {
-          v(i, k) -= a(_k) * v(i, _k);
-        }
-
-        if (L1[1] > 0)
-          v(i, k) -= L1[1];
-
-        v(i, k) /= akk + DIV_OFFSET;
-      }
-
-      // Scale V
-      v.col(k) /= v.col(k).norm() + DIV_OFFSET;
-
-      // Update U
-      akk = v.col(k).dot(v.col(k));
-      for (int _k = 0; _k < k; ++_k)
-        a(_k) = v.col(k).dot(v.col(_k));
-
-#ifdef _OPENMP
-#pragma omp parallel for num_threads(threads) schedule(dynamic)
-#endif
-      for (int i = 0; i < u.rows(); ++i)
-      {
-        u(i, k) = 0.0;
-        for (Rcpp::SparseMatrix::InnerIterator iter(At, i); iter; ++iter)
-          u(i, k) += v(iter.row(), k) * iter.value();
-
-        for (int _k = 0; _k < k; ++_k)
-        {
-          u(i, k) -= a(_k) * u(i, _k);
-        }
-
-        if (L1[0] > 0)
-          u(i, k) -= L1[0];
-
-        u(i, k) /= akk + DIV_OFFSET;
-      }
-
-      // Scale U
-      d_k = u.col(k).norm();
-      u.col(k) /= (d_k + DIV_OFFSET);
-
-      // Check early exit criteria
-      if (d_k < tol)
-      {
-        d_k = 0.0;
-        break;
-      }
-
-      // Check exit criteria
-      tol_ = (u.col(k) - u_it).norm();
-      if (verbose)
-        Rprintf("iteration %4d, rank %4d | %8.2e\n", iter_ + 1, k + 1, tol_);
-
-      if (tol_ < tol)
-        break;
-      Rcpp::checkUserInterrupt();
-    }
-
-    // "unscale" U
-    u.col(k) *= d_k;
-    d(k) = d_k;
-  };
-
-  template <>
-  template <>
-  void svd<Rcpp::SparseMatrix>::fit_rank_k<0>()
-  {
-    Rcpp::SparseMatrix At = A.transpose();
-
-    // alternating least squares updates
-    double d_k;
-    for (; iter_ < maxit; ++iter_)
-    {
-      Eigen::VectorXd u_it = u.col(0);
-
-      double akk = u.col(0).dot(u.col(0));
-#ifdef _OPENMP
-#pragma omp parallel for num_threads(threads) schedule(dynamic)
-#endif
-      for (int i = 0; i < v.rows(); ++i)
-      {
-        v(i, 0) = 0.0;
-        for (Rcpp::SparseMatrix::InnerIterator iter(A, i); iter; ++iter)
-          v(i, 0) += u(iter.row(), 0) * iter.value();
-        v(i, 0) *= akk;
-
-        if (L1[1] > 0)
-          v(i, 0) -= L1[1];
-      }
-
-      // Scale V
-      v.col(0) /= v.col(0).norm() + DIV_OFFSET;
-
-      // Update U
-      akk = v.col(0).dot(v.col(0));
-
-#ifdef _OPENMP
-#pragma omp parallel for num_threads(threads) schedule(dynamic)
-#endif
-      for (int i = 0; i < u.rows(); ++i)
-      {
-        u(i, 0) = 0.0;
-        for (Rcpp::SparseMatrix::InnerIterator iter(At, i); iter; ++iter)
-          u(i, 0) += v(iter.row(), 0) * iter.value();
-        u(i, 0) *= akk;
-
-        if (L1[0] > 0)
-          u(i, 0) -= L1[0];
-      }
-
-      // Scale U
-      d_k = u.col(0).norm();
-      u.col(0) /= (d_k + DIV_OFFSET);
-
-      // Check early exit criteria
-      if (d_k < tol)
-      {
-        d_k = 0.0;
-        break;
-      }
-
-      // Check exit criteria
-      tol_ = (u.col(0) - u_it).norm();
-      if (verbose)
-        Rprintf("iteration %4d, rank %4d | %8.2e\n", iter_ + 1, 1, tol_);
-
-      if (tol_ < tol)
-        break;
-      Rcpp::checkUserInterrupt();
-    }
-
-    // "unscale" U
-    u.col(0) *= d_k;
-    d(0) = d_k;
   }
 
+  // General fit method for sparse data of any rank
   template <>
   void svd<Rcpp::SparseMatrix>::fit()
   {
-    if (u.cols() == 1)
+    switch (u.cols())
     {
+    case 1:
       fit_rank_k<0>();
-    }
-    else if (u.cols() == 2)
-    {
+    case 2:
       fit_rank_k<1>();
-    }
-    else if (u.cols() == 3)
-    {
+      break;
+    case 3:
       fit_rank_k<2>();
-    }
-    else if (u.cols() == 4)
-    {
+      break;
+    case 4:
       fit_rank_k<3>();
-    }
-    else if (u.cols() == 5)
-    {
+      break;
+    case 5:
       fit_rank_k<4>();
-    }
-    else if (u.cols() == 6)
-    {
+      break;
+    case 6:
       fit_rank_k<5>();
-    }
-    else if (u.cols() == 7)
-    {
+      break;
+    case 7:
       fit_rank_k<6>();
-    }
-    else if (u.cols() == 8)
-    {
+      break;
+    case 8:
       fit_rank_k<7>();
-    }
-    else if (u.cols() == 9)
-    {
+      break;
+    case 9:
       fit_rank_k<8>();
-    }
-    else if (u.cols() == 10)
-    {
+      break;
+    case 10:
       fit_rank_k<9>();
-    }
-    else if (u.cols() == 11)
-    {
+      break;
+    case 11:
       fit_rank_k<10>();
-    }
-    else if (u.cols() == 12)
-    {
+      break;
+    case 12:
       fit_rank_k<11>();
-    }
-    else if (u.cols() == 13)
-    {
+      break;
+    case 13:
       fit_rank_k<12>();
-    }
-    else if (u.cols() == 14)
-    {
+      break;
+    case 14:
       fit_rank_k<13>();
-    }
-    else if (u.cols() == 15)
-    {
+      break;
+    case 15:
       fit_rank_k<14>();
-    }
-    else if (u.cols() == 16)
-    {
+      break;
+    case 16:
       fit_rank_k<15>();
-    }
-    else if (u.cols() == 17)
-    {
+      break;
+    case 17:
       fit_rank_k<16>();
-    }
-    else if (u.cols() == 18)
-    {
+      break;
+    case 18:
       fit_rank_k<17>();
-    }
-    else if (u.cols() == 19)
-    {
+      break;
+    case 19:
       fit_rank_k<18>();
-    }
-    else if (u.cols() == 20)
-    {
+      break;
+    case 20:
       fit_rank_k<19>();
-    }
-    else if (u.cols() == 21)
-    {
+      break;
+    case 21:
       fit_rank_k<20>();
-    }
-    else if (u.cols() == 22)
-    {
+      break;
+    case 22:
       fit_rank_k<21>();
-    }
-    else if (u.cols() == 23)
-    {
+      break;
+    case 23:
       fit_rank_k<22>();
-    }
-    else if (u.cols() == 24)
-    {
+      break;
+    case 24:
       fit_rank_k<23>();
-    }
-    else if (u.cols() == 25)
-    {
+      break;
+    case 25:
       fit_rank_k<24>();
-    }
-    else if (u.cols() == 26)
-    {
+      break;
+    case 26:
       fit_rank_k<25>();
-    }
-    else if (u.cols() == 27)
-    {
+      break;
+    case 27:
       fit_rank_k<26>();
-    }
-    else if (u.cols() == 28)
-    {
+      break;
+    case 28:
       fit_rank_k<27>();
-    }
-    else if (u.cols() == 29)
-    {
+      break;
+    case 29:
       fit_rank_k<28>();
-    }
-    else if (u.cols() == 30)
-    {
+      break;
+    case 30:
       fit_rank_k<29>();
-    }
-    else if (u.cols() == 31)
-    {
+      break;
+    case 31:
       fit_rank_k<30>();
-    }
-    else if (u.cols() == 32)
-    {
+      break;
+    case 32:
       fit_rank_k<31>();
-    }
-    else if (u.cols() == 33)
-    {
+      break;
+    case 33:
       fit_rank_k<32>();
-    }
-    else if (u.cols() == 34)
-    {
+      break;
+    case 34:
       fit_rank_k<33>();
-    }
-    else if (u.cols() == 35)
-    {
+      break;
+    case 35:
       fit_rank_k<34>();
-    }
-    else if (u.cols() == 36)
-    {
+      break;
+    case 36:
       fit_rank_k<35>();
-    }
-    else if (u.cols() == 37)
-    {
+      break;
+    case 37:
       fit_rank_k<36>();
-    }
-    else if (u.cols() == 38)
-    {
+      break;
+    case 38:
       fit_rank_k<37>();
-    }
-    else if (u.cols() == 39)
-    {
+      break;
+    case 39:
       fit_rank_k<38>();
-    }
-    else if (u.cols() == 40)
-    {
+      break;
+    case 40:
       fit_rank_k<39>();
-    }
-    else if (u.cols() == 41)
-    {
+      break;
+    case 41:
       fit_rank_k<40>();
-    }
-    else if (u.cols() == 42)
-    {
+      break;
+    case 42:
       fit_rank_k<41>();
-    }
-    else if (u.cols() == 43)
-    {
+      break;
+    case 43:
       fit_rank_k<42>();
-    }
-    else if (u.cols() == 44)
-    {
+      break;
+    case 44:
       fit_rank_k<43>();
-    }
-    else if (u.cols() == 45)
-    {
+      break;
+    case 45:
       fit_rank_k<44>();
-    }
-    else if (u.cols() == 46)
-    {
+      break;
+    case 46:
       fit_rank_k<45>();
-    }
-    else if (u.cols() == 47)
-    {
+      break;
+    case 47:
       fit_rank_k<46>();
-    }
-    else if (u.cols() == 48)
-    {
+      break;
+    case 48:
       fit_rank_k<47>();
-    }
-    else if (u.cols() == 49)
-    {
+      break;
+    case 49:
       fit_rank_k<48>();
-    }
-    else if (u.cols() == 50)
-    {
+      break;
+    case 50:
       fit_rank_k<49>();
-    }
-    else if (u.cols() == 51)
-    {
+      break;
+    case 51:
       fit_rank_k<50>();
-    }
-    else if (u.cols() == 52)
-    {
+      break;
+    case 52:
       fit_rank_k<51>();
-    }
-    else if (u.cols() == 53)
-    {
+      break;
+    case 53:
       fit_rank_k<52>();
-    }
-    else if (u.cols() == 54)
-    {
+      break;
+    case 54:
       fit_rank_k<53>();
-    }
-    else if (u.cols() == 55)
-    {
+      break;
+    case 55:
       fit_rank_k<54>();
-    }
-    else if (u.cols() == 56)
-    {
+      break;
+    case 56:
       fit_rank_k<55>();
-    }
-    else if (u.cols() == 57)
-    {
+      break;
+    case 57:
       fit_rank_k<56>();
-    }
-    else if (u.cols() == 58)
-    {
+      break;
+    case 58:
       fit_rank_k<57>();
-    }
-    else if (u.cols() == 59)
-    {
+      break;
+    case 59:
       fit_rank_k<58>();
-    }
-    else if (u.cols() == 60)
-    {
+      break;
+    case 60:
       fit_rank_k<59>();
-    }
-    else if (u.cols() == 61)
-    {
+      break;
+    case 61:
       fit_rank_k<60>();
-    }
-    else if (u.cols() == 62)
-    {
+      break;
+    case 62:
       fit_rank_k<61>();
-    }
-    else if (u.cols() == 63)
-    {
+      break;
+    case 63:
       fit_rank_k<62>();
-    }
-    else if (u.cols() == 64)
-    {
+      break;
+    case 64:
       fit_rank_k<63>();
-    }
-    else if (u.cols() == 65)
-    {
+      break;
+    case 65:
       fit_rank_k<64>();
-    }
-    else if (u.cols() == 66)
-    {
+      break;
+    case 66:
       fit_rank_k<65>();
-    }
-    else if (u.cols() == 67)
-    {
+      break;
+    case 67:
       fit_rank_k<66>();
-    }
-    else if (u.cols() == 68)
-    {
+      break;
+    case 68:
       fit_rank_k<67>();
-    }
-    else if (u.cols() == 69)
-    {
+      break;
+    case 69:
       fit_rank_k<68>();
-    }
-    else if (u.cols() == 70)
-    {
+      break;
+    case 70:
       fit_rank_k<69>();
-    }
-    else if (u.cols() == 71)
-    {
+      break;
+    case 71:
       fit_rank_k<70>();
-    }
-    else if (u.cols() == 72)
-    {
+      break;
+    case 72:
       fit_rank_k<71>();
-    }
-    else if (u.cols() == 73)
-    {
+      break;
+    case 73:
       fit_rank_k<72>();
-    }
-    else if (u.cols() == 74)
-    {
+      break;
+    case 74:
       fit_rank_k<73>();
-    }
-    else if (u.cols() == 75)
-    {
+      break;
+    case 75:
       fit_rank_k<74>();
-    }
-    else if (u.cols() == 76)
-    {
+      break;
+    case 76:
       fit_rank_k<75>();
-    }
-    else if (u.cols() == 77)
-    {
+      break;
+    case 77:
       fit_rank_k<76>();
-    }
-    else if (u.cols() == 78)
-    {
+      break;
+    case 78:
       fit_rank_k<77>();
-    }
-    else if (u.cols() == 79)
-    {
+      break;
+    case 79:
       fit_rank_k<78>();
-    }
-    else if (u.cols() == 80)
-    {
+      break;
+    case 80:
       fit_rank_k<79>();
-    }
-    else if (u.cols() == 81)
-    {
+      break;
+    case 81:
       fit_rank_k<80>();
-    }
-    else if (u.cols() == 82)
-    {
+      break;
+    case 82:
       fit_rank_k<81>();
-    }
-    else if (u.cols() == 83)
-    {
+      break;
+    case 83:
       fit_rank_k<82>();
-    }
-    else if (u.cols() == 84)
-    {
+      break;
+    case 84:
       fit_rank_k<83>();
-    }
-    else if (u.cols() == 85)
-    {
+      break;
+    case 85:
       fit_rank_k<84>();
-    }
-    else if (u.cols() == 86)
-    {
+      break;
+    case 86:
       fit_rank_k<85>();
-    }
-    else if (u.cols() == 87)
-    {
+      break;
+    case 87:
       fit_rank_k<86>();
-    }
-    else if (u.cols() == 88)
-    {
+      break;
+    case 88:
       fit_rank_k<87>();
-    }
-    else if (u.cols() == 89)
-    {
+      break;
+    case 89:
       fit_rank_k<88>();
-    }
-    else if (u.cols() == 90)
-    {
+      break;
+    case 90:
       fit_rank_k<89>();
-    }
-    else if (u.cols() == 91)
-    {
+      break;
+    case 91:
       fit_rank_k<90>();
-    }
-    else if (u.cols() == 92)
-    {
+      break;
+    case 92:
       fit_rank_k<91>();
-    }
-    else if (u.cols() == 93)
-    {
+      break;
+    case 93:
       fit_rank_k<92>();
-    }
-    else if (u.cols() == 94)
-    {
+      break;
+    case 94:
       fit_rank_k<93>();
-    }
-    else if (u.cols() == 95)
-    {
+      break;
+    case 95:
       fit_rank_k<94>();
-    }
-    else if (u.cols() == 96)
-    {
+      break;
+    case 96:
       fit_rank_k<95>();
-    }
-    else if (u.cols() == 97)
-    {
+      break;
+    case 97:
       fit_rank_k<96>();
-    }
-    else if (u.cols() == 98)
-    {
+      break;
+    case 98:
       fit_rank_k<97>();
-    }
-    else if (u.cols() == 99)
-    {
+      break;
+    case 99:
       fit_rank_k<98>();
-    }
-    else
-    {
+      break;
+    case 100:
+      fit_rank_k<99>();
+      break;
+    default:
+      fit_rank_k<99>();
       Rcpp::SparseMatrix At = A.transpose();
-      for (int k = 0; k < u.cols(); ++k)
+      for (int k = 100; k < u.cols(); ++k)
       {
         // alternating least squares updates
         double d_k;
@@ -1403,14 +1241,13 @@ namespace RcppML
             v(i, k) = 0.0;
             for (Rcpp::SparseMatrix::InnerIterator iter(A, i); iter; ++iter)
               v(i, k) += u(iter.row(), k) * iter.value();
+            if (L1[1] > 0)
+              v(i, k) -= L1[1];
 
             for (int _k = 0; _k < k; ++_k)
             {
               v(i, k) -= a(_k) * v(i, _k);
             }
-
-            if (L1[1] > 0)
-              v(i, k) -= L1[1];
 
             v(i, k) /= akk + DIV_OFFSET;
           }
@@ -1430,15 +1267,15 @@ namespace RcppML
           {
             u(i, k) = 0.0;
             for (Rcpp::SparseMatrix::InnerIterator iter(At, i); iter; ++iter)
-              u(i, k) += v(iter.row(), k) * iter.value();
+              u(i, k) += v(iter.row(), k) * iter.value();            
+            if (L1[0] > 0)
+              u(i, k) -= L1[0];
+
 
             for (int _k = 0; _k < k; ++_k)
             {
               u(i, k) -= a(_k) * u(i, _k);
             }
-
-            if (L1[0] > 0)
-              u(i, k) -= L1[0];
 
             u(i, k) /= akk + DIV_OFFSET;
           }
