@@ -43,7 +43,7 @@ Eigen::MatrixXd Rcpp_predict_dense(Eigen::MatrixXd& A_, const Rcpp::S4& mask, Ei
         m.maskMatrix(mask_);
     m.threads = threads;
     m.L1[1] = L1;
-    m.L2[1] = L1;
+    m.L2[1] = L2;
     m.upper_bound = upper_bound;
     m.predictH();
     return m.matrixH();
