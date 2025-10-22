@@ -39,8 +39,8 @@ crossValidate <- function(data, k, reps = 3, n = 0.05, verbose = FALSE, ...) {
     
     # get samples, features, or missing values for test/training/cross-validation
     if(!is.null(p$seed)) set.seed(p$seed + rep)
-    mask_matrix <- rsparsematrix(as.numeric(nrow(data)), as.numeric(ncol(data)), n, rand.x = NULL)
-
+    # mask_matrix <- rsparsematrix(as.numeric(nrow(data)), as.numeric(ncol(data)), n, rand.x = NULL)
+    mask_matrix = RcppML::r_sparsematrix(as.numeric(nrow(data)),as.numeric(ncol(data)), inv_density = 1/n,pattern=T)
     for(rank in k){
       if(verbose) cat(rank, " ")
       

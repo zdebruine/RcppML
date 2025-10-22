@@ -13,7 +13,7 @@
 \alias{prod,nmf-method}
 \alias{$,nmf-method}
 \alias{coerce,nmf,list-method}
-\alias{[[,nmf-method}
+\alias{[[,nmf,ANY,ANY-method}
 \alias{predict,nmf-method}
 \title{nmf class methods}
 \usage{
@@ -39,7 +39,7 @@
 
 \S4method{coerce}{nmf,list}(from, to)
 
-\S4method{[[}{nmf}(x, i)
+\S4method{[[}{nmf,ANY,ANY}(x, i)
 
 \S4method{predict}{nmf}(object, data, L1 = 0, L2 = 0, mask = NULL, upper_bound = NULL, ...)
 }
