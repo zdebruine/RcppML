@@ -1,3 +1,7 @@
+# Note: CRAN Update coming soon
+
+In response to new CRAN requirements a new RcppML version will be shipping next week! Thank you to the community for all your support and engagement.
+
 # Rcpp Machine Learning Library
 
 [![](https://cranlogs.r-pkg.org/badges/grand-total/RcppML)](https://cran.r-project.org/package=RcppML)
@@ -64,3 +68,4 @@ A <- Matrix::rsparsematrix(1000, 1000, 0.1) # sparse Matrix::dgcMatrix
 clusters <- dclust(A, min_dist = 0.001, min_samples = 5)
 cluster0 <- bipartition(A)
 ```
+
