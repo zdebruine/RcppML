@@ -1,17 +1,17 @@
 #' @importFrom methods new validObject
+#' @name nmf-class
+#' @rdname nmf-class
+#' @title nmf S4 Class
+#' @description The S4 class for NMF model results.
 #' @slot w feature factor matrix
 #' @slot d scaling diagonal vector
 #' @slot h sample factor matrix
-#' @slot misc list often containing components:
-#'  \itemize{
-#'    \item tol     : tolerance of fit
-#'    \item iter    : number of fitting updates
-#'    \item runtime : runtime in seconds
-#'    \item mse     : mean squared error of model (calculated for multiple starts only)
-#'    \item w_init  : initial w matrix used for model fitting
-#'  }
-#' @name nmf
-#' @aliases nmf, nmf-class
+#' @slot misc list containing optional components including tol (tolerance), iter (iterations), 
+#'   loss (final loss value), loss_type (loss function used), runtime (in seconds), 
+#'   w_init (initial w matrix), test_mask (CV test set), test_seed (CV seed), 
+#'   test_fraction (CV holdout fraction), train_loss (CV training loss), 
+#'   test_loss (CV test loss), and best_iter (CV best iteration)
+#' @aliases nmf-class
 #' @exportClass nmf
 #'
 setClass("nmf",
@@ -34,6 +34,7 @@ setClass("nmf",
 #' @param i indices
 #' @param ... additional parameters
 #' @param na.rm remove na values
+#' @return An \code{nmf} object subsetted to the specified factors.
 #' @export
 setMethod("subset", signature("nmf"), function(x, i, ...) {
   validObject(x)
@@ -48,6 +49,7 @@ setMethod("subset", signature("nmf"), function(x, i, ...) {
 #' @rdname nmf-class-methods
 #' @param x object of class \code{nmf}
 #' @param i indices
+#' @return An \code{nmf} object subsetted to the specified factors.
 setMethod("[", signature("nmf"), function(x, i) {
   validObject(x)
   x@w <- x@w[, i]
@@ -65,6 +67,7 @@ setMethod("[", signature("nmf"), function(x, i) {
 #' @rdname nmf-class-methods
 #' @param n number of rows/columns to show
 #' @param ... additional parameters
+#' @return Invisibly returns the \code{nmf} object.
 #' 
 setMethod("head", signature("nmf"), function(x, n = getOption("digits"), ...) {
   validObject(x)
@@ -107,6 +110,7 @@ setMethod("head", signature("nmf"), function(x, n = getOption("digits"), ...) {
 #' @method show nmf
 #' @param object object of class \code{nmf}
 #' @rdname nmf-class-methods
+#' @return Invisibly returns the \code{nmf} object.
 #' 
 setMethod("show", signature("nmf"), function(object) {
   head(object)
@@ -117,15 +121,17 @@ setMethod("show", signature("nmf"), function(object) {
 #' @method dimnames nmf
 #' @param x object of class \code{nmf}
 #' @rdname nmf-class-methods
+#' @return A list of length two: row names of \code{w} and column names of \code{h}.
 #' 
 setMethod("dimnames", signature = "nmf", function(x) {
   validObject(x)
-  print(list(rownames(x@w), colnames(x@h)))
+  list(rownames(x@w), colnames(x@h))
 })
 
 #' @export
 #' @method dim nmf
 #' @rdname nmf-class-methods
+#' @return An integer vector of length 3: number of features, number of samples, and rank.
 #' 
 setMethod("dim", signature = "nmf", function(x) {
   validObject(x)
@@ -135,10 +141,11 @@ setMethod("dim", signature = "nmf", function(x) {
 #' @export
 #' @method t nmf
 #' @rdname nmf-class-methods
+#' @return An \code{nmf} object with transposed factorization (\code{w} and \code{h} swapped and transposed).
 #' 
 setMethod("t", signature = "nmf", function(x) {
   validObject(x)
-  tx <- new("nmf", w = t(x@h), d = x@d, h = t(x@w), misc = x$misc)
+  tx <- new("nmf", w = t(x@h), d = x@d, h = t(x@w), misc = x@misc)
   tx
 })
 
@@ -146,6 +153,7 @@ setMethod("t", signature = "nmf", function(x) {
 #' @method sort nmf
 #' @rdname nmf-class-methods
 #' @param decreasing logical. Should the sort be increasing or decreasing?
+#' @return An \code{nmf} object with factors reordered by decreasing (or increasing) \code{d}.
 #' 
 setMethod("sort", signature = "nmf", function(x, decreasing = TRUE, ...) {
   validObject(x)
@@ -158,6 +166,7 @@ setMethod("sort", signature = "nmf", function(x, decreasing = TRUE, ...) {
 #' @rdname nmf-class-methods
 #' @param x object of class \code{nmf}.
 #' @param ... additional parameters
+#' @return A dense matrix equal to \code{w \%*\% diag(d) \%*\% h}.
 #' 
 setMethod("prod", signature = "nmf", function(x, ...) {
   validObject(x)
@@ -168,6 +177,7 @@ setMethod("prod", signature = "nmf", function(x, ...) {
 #' @rdname nmf-class-methods
 #' @param x object of class \code{nmf}.
 #' @param name name of nmf class slot
+#' @return Contents of the named slot (\code{w}, \code{d}, \code{h}, or \code{misc}), or the named element from \code{misc}.
 #' @export
 setMethod("$", signature = "nmf", function(x, name) {
   validObject(x)
@@ -183,6 +193,7 @@ setMethod("$", signature = "nmf", function(x, name) {
 #' @param from class which the coerce method should perform coercion from
 #' @param to class which the coerce method should perform coercion to
 #' @rdname nmf-class-methods
+#' @return A named list with elements \code{w}, \code{d}, \code{h}, and \code{misc}.
 setMethod("coerce", signature(from = "nmf", to = "list"), function(from, to) {
   list("w" = slot(from, "w"), "d" = slot(from, "d"), "h" = slot(from, "h"), "misc" = slot(from, "misc"))
 })
@@ -195,6 +206,13 @@ setMethod("coerce", signature(from = "nmf", to = "list"), function(from, to) {
 #' @export
 #' @param object object of class \code{nmf}.
 #' @param ... additional parameters
+#' @return A \code{data.frame} with columns \code{factor}, \code{sparsity}, and \code{model} ("w" or "h").
+#' @examples
+#' \donttest{
+#' data <- simulateNMF(50, 30, k = 3, seed = 1)
+#' model <- nmf(data$A, 3, seed = 1, maxit = 50)
+#' sparsity(model)
+#' }
 setGeneric("sparsity", function(object, ...) standardGeneric("sparsity"))
 
 #' @rdname sparsity
@@ -223,43 +241,31 @@ setMethod("sparsity", signature = "nmf", function(object, ...) {
 #' @param ref reference nmf model to which \code{object} will be aligned
 #' @param method either \code{cosine} or \code{cor}
 #' @param ... arguments passed to or from other methods
+#' @return An \code{nmf} object with factors reordered to best match \code{ref}.
 #' @export
 #' @importFrom stats cor
-#'
+#' @examples
+#' \donttest{
+#' data <- simulateNMF(50, 30, k = 3, seed = 1)
+#' m1 <- nmf(data$A, 3, seed = 1, maxit = 50)
+#' m2 <- nmf(data$A, 3, seed = 2, maxit = 50)
+#' aligned <- align(m2, m1)  # reorder m2 factors to match m1
+#' }
 setGeneric("align", function(object, ...) standardGeneric("align"))
 
 #' @rdname align
 #' @method align nmf
 setMethod("align", signature = "nmf", function(object, ref, method = "cosine", ...) {
   validObject(object)
-  if (all(dim(ref$w) != dim(object$w))) stop("dimensions of object$w and ref$w are not identical")
+  if (any(dim(ref$w) != dim(object$w))) stop("dimensions of object$w and ref$w are not identical")
   if (method == "cosine") {
     cost <- 1 - cosine(object$w, ref$w) + 1e-10
   } else if (method == "cor") {
     cost <- 1 - cor(object$w, ref$w) + 1e-10
   }
   cost[cost < 0] <- 0
-  object[bipartiteMatch(cost)$pairs]
+  object[bipartiteMatch(cost)$assignment + 1L]
 })
-
-#' Align two matrices with bipartite matching
-#' 
-#' Same as the \code{align} S4 method for the `nmf` class, but operates only on the `w` matrices.
-#' 
-#' @param w matrix with columns to be aligned to columns in \code{wref}
-#' @param wref reference matrix to which columns in \code{w} will be aligned
-#' @param method distance metric (either \code{cor} or \code{cosine}) to use for constructing the cost matrix
-#' @param ... additional arguments
-align_models <- function(w, wref, method = "cosine", ...) {
-  if (all(dim(wref) != dim(w))) stop("dimensions of 'w' and 'wref' are not identical")
-  if (method == "cosine") {
-    cost <- 1 - cosine(w, wref) + 1e-10
-  } else if (method == "cor") {
-    cost <- 1 - cor(w, wref) + 1e-10
-  }
-  cost[cost < 0] <- 0
-  w[bipartiteMatch(cost)$pairs]
-}
 
 #' Summarize NMF factors
 #'
@@ -271,6 +277,16 @@ align_models <- function(w, wref, method = "cosine", ...) {
 #' @param ... arguments passed to or from other methods
 #' @export
 #' @return \code{data.frame} with columns \code{group}, \code{factor}, and \code{stat}
+#'
+#' @examples
+#' \donttest{
+#' library(Matrix)
+#' A <- rsparsematrix(100, 50, 0.1)
+#' model <- nmf(A, k = 3, seed = 42, tol = 1e-2, maxit = 10)
+#' groups <- factor(sample(c("A", "B"), 50, replace = TRUE))
+#' s <- summary(model, group_by = groups)
+#' }
+#'
 #' @method summary nmf
 setMethod("summary", signature = "nmf", function(object, group_by, stat = "sum", ...) {
   validObject(object)
@@ -305,37 +321,102 @@ setMethod("summary", signature = "nmf", function(object, group_by, stat = "sum",
 
 #' Evaluate an NMF model
 #'
-#' Calculate mean squared error for an NMF model, accounting for any masking schemes requested during fitting.
+#' Calculate loss for an NMF model using the specified loss function, accounting for any masking schemes requested during fitting.
 #'
 #' @inheritParams nmf
 #' @param x fitted model, class \code{nmf}, generally the result of calling \code{nmf}, with models of equal dimensions as \code{data}
-#' @param missing_only calculate mean squared error only for missing values specified as a matrix in \code{mask}
+#' @param loss loss function to use: "mse" (Mean Squared Error, default), "mae" (Mean Absolute Error), 
+#'   "huber" (Huber loss), or "kl" (Kullback-Leibler divergence)
+#' @param huber_delta delta parameter for Huber loss (default 1.0), ignored for other loss functions
+#' @param missing_only calculate loss only for missing values specified as a matrix in \code{mask}
+#' @param test_fraction fraction of entries to hold out as test set (default 0 = disabled). When > 0, creates a random mask for test/train split.
+#' @param test_seed seed for test set generation. If NULL, attempts to use test mask from model's @misc$test_mask if available.
+#' @param eval_set which set to evaluate: "all" (default), "test" (held-out entries only), or "train" (non-held-out entries only). 
+#'   Only used when test_fraction > 0 or test mask exists in model.
+#' @param threads number of threads for OpenMP parallelization (default 0 = all available)
+#' @param verbose print progress information (default FALSE)
 #' @importFrom methods is
+#' @return A single numeric value: the loss (MSE, MAE, Huber, or KL divergence) of the model on the data.
 #' @export
+#' @examples
+#' \donttest{
+#' library(Matrix)
+#' A <- rsparsematrix(100, 50, 0.1)
+#' model <- nmf(A, 3, seed = 1, maxit = 50, tol = 1e-4)
+#' evaluate(model, A)  # MSE
+#' evaluate(model, A, loss = "mae")  # MAE
+#' }
 setGeneric("evaluate", function(x, ...) standardGeneric("evaluate"))
 
 #' @rdname evaluate
 #' @method evaluate nmf
-setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, missing_only = FALSE, ...) {
+setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, missing_only = FALSE, 
+                                                   loss = c("mse", "mae", "huber", "kl"),
+                                                   huber_delta = 1.0,
+                                                   test_fraction = 0,
+                                                   test_seed = NULL,
+                                                   eval_set = c("all", "test", "train"),
+                                                   threads = 0, verbose = FALSE, ...) {
   validObject(x)
+  
+  eval_set <- match.arg(eval_set)
 
   if (missing_only && is.null(mask)) stop("a mask matrix must be specified to set 'missing_only = TRUE'")
 
-  # get 'data' in either sparse or dense matrix format and look for NA's
-  if (is(data, "sparseMatrix")) {
-    if (class(data)[[1]] != "dgCMatrix") data <- as(data, "dgCMatrix")
+  # Validate and convert loss parameter
+  loss <- match.arg(loss)
+  loss_type <- switch(loss,
+    "mse" = 0L,
+    "mae" = 1L,
+    "huber" = 2L,
+    "kl" = 3L
+  )
+
+  # Unified input validation (supports file paths, sparse, dense)
+  data_info <- validate_data(data)
+  data <- data_info$data
+  # NA detection
+  if (is(data, "dgCMatrix")) {
     if (any(is.na(data@x))) {
       if (!is.null(mask) && mask != "NA") stop("data contains 'NA' values. Either remove these values or specify \"mask = 'NA'\"")
       mask <- is.na(data)
     }
-  } else if (canCoerce(data, "matrix")) {
-    data <- as.matrix(data)
-    if (!is.numeric(data)) data <- as.numeric(data)
+  } else if (is.matrix(data)) {
     if (any(is.na(data))) {
       if (!is.null(mask) && mask != "NA") stop("data contains 'NA' values. Either remove these values or specify \"mask = 'NA'\"")
-      mask <- is.na(as(data, "dgCMatrix"))
+      mask <- is.na(.to_dgCMatrix(data))
     }
-  } else stop("'data' was not coercible to a matrix")
+  }
+  
+  # Handle test set mask generation or retrieval
+  test_mask <- NULL
+  if (test_fraction > 0 || !is.null(test_seed) || eval_set != "all") {
+    # Try to get test mask from model if available
+    if (!is.null(x@misc$test_mask) && is.null(test_seed)) {
+      # Reuse existing test mask from model
+      test_mask <- x@misc$test_mask
+      if (verbose) {
+        cat("Using test mask from model (", round(sum(test_mask@x) / (nrow(data) * ncol(data)) * 100, 2), 
+            "% held out)\n", sep = "")
+      }
+    } else if (test_fraction > 0) {
+      # Generate new test mask
+      if (is.null(test_seed)) {
+        test_seed <- sample.int(.Machine$integer.max, 1)
+      }
+      
+      # Create holdout mask using rsparsematrix
+      set.seed(test_seed)
+      test_mask <- rsparsematrix(nrow(data), ncol(data), test_fraction, rand.x = NULL)
+      
+      if (verbose) {
+        cat("Generated test mask with seed", test_seed, "(", 
+            round(test_fraction * 100, 2), "% target holdout)\n", sep = " ")
+      }
+    } else if (eval_set != "all") {
+      stop("eval_set = '", eval_set, "' requires test_fraction > 0 or a test mask in the model")
+    }
+  }
 
   if (is.null(mask)) {
     mask_matrix <- new("dgCMatrix")
@@ -347,23 +428,51 @@ setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, missing_
     mask_zeros <- FALSE
     if (!canCoerce(mask, "dgCMatrix")) {
       if (canCoerce(mask, "matrix")) {
-        mask <- as.matrix(matrix)
+        mask <- as.matrix(mask)
       } else stop("could not coerce the value of 'mask' to a sparse pattern matrix (dgCMatrix)")
     }
-    mask_matrix <- as(mask, "dgCMatrix")
+    # Use dMatrix intermediate to avoid ngCMatrix -> dgCMatrix deprecation warning
+    mask_matrix <- .to_dgCMatrix(as(mask, "dMatrix"))
+  }
+  
+  # Apply test set logic
+  if (!is.null(test_mask)) {
+    if (eval_set == "test") {
+      # Evaluate only on test set (held-out entries)
+      mask_matrix <- test_mask
+      missing_only <- TRUE
+    } else if (eval_set == "train") {
+      # Evaluate only on training set (non-held-out entries)
+      # Invert the test mask: mask out the test entries
+      test_mask_inv <- .to_dgCMatrix(test_mask != 0)
+      if (is.null(mask) || (is.character(mask) && mask == "zeros")) {
+        mask_matrix <- test_mask_inv
+        missing_only <- FALSE
+      } else {
+        # Combine with existing mask
+        mask_matrix <- .to_dgCMatrix((mask_matrix | test_mask_inv) != 0)
+      }
+    }
+    # For eval_set == "all", don't modify mask - evaluate on everything
   }
 
+  # Unified loss evaluation — always use general loss functions
+  # (loss_type=0 corresponds to MSE, handled by compute_loss_general)
   if (class(data)[[1]] == "dgCMatrix") {
     if (missing_only) {
-      Rcpp_mse_missing_sparse(data, mask_matrix, t(x@w), x@d, x@h, getOption("RcppML.threads"))
+      Rcpp_evaluate_loss_missing_sparse(data, mask_matrix, x@w, x@d, x@h, 
+                                        loss_type, huber_delta, as.integer(threads))
     } else {
-      Rcpp_mse_sparse(data, mask_matrix, t(x@w), x@d, x@h, getOption("RcppML.threads"), mask_zeros)
+      Rcpp_evaluate_loss_sparse(data, mask_matrix, x@w, x@d, x@h, 
+                                loss_type, huber_delta, as.integer(threads), mask_zeros)
     }
   } else {
     if (missing_only) {
-      Rcpp_mse_missing_dense(data, mask_matrix, t(x@w), x@d, x@h, getOption("RcppML.threads"))
+      Rcpp_evaluate_loss_missing_dense(data, mask_matrix, x@w, x@d, x@h, 
+                                       loss_type, huber_delta, as.integer(threads))
     } else {
-      Rcpp_mse_dense(data, mask_matrix, t(x@w), x@d, x@h, getOption("RcppML.threads"), mask_zeros)
+      Rcpp_evaluate_loss_dense(data, mask_matrix, x@w, x@d, x@h, 
+                               loss_type, huber_delta, as.integer(threads), mask_zeros)
     }
   }
 })
@@ -378,22 +487,43 @@ setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, missing_
 #' @inheritParams nmf
 #' @param missing_only only calculate mean squared error at masked values
 #' @param ... additional arguments
+#' @return A single numeric value: the mean squared error of the factorization.
+#' @examples
+#' \donttest{
+#' data <- simulateNMF(50, 30, k = 3, seed = 1)
+#' model <- nmf(data$A, 3, seed = 1, maxit = 50)
+#' mse(model$w, model$d, model$h, data$A)
+#' }
 mse <- function(w, d = NULL, h, data, mask = NULL, missing_only = FALSE, ...) {
+  # Backward compat: old API was mse(A, w, d, h) with data first.
+  # Detect if called with old API by checking if d is a matrix (should be a vector).
+  if (!is.null(d) && (is.matrix(d) || is(d, "sparseMatrix"))) {
+    .Deprecated(msg = paste0(
+      "mse(A, w, d, h) argument order is deprecated.\n",
+      "Use mse(w = ..., d = ..., h = ..., data = ...) instead."))
+    # Remap: old(A=w, w=d, d=h, h=data) → new(w=d, d=h, h=data, data=w)
+    old_A <- w; old_w <- d; old_d <- h; old_h <- data
+    w <- old_w; d <- old_d; h <- old_h; data <- old_A
+  }
   if (is.null(d)) d <- rep(1, nrow(h))
   m <- new("nmf", w = w, d = d, h = h)
-  evaluate(m, data, mask = mask, missing_only = missing_only)
+  evaluate(m, data, mask = mask, missing_only = missing_only, loss = "mse", ...)
 }
 
 #'
 #' @export
 #' @rdname nmf-class-methods
+#' @return The element from the \code{misc} list at the given name or index.
 setMethod("[[", signature("nmf"), function(x, i) {
   validObject(x)
-  i <- i[[1]]
-  if (i < 1 || i > length(x@u)) stop("specified index was < 1 or > the number of models in the 'lmf' object")
-  w <- cbind(x@w, x@u[[i]])
-  h <- rbind(x@h[[i]], x@v[[i]])
-  d <- c(x@d_wh[[i]], x@d_uv[[i]])
-  d_order <- order(d, decreasing = TRUE)
-  new("nmf", w = w[, d_order], h = h[d_order,], d = d[d_order], misc = x@misc)
+  # Access misc list elements by name or index
+  if (is.character(i)) {
+    if (!(i %in% names(x@misc))) stop(sprintf("no element '%s' in misc", i))
+    return(x@misc[[i]])
+  }
+  if (is.numeric(i)) {
+    if (i < 1 || i > length(x@misc)) stop("index out of bounds for misc list")
+    return(x@misc[[i]])
+  }
+  stop("[[ requires a character or numeric index")
 })
