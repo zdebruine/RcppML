@@ -254,6 +254,8 @@ initialized from user-supplied values. Default \code{NULL} (auto-init).}
 \item{profile}{if \code{TRUE}, enable per-iteration timing profiling.
 Results stored in \code{misc$profile} of the returned object. Default \code{FALSE}.}
 
+\item{dispatch}{StreamPress dispatch mode for .spz file input. \code{NULL} (default) or \code{"auto"} for automatic dispatch based on available RAM; a string like \code{"inmemory"}, \code{"chunked"}, or \code{"streaming"} to override.}
+
 \item{...}{additional development parameters}
 }
 \value{

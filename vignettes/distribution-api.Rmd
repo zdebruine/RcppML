@@ -64,7 +64,7 @@ how noise scales with the predicted value:
 **Rule of thumb**: Plot the relationship between the mean and variance of your
 features (rows). The slope on a log-log scale tells you the power $p$:
 
-```{r choose-distribution}
+```{r choose-distribution, purl = FALSE}
 library(RcppML)
 library(Matrix)
 
@@ -89,7 +89,7 @@ plot(log10(row_means + 1), log10(row_vars + 1),
 
 Or let RcppML decide automatically:
 
-```{r auto-select}
+```{r auto-select, purl = FALSE}
 # Automatic distribution selection via score test
 model <- nmf(data, k = 10, distribution = "auto")
 ```
@@ -108,7 +108,7 @@ refitting:
 
 You can also compare distributions explicitly using AIC/BIC:
 
-```{r auto-compare}
+```{r auto-compare, purl = FALSE}
 result <- auto_nmf_distribution(data, k = 10,
                                  distributions = c("mse", "gp", "nb"),
                                  criterion = "bic", verbose = TRUE)
@@ -133,7 +133,7 @@ The `dispersion` parameter controls the resolution of dispersion estimation:
 | `"per_row"` (default) | $\theta_i$ per row/feature | Genes have different dispersions |
 | `"per_col"` | $\theta_j$ per column/sample | Samples have different quality |
 
-```{r dispersion}
+```{r dispersion, purl = FALSE}
 # GP with per-row dispersion (default)
 model <- nmf(data, k = 10, loss = "gp", dispersion = "per_row")
 
@@ -152,7 +152,7 @@ model <- nmf(data, k = 10, loss = "gp", dispersion = "none")
 
 These go in the `distribution_config` list:
 
-```{r theta-config}
+```{r theta-config, purl = FALSE}
 model <- nmf(data, k = 10, loss = "gp",
              distribution_config = list(
                theta_init = 0.05,
@@ -169,7 +169,7 @@ model <- nmf(data, k = 10, loss = "gp",
 | `nb_size_max` | 1e6 | Cap (large $r$ → Poisson) |
 | `nb_size_min` | 0.01 | Floor |
 
-```{r nb-config}
+```{r nb-config, purl = FALSE}
 model <- nmf(data, k = 10, loss = "nb",
              distribution_config = list(
                nb_size_init = 5.0
@@ -196,7 +196,7 @@ rather than a true biological zero-count.
 | `"twoway"` | $\pi_{ij} = 1 - (1-\pi_i)(1-\pi_j)$ | $m + n$ params | Both gene and sample dropout |
 | `"auto"` | Diagnose from data | — | Unsure |
 
-```{r zero-inflation}
+```{r zero-inflation, purl = FALSE}
 # Gene-level dropout (common for scRNA-seq)
 model <- nmf(data, k = 10, loss = "gp", zero_inflation = "row")
 
@@ -226,7 +226,7 @@ $$w_{\text{robust}}(r^P) = \min\!\left(1, \; \frac{\delta}{|r^P|}\right)$$
 Robustness composes with any distribution. For example, robust GP downweights
 outlier counts that deviate far from the Poisson prediction:
 
-```{r robust}
+```{r robust, purl = FALSE}
 # Robust GP: downweight outlier counts
 model <- nmf(data, k = 10, loss = "gp", robust = TRUE)
 
@@ -244,7 +244,7 @@ work well for most data, but you can tune:
 | `irls_max_iter` | 5 | Max IRLS re-weighting iterations per column |
 | `irls_tol` | 1e-4 | Convergence: max relative change in solution |
 
-```{r irls-tune}
+```{r irls-tune, purl = FALSE}
 # More IRLS iterations for better convergence
 model <- nmf(data, k = 10, loss = "gp",
              irls_max_iter = 10, irls_tol = 1e-6)
@@ -255,7 +255,7 @@ time (each IRLS iteration is roughly as expensive as one CD solve).
 
 ## Complete Example: scRNA-seq Analysis
 
-```{r complete-example}
+```{r complete-example, purl = FALSE}
 library(RcppML)
 library(Matrix)
 
@@ -335,7 +335,7 @@ $|T_p|$ identifies the best-fitting variance function without refitting.
 
 To verify that the distribution model recovers known ground truth:
 
-```{r simulation-recovery, eval = FALSE}
+```{r simulation-recovery, eval = FALSE, purl = FALSE}
 # Generate Poisson-distributed data from known factors
 set.seed(42)
 W_true <- matrix(runif(100 * 5), 100, 5)

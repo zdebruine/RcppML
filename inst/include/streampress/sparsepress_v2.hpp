@@ -16,6 +16,7 @@
 #define SPARSEPRESS_V2_HPP
 
 #include <streampress/format/header_v2.hpp>
+#include <streampress/format/obs_var_table.hpp>
 #include <streampress/core/types.hpp>
 #include <streampress/codec/varint.hpp>
 #include <streampress/codec/rans.hpp>
@@ -57,6 +58,8 @@ struct CompressConfig_v2 {
     bool include_transpose = false;       // Store CSC(Aᵀ) in file
     int  verbose = 0;                     // 0=silent, 1=summary, 2=detailed, 3=debug
     uint32_t chunk_cols = DEFAULT_CHUNK_COLS;
+    std::vector<uint8_t> obs_buf;         // Pre-serialized obs table (empty = no obs)
+    std::vector<uint8_t> var_buf;         // Pre-serialized var table (empty = no var)
 };
 
 struct CompressStats_v2 {
@@ -803,6 +806,16 @@ inline std::vector<uint8_t> compress_v2(
         hdr.metadata_offset = hdr.transpose_offset + transpose_data.size();
     }
 
+    // Obs/var table offsets (after transpose, before metadata)
+    if (!cfg.obs_buf.empty()) {
+        hdr.set_obs_table_offset(hdr.metadata_offset);
+        hdr.metadata_offset += cfg.obs_buf.size();
+    }
+    if (!cfg.var_buf.empty()) {
+        hdr.set_var_table_offset(hdr.metadata_offset);
+        hdr.metadata_offset += cfg.var_buf.size();
+    }
+
     // Assemble output
     uint64_t total_size = hdr.metadata_offset + meta_bytes.size() + FOOTER_SIZE;
     std::vector<uint8_t> output;
@@ -827,6 +840,14 @@ inline std::vector<uint8_t> compress_v2(
     // Transpose section (optional)
     if (!transpose_data.empty()) {
         output.insert(output.end(), transpose_data.begin(), transpose_data.end());
+    }
+
+    // Obs/var tables (optional)
+    if (!cfg.obs_buf.empty()) {
+        output.insert(output.end(), cfg.obs_buf.begin(), cfg.obs_buf.end());
+    }
+    if (!cfg.var_buf.empty()) {
+        output.insert(output.end(), cfg.var_buf.begin(), cfg.var_buf.end());
     }
 
     // Metadata

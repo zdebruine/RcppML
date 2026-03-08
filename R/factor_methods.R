@@ -733,8 +733,9 @@ print.factor_net_result <- function(x, ...) {
     }
   }
   cat(sprintf("  loss: %g, iter: %d, converged: %s\n",
-              x$total_loss, x$total_iterations,
-              if (x$converged) "yes" else "no"))
+              if (is.null(x$total_loss)) NA_real_ else x$total_loss,
+              if (is.null(x$total_iterations)) 0L else x$total_iterations,
+              if (isTRUE(x$converged)) "yes" else "no"))
   invisible(x)
 }
 
@@ -748,9 +749,9 @@ summary.factor_net_result <- function(object, ...) {
   cat("Factor Network Result Summary\n")
   cat(sprintf("  Layers: %d\n", object$n_layers))
   cat(sprintf("  Multi-modal: %s\n", object$multi_modal))
-  cat(sprintf("  Total iterations: %d\n", object$total_iterations))
-  cat(sprintf("  Final loss: %g\n", object$total_loss))
-  cat(sprintf("  Converged: %s\n", object$converged))
+  cat(sprintf("  Total iterations: %d\n", if (is.null(object$total_iterations)) 0L else object$total_iterations))
+  cat(sprintf("  Final loss: %g\n", if (is.null(object$total_loss)) NA_real_ else object$total_loss))
+  cat(sprintf("  Converged: %s\n", if (isTRUE(object$converged)) "yes" else "no"))
   for (nm in names(object$layers)) {
     lr <- object$layers[[nm]]
     cat(sprintf("\n  Layer '%s':\n", nm))
@@ -1043,11 +1044,11 @@ summary.factor_net_result <- function(object, ...) {
       W = lr$W,
       d = as.numeric(lr$d),
       H = lr$H,
-      iterations = lr$iterations,
-      loss = lr$loss,
-      test_loss = if (!is.null(lr$test_loss)) lr$test_loss else 0,
-      best_test_loss = if (!is.null(lr$best_test_loss)) lr$best_test_loss else 0,
-      converged = lr$converged
+      iterations = if (length(lr$iterations)) lr$iterations else 0L,
+      loss = if (length(lr$loss)) lr$loss else NA_real_,
+      test_loss = if (length(lr$test_loss)) lr$test_loss else NA_real_,
+      best_test_loss = if (length(lr$best_test_loss)) lr$best_test_loss else NA_real_,
+      converged = if (length(lr$converged)) lr$converged else FALSE
     )
     # Handle multi-modal W splits
     if (!is.null(lr$W_splits)) {
@@ -1063,9 +1064,9 @@ summary.factor_net_result <- function(object, ...) {
     config = net$config,
     n_layers = length(layer_results),
     multi_modal = is_mm,
-    total_iterations = raw$total_iterations,
-    total_loss = raw$total_loss,
-    converged = raw$converged
+    total_iterations = if (length(raw$total_iterations)) raw$total_iterations else 0L,
+    total_loss = if (length(raw$total_loss)) raw$total_loss else NA_real_,
+    converged = if (length(raw$converged)) raw$converged else FALSE
   ), class = "factor_net_result")
 
   if (is_mm) {

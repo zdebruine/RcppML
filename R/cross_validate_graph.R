@@ -173,10 +173,10 @@ cross_validate_graph <- function(inputs, layer_fn, params,
         first_layer <- res$layers[[1]]
         results[[idx]] <- data.frame(
           combo = ci, rep = ri,
-          test_loss = first_layer$test_loss,
-          train_loss = first_layer$loss,
-          iterations = first_layer$iterations,
-          converged = first_layer$converged,
+          test_loss = if (length(first_layer$test_loss)) first_layer$test_loss else NA_real_,
+          train_loss = if (length(first_layer$loss)) first_layer$loss else NA_real_,
+          iterations = if (length(first_layer$iterations)) first_layer$iterations else NA_integer_,
+          converged = if (length(first_layer$converged)) first_layer$converged else FALSE,
           stringsAsFactors = FALSE
         )
       }
@@ -209,6 +209,7 @@ cross_validate_graph <- function(inputs, layer_fn, params,
 
   # Best params
   best_idx <- which.min(summary_df$mean_test_loss)
+  if (length(best_idx) == 0) best_idx <- 1L
   best_params <- as.list(summary_df[best_idx, names(params), drop = FALSE])
 
   if (verbose) {

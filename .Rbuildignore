@@ -81,3 +81,5 @@
 ^WORKQUEUE.*\.md$
 ^WORKSTREAMS\.md$
 ^\.vscode$
+^test_results\.log$
+^test_run\.log$

@@ -659,6 +659,39 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// Rcpp_st_serialize_table
+RawVector Rcpp_st_serialize_table(const DataFrame& df);
+RcppExport SEXP _RcppML_Rcpp_st_serialize_table(SEXP dfSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const DataFrame& >::type df(dfSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_st_serialize_table(df));
+    return rcpp_result_gen;
+END_RCPP
+}
+// Rcpp_st_read_obs
+DataFrame Rcpp_st_read_obs(const std::string& path);
+RcppExport SEXP _RcppML_Rcpp_st_read_obs(SEXP pathSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const std::string& >::type path(pathSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_st_read_obs(path));
+    return rcpp_result_gen;
+END_RCPP
+}
+// Rcpp_st_read_var
+DataFrame Rcpp_st_read_var(const std::string& path);
+RcppExport SEXP _RcppML_Rcpp_st_read_var(SEXP pathSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const std::string& >::type path(pathSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_st_read_var(path));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_RcppML_Rcpp_factor_net_fit", (DL_FUNC) &_RcppML_Rcpp_factor_net_fit, 1},
@@ -695,6 +728,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_RcppML_Rcpp_sp_metadata_v3", (DL_FUNC) &_RcppML_Rcpp_sp_metadata_v3, 1},
     {"_RcppML_Rcpp_get_available_ram_mb", (DL_FUNC) &_RcppML_Rcpp_get_available_ram_mb, 0},
     {"_RcppML_Rcpp_st_add_transpose", (DL_FUNC) &_RcppML_Rcpp_st_add_transpose, 2},
+    {"_RcppML_Rcpp_st_serialize_table", (DL_FUNC) &_RcppML_Rcpp_st_serialize_table, 1},
+    {"_RcppML_Rcpp_st_read_obs", (DL_FUNC) &_RcppML_Rcpp_st_read_obs, 1},
+    {"_RcppML_Rcpp_st_read_var", (DL_FUNC) &_RcppML_Rcpp_st_read_var, 1},
     {NULL, NULL, 0}
 };
 

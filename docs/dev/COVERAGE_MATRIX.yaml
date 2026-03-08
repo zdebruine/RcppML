@@ -110,7 +110,15 @@ groups:
     description: >
       Core algorithm × backend × input type. The fundamental dispatch matrix.
       Target: every algorithm on every backend with both sparse and dense input.
-    entries:
+    # WQ1 Audit Notes (March 2026):
+# - semi_nmf.cpu.sparse/dense: nonneg_w=FALSE passes through to C++ NNLS solver
+#   which already supports unconstrained LS. Status updated to implemented.
+# - LS (unconstrained): nnls(nonneg=FALSE) already works. Status updated.
+# - GPU dense + non-MSE losses: Falls back to CPU via C++ gateway. Safe, no guard needed.
+# - Dense streaming (SPZ v3): Not user-reachable until v3 format is written.
+# - ~95% of planned entries are internal/future infrastructure, not user-reachable.
+
+entries:
 
       # --- NMF ---
       - id: nmf.cpu.sparse

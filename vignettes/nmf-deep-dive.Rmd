@@ -31,7 +31,7 @@ The non-negativity constraint ensures that factors can only _add_, never subtrac
 
 This vignette walks through these capabilities with synthetic experiments (where ground truth is known) and real demonstrations on built-in datasets. For domain-specific applications, see the links in [Further Reading](#further-reading).
 
-```{r libraries}
+```{r libraries, purl = FALSE}
 library(RcppML)
 library(ggplot2)
 library(Matrix)
@@ -61,7 +61,7 @@ Convergence is measured as the relative change in the loss function between iter
 
 $$\frac{|\mathcal{L}^{(t)} - \mathcal{L}^{(t-1)}|}{|\mathcal{L}^{(t-1)}| + \epsilon} < \texttt{tol}$$
 
-```{r convergence-demo, fig.width=7, fig.height=5}
+```{r convergence-demo, fig.width=7, fig.height=5, purl = FALSE}
 # Generate data with known rank
 sim <- simulateNMF(nrow = 200, ncol = 150, k = 5, noise = 0.1, seed = 42)
 A <- sim$A
@@ -137,7 +137,7 @@ $$\mathcal{L}_{\text{KL}} = \sum_{ij} \left( A_{ij} \log \frac{A_{ij}}{\hat{A}_{
 
 ### Comparing Loss Functions
 
-```{r loss-comparison, fig.width=7, fig.height=5}
+```{r loss-comparison, fig.width=7, fig.height=5, purl = FALSE}
 # Add outliers to test robustness
 set.seed(99)
 A_clean <- sim$A
@@ -190,7 +190,7 @@ $$\mathcal{R}_{L_1} = \alpha_w \|W\|_1 + \alpha_h \|H\|_1$$
 
 This produces **sparse factors** — each factor is defined by a small number of features and each sample loads on a small number of factors — improving interpretability and reducing noise.
 
-```{r l1-demo, fig.width=7, fig.height=5}
+```{r l1-demo, fig.width=7, fig.height=5, purl = FALSE}
 sim_sparse <- simulateNMF(nrow = 300, ncol = 200, k = 8, noise = 0.05,
                           dropout = 0.5, seed = 42)
 A_sp <- sim_sparse$A
@@ -228,7 +228,7 @@ ggplot(df_trade, aes(x = L1, y = value, color = metric)) +
 
 The plot shows the fundamental tradeoff: as L1 increases, sparsity rises (more zeros in the factors) while reconstruction error increases. Values in the range 0.01–0.1 typically give a good balance. The penalty is applied within the coordinate descent NNLS solver, so it is cheap — there is essentially no runtime cost for using L1.
 
-```{r l1-histograms, fig.width=7, fig.height=6}
+```{r l1-histograms, fig.width=7, fig.height=6, purl = FALSE}
 # Histograms of W values under three L1 settings
 w_list <- list()
 for (lbl in c("0", "0.05", "0.3")) {
@@ -288,7 +288,7 @@ $$\mathcal{R}_{L_2} = \beta_w \|W\|_F^2 + \beta_h \|H\|_F^2$$
 
 Unlike L1, L2 does not produce exact zeros — it **shrinks** all values toward zero proportionally. This is useful for preventing individual features from dominating a factor and for numerical stability when the problem is ill-conditioned.
 
-```{r l2-demo, fig.width=7, fig.height=5}
+```{r l2-demo, fig.width=7, fig.height=5, purl = FALSE}
 l2_vals <- c(0, 0.01, 0.1, 1.0)
 l2_models <- list()
 results_l2 <- data.frame()
@@ -344,7 +344,7 @@ Because the $d$ diagonal captures the overall scale of each factor after normali
 
 We demonstrate L21 on the Hawaiian birds dataset — a real ecological matrix with meaningful factor structure. By fitting with $k = 12$ (more than the expected number of bird communities), we test whether L21 suppresses unnecessary factors:
 
-```{r l21-demo, fig.width=7, fig.height=5}
+```{r l21-demo, fig.width=7, fig.height=5, purl = FALSE}
 data(hawaiibirds)
 meta_w <- attr(hawaiibirds, "metadata_w")
 meta_h <- attr(hawaiibirds, "metadata_h")
@@ -398,7 +398,7 @@ $$G \mathrel{+}= \eta \cdot (W \cdot W^T - \text{diag})$$
 
 where only the off-diagonal terms penalize overlap between factors. This pushes the model toward solutions where each factor captures a distinct, non-redundant pattern.
 
-```{r angular-demo, fig.width=7, fig.height=6}
+```{r angular-demo, fig.width=7, fig.height=6, purl = FALSE}
 K <- 6
 ang_vals <- c(0, 0.1, 0.5, 1.0)
 results_ang <- data.frame()
@@ -458,7 +458,7 @@ Higher angular penalties produce factors with lower inter-factor cosine similari
 
 Upper bound constraints clip factor values to a maximum during coordinate descent. Because RcppML normalizes factor columns to unit $\ell_1$ norm after each iteration, a factor value of $x$ in $W$ means that feature accounts for fraction $x$ of the factor's total loading. An upper bound of 0.1 ensures no single feature can dominate — each factor's loading is spread across at least 10 features.
 
-```{r upper-bound-demo, fig.width=7, fig.height=5}
+```{r upper-bound-demo, fig.width=7, fig.height=5, purl = FALSE}
 A5 <- sim$A  # 5 true factors
 m_unbound <- nmf(A5, k = 5, tol = 1e-5, maxit = 200, seed = 1, verbose = FALSE)
 
@@ -507,7 +507,7 @@ ggplot(df_ub, aes(x = value, fill = bound)) +
   theme(legend.position = "none")
 ```
 
-```{r upper-bound-table}
+```{r upper-bound-table, purl = FALSE}
 # d values comparison
 cat("Diagonal scaling (d) under upper bounds:\n")
 d_df <- data.frame(factor = 1:5, unconstrained = sort(m_unbound@d, decreasing = TRUE))
@@ -530,7 +530,7 @@ When the upper bound clips values, the distribution shifts: peak loadings are ca
 
 Regularization types can be combined. A common pattern is L1 for sparsity plus L2 for numerical stability:
 
-```{r combined-reg, fig.width=7, fig.height=5}
+```{r combined-reg, fig.width=7, fig.height=5, purl = FALSE}
 m_combined <- nmf(A_sp, k = 8, L1 = c(0.1, 0.1), L2 = c(0.01, 0.01),
                   tol = 1e-5, maxit = 200, seed = 1, verbose = FALSE)
 m_l1_only <- nmf(A_sp, k = 8, L1 = c(0.1, 0.1),
@@ -585,7 +585,7 @@ NMF can handle incomplete matrices via masking — ignoring certain entries duri
 
 If your data contains `NA` entries (genuinely missing observations), set `mask = "NA"`:
 
-```{r na-mask-demo, fig.width=7, fig.height=4}
+```{r na-mask-demo, fig.width=7, fig.height=4, purl = FALSE}
 # Introduce NAs into the data
 A5 <- sim$A
 A_na <- as.matrix(A5)
@@ -609,7 +609,7 @@ Masked entries do not contribute to the loss or gradients. The model learns from
 
 For data where zeros represent **missing observations** rather than true zero values — as in recommendation systems where a zero rating means "not rated" rather than "rated zero stars" — set `mask_zeros = TRUE`:
 
-```{r sparse-mask-demo}
+```{r sparse-mask-demo, purl = FALSE}
 # MovieLens: zeros are "not rated", not "zero stars"
 data(movielens)
 cat("MovieLens: ", nrow(movielens), "movies x", ncol(movielens), "users\n")
@@ -643,7 +643,7 @@ With `mask_zeros = TRUE`, the model focuses exclusively on reconstructing the ob
 
 For more complex missing-data patterns, pass an explicit mask matrix. The mask should be the same dimensions as the data, with non-zero entries marking values to exclude:
 
-```{r custom-mask-demo}
+```{r custom-mask-demo, purl = FALSE}
 # Mask the top 5% of values (e.g., suspected measurement artifacts)
 A_dense <- as.matrix(A5)
 threshold <- quantile(A_dense[A_dense > 0], 0.95)
@@ -660,7 +660,7 @@ cat(sprintf("Factor recovery with masking: %.4f\n", recover_quality(m_masked, si
 
 Standard NMF requires $W \geq 0$ and $H \geq 0$. **Semi-NMF** relaxes one or both constraints, enabling factorization of data with both positive and negative values:
 
-```{r semi-nmf-demo, fig.width=7, fig.height=4}
+```{r semi-nmf-demo, fig.width=7, fig.height=4, purl = FALSE}
 # Center the data (introduces negative values)
 A_centered <- as.matrix(A5) - rowMeans(as.matrix(A5))
 cat("Centered data range:", round(range(A_centered), 3), "\n")
@@ -704,7 +704,7 @@ Setting `patience` too aggressively (small values) can terminate training premat
 
 We demonstrate with the Hawaiian birds dataset — a sparse ecological matrix where the target rank (number of bird communities) has an ecological interpretation:
 
-```{r cv-rank-sweep, fig.width=7, fig.height=5}
+```{r cv-rank-sweep, fig.width=7, fig.height=5, purl = FALSE}
 # Cross-validate across ranks 2-25 with 3 replicates
 # Higher-rank models test whether overfitting emerges
 cv <- nmf(hawaiibirds, k = 2:25, test_fraction = 0.2, cv_seed = 1:3,
@@ -714,7 +714,7 @@ plot(cv) + ggtitle("Hawaiian Birds: Cross-Validation for Optimal Rank")
 
 The plot shows test MSE vs. rank. Multiple replicates (different `cv_seed` values) provide confidence intervals. With sufficient `patience` and a wide rank range (up to 25), higher-rank models may show test loss increasing after an initial decrease — a clear signature of overfitting that identifies the ideal rank.
 
-```{r cv-optimal}
+```{r cv-optimal, purl = FALSE}
 mean_test <- tapply(cv$test_mse, cv$k, mean)
 optimal_k <- as.integer(names(which.min(mean_test)))
 cat("Optimal rank:", optimal_k, "\n")
@@ -725,7 +725,7 @@ cat("Test MSE at optimal k:", round(min(mean_test), 5), "\n")
 
 The `test_fraction` parameter controls how much data is held out. Larger fractions give more stable estimates but remove more training signal:
 
-```{r test-fraction, fig.width=7, fig.height=5}
+```{r test-fraction, fig.width=7, fig.height=5, purl = FALSE}
 # Compare different holdout fractions — including a large one to test stability
 fracs <- c(0.05, 0.20, 0.50)
 cv_results <- list()
@@ -758,7 +758,7 @@ The `mask_zeros` parameter in cross-validation controls whether zero entries are
 
 - `mask_zeros = TRUE`: The test set contains only non-zero entries. The model is evaluated on predicting observed values. Appropriate for recommendation data where zeros mean "unobserved."
 
-```{r sparse-cv, fig.width=7, fig.height=5}
+```{r sparse-cv, fig.width=7, fig.height=5, purl = FALSE}
 # MovieLens: compare sparse vs dense test set semantics
 cv_dense  <- nmf(movielens, k = 2:15, test_fraction = 0.2, mask_zeros = FALSE,
                  cv_seed = 42, tol = 1e-5, maxit = 80, verbose = FALSE)
@@ -786,7 +786,7 @@ The absolute MSE values differ substantially between the two modes because they 
 
 For convenience, RcppML can search for the optimal rank automatically:
 
-```{r auto-rank, eval=FALSE}
+```{r auto-rank, eval=FALSE, purl = FALSE}
 # Binary search over [2, 30]
 auto_model <- nmf(hawaiibirds, k = "auto", cv_k_range = c(2, 30),
                   test_fraction = 0.2, cv_seed = 42, verbose = TRUE)
@@ -807,7 +807,7 @@ where $L_H$ is the graph Laplacian of the sample adjacency matrix.
 
 The Hawaiian birds dataset includes geographic coordinates for each survey site. We construct a within-island adjacency graph connecting nearby sites:
 
-```{r graph-setup}
+```{r graph-setup, purl = FALSE}
 # Build spatial adjacency graph for Hawaiian bird survey sites
 coords <- cbind(meta_h$lng, meta_h$lat)
 n_sites <- nrow(coords)
@@ -836,7 +836,7 @@ cat("Spatial graph:", n_sites, "nodes,", nnzero(graph_H) / 2, "edges\n")
 
 We test multiple graph regularization strengths, including strong values ($\lambda = 2.0$) to make the effect clearly visible:
 
-```{r graph-compare, fig.width=7, fig.height=6}
+```{r graph-compare, fig.width=7, fig.height=6, purl = FALSE}
 graph_lambdas <- c(0, 0.1, 0.5, 2.0)
 graph_models <- list()
 graph_results <- data.frame()
@@ -894,7 +894,7 @@ ggplot(df_graph, aes(x = factor(lambda), y = value, fill = metric)) +
 
 ### Spatial Maps
 
-```{r graph-maps, fig.width=7, fig.height=8}
+```{r graph-maps, fig.width=7, fig.height=8, purl = FALSE}
 # Spatial visualization: compare standard vs. strong graph regularization
 m_std <- graph_models[["0"]]
 m_graph <- graph_models[["2"]]

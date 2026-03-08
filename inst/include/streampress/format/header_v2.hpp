@@ -167,6 +167,26 @@ struct FileHeader_v2 {
             && version == FORMAT_VERSION_V2;
     }
 
+    // Accessors for reserved-byte extension fields (backwards-compatible read)
+    uint64_t obs_table_offset() const {
+        uint64_t v = 0; std::memcpy(&v, reserved,     8); return v;
+    }
+    uint64_t var_table_offset() const {
+        uint64_t v = 0; std::memcpy(&v, reserved + 8, 8); return v;
+    }
+    uint32_t transp_chunk_cols() const {
+        uint32_t v = 0; std::memcpy(&v, reserved + 16, 4); return v;
+    }
+    uint8_t ext_flags() const { return reserved[20]; }
+    bool has_dimnames() const { return (ext_flags() & 0x01) != 0; }
+
+    void set_obs_table_offset(uint64_t off) { std::memcpy(reserved,      &off, 8); }
+    void set_var_table_offset(uint64_t off) { std::memcpy(reserved + 8,  &off, 8); }
+    void set_transp_chunk_cols(uint32_t cc) { std::memcpy(reserved + 16, &cc,  4); }
+    void set_has_dimnames(bool v) {
+        reserved[20] = v ? (reserved[20] | 0x01) : (reserved[20] & ~0x01);
+    }
+
     std::vector<uint8_t> serialize() const {
         std::vector<uint8_t> buf(HEADER_SIZE_V2, 0);
         std::memcpy(buf.data(), this, HEADER_SIZE_V2);

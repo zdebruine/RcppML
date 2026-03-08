@@ -245,6 +245,7 @@
 #'   initialized from user-supplied values. Default \code{NULL} (auto-init).
 #' @param profile if \code{TRUE}, enable per-iteration timing profiling.
 #'   Results stored in \code{misc$profile} of the returned object. Default \code{FALSE}.
+#' @param dispatch StreamPress dispatch mode for .spz file input. \code{NULL} (default) or \code{"auto"} for automatic dispatch based on available RAM; a string like \code{"inmemory"}, \code{"chunked"}, or \code{"streaming"} to override.
 #' @param ... additional development parameters
 #' @return
 #' When \code{k} is a single integer: an S4 object of class \code{nmf} with slots:

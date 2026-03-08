@@ -50,7 +50,7 @@ The `pbmc3k` dataset is a classic benchmark from 10x Genomics containing 2,700
 peripheral blood mononuclear cells (PBMCs) from a healthy donor. Expert-curated
 cell type labels are stored as metadata:
 
-```{r load-data}
+```{r load-data, purl = FALSE}
 library(RcppML)
 library(ggplot2)
 library(Matrix)
@@ -73,7 +73,7 @@ normalization (so each cell contributes equally regardless of sequencing depth)
 followed by log-transformation (to stabilize variance and reduce the influence of
 highly-expressed housekeeping genes):
 
-```{r preprocess}
+```{r preprocess, purl = FALSE}
 # Library-size normalize to median total counts, then log-transform
 lib_sizes <- colSums(pbmc3k)
 scale_factors <- median(lib_sizes) / lib_sizes
@@ -99,7 +99,7 @@ remaining entries, and measure prediction error on the held-out set.
 
 We sweep across a range of ranks and use multiple random seeds to assess variability:
 
-```{r cross-validation, fig.width=7, fig.height=4}
+```{r cross-validation, fig.width=7, fig.height=4, purl = FALSE}
 cv <- nmf(pbmc_norm, k = 2:12, test_fraction = 0.2, cv_seed = 1:3,
           tol = 1e-5, maxit = 100, verbose = FALSE)
 plot(cv)
@@ -114,7 +114,7 @@ stabilizes and use domain knowledge to guide the final choice.
 
 RcppML can also search for the optimal rank automatically using binary search:
 
-```{r auto-rank}
+```{r auto-rank, purl = FALSE}
 cv_auto <- nmf(pbmc_norm, k = "auto", cv_k_range = c(2, 15), test_fraction = 0.2,
                cv_seed = 42, tol = 1e-5, maxit = 100, verbose = FALSE)
 cat("Automatically selected rank:", cv_auto$rank_search$k_optimal, "\n")
@@ -130,7 +130,7 @@ Based on cross-validation and the known biology (7 annotated cell types in this
 dataset), we use $k = 7$. We apply L1 regularization on $H$ to encourage sparse
 cell assignments (each cell loads primarily on a few factors):
 
-```{r fit-nmf}
+```{r fit-nmf, purl = FALSE}
 model <- nmf(pbmc_norm, k = 7, L1 = c(0, 0.5), loss = "mse",
              tol = 1e-5, maxit = 200, seed = 42, verbose = FALSE)
 model
@@ -140,7 +140,7 @@ model
 
 The training history shows how the loss decreased over iterations:
 
-```{r plot-loss, fig.width=7, fig.height=4}
+```{r plot-loss, fig.width=7, fig.height=4, purl = FALSE}
 plot(model, type = "loss")
 ```
 
@@ -148,7 +148,7 @@ plot(model, type = "loss")
 
 The diagonal scaling vector $d$ tells us the relative importance of each factor:
 
-```{r diag-scaling}
+```{r diag-scaling, purl = FALSE}
 model_sorted <- sort(model)
 barplot(model_sorted@d, names.arg = paste0("F", seq_along(model_sorted@d)),
         main = "Factor Importance (diagonal scaling, sorted)",
@@ -165,7 +165,7 @@ F1, F2, ... refer to the sorted order, not the original factor indices.
 The `summary()` method computes how each factor maps to known cell type labels,
 producing a factor-by-group representation table:
 
-```{r summary-groups, fig.width=7, fig.height=5}
+```{r summary-groups, fig.width=7, fig.height=5, purl = FALSE}
 nmf_summary <- summary(model, group_by = cell_types)
 plot(nmf_summary) +
   ggtitle("Factor Representation Across Cell Types") +
@@ -180,7 +180,7 @@ demonstrating that NMF independently discovers biologically meaningful programs.
 A biplot projects cells into a 2D space defined by two factors, revealing how cell
 populations separate:
 
-```{r biplot, fig.width=7, fig.height=5}
+```{r biplot, fig.width=7, fig.height=5, purl = FALSE}
 biplot(model, factors = c(1, 2), matrix = "h", group_by = cell_types) +
   ggtitle("Cell Biplot: Factor 1 vs Factor 2")
 ```
@@ -190,7 +190,7 @@ biplot(model, factors = c(1, 2), matrix = "h", group_by = cell_types) +
 L1 regularization encourages sparsity in $H$, meaning each cell loads on only a few
 factors. We can quantify this:
 
-```{r sparsity}
+```{r sparsity, purl = FALSE}
 sp <- sparsity(model)
 print(sp)
 ```
@@ -202,7 +202,7 @@ means each factor is defined by fewer genes, producing more interpretable signat
 
 We can quantify reconstruction quality using multiple metrics:
 
-```{r evaluate}
+```{r evaluate, purl = FALSE}
 mse_val <- evaluate(model, pbmc_norm, loss = "mse")
 mae_val <- evaluate(model, pbmc_norm, loss = "mae")
 cat("MSE:", round(mse_val, 4), "\n")
@@ -213,7 +213,7 @@ cat("Per-element RMSE:", round(sqrt(mse_val), 4), "\n")
 These are mean losses averaged over all matrix entries (including zeros). For context,
 the mean non-zero value in the normalized matrix is:
 
-```{r context}
+```{r context, purl = FALSE}
 cat("Mean non-zero value:", round(mean(pbmc_norm@x), 4), "\n")
 cat("RMSE / mean non-zero:", round(sqrt(mse_val) / mean(pbmc_norm@x), 2), "\n")
 ```
@@ -223,7 +223,7 @@ cat("RMSE / mean non-zero:", round(sqrt(mse_val) / mean(pbmc_norm@x), 2), "\n")
 A powerful application of NMF is projecting new data onto a learned model. Given a
 matrix $W$ of gene programs, we can classify new cells by solving for their loadings:
 
-```{r predict}
+```{r predict, purl = FALSE}
 # Simulate "new cells" by holding out 100 cells
 test_cells <- pbmc_norm[, 1:100]
 train <- pbmc_norm[, 101:ncol(pbmc_norm)]
@@ -245,7 +245,7 @@ classification without re-running the full factorization.
 RcppML also provides `dclust()`, which performs hierarchical clustering via recursive
 rank-2 bipartitioning. This is useful as an alternative to graph-based clustering:
 
-```{r dclust}
+```{r dclust, purl = FALSE}
 clust <- dclust(pbmc_norm, min_samples = 20, seed = 42)
 if (length(clust$id) > 0) {
   cat("Number of clusters found:", length(clust$id), "\n")
@@ -264,7 +264,7 @@ The $W$ matrix reveals which genes drive each factor. By examining the highest-l
 genes per factor, we can identify **marker genes** — genes that distinguish each cell
 population:
 
-```{r marker-genes}
+```{r marker-genes, purl = FALSE}
 # Get top 5 genes per factor
 for (i in 1:7) {
   idx <- order(model@w[, i], decreasing = TRUE)[1:5]

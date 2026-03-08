@@ -197,3 +197,27 @@ Rcpp_st_add_transpose <- function(path, verbose = TRUE) {
     .Call(`_RcppML_Rcpp_st_add_transpose`, path, verbose)
 }
 
+#' @title Serialize a data.frame to obs/var table binary format
+#' @param df A data.frame
+#' @return A raw vector containing the serialized table
+#' @keywords internal
+Rcpp_st_serialize_table <- function(df) {
+    .Call(`_RcppML_Rcpp_st_serialize_table`, df)
+}
+
+#' @title Read obs table from a v2 .spz file
+#' @param path Path to .spz file
+#' @return A data.frame, or empty data.frame if no obs table
+#' @keywords internal
+Rcpp_st_read_obs <- function(path) {
+    .Call(`_RcppML_Rcpp_st_read_obs`, path)
+}
+
+#' @title Read var table from a v2 .spz file
+#' @param path Path to .spz file
+#' @return A data.frame, or empty data.frame if no var table
+#' @keywords internal
+Rcpp_st_read_var <- function(path) {
+    .Call(`_RcppML_Rcpp_st_read_var`, path)
+}
+
