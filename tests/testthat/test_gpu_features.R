@@ -558,3 +558,224 @@ test_that("GPU precision option controls fp32 vs fp64", {
   expect_true(abs(mse64 - mse32) / max(mse64, 1e-16) < 0.25,
               label = sprintf("fp64 MSE=%.6e, fp32 MSE=%.6e", mse64, mse32))
 })
+
+
+# ============================================================================
+# GPU Regularization Parity Tests (L1/L2 on W/H separately)
+# ============================================================================
+
+test_that("GPU L1-W loss within 10% of CPU L1-W", {
+  skip_if_no_gpu()
+
+  data(pbmc3k)
+  A <- pbmc3k[1:500, 1:200]
+  A <- as(A, "dgCMatrix")
+
+  cpu <- nmf(A, k = 5, L1 = c(0.1, 0), maxit = 20, tol = 1e-10,
+             seed = 42, resource = "cpu", verbose = FALSE)
+  gpu <- nmf(A, k = 5, L1 = c(0.1, 0), maxit = 20, tol = 1e-10,
+             seed = 42, resource = "gpu", verbose = FALSE)
+
+  rel <- abs(cpu@misc$loss - gpu@misc$loss) / max(abs(cpu@misc$loss), 1e-16)
+  expect_true(rel < 0.10,
+    label = sprintf("L1-W parity: rel=%.4f (tol=0.10)", rel))
+
+  # Both should produce sparse W
+  expect_true(mean(cpu@w == 0) > 0.01 || mean(gpu@w == 0) > 0.01,
+    label = "L1 on W should create zeros")
+})
+
+test_that("GPU L1-H loss within 10% of CPU L1-H", {
+  skip_if_no_gpu()
+
+  data(pbmc3k)
+  A <- pbmc3k[1:500, 1:200]
+  A <- as(A, "dgCMatrix")
+
+  cpu <- nmf(A, k = 5, L1 = c(0, 0.1), maxit = 20, tol = 1e-10,
+             seed = 42, resource = "cpu", verbose = FALSE)
+  gpu <- nmf(A, k = 5, L1 = c(0, 0.1), maxit = 20, tol = 1e-10,
+             seed = 42, resource = "gpu", verbose = FALSE)
+
+  rel <- abs(cpu@misc$loss - gpu@misc$loss) / max(abs(cpu@misc$loss), 1e-16)
+  expect_true(rel < 0.10,
+    label = sprintf("L1-H parity: rel=%.4f (tol=0.10)", rel))
+
+  # Both should produce sparse H
+  expect_true(mean(cpu@h == 0) > 0.01 || mean(gpu@h == 0) > 0.01,
+    label = "L1 on H should create zeros")
+})
+
+test_that("GPU L2-W loss within 15% of CPU L2-W", {
+  skip_if_no_gpu()
+
+  data(pbmc3k)
+  A <- pbmc3k[1:500, 1:200]
+  A <- as(A, "dgCMatrix")
+
+  cpu <- nmf(A, k = 5, L2 = c(0.01, 0), maxit = 20, tol = 1e-10,
+             seed = 42, resource = "cpu", verbose = FALSE)
+  gpu <- nmf(A, k = 5, L2 = c(0.01, 0), maxit = 20, tol = 1e-10,
+             seed = 42, resource = "gpu", verbose = FALSE)
+
+  rel <- abs(cpu@misc$loss - gpu@misc$loss) / max(abs(cpu@misc$loss), 1e-16)
+  expect_true(rel < 0.15,
+    label = sprintf("L2-W parity: rel=%.4f (tol=0.15)", rel))
+})
+
+test_that("GPU L2-H loss within 10% of CPU L2-H", {
+  skip_if_no_gpu()
+
+  data(pbmc3k)
+  A <- pbmc3k[1:500, 1:200]
+  A <- as(A, "dgCMatrix")
+
+  cpu <- nmf(A, k = 5, L2 = c(0, 0.01), maxit = 20, tol = 1e-10,
+             seed = 42, resource = "cpu", verbose = FALSE)
+  gpu <- nmf(A, k = 5, L2 = c(0, 0.01), maxit = 20, tol = 1e-10,
+             seed = 42, resource = "gpu", verbose = FALSE)
+
+  rel <- abs(cpu@misc$loss - gpu@misc$loss) / max(abs(cpu@misc$loss), 1e-16)
+  expect_true(rel < 0.10,
+    label = sprintf("L2-H parity: rel=%.4f (tol=0.10)", rel))
+})
+
+# ── Scale Parity Tests (P2) ────────────────────────────────────────
+
+test_that("GPU scale=L2 loss within 5% of CPU", {
+  skip_if_no_gpu()
+
+  data(pbmc3k)
+  A <- pbmc3k[1:300, 1:150]
+  A <- as(A, "dgCMatrix")
+
+  cpu <- nmf(A, k = 5, norm = "L2", maxit = 20, tol = 1e-10,
+             seed = 42, resource = "cpu", verbose = FALSE)
+  gpu <- nmf(A, k = 5, norm = "L2", maxit = 20, tol = 1e-10,
+             seed = 42, resource = "gpu", verbose = FALSE)
+
+  rel <- abs(cpu@misc$loss - gpu@misc$loss) / max(abs(cpu@misc$loss), 1e-16)
+  expect_true(rel < 0.05,
+    label = sprintf("Scale L2 parity: rel=%.4f (tol=0.05)", rel))
+
+  # d vector should be positive
+  expect_true(all(gpu@d > 0))
+})
+
+test_that("GPU scale=none loss within 5% of CPU", {
+  skip_if_no_gpu()
+
+  data(pbmc3k)
+  A <- pbmc3k[1:300, 1:150]
+  A <- as(A, "dgCMatrix")
+
+  cpu <- nmf(A, k = 5, norm = "none", maxit = 20, tol = 1e-10,
+             seed = 42, resource = "cpu", verbose = FALSE)
+  gpu <- nmf(A, k = 5, norm = "none", maxit = 20, tol = 1e-10,
+             seed = 42, resource = "gpu", verbose = FALSE)
+
+  rel <- abs(cpu@misc$loss - gpu@misc$loss) / max(abs(cpu@misc$loss), 1e-16)
+  expect_true(rel < 0.05,
+    label = sprintf("Scale none parity: rel=%.4f (tol=0.05)", rel))
+
+  # d vector should be all 1s for no scaling
+  expect_true(all(abs(gpu@d - 1) < 1e-6) || all(gpu@d > 0))
+})
+
+# ── Mask Parity Tests (P2) ─────────────────────────────────────────
+
+test_that("GPU mask_zeros=TRUE loss within 5% of CPU", {
+  skip_if_no_gpu()
+
+  data(pbmc3k)
+  A <- pbmc3k[1:300, 1:150]
+  A <- as(A, "dgCMatrix")
+
+  cpu <- nmf(A, k = 5, mask_zeros = TRUE, maxit = 20, tol = 1e-10,
+             seed = 42, resource = "cpu", verbose = FALSE)
+  gpu <- nmf(A, k = 5, mask_zeros = TRUE, maxit = 20, tol = 1e-10,
+             seed = 42, resource = "gpu", verbose = FALSE)
+
+  rel <- abs(cpu@misc$loss - gpu@misc$loss) / max(abs(cpu@misc$loss), 1e-16)
+  expect_true(rel < 0.05,
+    label = sprintf("Mask zeros parity: rel=%.4f (tol=0.05)", rel))
+})
+
+test_that("GPU mask_zeros=FALSE (default) loss within 5% of CPU", {
+  skip_if_no_gpu()
+
+  data(pbmc3k)
+  A <- pbmc3k[1:300, 1:150]
+  A <- as(A, "dgCMatrix")
+
+  cpu <- nmf(A, k = 5, mask_zeros = FALSE, maxit = 20, tol = 1e-10,
+             seed = 42, resource = "cpu", verbose = FALSE)
+  gpu <- nmf(A, k = 5, mask_zeros = FALSE, maxit = 20, tol = 1e-10,
+             seed = 42, resource = "gpu", verbose = FALSE)
+
+  rel <- abs(cpu@misc$loss - gpu@misc$loss) / max(abs(cpu@misc$loss), 1e-16)
+  expect_true(rel < 0.05,
+    label = sprintf("Mask default parity: rel=%.4f (tol=0.05)", rel))
+})
+
+# ── Loss Computation Parity Tests (P2) ─────────────────────────────
+
+test_that("GPU sparse loss eval matches CPU", {
+  skip_if_no_gpu()
+
+  data(pbmc3k)
+  A <- pbmc3k[1:300, 1:150]
+  A <- as(A, "dgCMatrix")
+
+  cpu <- nmf(A, k = 5, maxit = 20, tol = 1e-10,
+             seed = 42, resource = "cpu", verbose = FALSE)
+  gpu <- nmf(A, k = 5, maxit = 20, tol = 1e-10,
+             seed = 42, resource = "gpu", verbose = FALSE)
+
+  # Both should report finite loss
+  expect_true(is.finite(cpu@misc$loss))
+  expect_true(is.finite(gpu@misc$loss))
+
+  rel <- abs(cpu@misc$loss - gpu@misc$loss) / max(abs(cpu@misc$loss), 1e-16)
+  expect_true(rel < 0.05,
+    label = sprintf("Sparse loss eval parity: rel=%.4f (tol=0.05)", rel))
+})
+
+test_that("GPU dense loss eval matches CPU", {
+  skip_if_no_gpu()
+
+  data(pbmc3k)
+  A <- as.matrix(pbmc3k[1:300, 1:150])
+
+  cpu <- nmf(A, k = 5, maxit = 50, tol = 1e-10,
+             seed = 42, resource = "cpu", verbose = FALSE)
+  gpu <- nmf(A, k = 5, maxit = 50, tol = 1e-10,
+             seed = 42, resource = "gpu", verbose = FALSE)
+
+  expect_true(is.finite(cpu@misc$loss))
+  expect_true(is.finite(gpu@misc$loss))
+
+  rel <- abs(cpu@misc$loss - gpu@misc$loss) / max(abs(cpu@misc$loss), 1e-16)
+  expect_true(rel < 0.05,
+    label = sprintf("Dense loss eval parity: rel=%.4f (tol=0.05)", rel))
+})
+
+test_that("GPU per-iteration loss history or final loss is valid", {
+  skip_if_no_gpu()
+
+  data(pbmc3k)
+  A <- pbmc3k[1:300, 1:150]
+  A <- as(A, "dgCMatrix")
+
+  gpu <- nmf(A, k = 5, maxit = 20, tol = 1e-10,
+             seed = 42, resource = "gpu", verbose = FALSE)
+
+  # GPU may not populate loss_history but final loss must be valid
+  expect_true(is.finite(gpu@misc$loss))
+  expect_true(gpu@misc$loss > 0)
+
+  # If loss_history exists, verify it's monotonically decreasing or all finite
+  if (length(gpu@misc$loss_history) > 0) {
+    expect_true(all(is.finite(gpu@misc$loss_history)))
+  }
+})

@@ -6,8 +6,16 @@
 #' This implementation was adapted from RcppHungarian, an Rcpp wrapper for the original C++ implementation by Cong Ma (2016).
 #'
 #' @param x symmetric matrix giving the cost of every possible pairing
-#' @return List of "cost" and "pairs"
+#' @return List with elements \code{cost} (total matching cost) and \code{assignment} (0-indexed column assignment for each row).
+#' @seealso \code{\link{align}}, \code{\link{consensus_nmf}}
 #' @export
+#' @examples
+#' cost <- matrix(c(1, 0.5, 0.2,
+#'                   0.5, 1, 0.3,
+#'                   0.2, 0.3, 1), nrow = 3, byrow = TRUE)
+#' result <- bipartiteMatch(cost)
+#' result$cost
+#' result$assignment
 #'
 bipartiteMatch <- function(x) {
   x <- as.matrix(x)

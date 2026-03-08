@@ -1,0 +1,240 @@
+---
+title: "GPU Acceleration Guide"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{GPU Acceleration Guide}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Overview
+
+RcppML supports GPU-accelerated NMF via NVIDIA CUDA. The GPU backend uses cuBLAS and cuSPARSE for dense linear algebra and custom CUDA kernels for sparse operations and the coordinate descent NNLS solver.
+
+GPU acceleration is **optional**: the package installs and functions fully on CPU. The GPU shared library (`RcppML_gpu.so`) is loaded at runtime only when CUDA hardware is detected.
+
+## Requirements
+
+- **NVIDIA GPU** with compute capability ≥ 7.0 (Volta or newer: V100, A100, H100, RTX 20xx+)
+- **CUDA Toolkit** ≥ 12.x
+- **cuBLAS** and **cuSPARSE** (included with CUDA Toolkit)
+
+## Building the GPU Library
+
+The GPU component is compiled separately from the main R package using `nvcc`:
+
+```bash
+# 1. Load CUDA on your system (HPC example)
+module load cuda/12.8.1
+
+# 2. Navigate to the CUDA build directory
+cd benchmarks/cuda/
+
+# 3. Build the production benchmark (to test GPU alone)
+make production_benchmark
+
+# 4. Build the GPU shared library for R
+cd ../../src/
+nvcc -O3 \
+  -gencode arch=compute_80,code=sm_80 \
+  -gencode arch=compute_90,code=sm_90 \
+  -std=c++17 -Xcompiler -fPIC \
+  --shared \
+  -I../inst/include \
+  -o ../inst/lib/RcppML_gpu.so \
+  gpu_bridge.cu \
+  -lcublas -lcusparse -lcuda
+```
+
+Adapt the `-gencode` flags to your GPU architecture:
+
+| GPU Family | Compute Capability | Flag |
+|:-----------|:-------------------|:-----|
+| V100 | 7.0 | `arch=compute_70,code=sm_70` |
+| A100 | 8.0 | `arch=compute_80,code=sm_80` |
+| H100 | 9.0 | `arch=compute_90,code=sm_90` |
+| RTX 3090 | 8.6 | `arch=compute_86,code=sm_86` |
+| RTX 4090 | 8.9 | `arch=compute_89,code=sm_89` |
+
+## Library Search Path
+
+RcppML searches for `RcppML_gpu.so` (or `.dll` on Windows) in these locations (in order):
+
+1. `<package_install_path>/lib/`
+2. `<package_install_path>/src/`
+3. `<working_directory>/src/`
+4. `<working_directory>/inst/lib/`
+5. `<working_directory>/`
+
+For development, placing the library in `inst/lib/` is recommended.
+
+## Checking GPU Availability
+
+```{r eval = FALSE}
+library(RcppML)
+
+# Check if GPU is available
+gpu_available()
+#> [1] TRUE
+
+# Get device details
+gpu_info()
+#>   device   name total_mb  free_mb
+#> 1      0 GPU 0    32510    31200
+```
+
+## Using GPU NMF
+
+GPU dispatch happens automatically when a GPU is available:
+
+```{r eval = FALSE}
+library(Matrix)
+A <- rsparsematrix(10000, 5000, 0.05)
+
+# Auto-dispatch (uses GPU if available, CPU otherwise)
+model <- nmf(A, k = 20, verbose = TRUE)
+#> [RcppML] Using GPU backend for NMF
+
+# Force CPU even when GPU is available
+model_cpu <- nmf(A, k = 20, resource = "cpu")
+
+# Force GPU (errors if unavailable)
+model_gpu <- nmf(A, k = 20, resource = "gpu")
+```
+
+### Resource Override Priority
+
+The compute backend is determined by (highest priority first):
+
+1. `resource` parameter in `nmf()`
+2. `RCPPML_RESOURCE` environment variable
+3. `options(RcppML.gpu = TRUE/FALSE)`  
+4. Auto-detection
+
+```{r eval = FALSE}
+# Environment variable
+Sys.setenv(RCPPML_RESOURCE = "cpu")
+
+# R option
+options(RcppML.gpu = FALSE)
+```
+
+## GPU-Supported Features
+
+| Feature | GPU Support |
+|:--------|:------------|
+| Sparse NMF | Yes |
+| Dense NMF | Yes |
+| Cross-validation NMF | Yes |
+| MSE loss | Yes |
+| MAE / Huber / KL loss | Yes |
+| L1, L2 regularization | Yes |
+| L21, angular regularization | Yes |
+| Graph regularization | CPU only |
+| Upper bound constraints | Yes |
+| Bipartition | Yes |
+| Divisive clustering (dclust) | Yes |
+| SparsePress streaming NMF | CPU only |
+
+When a GPU-unsupported feature is requested, RcppML automatically falls back to the CPU backend.
+
+## Performance Expectations
+
+GPU acceleration is most beneficial for:
+
+- **Large matrices**: >1000 rows, >1000 columns
+- **Moderate to high rank**: k ≥ 10
+- **Many iterations**: the GPU amortizes setup costs over iterations
+
+Expected speedups over a multi-threaded CPU (48 cores):
+
+| Operation | Typical Speedup |
+|:----------|:----------------|
+| Gram matrix (G = H'H) | 5–10× |
+| Sparse RHS (B = A·H') | 10–30× |
+| NNLS batch solve | 20–50× |
+| **Full NMF iteration** | **10–20×** |
+
+For small matrices or low rank (k < 5), CPU may be faster due to GPU kernel launch overhead.
+
+## Precision
+
+GPU computation currently uses double precision. Single precision support is planned
+for a future release to enable faster performance on consumer GPUs with fewer FP64 units.
+
+## Troubleshooting
+
+### GPU Not Detected
+
+```{r eval = FALSE}
+gpu_available(force_recheck = TRUE)  # Force re-probe
+```
+
+Common causes:
+- CUDA drivers not installed or outdated
+- GPU compute capability < 7.0
+- `RcppML_gpu.so` not found in search path
+- Library compiled for wrong architecture (e.g., sm_90 on a V100)
+
+### CUDA Out of Memory
+
+NMF GPU memory usage is approximately:
+
+$$\text{Memory} \approx \text{nnz} \times 12 + (m + n) \times k \times 8 \text{ bytes}$$
+
+where nnz is the number of non-zeros, m and n are matrix dimensions, and k is rank.
+
+For very large matrices, reduce memory pressure:
+- Reduce rank k
+- Use CPU for the largest problems
+
+### Runtime Errors
+
+Set verbose mode to diagnose issues:
+
+```{r eval = FALSE}
+model <- nmf(A, k = 20, resource = "gpu", verbose = TRUE)
+```
+
+## HPC / SLURM Usage
+
+On SLURM-managed clusters, request GPU resources:
+
+```bash
+# Interactive GPU session
+salloc --partition=gpu --gres=gpu:1 --cpus-per-task=8 --mem=32G --time=02:00:00
+
+# Batch job
+sbatch --partition=gpu --gres=gpu:1 --wrap="Rscript my_nmf_script.R"
+```
+
+Example SLURM batch script:
+
+```bash
+#!/bin/bash
+#SBATCH --partition=gpu
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=32G
+#SBATCH --time=04:00:00
+#SBATCH --output=nmf_gpu_%j.log
+
+module load r/4.5.2 cuda/12.8.1
+
+Rscript -e '
+library(RcppML)
+cat("GPU available:", gpu_available(), "\n")
+print(gpu_info())
+
+data(pbmc3k)
+model <- nmf(pbmc3k, k = 20, resource = "gpu", verbose = TRUE)
+cat("Loss:", model@misc$loss, "\n")
+'
+```

@@ -8,9 +8,15 @@
 #' @param noise standard deviation of Gaussian noise centered at 0 to add to input matrix. Any negative values after noise addition are set to 0.
 #' @param dropout density of dropout events
 #' @param seed seed for random number generation
+#' @seealso \code{\link{simulateSwimmer}}, \code{\link{nmf}}
 #' @export
-#' @importFrom stats cor rmultinom rnorm runif
+#' @importFrom stats rnorm
 #' @return list of dense matrix \code{A} and true \code{w} and \code{h} models
+#' @examples
+#' data <- simulateNMF(50, 30, k = 3, noise = 0.1, seed = 42)
+#' dim(data$A)  # 50 x 30
+#' dim(data$w)  # 50 x 3
+#' dim(data$h)  # 3 x 30
 #'
 simulateNMF <- function(nrow, ncol, k, noise = 0.5, dropout = 0.5, seed = NULL) {
 
@@ -45,7 +51,8 @@ simulateNMF <- function(nrow, ncol, k, noise = 0.5, dropout = 0.5, seed = NULL) 
 
   # introduce dropout
   if (dropout > 0) {
-    d <- as.matrix(as(Matrix::rsparsematrix(nrow, ncol, 1 - dropout, rand.x = NULL), "dgCMatrix"))
+    # Use dMatrix intermediate to avoid ngCMatrix -> dgCMatrix deprecation warning
+    d <- as.matrix(.to_dgCMatrix(as(Matrix::rsparsematrix(nrow, ncol, 1 - dropout, rand.x = NULL), "dMatrix")))
     res <- res * d
   }
 

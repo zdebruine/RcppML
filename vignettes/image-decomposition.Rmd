@@ -1,0 +1,385 @@
+---
+title: "Learning Parts from Images: Visual Feature Extraction with NMF"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Learning Parts from Images: Visual Feature Extraction with NMF}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+NOT_CRAN <- identical(tolower(Sys.getenv("NOT_CRAN")), "true")
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5,
+  dpi = 100,
+  eval = NOT_CRAN
+)
+```
+
+## Parts-Based Representation: Why NMF Sees Differently
+
+A foundational insight of Lee & Seung (1999) is that NMF naturally learns
+**parts-based representations** of data. While PCA (or SVD) decomposes data into
+holistic eigenmodes that combine addition and subtraction, NMF's non-negativity
+constraint forces it to build a whole from non-negative parts. For images, this
+means:
+
+- **PCA** learns "eigenfaces" — ghostly, holistic patterns where adding and
+  subtracting features creates each face.
+- **NMF** learns facial "parts" — eyes, noses, mouths, hairlines — that are
+  combined additively to reconstruct each face.
+
+This matters beyond aesthetics: parts-based representations are more interpretable,
+more robust to occlusion, and better aligned with how biological visual systems
+process information.
+
+## Controlled Validation: The Swimmer Dataset
+
+Before applying NMF to real images, we validate with a synthetic dataset where
+the ground truth is known. The **swimmer** dataset generates stick-figure images
+with independently moving limbs:
+
+```{r swimmer-generate, fig.width=7, fig.height=3.5}
+library(RcppML)
+library(ggplot2)
+library(Matrix)
+
+# Generate swimmer dataset: 256 images with known factors
+swimmer <- simulateSwimmer(n_images = 256, style = "stick",
+                           noise = 0.01, seed = 42,
+                           return_factors = TRUE)
+
+# simulateSwimmer returns images as ROWS (256 x 1024).
+# NMF expects features (pixels) as rows, observations (images) as columns.
+A_swim <- as.matrix(t(swimmer$A))  # 1024 pixels × 256 images
+
+cat("Data dimensions:", nrow(A_swim), "pixels ×", ncol(A_swim), "images\n")
+cat("True rank:", ncol(swimmer$w), "factors\n")
+cat("True factors: 4 limbs × 4 positions = 16\n")
+cat("(The torso is constant across all images, not a learned factor)\n")
+
+# Visualize sample images
+par(mfrow = c(2, 8), mar = c(0.5, 0.5, 0.5, 0.5))
+for (i in sample(ncol(A_swim), 16)) {
+  img <- matrix(A_swim[, i], 32, 32)
+  image(t(img[32:1, ]), axes = FALSE, col = gray.colors(64, start = 1, end = 0))
+}
+```
+
+### Recovering True Parts
+
+With 16 ground-truth factors (4 limbs × 4 positions each), can NMF recover them?
+
+```{r swimmer-nmf, fig.width=7, fig.height=6}
+model_swim <- nmf(A_swim, k = 16, L1 = c(0.2, 0),
+                  tol = 1e-6, maxit = 300, seed = 42, verbose = FALSE)
+
+# Visualize learned factors — each should show one limb position
+par(mfrow = c(4, 4), mar = c(0.5, 0.5, 1.5, 0.5))
+for (j in 1:16) {
+  img <- matrix(model_swim@w[, j], 32, 32)
+  image(t(img[32:1, ]), axes = FALSE,
+        col = gray.colors(64, start = 1, end = 0),
+        main = paste0("F", j), cex.main = 0.9)
+}
+```
+
+Each factor should correspond to a single limb position or the torso — demonstrating
+that NMF correctly identifies the compositional structure of the images.
+
+### Reconstruction Quality
+
+```{r swimmer-recon, fig.width=7, fig.height=3}
+recon <- prod(model_swim)
+
+par(mfrow = c(2, 8), mar = c(0.5, 0.5, 1.2, 0.5))
+for (i in 1:8) {
+  img <- matrix(A_swim[, i], 32, 32)
+  image(t(img[32:1, ]), axes = FALSE,
+        col = gray.colors(64, start = 1, end = 0), main = "Original", cex.main = 0.7)
+}
+for (i in 1:8) {
+  img <- matrix(recon[, i], 32, 32)
+  image(t(img[32:1, ]), axes = FALSE,
+        col = gray.colors(64, start = 1, end = 0), main = "NMF", cex.main = 0.7)
+}
+```
+
+```{r swimmer-mse}
+cat("Reconstruction MSE:", evaluate(model_swim, A_swim), "\n")
+```
+
+## Ground Truth Validation with Synthetic NMF
+
+The `simulateNMF()` function generates data from a known $W$, $H$ decomposition,
+allowing us to measure how accurately NMF recovers the true factors:
+
+```{r simulate-nmf}
+# Create ground truth with sparse factors for identifiable recovery
+set.seed(42)
+k_true <- 5; m <- 200; n <- 150
+W_true <- matrix(0, m, k_true)
+H_true <- matrix(0, k_true, n)
+for (j in 1:k_true) {
+  # Each factor uses ~30 features and ~25 samples (sparse, non-overlapping)
+  w_idx <- ((j - 1) * 40 + 1):min(j * 40, m)
+  h_idx <- ((j - 1) * 30 + 1):min(j * 30, n)
+  W_true[w_idx, j] <- runif(length(w_idx), 0.5, 1.5)
+  H_true[j, h_idx] <- runif(length(h_idx), 0.5, 1.5)
+}
+A_sim <- W_true %*% H_true + abs(matrix(rnorm(m * n, 0, 0.01), m, n))
+cat("Simulated data:", m, "×", n, "with true rank", k_true, "\n")
+cat("True W sparsity:", round(mean(W_true == 0), 2), "\n")
+
+# Fit NMF and compare
+model_sim <- nmf(A_sim, k = k_true, tol = 1e-6, maxit = 300, seed = 42, verbose = FALSE)
+
+# Align recovered factors to true factors using bipartite matching
+cos_raw <- cosine(W_true, model_sim@w)
+cost <- 1 - abs(cos_raw)
+match_result <- bipartiteMatch(cost)
+model_w_aligned <- model_sim@w[, match_result$assignment + 1]  # 0-indexed
+
+cos_aligned <- cosine(W_true, model_w_aligned)
+cat("\nCosine similarity (true vs recovered, after alignment):\n")
+cat("  Diagonal:", round(diag(cos_aligned), 3), "\n")
+cat("  Mean diagonal:", round(mean(diag(cos_aligned)), 3), "\n")
+```
+
+With sparse, non-overlapping ground truth factors, NMF achieves high cosine
+similarity after alignment — confirming that the algorithm correctly identifies
+the true compositional structure. The `bipartiteMatch()` function solves the
+assignment problem to find the best one-to-one correspondence between true and
+recovered factors.
+
+## Real Images: Olivetti Faces
+
+The **Olivetti** dataset contains 400 grayscale face images (64×64 pixels) from
+40 subjects, 10 images per subject, with varying lighting, expressions, and
+minor pose changes:
+
+```{r olivetti-load}
+data(olivetti)
+img_shape <- attr(olivetti, "image_shape")
+subjects <- attr(olivetti, "subject")
+
+cat("Dimensions:", nrow(olivetti), "images ×", ncol(olivetti), "pixels\n")
+cat("Image shape:", img_shape, "\n")
+cat("Subjects:", nlevels(subjects), "\n")
+```
+
+Note: in this dataset, **rows are images** and **columns are pixels**. We'll
+transpose for NMF so that columns are observations (images).
+
+```{r olivetti-show, fig.width=7, fig.height=3.5}
+# Show sample faces (one per subject)
+par(mfrow = c(2, 8), mar = c(0.5, 0.5, 0.5, 0.5))
+show_subs <- seq(1, 40, length.out = 16)
+for (s in show_subs) {
+  idx <- which(subjects == levels(subjects)[s])[1]
+  img <- matrix(olivetti[idx, ], img_shape[1], img_shape[2])
+  image(t(img[img_shape[1]:1, ]), axes = FALSE,
+        col = gray.colors(64, start = 0, end = 1))
+}
+```
+
+### Learning Facial Parts
+
+We decompose the transposed matrix so each column is a flattened face image:
+
+```{r olivetti-nmf}
+# Transpose: pixels × images for NMF
+A_faces <- t(olivetti)
+
+model_faces <- nmf(A_faces, k = 25, L1 = c(0.2, 0),
+                   tol = 1e-5, maxit = 200, seed = 42, verbose = FALSE)
+```
+
+### Convergence Analysis
+
+The multi-panel convergence plot reveals how the factorization stabilized:
+
+```{r convergence-plot, fig.width=7, fig.height=4}
+plot(model_faces, type = "convergence")
+```
+
+### Visualizing Learned Parts
+
+```{r face-parts, fig.width=7, fig.height=6}
+par(mfrow = c(5, 5), mar = c(0.5, 0.5, 1.5, 0.5))
+for (j in 1:25) {
+  img <- matrix(model_faces@w[, j], img_shape[1], img_shape[2])
+  image(t(img[img_shape[1]:1, ]), axes = FALSE,
+        col = gray.colors(64, start = 0, end = 1),
+        main = paste0("Factor ", j), cex.main = 0.8)
+}
+```
+
+Unlike PCA eigenfaces, these factors should show localized facial features: some
+capture eye regions, others nose/mouth areas, hairlines, or facial contours. The
+non-negativity constraint prevents cancellation, forcing each factor to contribute
+additively.
+
+## The Role of Regularization
+
+Regularization profoundly affects what NMF learns. Let's compare:
+
+### L1 Sparsity: Sharper Parts
+
+L1 regularization pushes small values to zero, creating sparser factors with
+crisper localization:
+
+```{r l1-effect, fig.width=7, fig.height=5}
+m_sparse <- nmf(A_faces, k = 25, L1 = c(0.5, 0), tol = 1e-5,
+                maxit = 200, seed = 42, verbose = FALSE)
+
+# Show regularization diagnostics
+plot(m_sparse, type = "regularization")
+```
+
+### Sparsity Comparison
+
+```{r sparsity-compare, fig.width=7, fig.height=4}
+sp_none <- sparsity(model_faces)
+sp_l1 <- sparsity(m_sparse)
+
+sp_none$Regularization <- "No L1"
+sp_l1$Regularization <- "L1 = 0.5"
+sp_df <- rbind(sp_none, sp_l1)
+
+ggplot(sp_df, aes(x = factor, y = sparsity, fill = Regularization)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.7) +
+  facet_wrap(~model, scales = "free_y",
+             labeller = labeller(model = c(w = "W (features)", h = "H (samples)"))) +
+  scale_fill_manual(values = c("steelblue", "coral")) +
+  labs(title = "Effect of L1 Regularization on Factor Sparsity",
+       x = "Factor", y = "Fraction of Zeros") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 6, angle = 45, hjust = 1))
+```
+
+### L21 Group Sparsity: Automatic Factor Selection
+
+L21 regularization penalizes the $\ell_{2,1}$ norm, encouraging the model to
+concentrate its capacity in fewer factors. While RcppML normalizes $W$ columns
+to unit norm during fitting, the factor importance is captured in the $d$
+vector — L21 drives less important factors' $d$ values toward zero:
+
+```{r l21-effect, fig.width=7, fig.height=4}
+# Use strong L21 to demonstrate factor pruning
+m_l21 <- nmf(A_faces, k = 25, L21 = c(2.0, 0), tol = 1e-5,
+             maxit = 200, seed = 42, verbose = FALSE)
+
+# With L21, factor importance shifts to the d vector
+# Factors with small d values are effectively deactivated
+d_sorted <- sort(m_l21@d, decreasing = TRUE)
+cat("Factor d values (sorted):\n")
+cat(round(d_sorted, 1), "\n")
+
+# Count effectively active factors (d > 1% of max)
+threshold <- max(m_l21@d) * 0.01
+active <- sum(m_l21@d > threshold)
+cat("Active factors (d > 1% of max):", active, "of 25\n")
+
+barplot(d_sorted, names.arg = 1:25,
+        main = "Factor Importance Under L21 Regularization",
+        xlab = "Factor (sorted)", ylab = "d value",
+        col = ifelse(d_sorted > threshold, "steelblue", "gray80"),
+        border = NA)
+abline(h = threshold, lty = 2, col = "red")
+```
+
+### Angular Regularization: Diverse Parts
+
+Angular regularization encourages orthogonality between factors, preventing
+redundant parts that capture similar features:
+
+```{r angular-effect, fig.width=7, fig.height=3}
+m_angular <- nmf(A_faces, k = 25, angular = c(0.3, 0), tol = 1e-5,
+                 maxit = 200, seed = 42, verbose = FALSE)
+
+# Measure factor similarity
+cos_no_reg <- cosine(model_faces@w)
+cos_angular <- cosine(m_angular@w)
+
+par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
+image(abs(cos_no_reg), main = "No Angular Reg",
+      col = heat.colors(32), axes = FALSE,
+      xlab = "Factor", ylab = "Factor")
+image(abs(cos_angular), main = "Angular Reg (0.3)",
+      col = heat.colors(32), axes = FALSE,
+      xlab = "Factor", ylab = "Factor")
+```
+
+With angular regularization, the off-diagonal elements of the cosine similarity
+matrix shrink — factors become more distinct from each other.
+
+## Semi-NMF: When Signs Matter
+
+Standard NMF constrains both $W$ and $H$ to be non-negative. But some data naturally
+contain both positive and negative components (e.g., centered images, residuals).
+**Semi-NMF** relaxes the constraint on one factor:
+
+```{r semi-nmf}
+# Center the face data (makes values positive and negative)
+A_centered <- as.matrix(A_faces) - rowMeans(as.matrix(A_faces))
+
+# Semi-NMF handles the signed data directly — no need for abs()
+# W is unconstrained (can be negative), H remains non-negative
+m_semi <- nmf(A_centered, k = 10, nonneg = c(FALSE, TRUE),
+              tol = 1e-5, maxit = 200, seed = 42, verbose = FALSE)
+
+cat("Input range:", round(range(A_centered), 3), "\n")
+cat("W range:", round(range(m_semi@w), 3), "\n")
+cat("H range:", round(range(m_semi@h), 3), "(constrained non-negative)\n")
+```
+
+In semi-NMF, $W$ factors can have negative entries (representing "anti-features"),
+while $H$ loadings remain non-negative (each observation is a non-negative
+combination of possibly signed basis elements). Negative values in $W$ capture
+regions that are specifically *not* associated with a factor — a richer model
+than standard NMF.
+
+## Sparsity Analysis
+
+The sparsity bar chart gives a per-factor view of zero fractions:
+
+```{r sparsity-plot, fig.width=7, fig.height=4}
+plot(m_sparse, type = "sparsity")
+```
+
+## Key Takeaways
+
+1. **NMF learns parts, not modes**: Unlike PCA, NMF's non-negativity constraint
+   produces localized, additive features — facial parts, limb positions, or image
+   patches that combine to form wholes.
+
+2. **Ground truth validation** with `simulateSwimmer()` and `simulateNMF()` confirms
+   that NMF can exactly recover known compositional structure.
+
+3. **L1 regularization** sharpens parts by driving small contributions to zero,
+   producing crisper, more localized features.
+
+4. **L21 group sparsity** shifts factor importance to the $d$ vector,
+   concentrating the model's capacity in fewer dominant factors while
+   down-weighting less important ones.
+
+5. **Angular regularization** enforces diversity between factors, preventing
+   redundant representations.
+
+6. **Semi-NMF** extends NMF to signed data while maintaining non-negative
+   combination coefficients.
+
+7. **Convergence diagnostics** (`plot(model, type = "convergence")`) confirm
+   that the factorization has stabilized, and regularization diagnostics
+   show the contribution of each penalty term.
+
+## Further Reading
+
+- [Getting started with RcppML](getting-started.html) — Basic NMF concepts and regularization overview
+- [Cross-validation for rank selection](cross-validation.html) — Detailed CV guide
+- [Ecological biodiversity patterns](ecological-biodiversity.html) — Graph regularization for spatial data
+- [Cancer subtype discovery](cancer-subtype-discovery.html) — Consensus NMF for robust clustering

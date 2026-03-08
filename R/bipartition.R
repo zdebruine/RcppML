@@ -21,6 +21,9 @@
 #'
 #' @inheritParams nmf
 #' @param nonneg enforce non-negativity of the rank-2 factorization used for bipartitioning
+#' @param threads number of threads for OpenMP parallelization (default 0 = all available)
+#' @param verbose print progress information (default FALSE)
+#' @param ... additional arguments (see Advanced Parameters section)
 #' @return
 #' A list giving the bipartition and useful statistics:
 #' 	\itemize{
@@ -38,38 +41,102 @@
 #' 
 #' Kuang, D, Park, H. (2013). "Fast rank-2 nonnegative matrix factorization for hierarchical document clustering." Proc. 19th ACM SIGKDD intl. conf. on Knowledge discovery and data mining.
 #'
+#' @note \code{bipartition()} uses scalar \code{nonneg} (not length-2)
+#' because rank-2 factorizations apply the same constraint to both factors.
+#' The default \code{tol = 1e-5} (inherited from \code{\link{nmf}()}'s
+#' internal rank-2 path) is tighter than \code{nmf()}'s global \code{1e-4}
+#' because single rank-2 subproblems converge faster.
+#'
 #' @author Zach DeBruine
 #' 
 #' @export
 #' @seealso \code{\link{nmf}}, \code{\link{dclust}}
 #' @md
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' library(Matrix)
 #' data(iris)
 #' A <- as(as.matrix(iris[,1:4]), "dgCMatrix")
 #' bipartition(A, calc_dist = TRUE)
 #' }
-bipartition <- function(data, tol = 1e-5, nonneg = TRUE, ...){
+bipartition <- function(data, tol = 1e-5, nonneg = TRUE, threads = 0, verbose = FALSE, ...){
 
   p <- list(...)
   defaults <- list("diag" = TRUE, "samples" = 1:ncol(data), "seed" = NULL, "calc_dist" = TRUE, "maxit" = 100)
   for(i in 1:length(defaults))
     if(is.null(p[[names(defaults)[[i]]]])) p[[names(defaults)[[i]]]] <- defaults[[i]]
 
-  if (is(data, "sparseMatrix")) {
-    data <- as(data, "dgCMatrix")
-  } else if (canCoerce(data, "matrix")) {
-    data <- as.matrix(data)
-  } else stop("'data' was not coercible to a matrix")
+  # Unified input validation (supports file paths, sparse, dense)
+  data_info <- validate_data(data)
+  data <- data_info$data
 
-    if(!is.numeric(p$seed)) p$seed <- 0
-    if(min(p$samples) == 0) stop("sample indices must be strictly positive")
-    if(max(p$samples) > ncol(data)) stop("sample indices must be strictly less than the number of columns in 'data'")
+  if(!is.numeric(p$seed)) p$seed <- 0
+  if(min(p$samples) == 0) stop("sample indices must be strictly positive")
+  if(max(p$samples) > ncol(data)) stop("sample indices must be strictly less than the number of columns in 'data'")
 
-    if(class(data)[[1]] == "dgCMatrix"){
-        Rcpp_bipartition_sparse(data, tol, p$maxit, nonneg, p$samples - 1, p$seed, getOption("verbose"), p$calc_dist, p$diag)
-    } else {
-        Rcpp_bipartition_dense(data, tol, p$maxit, nonneg, p$samples - 1, p$seed, getOption("verbose"), p$calc_dist, p$diag)
-    }
+  # GPU fast path for sparse bipartition
+  if (inherits(data, "dgCMatrix")) {
+    gpu_result <- .try_gpu_bipartition(data, tol, p, nonneg, verbose)
+    if (!is.null(gpu_result)) return(gpu_result)
+  }
+  Rcpp_bipartition(data, tol, p$maxit, nonneg, p$samples - 1, p$seed, verbose, p$calc_dist, p$diag, as.integer(threads))
+}
+
+#' Try GPU dispatch for bipartition
+#' @keywords internal
+.try_gpu_bipartition <- function(data, tol, p, nonneg, verbose) {
+  use_gpu <- getOption("RcppML.gpu", "auto")
+  if (identical(use_gpu, FALSE)) return(NULL)
+
+  gpu_ok <- if (identical(use_gpu, TRUE)) {
+    gpu_available()
+  } else {
+    # auto: use GPU for large matrices
+    (length(data@x) >= 100000 || ncol(data) >= 5000) && gpu_available()
+  }
+  if (!gpu_ok) return(NULL)
+
+  tryCatch({
+    m <- nrow(data)
+    n <- ncol(data)
+    nnz <- length(data@x)
+
+    partition <- integer(n)
+    v_out <- double(m)
+    center_out <- double(m * 2)
+    dist_out <- double(1)
+
+    ret <- .gpu_call("rcppml_gpu_bipartition_double",
+              col_ptr = as.integer(data@p),
+              row_idx = as.integer(data@i),
+              values = as.double(data@x),
+              m = as.integer(m), n = as.integer(n), nnz = as.integer(nnz),
+              max_iter = as.integer(p$maxit),
+              tol = as.double(tol),
+              nonneg = as.integer(nonneg),
+              seed = as.double(if (is.numeric(p$seed)) p$seed else 0),
+              partition = partition,
+              v = v_out,
+              center = center_out,
+              dist = dist_out,
+              out_status = integer(1))
+
+    if (ret$out_status != 0L) return(NULL)
+
+    s1 <- which(ret$partition == 0)
+    s2 <- which(ret$partition == 1)
+    list(
+      v = ret$v,
+      dist = ret$dist,
+      size1 = length(s1),
+      size2 = length(s2),
+      samples1 = s1,
+      samples2 = s2,
+      center1 = ret$center[1:m],
+      center2 = ret$center[(m + 1):(2 * m)]
+    )
+  }, error = function(e) {
+    if (verbose) message("GPU bipartition failed: ", conditionMessage(e), "\nFalling back to CPU.")
+    NULL
+  })
 }

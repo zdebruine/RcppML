@@ -1,37 +1,51 @@
 Package: RcppML
 Type: Package
-Title: Rcpp Machine Learning Library
-Version: 0.5.6
-Date: 2022-15-12
-Authors@R: person("Zach", "DeBruine", 
+Title: Fast Non-Negative Matrix Factorization and Divisive Clustering
+Version: 1.0.1
+Date: 2026-02-27
+Authors@R: person("Zachary", "DeBruine", 
     email = "zacharydebruine@gmail.com", 
     role = c("aut", "cre"), 
     comment = c(ORCID = "0000-0003-2234-4827"))
-Description: Fast machine learning algorithms including matrix factorization 
-    and divisive clustering for large sparse and dense matrices.
-License: GPL-3 + file LICENSE
+Description: High-performance non-negative matrix factorization (NMF),
+    singular value decomposition (SVD), and divisive clustering for large
+    sparse and dense matrices. Implements alternating least squares with
+    coordinate descent and Cholesky NNLS solvers, diagonal scaling for
+    interpretable factors, cross-validation for automatic rank selection,
+    multiple distribution-based losses (Gaussian, Poisson, Generalized Poisson,
+    Negative Binomial, Gamma, Inverse Gaussian, Tweedie) via iteratively
+    reweighted least squares, regularization (L1, L2, L21, angular, graph
+    Laplacian), and optional GPU acceleration via CUDA. Includes divisive
+    clustering via recursive rank-2 factorization, consensus clustering,
+    and the SparsePress compressed sparse matrix format. Methods are
+    described in DeBruine, Melcher, and Triche (2021)
+    <doi:10.1101/2021.09.01.458620>.
+Depends:
+    R (>= 3.5.0)
+License: GPL (>= 3)
 Imports:
     Rcpp,
     Matrix,
     methods,
     stats,
-    knitr,
     utils
 LinkingTo: 
-    Rcpp
-VignetteBuilder: knitr
-RoxygenNote: 7.2.1
+    Rcpp,
+    RcppEigen
+RoxygenNote: 7.3.3
 Suggests: 
     ggplot2,
-    rmarkdown, 
-    devtools,
-    ggrepel,
-    uwot,
-    cowplot,
-    viridis,
+    hdf5r,
+    jsonlite,
+    randomForest,
+    patchwork,
+    plotly,
+    scales,
     testthat (>= 3.0.0) 
 Config/testthat/edition: 3
 LazyData: true
+LazyDataCompression: xz
 URL: https://github.com/zdebruine/RcppML
 BugReports: https://github.com/zdebruine/RcppML/issues
+SystemRequirements: CUDA Toolkit >= 11.0 (optional, for GPU acceleration)
 Encoding: UTF-8

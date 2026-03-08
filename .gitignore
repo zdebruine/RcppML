@@ -36,6 +36,7 @@ RcppML.Rcheck/
 
 # Test artifacts
 test_output.txt
+tests/testthat/_problems/
 
 # Python virtual environment
 .venv/

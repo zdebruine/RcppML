@@ -11,7 +11,9 @@ dclust(
   tol = 1e-05,
   maxit = 100,
   nonneg = TRUE,
-  seed = NULL
+  seed = NULL,
+  threads = 0,
+  verbose = FALSE
 )
 }
 \arguments{
@@ -23,20 +25,23 @@ dclust(
 
 \item{tol}{in rank-2 NMF, the correlation distance (\eqn{1 - R^2}) between \eqn{w} across consecutive iterations at which to stop factorization}
 
-\item{maxit}{maximum number of fitting iterations}
+\item{maxit}{maximum number of fitting iterations (default 100)}
 
 \item{nonneg}{in rank-2 NMF, enforce non-negativity}
 
 \item{seed}{random seed for rank-2 NMF model initialization}
+
+\item{threads}{number of threads for OpenMP parallelization (default 0 = all available)}
+
+\item{verbose}{print progress information (default FALSE)}
 }
 \value{
 A list of lists corresponding to individual clusters:
 \itemize{
 \item id      : character sequence of "0" and "1" giving position of clusters along splitting hierarchy
-\item samples : indices of samples in the cluster
+\item samples : 0-indexed integer indices of samples in the cluster (add 1 for R-style indexing)
 \item center  : mean feature expression of all samples in the cluster
-\item dist    : if applicable, relative cosine distance of samples in cluster to assigned/unassigned cluster center.
-\item leaf    : is cluster a leaf node
+\item size    : number of samples in the cluster
 }
 }
 \description{
@@ -65,10 +70,17 @@ A bipartition will only be attempted if there are more than \code{2 * min_sample
 
 Other than setting the seed, reproducibility may be improved by setting \code{tol} to a smaller number to increase the exactness of each bipartition.
 }
+\note{
+\code{dclust()} uses \code{A} for the data matrix and scalar
+\code{nonneg}/\code{tol} parameters (matching \code{\link{bipartition}()}).
+The default \code{tol = 1e-5} is tighter than \code{\link{nmf}()}'s
+\code{1e-4} because rank-2 subproblems converge faster and benefit
+from higher precision.
+}
 \examples{
-\dontrun{
+\donttest{
 data(USArrests)
-A <- Matrix::as(as.matrix(t(USArrests)), "dgCMatrix")
+A <- as(as.matrix(t(USArrests)), "dgCMatrix")
 clusters <- dclust(A, min_samples = 2, min_dist = 0.001)
 str(clusters)
 }

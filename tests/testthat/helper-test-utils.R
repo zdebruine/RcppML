@@ -67,13 +67,15 @@ align_nmf_factors <- function(W, H, W_true, H_true) {
 #' @param W,H Factor matrices
 #' @param L1 L1 penalty coefficients c(L1_W, L1_H)
 #' @param L2 L2 penalty coefficients c(L2_W, L2_H)
-#' @param loss_type One of "mse", "mae", "huber", "kl"
+#' @param loss_type One of "mse", "mae", "huber", "kl", "gp"
 #' @param huber_delta Delta parameter for Huber loss
 #' @param mask Optional mask matrix or "zeros"
 #' @return Named list of loss components
 compute_nmf_loss <- function(A, W, H, L1 = c(0, 0), L2 = c(0, 0),
                              loss_type = "mse", huber_delta = 1.0,
                              mask = NULL) {
+  # "gp" is the public name; "kl" is the internal formula
+  if (loss_type == "gp") loss_type <- "kl"
   
   # Reconstruction
   A_recon <- W %*% H
@@ -240,6 +242,13 @@ compute_mse <- function(A, model) {
   sum((A[idx] - approx[idx])^2) / nrow(idx)
 }
 
+#' Compute MSE from raw factors: ||A - W*diag(d)*H||^2 / n_elements
+#' Used by GPU test files that pass W, d, H, A individually.
+mse <- function(W, d, H, A) {
+  approx <- W %*% diag(d, nrow = length(d)) %*% H
+  mean((as.matrix(A) - approx)^2)
+}
+
 #' Skip test if GPU is not available
 skip_if_no_gpu <- function() {
   skip_if_not(
@@ -247,4 +256,13 @@ skip_if_no_gpu <- function() {
       RcppML:::gpu_available(),
     "GPU not available"
   )
+}
+
+skip_if_no_sp_gpu <- function() {
+  skip_if_no_gpu()
+  has_sym <- tryCatch({
+    getNativeSymbolInfo("rcppml_sp_read_gpu", RcppML:::.gpu_env$dll)
+    TRUE
+  }, error = function(e) FALSE)
+  skip_if_not(has_sym, "sp_read_gpu not compiled into GPU .so")
 }

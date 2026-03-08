@@ -18,6 +18,9 @@ align(object, ...)
 
 \item{method}{either \code{cosine} or \code{cor}}
 }
+\value{
+An \code{nmf} object with factors reordered to best match \code{ref}.
+}
 \description{
 Align two NMF models
 }
@@ -25,4 +28,15 @@ Align two NMF models
 For \code{\link{nmf}} models, factors in \code{object} are reordered to minimize the cost of bipartite matching
 (see \code{\link{bipartiteMatch}}) on a \code{\link{cosine}} or correlation distance matrix. The \eqn{w} matrix is used for matching, and
 must be equidimensional in \code{object} and \code{ref}.
+}
+\examples{
+\donttest{
+data <- simulateNMF(50, 30, k = 3, seed = 1)
+m1 <- nmf(data$A, 3, seed = 1, maxit = 50)
+m2 <- nmf(data$A, 3, seed = 2, maxit = 50)
+aligned <- align(m2, m1)  # reorder m2 factors to match m1
+}
+}
+\seealso{
+\code{\link{bipartiteMatch}}, \code{\link{cosine}}, \code{\link{nmf}}
 }

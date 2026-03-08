@@ -13,14 +13,26 @@ mse(w, d = NULL, h, data, mask = NULL, missing_only = FALSE, ...)
 
 \item{h}{sample factor matrix (samples as columns)}
 
-\item{data}{dense or sparse matrix of features in rows and samples in columns. Prefer \code{matrix} or \code{Matrix::dgCMatrix}, respectively}
+\item{data}{dense or sparse matrix of features in rows and samples in columns. Prefer \code{matrix} or \code{Matrix::dgCMatrix}, respectively.
+Also accepts a file path (character string) which will be auto-loaded based on extension.}
 
-\item{mask}{dense or sparse matrix of values in \code{data} to handle as missing. Prefer \code{Matrix::dgCMatrix}. Alternatively, specify "\code{zeros}" or "\code{NA}" to mask either all zeros or NA values.}
+\item{mask}{dense or sparse matrix of values in \code{data} to handle as missing. Alternatively, specify "\code{zeros}" or "\code{NA}".}
 
 \item{missing_only}{only calculate mean squared error at masked values}
 
 \item{...}{additional arguments}
 }
+\value{
+A single numeric value: the mean squared error of the factorization.
+}
 \description{
 Same as the \code{evaluate} S4 method for the \code{nmf} class, but allows one to input the `w`, `d`, `h`, and `data` independently.
 }
+\examples{
+\donttest{
+data <- simulateNMF(50, 30, k = 3, seed = 1)
+model <- nmf(data$A, 3, seed = 1, maxit = 50)
+RcppML:::mse(model$w, model$d, model$h, data$A)
+}
+}
+\keyword{internal}

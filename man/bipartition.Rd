@@ -4,16 +4,28 @@
 \alias{bipartition}
 \title{Bipartition a sample set}
 \usage{
-bipartition(data, tol = 1e-05, nonneg = TRUE, ...)
+bipartition(
+  data,
+  tol = 1e-05,
+  nonneg = TRUE,
+  threads = 0,
+  verbose = FALSE,
+  ...
+)
 }
 \arguments{
-\item{data}{dense or sparse matrix of features in rows and samples in columns. Prefer \code{matrix} or \code{Matrix::dgCMatrix}, respectively}
+\item{data}{dense or sparse matrix of features in rows and samples in columns. Prefer \code{matrix} or \code{Matrix::dgCMatrix}, respectively.
+Also accepts a file path (character string) which will be auto-loaded based on extension.}
 
-\item{tol}{tolerance of the fit}
+\item{tol}{tolerance of the fit (default 1e-4)}
 
 \item{nonneg}{enforce non-negativity of the rank-2 factorization used for bipartitioning}
 
-\item{...}{development parameters}
+\item{threads}{number of threads for OpenMP parallelization (default 0 = all available)}
+
+\item{verbose}{print progress information (default FALSE)}
+
+\item{...}{additional arguments (see Advanced Parameters section)}
 }
 \value{
 A list giving the bipartition and useful statistics:
@@ -39,6 +51,13 @@ Rank-2 matrix factorization by alternating least squares is faster than rank-2-t
 
 This function is a specialization of rank-2 \code{\link{nmf}} with support for factorization of only a subset of samples, and with additional calculations on the factorization model relevant to bipartitioning. See \code{\link{nmf}} for details regarding rank-2 factorization.
 }
+\note{
+\code{bipartition()} uses scalar \code{nonneg} (not length-2)
+because rank-2 factorizations apply the same constraint to both factors.
+The default \code{tol = 1e-5} (inherited from \code{\link{nmf}()}'s
+internal rank-2 path) is tighter than \code{nmf()}'s global \code{1e-4}
+because single rank-2 subproblems converge faster.
+}
 \section{Advanced Parameters}{
 
 Several parameters may be specified in the \code{...} argument:
@@ -52,7 +71,7 @@ Several parameters may be specified in the \code{...} argument:
 }
 
 \examples{
-\dontrun{
+\donttest{
 library(Matrix)
 data(iris)
 A <- as(as.matrix(iris[,1:4]), "dgCMatrix")

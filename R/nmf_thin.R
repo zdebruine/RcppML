@@ -23,11 +23,11 @@
 #' @section Cross-Validation:
 #' When \code{k} is a vector, the function performs cross-validation to find the optimal rank:
 #' \itemize{
-#'   \item A fraction (\code{holdout_fraction}) of entries are held out for validation
+#'   \item A fraction (\code{test_fraction}) of entries are held out for validation
 #'   \item Models are fit for each rank in \code{k} using only training data
 #'   \item Test loss is computed on held-out entries
-#'   \item Returns a data.frame with train_mse, test_mse, and best_iter for each rank/replicate
-#'   \item Use \code{plot()} on the result to visualize MSE vs rank
+#'   \item Returns a data.frame with k, rep, train_mse, test_mse, and best_iter for each rank/replicate
+#'   \item Use \code{plot()} on the result to visualize loss vs rank
 #' }
 #'
 #' @section Loss Functions:
@@ -37,11 +37,27 @@
 #'   \item \code{"mae"}: Mean Absolute Error. More robust to outliers than MSE.
 #'   \item \code{"huber"}: Huber loss. Quadratic for small errors, linear for large errors.
 #'         Controlled by \code{huber_delta} parameter.
-#'   \item \code{"kl"}: Kullback-Leibler divergence. Appropriate for count data.
+#'   \item \code{"gp"}: Generalized Poisson. For overdispersed count data (e.g., scRNA-seq).
+#'         Use \code{dispersion} to control per-row or global overdispersion estimation.
+#'         With \code{dispersion="none"}, equivalent to KL divergence (Poisson model).
+#'   \item \code{"nb"}: Negative Binomial. Quadratic variance-mean relationship. Standard for
+#'         scRNA-seq data with overdispersion. Size parameter (r) estimated per-row or globally.
+#'   \item \code{"gamma"}: Gamma distribution. Variance proportional to mu^2. For positive
+#'         continuous data. Dispersion (phi) estimated via MoM Pearson estimator.
+#'   \item \code{"inverse_gaussian"}: Inverse Gaussian. Variance proportional to mu^3. For
+#'         positive continuous data with heavy right tails.
+#'   \item \code{"tweedie"}: Tweedie distribution. Variance proportional to mu^p where p is
+#'         set via \code{tweedie_power} (default 1.5). Interpolates between Poisson (p=1),
+#'         Gamma (p=2), and Inverse Gaussian (p=3).
 #' }
 #'
 #' Non-MSE losses use Iteratively Reweighted Least Squares (IRLS) which may be slower
-#' but provides robustness to outliers (MAE, Huber) or better fits for count data (KL).
+#' but provides robustness to outliers (MAE, Huber) or better fits for count data (GP, NB)
+#' and positive continuous data (Gamma, Inverse Gaussian).
+#'
+#' Alternatively, use the \code{distribution} parameter for the new unified API, which
+#' maps distribution names to loss functions and provides \code{distribution_config}
+#' for fine-grained tuning.
 #'
 #' @section L21 (Group Sparsity) Regularization:
 #' L21-norm regularization (also known as group LASSO) encourages entire rows of W or 
@@ -72,6 +88,28 @@
 #' Use \code{resource = "gpu"} to force GPU, \code{resource = "cpu"} to force CPU.
 #' Set \code{verbose = TRUE} to see which backend is selected.
 #'
+#' @section Unsupported Combinations:
+#' Not all parameter combinations are currently supported. The following will
+#' produce an error or unexpected results:
+#' \describe{
+#'   \item{Cholesky + non-MSE loss}{The Cholesky solver (\code{solver="cholesky"})
+#'     does not support IRLS-based losses (GP, NB, Gamma, Inverse Gaussian, Tweedie).
+#'     Use \code{solver="cd"} or \code{solver="auto"} (default) for non-MSE losses.}
+#'   \item{Zero-inflation with non-GP/NB losses}{Zero-inflation (\code{zi} or
+#'     \code{zero_inflation}) is only supported with \code{loss="gp"} and
+#'     \code{loss="nb"}. Using ZI with MSE, Gamma, Inverse Gaussian, or Tweedie
+#'     is unsupported and will produce incorrect results.}
+#'   \item{Zero-inflation "twoway" mode}{The \code{zi="twoway"} mode is currently
+#'     broken on all backends. Use \code{zi="row"} or \code{zi="col"} instead.}
+#'   \item{MAE and Huber losses}{The \code{"mae"} and \code{"huber"} loss functions
+#'     are deprecated. Use the \code{robust} parameter with any distribution instead
+#'     (e.g., \code{robust=TRUE} with \code{distribution="gaussian"}).}
+#'   \item{GPU + dense CV}{GPU cross-validation with dense matrices falls back to
+#'     CPU via sparseView conversion. Native GPU dense CV is not yet implemented.}
+#'   \item{GPU + projective/symmetric CV}{Cross-validation with \code{projective=TRUE}
+#'     or \code{symmetric=TRUE} falls back to CPU on GPU builds.}
+#' }
+#'
 #' @section Methods:
 #' S4 methods available for the \code{nmf} class:
 #' * \code{predict}: project an NMF model (or partial model) onto new samples
@@ -94,14 +132,37 @@
 #' @param angular Angular regularization penalties, single value or array of length two for \code{c(w, h)} (default c(0, 0)).
 #' @param seed random seed(s) for initialization and CV. Can be: \code{NULL} for random initialization, a single integer for reproducible initialization, a vector of integers for multiple CV replicates, or a custom W matrix (k x p) for custom initialization.
 #' @param mask dense or sparse matrix of values in \code{data} to handle as missing. Alternatively, specify "\code{zeros}" or "\code{NA}".
-#' @param loss loss function: \code{"mse"} (default), \code{"mae"}, \code{"huber"}, or \code{"kl"}.
+#' @param loss loss function: \code{"mse"} (default), \code{"mae"}, \code{"huber"}, \code{"gp"}, or \code{"nb"}.
+#' Use \code{loss="gp"} with \code{dispersion="none"} for KL divergence (Poisson).
+#' Use \code{loss="nb"} for Negative Binomial (quadratic variance-mean, standard for scRNA-seq).
 #' @param huber_delta delta parameter for Huber loss (default 1.0).
-#' @param graph_W sparse adjacency matrix (dgCMatrix) for feature graph regularization.
-#' @param graph_H sparse adjacency matrix (dgCMatrix) for sample graph regularization.
-#' @param graph_lambda regularization strength for graphs, single value or c(lambda_W, lambda_H) (default c(0, 0)).
+#' @param dispersion dispersion mode for Generalized Poisson loss: \code{"per_row"} (default, per-feature dispersion),
+#'   \code{"global"} (single shared dispersion), or \code{"none"} (no dispersion estimation;
+#'   theta=0 reduces GP to Poisson/KL divergence).
+#' @param theta_init initial theta value for GP dispersion (default 0.1).
+#' @param theta_max maximum allowed theta value (default 5.0). Caps dispersion to prevent instability.
+#' @param theta_min minimum theta floor (default 0). Set > 0 to prevent theta collapse to zero.
+
+#' @param zi zero-inflation mode for ZIGP/ZINB: \code{"none"} (default), \code{"row"} (per-row dropout),
+#'   \code{"col"} (per-column dropout), or \code{"twoway"} (row+column combined). Requires \code{loss="gp"} or \code{loss="nb"}.
+#'   Estimates structural dropout probabilities pi separately from count model.
+#'   Currently CPU-only; not yet supported in cross-validation mode.
+#' @param zi_em_iters number of EM iterations per NMF iteration for the zero-inflation E-step
+#'   and M-step (default 1). More iterations give more accurate pi estimates per NMF step.
+
+#' @param graph_W sparse graph Laplacian or weighted adjacency matrix (dgCMatrix, m x m) for
+#'   feature (row) graph regularization. Must be square and symmetric. Pass the graph Laplacian
+#'   \eqn{L = D - A} (recommended) or a raw adjacency matrix; RcppML converts to Laplacian
+#'   internally. Controls similarity constraints on W rows.
+#' @param graph_H sparse graph Laplacian or weighted adjacency matrix (dgCMatrix, n x n) for
+#'   sample (column) graph regularization. Must be square and symmetric.
+#'   Controls similarity constraints on H columns.
+#' @param graph_lambda regularization strength for graph Laplacian term, single value
+#'   (applied to both W and H graphs) or \code{c(lambda_W, lambda_H)} (default \code{c(0, 0)}).
+#'   Larger values enforce stronger similarity within connected nodes.
 #' @param sort_model if \code{TRUE} (default), sort factors by descending diagonal values.
 #' @param nonneg logical vector of length 2 for \code{c(w, h)} specifying non-negativity constraints (default \code{c(TRUE, TRUE)}).
-#' @param sparse if \code{TRUE}, treat all zero entries as missing (default \code{FALSE}).
+#' @param mask_zeros if \code{TRUE}, treat all zero entries as missing (default \code{FALSE}).
 #' @param upper_bound upper bound constraints for factor values, single value or c(w_bound, h_bound) (default c(0, 0) = no bound).
 #' @param test_fraction fraction of entries to hold out for cross-validation (default 0 = disabled).
 #' @param patience early stopping patience for cross-validation (default 5).
@@ -110,9 +171,8 @@
 #' @param track_train_loss if \code{TRUE} (default), track training loss history during cross-validation.
 #' @param threads number of threads for OpenMP parallelization (default 0 = all available)
 #' @param verbose print progress information during fitting (default FALSE)
-#' @param convergence convergence criterion: \code{"factor"} (default, matching singlet — uses
-#'   relative factor change, no loss computation → ~20\% faster), \code{"loss"} (relative MSE change),
-#'   or \code{"both"} (converge when both criteria met).
+#' @param cd_tol relative convergence tolerance for coordinate descent NNLS solver (default 1e-8).
+#' @param cd_abs_tol absolute convergence tolerance for coordinate descent (default 1e-15).
 #' @param cd_maxit maximum number of coordinate descent iterations in the NNLS solver (default 100).
 #'   Acts as a safety cap; with adaptive CD probing, the effective iteration count is determined
 #'   automatically from a sample of columns (typically 3-10 with warm starts).
@@ -120,9 +180,48 @@
 #'   Controls how W and H factors are normalized at each iteration and in the final result.
 #' @param streaming streaming mode for large matrices: \code{"auto"}, \code{TRUE}, or \code{FALSE}.
 #' @param panel_cols number of columns per streaming panel (default 0 = auto-detect).
+#' @param irls_max_iter maximum IRLS iterations for robust losses (default 20).
+#' @param irls_tol convergence tolerance for IRLS weights (default 1e-4).
 #' @param resource compute resource override: \code{"auto"} (default) auto-detects available resources,
 #'   \code{"cpu"} forces CPU, \code{"gpu"} forces GPU. Can also be set via the \code{RCPPML_RESOURCE}
 #'   environment variable (param takes priority over env var).
+#'
+#' @param distribution new unified distribution API. One of: \code{"auto"} (selects via
+#'   score test on a quick baseline fit), \code{"gaussian"} (MSE),
+#'   \code{"poisson"} (GP with dispersion=none), \code{"gp"} (Generalized Poisson),
+#'   \code{"nb"} (Negative Binomial), \code{"gamma"} (Gamma),
+#'   \code{"inverse_gaussian"} (Inverse Gaussian), or \code{"tweedie"} (Tweedie with
+#'   continuous variance power V(μ) = μ^p; set p via \code{tweedie_power} or
+#'   \code{distribution_config$tweedie_power}). When specified, takes precedence
+#'   over the \code{loss} parameter. Use \code{distribution_config} to set distribution-specific
+#'   tuning parameters.
+#' @param zero_inflation zero-inflation mode (new API): \code{"none"}, \code{"row"}, \code{"col"},
+#'   \code{"twoway"}, or \code{"auto"}. Equivalent to the \code{zi} parameter but preferred
+#'   in the new API. Use \code{zi_config} for additional tuning.
+#' @param robust robustness control. \code{FALSE} (default) for no robustness. \code{TRUE} for
+#'   Huber-type robustness with delta=1.345 (95\% asymptotic efficiency under Gaussian).
+#'   A positive numeric value sets a custom Huber delta. Works with any distribution:
+#'   IRLS weights are decomposed into distribution_weight * robust_huber_modifier.
+#' @param distribution_config named list of distribution-specific overrides. Supported keys:
+#'   \code{dispersion} (dispersion mode), \code{theta_init}/\code{theta_max}/\code{theta_min}
+#'   (GP theta), \code{nb_size_init}/\code{nb_size_max}/\code{nb_size_min} (NB size r),
+#'   \code{gamma_phi_init}/\code{gamma_phi_max}/\code{gamma_phi_min} (Gamma/IG dispersion phi).
+#' @param zi_config named list of zero-inflation overrides. Supported keys:
+#'   \code{em_iters} (number of EM iterations per NMF step).
+#' @param robust_config named list of robustness overrides. Supported keys:
+#'   \code{delta} (Huber delta), \code{irls_max_iter}, \code{irls_tol}.
+#' @param nb_size_init initial NB size (r) parameter for Negative Binomial dispersion (default 10.0).
+#' @param nb_size_max maximum allowed NB size (default 1e6).
+#' @param nb_size_min minimum allowed NB size (default 0.01).
+#' @param gamma_phi_init initial dispersion parameter for Gamma/Inverse Gaussian (default 1.0).
+#' @param gamma_phi_max maximum allowed Gamma/IG dispersion (default 1e4).
+#' @param gamma_phi_min minimum allowed Gamma/IG dispersion (default 1e-6).
+#' @param tweedie_power variance power parameter for Tweedie distribution (default 1.5).
+#'   V(μ) = μ^p. Special cases: p=0 Gaussian, p=1 Poisson, p=2 Gamma, p=3 Inverse Gaussian.
+#'   Can also be set via \code{distribution_config$tweedie_power}.
+#' @param guides reserved for future guided/semi-supervised NMF features.
+#' @param on_iteration optional callback function called after each NMF iteration.
+#'   Receives iteration number and current loss. Return \code{FALSE} to stop early.
 
 #' @param projective if \code{TRUE}, use projective NMF where \eqn{H = diag(d) \cdot W^T \cdot A} instead of solving for H independently (default \code{FALSE}).
 #'   This constrains the approximation to the column space of W, yielding parts-based representations with
@@ -130,27 +229,35 @@
 #' @param symmetric if \code{TRUE}, use symmetric NMF where \eqn{H = W^T}, factorizing \eqn{A \approx W \cdot d \cdot W^T} (default \code{FALSE}).
 #'   Appropriate for symmetric matrices such as covariance, correlation, or similarity matrices.
 #'   Only W is solved for; H is set equal to the transpose of W. Data should be a square symmetric matrix.
-#' @param solver NNLS solver for the alternating least squares subproblem: \code{"cd"} (default, coordinate descent),
-#'   \code{"cholesky"} (Cholesky factorization + clip, faster but approximate),
-#'   \code{"hierarchical_cholesky"} (Cholesky + one active-set refinement, better quality than plain clip), or
-#'   \code{"adaptive_cholesky"} (automatically switches between plain clip and hierarchical refinement
-#'   based on the fraction of negative entries after the initial solve; see \code{chol_adaptive_threshold}).
-#' @param chol_adaptive_threshold violation rate threshold for the \code{"adaptive_cholesky"} solver.
-#'   After the unconstrained Cholesky solve, computes the fraction of factor entries that are negative.
-#'   If this fraction exceeds \code{chol_adaptive_threshold}, hierarchical active-set sub-solves
-#'   are performed per column (same as \code{"hierarchical_cholesky"}); otherwise, negatives are simply
-#'   clipped (same as \code{"cholesky"}). Defaults to \code{0.05} (5\%).
-#'   Lower values bias towards the fast clip path; higher values bias towards the hierarchical path.
+#' @param solver NNLS solver for the alternating least squares subproblem:
+#'   \code{"auto"} (default) selects the best solver for the given rank and hardware —
+#'   CD for k <= 32 on GPU, Cholesky otherwise.
+#'   \code{"cholesky"} (Cholesky factorization + non-negativity clip, fastest for high ranks),
+#'   \code{"cd"} (coordinate descent, exact non-negativity enforcement, best quality at low ranks).
 #' @param init initialization method: \code{"random"} (default, uniform random),
 #'   \code{"lanczos"} (Lanczos SVD seed with \eqn{W = |U| \sqrt{\Sigma}}, \eqn{H = |V| \sqrt{\Sigma}};
 #'   typically reduces iteration count by 30-50\% with better initial loss), or \code{"irlba"}
 #'   (Implicitly Restarted Lanczos Bidiagonalization; alternative to Lanczos for high ranks k ≥ 32).
 #'   SVD-based methods (lanczos/irlba) provide better initialization quality but add overhead;
 #'   use when initialization quality is more important than speed.
+#' @param h_init optional initial H matrix (k x n) for custom initialization.
+#'   When provided alongside a custom W via \code{seed}, both factors are
+#'   initialized from user-supplied values. Default \code{NULL} (auto-init).
 #' @param ... additional development parameters
-#' @return object of class \code{nmf} when \code{k} is a single integer, or \code{nmfCrossValidate} data.frame when \code{k} is a vector
+#' @return
+#' When \code{k} is a single integer: an S4 object of class \code{nmf} with slots:
+#' \describe{
+#'   \item{\code{w}}{feature factor matrix, \code{m x k}}
+#'   \item{\code{d}}{scaling diagonal vector of length \code{k} (descending order after sorting)}
+#'   \item{\code{h}}{sample factor matrix, \code{k x n}}
+#'   \item{\code{misc}}{list containing \code{tol} (final tolerance), \code{iter} (iteration count),
+#'     \code{loss} (final loss value), \code{loss_type} (loss function used), and \code{runtime} (seconds).
+#'     Cross-validation models also include \code{test_mask}, \code{test_loss}, \code{train_loss}.}
+#' }
+#' When \code{k} is a vector: a \code{data.frame} of class \code{nmfCrossValidate} with columns
+#' \code{k}, \code{rep}, \code{train_loss}, \code{test_loss}, and \code{best_iter}.
 #' @importFrom methods is
-#' @importFrom stats runif
+#' @importFrom stats runif sd setNames var
 #' @references
 #'
 #' DeBruine, ZJ, Melcher, K, and Triche, TJ. (2021). "High-performance non-negative matrix factorization for large single-cell data." BioRXiv.
@@ -158,12 +265,12 @@
 #' @author Zach DeBruine
 #'
 #' @export
-#' @seealso \code{\link{predict}}, \code{\link{mse}}, \code{\link{nnls}}
+#' @seealso \code{\link{predict}}, \code{\link{mse}}, \code{\link{nnls}}, \code{\link{align}}, \code{\link{summary,nmf-method}}
 #' @md
 #' @examples
 #' \donttest{
 #' # basic NMF
-#' model <- nmf(rsparsematrix(1000, 100, 0.1), k = 10)
+#' model <- nmf(Matrix::rsparsematrix(1000, 100, 0.1), k = 10)
 #'
 #' # cross-validation to find optimal rank
 #' library(Matrix)
@@ -176,10 +283,16 @@
 #' model <- nmf(A, optimal_k)
 #' }
 nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L21 = c(0, 0), angular = c(0, 0), seed = NULL, mask = NULL, 
-                loss = c("mse", "mae", "huber", "kl"), huber_delta = 1.0,
+                loss = c("mse", "mae", "huber", "gp", "nb", "gamma", "inverse_gaussian", "tweedie"), huber_delta = 1.0,
+                dispersion = c("per_row", "per_col", "global", "none"), theta_init = 0.1, theta_max = 5.0,
+                zi = c("none", "row", "col", "twoway"), zi_em_iters = 1L, theta_min = 0.0,
+                nb_size_init = 10.0, nb_size_max = 1e6, nb_size_min = 0.01,
+                gamma_phi_init = 1.0, gamma_phi_max = 1e4, gamma_phi_min = 1e-6,
+                tweedie_power = 1.5,
                 graph_W = NULL, graph_H = NULL, graph_lambda = c(0, 0),
+                guides = NULL,
                 sort_model = TRUE,
-                sparse = FALSE,
+                mask_zeros = FALSE,
                 nonneg = c(TRUE, TRUE),
                 upper_bound = c(0, 0),
                 test_fraction = 0,
@@ -189,7 +302,7 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
                 track_train_loss = TRUE,
                 threads = 0,
                 verbose = FALSE,
-                convergence = c("factor", "loss", "both"),
+                cd_tol = 1e-8,
                 cd_maxit = 100L,
                 cd_abs_tol = 1e-15,
                 norm = c("L1", "L2", "none"),
@@ -198,13 +311,58 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
                 resource = "auto",
                 projective = FALSE,
                 symmetric = FALSE,
-                solver = c("cd", "cholesky", "hierarchical_cholesky", "adaptive_cholesky"),
+                solver = c("auto", "cholesky", "cd"),
                 init = c("random", "lanczos", "irlba"),
-                adaptive_solver = 0L,
-                chol_adaptive_threshold = 0.05,
+                irls_max_iter = 5L,
+                irls_tol = 1e-4,
+                robust = FALSE,
+                distribution = NULL,
+                zero_inflation = NULL,
+                distribution_config = list(),
+                zi_config = list(),
+                robust_config = list(),
+                on_iteration = NULL,
+                h_init = NULL,
+                profile = FALSE,
                 ...) {
   
   start_time <- Sys.time()
+  sparse <- mask_zeros  # internal alias for backward compat
+  
+  # --- Multi-modal list input: delegate to factor_net ---
+  if (is.list(data) && !inherits(data, "Matrix") && !inherits(data, "gpu_sparse_matrix")) {
+    if (length(data) < 2)
+      stop("Multi-modal NMF requires a list of 2+ matrices with the same number of columns")
+    nms <- names(data)
+    if (is.null(nms) || any(nms == "") || anyDuplicated(nms))
+      stop("Multi-modal NMF requires a named list with unique names")
+    # All matrices must have the same number of columns (shared samples)
+    ncols <- vapply(data, ncol, integer(1))
+    if (length(unique(ncols)) != 1)
+      stop("All matrices in multi-modal NMF must have the same number of columns (samples)")
+    
+    # Build factor_shared graph
+    inputs <- lapply(nms, function(nm) factor_input(data[[nm]], nm))
+    shared <- do.call(factor_shared, inputs)
+    layer <- nmf_layer(shared, k = k,
+                       W = W(L1 = L1[1], L2 = L2[1], L21 = L21[1],
+                             angular = angular[1], nonneg = nonneg[1],
+                             upper_bound = upper_bound[1]),
+                       H = H(L1 = L1[2], L2 = L2[2], L21 = L21[2],
+                             angular = angular[2], nonneg = nonneg[2],
+                             upper_bound = upper_bound[2]))
+    cfg <- factor_config(maxit = maxit, tol = tol, seed = seed,
+                         verbose = verbose)
+    net <- factor_net(inputs = inputs, output = layer, config = cfg)
+    return(fit(net))
+  }
+  
+  # --- Validate guides ---
+  if (!is.null(guides)) {
+    if (inherits(guides, "nmf_guide")) guides <- list(guides)
+    if (!is.list(guides) || !all(vapply(guides, inherits, logical(1), "nmf_guide")))
+      stop("'guides' must be an nmf_guide object or a list of nmf_guide objects")
+  }
   
   # --- Resource override: param > env var > options > "auto" ---
   if (resource == "auto") {
@@ -238,11 +396,206 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
   }
   
   # --- Match string arguments ---
+
+  # New API: distribution parameter takes precedence over loss
+  if (!is.null(distribution)) {
+    # Warn if user also explicitly set loss (not the default vector)
+    if (is.character(loss) && length(loss) == 1) {
+      warning("Both 'distribution' and 'loss' specified. 'distribution' takes precedence; ",
+              "'loss' is ignored. Use only one.",
+              call. = FALSE)
+    }
+
+    valid_dists <- c("auto", "gaussian", "poisson", "gp", "nb",
+                     "gamma", "inverse_gaussian", "tweedie")
+    distribution <- match.arg(distribution, valid_dists)
+
+    if (distribution == "auto") {
+      # Fit quick baseline MSE model for score test
+      auto_maxit <- min(maxit, 20L)
+      baseline <- nmf(data, k = if (is.numeric(k) && length(k) == 1) k else 5L,
+                       loss = "mse", maxit = auto_maxit, tol = 1e-3,
+                       seed = seed, verbose = FALSE, nonneg = nonneg,
+                       L1 = L1, L2 = L2)
+      diag_result <- score_test_distribution(data, baseline)
+      distribution <- diag_result$best_distribution
+
+      # If best distribution is a custom power (e.g. "power_1.5"), use Tweedie
+      if (grepl("^power_", distribution)) {
+        tweedie_power <- diag_result$best_power
+        distribution <- "tweedie"
+      }
+
+      # If NB diagnostic says overdispersed for integer data, prefer NB
+      if (!is.null(diag_result$nb_diagnostic) &&
+          isTRUE(diag_result$nb_diagnostic$overdispersed) &&
+          distribution == "gp") {
+        distribution <- "nb"
+      }
+
+      if (verbose) {
+        message("distribution='auto': selected '", distribution,
+                "' (score test T_stat = ",
+                round(diag_result$scores$T_stat[
+                  which(diag_result$scores$distribution == distribution)], 4), ")")
+      }
+      # Store baseline for potential zi="auto" reuse
+      .auto_baseline <- baseline
+    }
+
+    dist_map <- c(
+      gaussian = "mse",
+      poisson = "gp",
+      gp = "gp",
+      nb = "nb",
+      gamma = "gamma",
+      inverse_gaussian = "inverse_gaussian",
+      tweedie = "tweedie"
+    )
+
+    # Map distribution → internal loss string
+    loss <- dist_map[distribution]
+
+    # Poisson special case: GP with dispersion disabled
+    if (distribution == "poisson") {
+      dispersion <- "none"
+    }
+
+    # Apply distribution_config overrides
+    if (length(distribution_config) > 0) {
+      if (!is.null(distribution_config$dispersion))
+        dispersion <- distribution_config$dispersion
+      if (!is.null(distribution_config$theta_init))
+        theta_init <- distribution_config$theta_init
+      if (!is.null(distribution_config$theta_max))
+        theta_max <- distribution_config$theta_max
+      if (!is.null(distribution_config$theta_min))
+        theta_min <- distribution_config$theta_min
+      if (!is.null(distribution_config$nb_size_init))
+        nb_size_init <- distribution_config$nb_size_init
+      if (!is.null(distribution_config$nb_size_max))
+        nb_size_max <- distribution_config$nb_size_max
+      if (!is.null(distribution_config$nb_size_min))
+        nb_size_min <- distribution_config$nb_size_min
+      if (!is.null(distribution_config$gamma_phi_init))
+        gamma_phi_init <- distribution_config$gamma_phi_init
+      if (!is.null(distribution_config$gamma_phi_max))
+        gamma_phi_max <- distribution_config$gamma_phi_max
+      if (!is.null(distribution_config$gamma_phi_min))
+        gamma_phi_min <- distribution_config$gamma_phi_min
+      if (!is.null(distribution_config$tweedie_power))
+        tweedie_power <- distribution_config$tweedie_power
+      if (!is.null(distribution_config$power_param))
+        tweedie_power <- distribution_config$power_param
+    }
+  }
+
+  # New API: zero_inflation parameter takes precedence over zi
+  if (!is.null(zero_inflation)) {
+    zi <- match.arg(zero_inflation, c("none", "row", "col", "twoway", "auto"))
+    if (zi == "auto") {
+      # Reuse baseline from distribution="auto" if available, else fit one
+      if (!exists(".auto_baseline", inherits = FALSE)) {
+        auto_maxit <- min(maxit, 20L)
+        .auto_baseline <- nmf(data, k = if (is.numeric(k) && length(k) == 1) k else 5L,
+                               loss = "mse", maxit = auto_maxit, tol = 1e-3,
+                               seed = seed, verbose = FALSE, nonneg = nonneg,
+                               L1 = L1, L2 = L2)
+      }
+      zi_diag <- diagnose_zero_inflation(data, .auto_baseline)
+      zi <- zi_diag$zi_mode
+      if (verbose) {
+        message("zero_inflation='auto': selected '", zi,
+                "' (excess_zero_rate = ",
+                round(zi_diag$excess_zero_rate, 4), ")")
+      }
+    }
+    # Apply zi_config overrides
+    if (length(zi_config) > 0) {
+      if (!is.null(zi_config$em_iters))
+        zi_em_iters <- zi_config$em_iters
+    }
+  }
+
+  # Apply robust_config overrides
+  if (length(robust_config) > 0) {
+    if (!is.null(robust_config$delta))
+      robust <- robust_config$delta
+    if (!is.null(robust_config$irls_max_iter))
+      irls_max_iter <- robust_config$irls_max_iter
+    if (!is.null(robust_config$irls_tol))
+      irls_tol <- robust_config$irls_tol
+  }
+
+  # Deprecation shim: loss="kl" → loss="gp" with dispersion="none"
+  if (is.character(loss) && length(loss) == 1 && loss == "kl") {
+    .Deprecated(msg = 'loss="kl" is deprecated. Use loss="gp" with dispersion="none" instead.')
+    loss <- "gp"
+    dispersion <- "none"
+  }
   loss <- match.arg(loss)
-  convergence <- match.arg(convergence)
+  dispersion <- match.arg(dispersion)
+  dispersion_mode <- switch(dispersion, none = 0L, global = 1L, per_row = 2L, per_col = 3L)
+  zi <- match.arg(zi)
+  zi_mode <- switch(zi, none = 0L, row = 1L, col = 2L, twoway = 3L)
+
+  # Parse robust parameter: FALSE=0, TRUE=1.345, "mae"=1e-4, numeric=value
+  if (is.logical(robust)) {
+    robust_delta <- if (isTRUE(robust)) 1.345 else 0.0
+  } else if (is.character(robust) && tolower(robust) == "mae") {
+    robust_delta <- 1e-4
+  } else if (is.numeric(robust)) {
+    robust_delta <- as.double(robust)
+  } else {
+    stop("'robust' must be FALSE, TRUE, 'mae', or a positive numeric Huber delta.", call. = FALSE)
+  }
+
+  # ZIGP/ZINB requires GP or NB loss and CPU backend
+  if (zi != "none") {
+    if (loss == "mse")
+      stop("Zero-inflation (zi_mode='" , zi, "') is not supported with distribution='mse'. ",
+           "Use distribution='gp' or 'nb' for zero-inflated models.", call. = FALSE)
+    if (loss == "gamma")
+      stop("Zero-inflation (zi_mode='", zi, "') is not supported with distribution='gamma'. ",
+           "Use distribution='gp' or 'nb' for zero-inflated models.", call. = FALSE)
+    if (loss == "inverse_gaussian")
+      stop("Zero-inflation (zi_mode='", zi, "') is not supported with distribution='inverse_gaussian'. ",
+           "Use distribution='gp' or 'nb' for zero-inflated models.", call. = FALSE)
+    if (loss == "tweedie")
+      stop("Zero-inflation (zi_mode='", zi, "') is not supported with distribution='tweedie'. ",
+           "Use distribution='gp' or 'nb' for zero-inflated models.", call. = FALSE)
+    if (!loss %in% c("gp", "nb"))
+      stop("zi != 'none' requires loss='gp' or loss='nb'.", call. = FALSE)
+  }
+
   norm <- match.arg(norm)
   solver <- match.arg(solver)
-  solver_mode <- switch(solver, cd = 0L, cholesky = 1L, hierarchical_cholesky = 2L, adaptive_cholesky = 3L)
+  # Auto solver selection: CD for low rank (better non-negativity, O(k^2 n)),
+  # hierarchical Cholesky for high rank (O(k^3) amortized over n columns).
+  # Crossover at k~24 on H100 (SM>=9.0), k~16 on older GPUs.
+  if (solver == "auto") {
+    # IRLS-based losses (non-MSE or robust) require CD solver
+    needs_irls <- (loss != "mse") || (robust_delta > 0)
+    if (needs_irls) {
+      solver <- "cd"
+    } else if (use_gpu) {
+      solver <- if (max(k) <= 32) "cd" else "cholesky"
+    } else {
+      solver <- "cholesky"
+    }
+  }
+  # Cholesky solver does not support IRLS (non-MSE distributions)
+  if (solver == "cholesky" && loss != "mse" && robust_delta == 0) {
+    stop("solver='cholesky' is not supported with non-MSE distributions (got '", loss, "'). ",
+         "Use solver='cd' for IRLS-based distributions (GP, NB, Gamma, InvGauss, Tweedie).",
+         call. = FALSE)
+  }
+  if (solver == "cholesky" && robust_delta > 0) {
+    stop("solver='cholesky' is not supported with robust IRLS (robust_delta > 0). ",
+         "Use solver='cd' for robust estimation.", call. = FALSE)
+  }
+
+  solver_mode <- switch(solver, cd = 0L, cholesky = 1L, 0L)
   init <- match.arg(init)
   init_mode <- switch(init, random = 0L, lanczos = 1L, irlba = 2L)
   
@@ -264,19 +617,19 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
   }
   
   # --- Streaming SPZ shortcut ---
-  # If data is a .spz file path AND streaming is explicitly requested,
+  # If data is a .spz file path AND streaming is enabled,
   # use streaming NMF directly (no decompression into memory).
   # This requires a v2 .spz file with include_transpose=TRUE.
   # Supports standard NMF, NA masking, and cross-validation (CV).
+  # Streaming is enabled when: streaming=TRUE, or streaming="auto" with SPZ input,
+  # or the global option RcppML.streaming is TRUE.
+  use_streaming <- isTRUE(streaming) ||
+    (identical(streaming, "auto") && is.character(data) && length(data) == 1 &&
+     grepl("\\.spz$", data)) ||
+    isTRUE(getOption("RcppML.streaming", FALSE))
   if (is.character(data) && length(data) == 1 && grepl("\\.spz$", data) &&
-      isTRUE(getOption("RcppML.streaming", FALSE))) {
+      use_streaming) {
     if (!file.exists(data)) stop("SPZ file not found: ", data)
-    if (loss != "mse") {
-      stop("Streaming SPZ NMF only supports loss = \"mse\". ",
-           "Non-MSE losses (MAE/Huber/KL) require the full matrix in memory. ",
-           "Either set loss = \"mse\" or disable streaming with ",
-           "options(RcppML.streaming = FALSE).")
-    }
 
     # Validate mask for streaming
     spz_mask <- NULL  # dgCMatrix or NULL
@@ -299,6 +652,14 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
 
     if (length(nonneg) == 1) nonneg <- rep(nonneg, 2)
     seed_int <- if (is.null(seed)) sample.int(.Machine$integer.max, 1) else as.integer(seed)
+
+    # Convert graph matrices to dgCMatrix (Rcpp expects S4)
+    if (!is.null(graph_W) && !is(graph_W, "dgCMatrix")) {
+      graph_W <- .to_dgCMatrix(as(graph_W, "dMatrix"))
+    }
+    if (!is.null(graph_H) && !is(graph_H, "dgCMatrix")) {
+      graph_H <- .to_dgCMatrix(as(graph_H, "dMatrix"))
+    }
 
     # Prepare graph lambda vector
     graph_lambda_vec <- c(
@@ -333,7 +694,7 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
             angular = as.double(angular), upper_bound = as.double(upper_bound),
             graph_lambda = as.double(graph_lambda_vec),
             nonneg_w = nonneg[1], nonneg_h = nonneg[2],
-            cd_maxit = as.integer(cd_maxit), cd_tol = 1e-8,
+            cd_maxit = as.integer(cd_maxit), cd_tol = cd_tol,
             threads = as.integer(threads), seed = init_seed,
             verbose = FALSE,
             loss_str = loss, huber_delta = huber_delta,
@@ -344,7 +705,9 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
             mask_sexp = spz_mask,
             graph_W_sexp = graph_W, graph_H_sexp = graph_H,
             solver_mode = solver_mode,
-            init_mode = init_mode
+            init_mode = init_mode,
+            projective = projective,
+            symmetric = symmetric
           )
           results[[idx]] <- data.frame(
             rep = rep_idx, k = rank,
@@ -379,7 +742,7 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
       nonneg_w = nonneg[1],
       nonneg_h = nonneg[2],
       cd_maxit = as.integer(cd_maxit),
-      cd_tol = 1e-8,
+      cd_tol = cd_tol,
       threads = as.integer(threads),
       seed = seed_int,
       verbose = verbose,
@@ -393,7 +756,10 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
       graph_W_sexp = graph_W,
       graph_H_sexp = graph_H,
       solver_mode = solver_mode,
-      init_mode = init_mode
+      init_mode = init_mode,
+      projective = projective,
+      symmetric = symmetric,
+      enable_profiling = profile
     )
     
     k_final <- ncol(result$w)
@@ -414,6 +780,9 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
       misc$test_loss <- result$test_loss
       if (!is.null(result$test_loss_history) && length(result$test_loss_history) > 0)
         misc$test_loss_history <- result$test_loss_history
+    }
+    if (!is.null(result$profile)) {
+      misc$profile <- result$profile
     }
     
     return(new("nmf", w = result$w, d = result$d, h = result$h, misc = misc))
@@ -463,7 +832,15 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
   # --- Validate graphs ---
   vg <- validate_graphs(graph_W, graph_H, dim(data), graph_lambda)
   graph_W <- vg$graph_W; graph_H <- vg$graph_H
-  
+
+  # Build graph_lambda_vec used by GPU dispatch and other paths
+  graph_lambda_vec <- c(
+    if (!is.null(graph_W)) graph_lambda[1] else 0,
+    if (!is.null(graph_H)) {
+      if (length(graph_lambda) > 1) graph_lambda[2] else graph_lambda[1]
+    } else 0
+  )
+
   # --- Handle NA values ---
   if (has_na) {
     if (is_sparse) {
@@ -608,11 +985,11 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
         A_sexp = data, k_vec = k_vec, k_auto = FALSE,
         k_auto_min = 2L, k_auto_max = 50L,
         L1 = as.double(L1), L2 = as.double(L2),
-        L21 = as.double(L21), ortho = as.double(angular),
+        L21 = as.double(L21), angular = as.double(angular),
         upper_bound = as.double(upper_bound),
         graph_lambda = as.double(graph_lambda),
         tol = tol, maxit = as.integer(maxit),
-        cd_maxit = as.integer(cd_maxit), cd_tol = 1e-8,
+        cd_maxit = as.integer(cd_maxit), cd_tol = cd_tol,
         cd_abs_tol = cd_abs_tol,
         threads = as.integer(threads),
         seed = as.integer(seed_int + i - 1L),
@@ -620,19 +997,36 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
         sort_model = sort_model, mask_zeros = mask_zeros,
         track_loss_history = TRUE, track_train_loss = FALSE,
         loss_str = loss, huber_delta = huber_delta,
-        convergence_str = convergence,
         holdout_fraction = 0, cv_seeds = integer(0), cv_patience = 0L,
         resource_override = resource,
         norm_str = norm,
         graph_W_sexp = graph_W, graph_H_sexp = graph_H,
-        w_init_sexp = w_init_list[[i]], verbose = FALSE,
+        w_init_sexp = w_init_list[[i]],
+        h_init_sexp = h_init,
+        verbose = FALSE,
         mask_sexp = if (inherits(mask, "sparseMatrix")) mask else NULL,
         projective = projective,
         symmetric_nmf = symmetric,
         solver_mode = solver_mode,
         init_mode = init_mode,
-        adaptive_solver_switch = as.integer(adaptive_solver),
-        chol_adaptive_threshold = chol_adaptive_threshold
+        irls_max_iter = as.integer(irls_max_iter),
+
+        irls_tol = irls_tol,
+        gp_dispersion_mode = dispersion_mode,
+        gp_theta_init = theta_init,
+        gp_theta_max = theta_max,
+        zi_mode = zi_mode,
+        zi_em_iters = as.integer(zi_em_iters),
+        gp_theta_min = theta_min,
+        nb_size_init = nb_size_init,
+        nb_size_max = nb_size_max,
+        nb_size_min = nb_size_min,
+        gamma_phi_init = gamma_phi_init,
+        gamma_phi_max = gamma_phi_max,
+        gamma_phi_min = gamma_phi_min,
+        robust_delta = robust_delta,
+        tweedie_power = tweedie_power,
+        enable_profiling = profile
       )
       all_losses[i] <- result_i$loss
       if (result_i$loss < best_loss) {
@@ -670,19 +1064,11 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
   # --- k = "auto": automatic rank search using C++ rank search engine ---
   if (k_auto) {
     cv_seed_auto <- if (length(cv_seeds) > 0) cv_seeds[1] else seed_int
-    rank_result <- if (is_sparse) {
-      .Call(`_RcppML_Rcpp_nmf_rank_cv_sparse`,
-        data, as.integer(k_auto_min), as.integer(k_auto_max), 1L,
-        test_fraction, as.integer(cv_seed_auto),
-        tol, as.integer(maxit), verbose,
-        as.double(L1), as.double(L2), as.integer(threads))
-    } else {
-      .Call(`_RcppML_Rcpp_nmf_rank_cv_dense`,
-        data, as.integer(k_auto_min), as.integer(k_auto_max), 1L,
-        test_fraction, as.integer(cv_seed_auto),
-        tol, as.integer(maxit), verbose,
-        as.double(L1), as.double(L2), as.integer(threads))
-    }
+    rank_result <- .Call(`_RcppML_Rcpp_nmf_rank_cv`,
+      data, as.integer(k_auto_min), as.integer(k_auto_max), 1L,
+      test_fraction, as.integer(cv_seed_auto),
+      tol, as.integer(maxit), verbose,
+      as.double(L1), as.double(L2), as.integer(threads))
     
     # Fit final model at optimal rank
     k_vec <- as.integer(rank_result$k_optimal)
@@ -696,11 +1082,11 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
       A_sexp = data, k_vec = k_vec, k_auto = FALSE,
       k_auto_min = as.integer(k_auto_min), k_auto_max = as.integer(k_auto_max),
       L1 = as.double(L1), L2 = as.double(L2),
-      L21 = as.double(L21), ortho = as.double(angular),
+      L21 = as.double(L21), angular = as.double(angular),
       upper_bound = as.double(upper_bound),
       graph_lambda = as.double(graph_lambda),
       tol = tol, maxit = as.integer(maxit),
-      cd_maxit = as.integer(cd_maxit), cd_tol = 1e-8,
+      cd_maxit = as.integer(cd_maxit), cd_tol = cd_tol,
       cd_abs_tol = cd_abs_tol,
       threads = as.integer(threads),
       seed = as.integer(seed_int),
@@ -708,19 +1094,35 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
       sort_model = sort_model, mask_zeros = mask_zeros,
       track_loss_history = TRUE, track_train_loss = track_train_loss,
       loss_str = loss, huber_delta = huber_delta,
-      convergence_str = convergence,
       holdout_fraction = 0, cv_seeds = integer(0), cv_patience = 0L,
       resource_override = resource,
       norm_str = norm,
       graph_W_sexp = graph_W, graph_H_sexp = graph_H,
-      w_init_sexp = w_init_mat, verbose = verbose,
+      w_init_sexp = w_init_mat,
+      h_init_sexp = h_init,
+      verbose = verbose,
       mask_sexp = if (!is.null(mask) && inherits(mask, "sparseMatrix")) mask else NULL,
       projective = projective,
       symmetric_nmf = symmetric,
       solver_mode = solver_mode,
       init_mode = init_mode,
-      adaptive_solver_switch = as.integer(adaptive_solver),
-      chol_adaptive_threshold = chol_adaptive_threshold
+      irls_max_iter = as.integer(irls_max_iter),
+      irls_tol = irls_tol,
+      gp_dispersion_mode = dispersion_mode,
+      gp_theta_init = theta_init,
+      gp_theta_max = theta_max,
+      zi_mode = zi_mode,
+      zi_em_iters = as.integer(zi_em_iters),
+      gp_theta_min = theta_min,
+      nb_size_init = nb_size_init,
+      nb_size_max = nb_size_max,
+      nb_size_min = nb_size_min,
+      gamma_phi_init = gamma_phi_init,
+      gamma_phi_max = gamma_phi_max,
+      gamma_phi_min = gamma_phi_min,
+      robust_delta = robust_delta,
+      tweedie_power = tweedie_power,
+      enable_profiling = profile
     )
     
     # Build S4 result with rank_search metadata
@@ -760,38 +1162,15 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
         # Use deterministic seed derived from cv_seed and rank.
         init_seed <- as.integer((rep_cv_seed + rank) %% .Machine$integer.max)
         
-        if (use_gpu) {
-          # GPU CV dispatch
-          gpu_result_i <- .gpu_nmf_cv_unified(
-            A = data, k = rank, maxit = maxit, tol = tol, seed = init_seed,
-            L1 = as.double(L1), L2 = as.double(L2),
-            cd_maxit = as.integer(cd_maxit), verbose = FALSE,
-            holdout_frac = test_fraction,
-            cv_seed = rep_cv_seed,
-            mask_zeros = mask_zeros,
-            nonneg = nonneg,
-            norm = norm
-          )
-          
-          results[[idx]] <- data.frame(
-            rep = rep,
-            k = rank,
-            train_mse = gpu_result_i$train_loss,
-            test_mse = gpu_result_i$best_test_loss,
-            best_iter = gpu_result_i$best_iter + 1L,
-            total_iter = gpu_result_i$iter
-          )
-        } else {
-        
         result_i <- Rcpp_nmf_full(
           A_sexp = data, k_vec = as.integer(rank), k_auto = FALSE,
           k_auto_min = 2L, k_auto_max = 50L,
           L1 = as.double(L1), L2 = as.double(L2),
-          L21 = as.double(L21), ortho = as.double(angular),
+          L21 = as.double(L21), angular = as.double(angular),
           upper_bound = as.double(upper_bound),
           graph_lambda = as.double(graph_lambda),
           tol = tol, maxit = as.integer(maxit),
-          cd_maxit = as.integer(cd_maxit), cd_tol = 1e-8,
+          cd_maxit = as.integer(cd_maxit), cd_tol = cd_tol,
           cd_abs_tol = cd_abs_tol,
           threads = as.integer(threads),
           seed = init_seed,
@@ -799,21 +1178,38 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
           sort_model = sort_model, mask_zeros = mask_zeros,
           track_loss_history = TRUE, track_train_loss = track_train_loss,
           loss_str = loss, huber_delta = huber_delta,
-          convergence_str = convergence,
           holdout_fraction = test_fraction,
           cv_seeds = as.integer(rep_cv_seed),
           cv_patience = as.integer(patience),
           resource_override = resource,
           norm_str = norm,
           graph_W_sexp = graph_W, graph_H_sexp = graph_H,
-          w_init_sexp = NULL, verbose = FALSE,
+          w_init_sexp = NULL,
+          h_init_sexp = NULL,
+          verbose = FALSE,
           mask_sexp = if (!is.null(mask) && inherits(mask, "sparseMatrix")) mask else NULL,
           projective = projective,
           symmetric_nmf = symmetric,
           solver_mode = solver_mode,
           init_mode = init_mode,
-          adaptive_solver_switch = as.integer(adaptive_solver),
-          chol_adaptive_threshold = chol_adaptive_threshold
+          irls_max_iter = as.integer(irls_max_iter),
+
+          irls_tol = irls_tol,
+          gp_dispersion_mode = dispersion_mode,
+          gp_theta_init = theta_init,
+          gp_theta_max = theta_max,
+          zi_mode = zi_mode,
+          zi_em_iters = as.integer(zi_em_iters),
+          gp_theta_min = theta_min,
+          nb_size_init = nb_size_init,
+          nb_size_max = nb_size_max,
+          nb_size_min = nb_size_min,
+          gamma_phi_init = gamma_phi_init,
+          gamma_phi_max = gamma_phi_max,
+          gamma_phi_min = gamma_phi_min,
+          robust_delta = robust_delta,
+          tweedie_power = tweedie_power,
+          enable_profiling = profile
         )
         
         results[[idx]] <- data.frame(
@@ -822,9 +1218,10 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
           train_mse = if (!is.null(result_i$train_loss)) result_i$train_loss else NA_real_,
           test_mse = if (!is.null(result_i$best_test_loss)) result_i$best_test_loss else NA_real_,
           best_iter = if (!is.null(result_i$best_iter)) result_i$best_iter + 1L else NA_integer_,
-          total_iter = if (!is.null(result_i$iter)) result_i$iter else NA_integer_
+          total_iter = if (!is.null(result_i$iter)) result_i$iter else NA_integer_,
+          mean_theta = if (!is.null(result_i$theta)) mean(result_i$theta) else NA_real_,
+          mean_dispersion = if (!is.null(result_i$dispersion)) mean(result_i$dispersion) else NA_real_
         )
-        } # end else (CPU path)
         idx <- idx + 1L
       }
     }
@@ -838,42 +1235,27 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
   # --- Resource override ---
   resource_override <- resource
   
-  # --- GPU dispatch for single-rank NMF ---
-  if (use_gpu && length(k_vec) == 1 && test_fraction == 0) {
-    if (verbose) message("[RcppML] Using GPU backend for NMF")
+  # --- Zero-copy GPU NMF for gpu_sparse_matrix (data already on device) ---
+  # This path cannot go through Rcpp_nmf_full() because the data is GPU-resident.
+  if (is_gpu_sparse && length(k_vec) == 1 && test_fraction == 0) {
+    if (verbose) message("[RcppML] Using GPU zero-copy backend for NMF")
     
-    if (is_gpu_sparse) {
-      # Zero-copy path: data already on GPU device
-      gpu_result <- .gpu_nmf_zerocopy(
-        gpu_mat = data, k = k_vec[1], maxit = maxit, tol = tol, seed = seed_int,
-        L1 = as.double(L1), L2 = as.double(L2),
-        L21 = as.double(L21), ortho = as.double(angular),
-        upper_bound = as.double(upper_bound),
-        cd_maxit = as.integer(cd_maxit), verbose = verbose,
-        nonneg = nonneg,
-        w_init = w_init_mat,
-        loss = loss, huber_delta = huber_delta,
-        norm = norm
-      )
-    } else {
-      gpu_result <- .gpu_nmf_unified(
-        A = data, k = k_vec[1], maxit = maxit, tol = tol, seed = seed_int,
-        L1 = as.double(L1), L2 = as.double(L2),
-        L21 = as.double(L21), ortho = as.double(angular),
-        upper_bound = as.double(upper_bound),
-        cd_maxit = as.integer(cd_maxit), verbose = verbose,
-        nonneg = nonneg, precision = "float",
-        w_init = w_init_mat,
-        loss = loss, huber_delta = huber_delta,
-        norm = norm,
-        solver_mode = solver_mode
-      )
-    }
+    gpu_result <- .gpu_nmf_zerocopy(
+      gpu_mat = data, k = k_vec[1], maxit = maxit, tol = tol, seed = seed_int,
+      L1 = as.double(L1), L2 = as.double(L2),
+      L21 = as.double(L21), ortho = as.double(angular),
+      upper_bound = as.double(upper_bound),
+      cd_maxit = as.integer(cd_maxit), verbose = verbose,
+      nonneg = nonneg,
+      w_init = w_init_mat,
+      loss = loss, huber_delta = huber_delta,
+      irls_max_iter = as.integer(irls_max_iter),
+      irls_tol = as.double(irls_tol),
+      norm = norm
+    )
     
     k_final <- ncol(gpu_result$w)
     colnames(gpu_result$w) <- rownames(gpu_result$h) <- paste0("nmf", 1:k_final)
-    if (!is.null(rownames(data))) rownames(gpu_result$w) <- rownames(data)
-    if (!is.null(colnames(data))) colnames(gpu_result$h) <- colnames(data)
     
     misc <- list(
       tol = gpu_result$tol,
@@ -888,44 +1270,7 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
     return(new("nmf", w = gpu_result$w, d = gpu_result$d, h = gpu_result$h, misc = misc))
   }
   
-  # --- GPU dispatch for single-rank CV ---
-  if (use_gpu && length(k_vec) == 1 && test_fraction > 0) {
-    if (verbose) message("[RcppML] Using GPU backend for CV NMF")
-    
-    cv_seed_val <- if (length(cv_seeds) > 0) cv_seeds[1] else seed_int
-    
-    gpu_result <- .gpu_nmf_cv_unified(
-      A = data, k = k_vec[1], maxit = maxit, tol = tol, seed = seed_int,
-      L1 = as.double(L1), L2 = as.double(L2),
-      cd_maxit = as.integer(cd_maxit), verbose = verbose,
-      holdout_frac = test_fraction,
-      cv_seed = cv_seed_val,
-      mask_zeros = mask_zeros,
-      nonneg = nonneg,
-      norm = norm
-    )
-    
-    k_final <- ncol(gpu_result$w)
-    colnames(gpu_result$w) <- rownames(gpu_result$h) <- paste0("nmf", 1:k_final)
-    if (!is.null(rownames(data))) rownames(gpu_result$w) <- rownames(data)
-    if (!is.null(colnames(data))) colnames(gpu_result$h) <- colnames(data)
-    
-    misc <- list(
-      tol = gpu_result$tol,
-      iter = gpu_result$iter,
-      loss_type = loss,
-      loss = gpu_result$loss,
-      train_loss = gpu_result$train_loss,
-      test_loss = gpu_result$best_test_loss,
-      best_iter = gpu_result$best_iter,
-      runtime = difftime(Sys.time(), start_time, units = "secs"),
-      backend = "gpu"
-    )
-    
-    return(new("nmf", w = gpu_result$w, d = gpu_result$d, h = gpu_result$h, misc = misc))
-  }
-  
-  # --- Call C++ full gateway (CPU path) ---
+  # --- Call C++ full gateway (handles CPU and GPU via resource_override) ---
   if (is_gpu_sparse) {
     stop("gpu_sparse_matrix only supports single-rank GPU NMF (no CV, no multi-rank). ",
          "Use sp_read() for CPU-side loading, or convert to dgCMatrix.",
@@ -940,13 +1285,13 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
     L1 = as.double(L1),
     L2 = as.double(L2),
     L21 = as.double(L21),
-    ortho = as.double(angular),
+    angular = as.double(angular),
     upper_bound = as.double(upper_bound),
     graph_lambda = as.double(graph_lambda),
     tol = tol,
     maxit = as.integer(maxit),
     cd_maxit = as.integer(cd_maxit),
-    cd_tol = 1e-8,
+    cd_tol = cd_tol,
     cd_abs_tol = cd_abs_tol,
     threads = as.integer(threads),
     seed = as.integer(seed_int),
@@ -958,7 +1303,6 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
     track_train_loss = track_train_loss,
     loss_str = loss,
     huber_delta = huber_delta,
-    convergence_str = convergence,
     holdout_fraction = test_fraction,
     cv_seeds = cv_seeds,
     cv_patience = as.integer(patience),
@@ -967,14 +1311,33 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
     graph_W_sexp = graph_W,
     graph_H_sexp = graph_H,
     w_init_sexp = w_init_mat,
+    h_init_sexp = h_init,
     verbose = verbose,
     mask_sexp = if (!is.null(mask) && inherits(mask, "sparseMatrix")) mask else NULL,
     projective = projective,
     symmetric_nmf = symmetric,
     solver_mode = solver_mode,
     init_mode = init_mode,
-    adaptive_solver_switch = as.integer(adaptive_solver),
-    chol_adaptive_threshold = chol_adaptive_threshold
+    irls_max_iter = as.integer(irls_max_iter),
+
+    irls_tol = irls_tol,
+    gp_dispersion_mode = dispersion_mode,
+    gp_theta_init = theta_init,
+    gp_theta_max = theta_max,
+    zi_mode = zi_mode,
+    zi_em_iters = as.integer(zi_em_iters),
+    gp_theta_min = theta_min,
+    nb_size_init = nb_size_init,
+    nb_size_max = nb_size_max,
+    nb_size_min = nb_size_min,
+    gamma_phi_init = gamma_phi_init,
+    gamma_phi_max = gamma_phi_max,
+    gamma_phi_min = gamma_phi_min,
+    robust_delta = robust_delta,
+    tweedie_power = tweedie_power,
+    on_iteration_r = on_iteration,
+    guides_list = guides,
+    enable_profiling = profile
   )
   
   mode <- attr(result, "mode")
@@ -1052,6 +1415,33 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
       loss = result$all_init_losses,
       selected = seq_along(result$all_init_losses) == result$best_init_idx
     )
+  }
+  
+  # GP theta parameters
+  if (!is.null(result$theta)) {
+    misc$theta <- result$theta
+    if (!is.null(rownames(data))) names(misc$theta) <- rownames(data)
+  }
+  
+  # Gamma/InvGauss dispersion parameters
+  if (!is.null(result$dispersion)) {
+    misc$dispersion <- result$dispersion
+    if (!is.null(rownames(data))) names(misc$dispersion) <- rownames(data)
+  }
+  
+  # ZIGP pi parameters
+  if (!is.null(result$pi_row)) {
+    misc$pi_row <- result$pi_row
+    if (!is.null(rownames(data))) names(misc$pi_row) <- rownames(data)
+  }
+  if (!is.null(result$pi_col)) {
+    misc$pi_col <- result$pi_col
+    if (!is.null(colnames(data))) names(misc$pi_col) <- colnames(data)
+  }
+
+  # Profiling data
+  if (!is.null(result$profile)) {
+    misc$profile <- result$profile
   }
   
   new("nmf", w = result$w, d = result$d, h = result$h, misc = misc)

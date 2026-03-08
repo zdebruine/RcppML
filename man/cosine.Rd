@@ -24,3 +24,12 @@ This function takes advantage of extremely fast vector operations and is able to
 
 This function adopts the sparse matrix computational strategy applied by \code{qlcMatrix::cosSparse}, and extends it to any combination of single and/or pair of sparse matrix and/or dense vector.
 }
+\examples{
+x <- matrix(runif(20), 4, 5)
+cosine(x)         # self-similarity: 5x5 matrix
+cosine(x, x[,1])  # similarity of columns to first column
+
+}
+\seealso{
+\code{\link{nmf}}, \code{\link{bipartiteMatch}}
+}

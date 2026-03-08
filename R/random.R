@@ -7,23 +7,25 @@
 #' @param size an integer giving the number of items to choose. If \code{NULL}, \code{x} is shuffled and all values are kept.
 #' @param replace should sampling be with replacement?
 #' @rdname random
-#' @export
+#' @keywords internal
+#' @return For \code{r_sample}: a vector of sampled elements from \code{x}.
 #' @examples
+#' \dontrun{
 #' # draw all integers from 1 to 10 in a random order
-#' sample(10)
+#' r_sample(10)
 #'
 #' # shuffle a vector of values
 #' v <- r_unif(3)
 #' v
-#' v_ <- sample(v)
+#' v_ <- r_sample(v)
 #' v_
 #'
 #' # draw values from a vector
-#' sample(r_unif(100), 3)
+#' r_sample(r_unif(100), 3)
 #'
 #' # draw some integers between 1 and 1000
-#' sample(1000, 3)
-#'
+#' r_sample(1000, 3)
+#' }
 r_sample <- function(x, size = NULL, replace = FALSE) {
   if (length(x) == 1 && x %% 1 == 0) {
     if (is.null(size)) size <- x
@@ -52,9 +54,11 @@ r_sample <- function(x, size = NULL, replace = FALSE) {
 #' @param min finite lower limit of the uniform distribution
 #' @param max finite upper limit of the uniform distribution
 #' @seealso \code{\link{r_matrix}}, \code{\link{r_sparsematrix}}
-#' @export
+#' @keywords internal
 #' @rdname random
+#' @return For \code{r_unif}: a numeric vector of random values from the uniform distribution.
 #' @examples
+#' \dontrun{
 #' # simulate a uniform distribution
 #' v <- r_unif(10000)
 #' plot(density(v))
@@ -70,7 +74,7 @@ r_sample <- function(x, size = NULL, replace = FALSE) {
 #' v <- r_binom(100, 1, 20)
 #' successful_trials <- slot(as(v, "nsparseVector"), "i")
 #' successful_trials
-#'
+#' }
 r_unif <- function(n, min = 0, max = 1) {
   v <- c_runif(n, min, max, .Random.seed[3], .Random.seed[4])
   set.seed(.Random.seed[3])
@@ -80,7 +84,8 @@ r_unif <- function(n, min = 0, max = 1) {
 #' @rdname random
 #' @param size number of trials (one or more)
 #' @param inv_prob inverse probability of success for each trial, must be integral (e.g. 50 percent success = 2, 10 percent success = 10)
-#' @export
+#' @return For \code{r_binom}: a numeric vector of random values from the binomial distribution.
+#' @keywords internal
 r_binom <- function(n, size = 1, inv_prob = 2) {
   v <- c_rbinom(n, size, inv_prob, .Random.seed[[3]], .Random.seed[[4]])
   set.seed(.Random.seed[3])
@@ -96,10 +101,11 @@ r_binom <- function(n, size = 1, inv_prob = 2) {
 #' @param ncol number of columns
 #' @param transpose_identical should the matrix be transpose-identical?
 #'
-#' @seealso \code{\link{r_unif}}
-#' @export
-#' @seealso \code{\link{r_matrix}}, \code{\link{r_unif}}, \code{\link{r_binom}}
+#' @seealso \code{\link{r_unif}}, \code{\link{r_binom}}
+#' @return A dense numeric matrix of dimensions \code{nrow} by \code{ncol} with random uniform values.
+#' @keywords internal
 #' @examples
+#' \dontrun{
 #' # generate a simple random matrix
 #' A <- r_matrix(10, 10)
 #'
@@ -124,7 +130,7 @@ r_binom <- function(n, size = 1, inv_prob = 2) {
 #' densities <- sapply(A, function(x) length(x@i) / prod(dim(x)))
 #' plot(density(densities)) # normal distribution centered at 0.100
 #' range(densities)
-#'
+#' }
 r_matrix <- function(nrow, ncol, transpose_identical = FALSE) {
   if (transpose_identical) {
     v <- c_rtimatrix(nrow, ncol, .Random.seed[3])
@@ -138,7 +144,8 @@ r_matrix <- function(nrow, ncol, transpose_identical = FALSE) {
 #' @rdname r_matrix
 #' @param inv_density an integer giving the inverse density of the matrix (i.e. 10 percent density corresponds to \code{inv_density = 10}). Density is probabilistic, not exact. See examples.
 #' @param pattern should a pattern matrix (\code{Matrix::ngCMatrix}) be returned? If not, a \code{Matrix::dgCMatrix} with random uniform values will be returned.
-#' @export
+#' @return A sparse matrix: \code{ngCMatrix} if \code{pattern = TRUE}, otherwise \code{dgCMatrix}.
+#' @keywords internal
 r_sparsematrix <- function(nrow, ncol, inv_density, transpose_identical = FALSE, pattern = FALSE) {
   requireNamespace("Matrix")
   if (inv_density < 1) stop("inv_density must be an integer >= 1")

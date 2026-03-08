@@ -1,0 +1,102 @@
+# GPU CI workflow — runs GPU tests on a self-hosted runner with NVIDIA GPU
+# Requires a self-hosted runner (label: gpu) with CUDA toolkit installed.
+#
+# Manual trigger only — GPU runners are expensive and limited.
+# Also runs when GPU-related files change on main/master.
+
+name: GPU Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner_label:
+        description: 'Self-hosted runner label'
+        required: true
+        default: 'gpu'
+  push:
+    branches: [main, master]
+    paths:
+      - 'inst/include/FactorNet/nmf/fit_gpu*'
+      - 'inst/include/FactorNet/nmf/fit_cv_gpu*'
+      - 'inst/include/FactorNet/primitives/gpu/**'
+      - 'src/Makefile.gpu'
+      - 'src/gpu_*.cu'
+      - 'tests/testthat/test_gpu*'
+
+permissions: read-all
+
+jobs:
+  gpu-tests:
+    runs-on: ${{ github.event.inputs.runner_label || 'gpu' }}
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+      OMP_NUM_THREADS: 4
+      R_LIBS_USER: ${{ github.workspace }}/.r-libs
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify GPU access
+        run: |
+          nvidia-smi
+          nvcc --version
+
+      - name: Setup R
+        run: |
+          # For self-hosted runners, R should be pre-installed
+          R --version || { echo "R not found — install R 4.5+ on the runner"; exit 1; }
+          mkdir -p $R_LIBS_USER
+
+      - name: Install R dependencies
+        run: |
+          Rscript -e '
+            .libPaths(c(Sys.getenv("R_LIBS_USER"), .libPaths()))
+            if (!require("Rcpp")) install.packages("Rcpp", repos="https://cloud.r-project.org")
+            if (!require("RcppEigen")) install.packages("RcppEigen", repos="https://cloud.r-project.org")
+            if (!require("Matrix")) install.packages("Matrix", repos="https://cloud.r-project.org")
+            if (!require("testthat")) install.packages("testthat", repos="https://cloud.r-project.org")
+          '
+
+      - name: Install R package (CPU)
+        run: R CMD INSTALL --library=$R_LIBS_USER --no-lock .
+
+      - name: Build GPU shared library
+        run: |
+          cd src
+          make -f Makefile.gpu clean
+          make -f Makefile.gpu
+          make -f Makefile.gpu install
+          cd ..
+          R CMD INSTALL --library=$R_LIBS_USER --no-lock .
+
+      - name: Run GPU tests
+        run: |
+          Rscript -e '
+            .libPaths(c(Sys.getenv("R_LIBS_USER"), .libPaths()))
+            library(testthat)
+            library(RcppML)
+            cat("GPU available:", tryCatch(RcppML:::gpu_available(), error=function(e) FALSE), "\n")
+            test_dir("tests/testthat", filter="gpu", reporter="summary")
+          '
+
+      - name: Run GPU benchmarks (smoke test)
+        run: |
+          Rscript -e '
+            .libPaths(c(Sys.getenv("R_LIBS_USER"), .libPaths()))
+            library(RcppML)
+            library(Matrix)
+            set.seed(42)
+            A <- rsparsematrix(1000, 500, density=0.1)
+            A@x <- abs(A@x)
+            t0 <- proc.time()["elapsed"]
+            res <- nmf(A, k=16, tol=1e-10, maxit=20, seed=42, resource="gpu")
+            t1 <- proc.time()["elapsed"]
+            cat(sprintf("GPU NMF (1000x500, k=16): %.3f sec, loss=%.4f\n", t1-t0, res@loss))
+          '
+
+      - name: Run C++ unit tests
+        run: |
+          cd tests/cpp
+          make run

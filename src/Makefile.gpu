@@ -1,0 +1,132 @@
+# =============================================================================
+# Makefile.gpu — Build RcppML_gpu.so from split GPU bridge files (C++ library: FactorNet)
+# (gpu_bridge.cu was split into gpu_bridge_{cluster,nmf,svd,utils}.cu in 2026)
+#
+# Usage:
+#   make -f Makefile.gpu              # Build GPU shared library
+#   make -f Makefile.gpu clean        # Remove build artifacts
+#   make -f Makefile.gpu install      # Install to inst/lib/
+#
+# Prerequisites:
+#   - CUDA toolkit (nvcc) in PATH (e.g., module load cuda/12.8.1)
+#   - RcppEigen installed
+#
+# This is intentionally separate from the R package build system.
+# The GPU library is loaded at runtime via dyn.load() when available.
+# =============================================================================
+
+# Compilers
+NVCC ?= nvcc
+
+# Architecture targets — universal build for all cluster GPUs:
+#   sm_70: V100S (g001–g005)
+#   sm_75: RTX 8000 (g006–g008)
+#   sm_80: A100 (future expansion)
+#   sm_90: H100 NVL (g050–g052)
+# PTX for sm_90 enables forward compatibility with sm_100+ (Blackwell)
+CUDA_ARCH ?= -gencode arch=compute_70,code=sm_70 \
+             -gencode arch=compute_75,code=sm_75 \
+             -gencode arch=compute_80,code=sm_80 \
+             -gencode arch=compute_90,code=sm_90 \
+             -gencode arch=compute_90,code=compute_90
+
+# nvcc flags
+NVCC_FLAGS = -O3 $(CUDA_ARCH) -std=c++17 \
+             -Xcompiler -fPIC \
+             --expt-relaxed-constexpr \
+             -lineinfo \
+             -DNDEBUG
+
+# Eigen include (auto-detect from R, fallback to known path)
+EIGEN_INC ?= $(shell Rscript -e 'cat(system.file("include", package="RcppEigen"))' 2>/dev/null)
+ifeq ($(EIGEN_INC),)
+  EIGEN_INC = /opt/gvsu/clipper/2025.12/R/4.5.2/library/RcppEigen/include
+endif
+
+# Project include (GPU headers are in inst/include/FactorNet/gpu/)
+PROJECT_INC = ../inst/include
+
+# SparsePress root (sparsepress/gpu/ lives at project root)
+SP_ROOT = ..
+
+# All include dirs
+INCLUDES = -I$(EIGEN_INC) -I$(PROJECT_INC) -I$(SP_ROOT)
+
+# CUDA libraries
+LIBS = -lcublas -lcusparse -lcusolver -lcuda
+
+# Target
+TARGET = RcppML_gpu.so
+INSTALL_DIR = ../inst/lib
+
+# GPU header directory (for dependency tracking)
+GPU_HDR_DIR = ../inst/include/FactorNet/gpu
+UNIFIED_HDR_DIR = ../inst/include/FactorNet
+GPU_HEADERS = $(wildcard $(GPU_HDR_DIR)/*.cuh)
+UNIFIED_HEADERS = $(wildcard $(UNIFIED_HDR_DIR)/core/*.hpp) \
+                  $(wildcard $(UNIFIED_HDR_DIR)/features/*.hpp) \
+                  $(wildcard $(UNIFIED_HDR_DIR)/rng/*.hpp) \
+                  $(wildcard $(UNIFIED_HDR_DIR)/primitives/gpu/*.cuh) \
+                  $(wildcard $(UNIFIED_HDR_DIR)/algorithms/nmf/*.cuh) \
+                  $(wildcard $(UNIFIED_HDR_DIR)/algorithms/nmf/*.hpp) \
+                  $(wildcard $(UNIFIED_HDR_DIR)/algorithms/svd/*.cuh) \
+                  $(wildcard $(UNIFIED_HDR_DIR)/algorithms/svd/*.hpp) \
+                  $(wildcard $(UNIFIED_HDR_DIR)/gateway/*.hpp)
+
+# SparsePress headers (for sp_gpu_bridge dependency tracking)
+SP_HDR_DIR = ../inst/include/sparsepress
+SP_HEADERS = $(wildcard $(SP_HDR_DIR)/gpu/*.cuh) \
+             $(wildcard $(SP_HDR_DIR)/gpu/*.h) \
+             $(wildcard $(SP_HDR_DIR)/format/*.hpp)
+
+# Object files
+# Only include sp_gpu_bridge if sparsepress GPU headers exist
+SP_GPU_HEADER = ../inst/include/sparsepress/gpu/spgpu_v2_adapter.cuh
+OBJ = gpu_bridge_cluster.o gpu_bridge_nmf.o gpu_bridge_svd.o gpu_bridge_utils.o
+ifneq ($(wildcard $(SP_GPU_HEADER)),)
+  OBJ += sp_gpu_bridge.o
+endif
+
+# =============================================================================
+# Rules
+# =============================================================================
+
+.PHONY: all clean install check
+
+all: $(TARGET)
+
+$(TARGET): $(OBJ)
+	$(NVCC) -shared -o $@ $^ $(LIBS)
+	@echo "==> Built $(TARGET) successfully"
+
+gpu_bridge_cluster.o: gpu_bridge_cluster.cu gpu_bridge_common.cuh $(GPU_HEADERS)
+	$(NVCC) $(NVCC_FLAGS) $(INCLUDES) -c -o $@ $<
+
+gpu_bridge_nmf.o: gpu_bridge_nmf.cu gpu_bridge_common.cuh $(GPU_HEADERS) $(UNIFIED_HEADERS)
+	$(NVCC) $(NVCC_FLAGS) $(INCLUDES) -c -o $@ $<
+
+gpu_bridge_svd.o: gpu_bridge_svd.cu gpu_bridge_common.cuh $(GPU_HEADERS) $(UNIFIED_HEADERS)
+	$(NVCC) $(NVCC_FLAGS) $(INCLUDES) -c -o $@ $<
+
+gpu_bridge_utils.o: gpu_bridge_utils.cu gpu_bridge_common.cuh $(GPU_HEADERS) $(UNIFIED_HEADERS)
+	$(NVCC) $(NVCC_FLAGS) $(INCLUDES) -c -o $@ $<
+
+sp_gpu_bridge.o: sp_gpu_bridge.cu $(SP_HEADERS)
+	$(NVCC) $(NVCC_FLAGS) $(INCLUDES) -c -o $@ $<
+
+install: $(TARGET)
+	@mkdir -p $(INSTALL_DIR)
+	cp $(TARGET) $(INSTALL_DIR)/
+	@echo "==> Installed $(TARGET) to $(INSTALL_DIR)/"
+
+clean:
+	rm -f $(OBJ) $(TARGET) gpu_bridge.o
+
+# Quick check that nvcc is available
+check:
+	@which nvcc > /dev/null 2>&1 && echo "nvcc found: $$(nvcc --version | tail -1)" \
+	  || echo "ERROR: nvcc not found. Load CUDA module first."
+	@echo "Eigen include: $(EIGEN_INC)"
+	@echo "GPU headers: $(words $(GPU_HEADERS)) files in $(GPU_HDR_DIR)/"
+	@echo "Unified headers: $(words $(UNIFIED_HEADERS)) files"
+	@echo "CUDA_ARCH: $(CUDA_ARCH)"

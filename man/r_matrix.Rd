@@ -26,11 +26,17 @@ r_sparsematrix(
 
 \item{pattern}{should a pattern matrix (\code{Matrix::ngCMatrix}) be returned? If not, a \code{Matrix::dgCMatrix} with random uniform values will be returned.}
 }
+\value{
+A dense numeric matrix of dimensions \code{nrow} by \code{ncol} with random uniform values.
+
+A sparse matrix: \code{ngCMatrix} if \code{pattern = TRUE}, otherwise \code{dgCMatrix}.
+}
 \description{
 Generate a random sparse matrix, just like \code{Matrix::rsparsematrix} or \code{(matrix(runif(nrow * ncol), nrow,))}, but much faster.
 Generation of transpose-identical matrices is also supported without additional computational cost.
 }
 \examples{
+\dontrun{
 # generate a simple random matrix
 A <- r_matrix(10, 10)
 
@@ -55,10 +61,9 @@ A <- replicate(1000, r_sparsematrix(100, 100, 10))
 densities <- sapply(A, function(x) length(x@i) / prod(dim(x)))
 plot(density(densities)) # normal distribution centered at 0.100
 range(densities)
-
+}
 }
 \seealso{
-\code{\link{r_unif}}
-
-\code{\link{r_matrix}}, \code{\link{r_unif}}, \code{\link{r_binom}}
+\code{\link{r_unif}}, \code{\link{r_binom}}
 }
+\keyword{internal}

@@ -14,10 +14,23 @@ sparsity(object, ...)
 
 \item{...}{additional parameters}
 }
+\value{
+A \code{data.frame} with columns \code{factor}, \code{sparsity}, and \code{model} ("w" or "h").
+}
 \description{
 Compute the sparsity of each NMF factor
 }
 \details{
 For \code{\link{nmf}} models, the sparsity of each factor is computed and summarized
 or \eqn{w} and \eqn{h} matrices. A long \code{data.frame} with columns \code{factor}, \code{sparsity}, and \code{model} is returned.
+}
+\examples{
+\donttest{
+data <- simulateNMF(50, 30, k = 3, seed = 1)
+model <- nmf(data$A, 3, seed = 1, maxit = 50)
+sparsity(model)
+}
+}
+\seealso{
+\code{\link{nmf}}, \code{\link{summary,nmf-method}}
 }

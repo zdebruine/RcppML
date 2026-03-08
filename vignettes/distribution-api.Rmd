@@ -1,0 +1,349 @@
+---
+title: "Distribution API: Statistical Modeling for NMF"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Distribution API: Statistical Modeling for NMF}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4.5,
+  eval = FALSE
+)
+```
+
+## Overview
+
+Standard NMF minimizes **mean squared error** (MSE), which assumes Gaussian
+noise — that every entry has the same variance regardless of magnitude. This
+assumption is wrong for most biological and count data: a gene with mean
+expression 1,000 has far more variance than one with mean 10.
+
+RcppML's Distribution API lets you match the **variance-mean relationship** to
+your data by choosing from a family of distributions. This is implemented
+through Iteratively Reweighted Least Squares (IRLS), which adaptively
+reweights the standard NMF solver so that high-variance entries get less
+influence and low-variance entries get more.
+
+The API is organized around three orthogonal dimensions:
+
+| Dimension | Controls | Parameters |
+|-----------|----------|------------|
+| **Distribution** | Variance-mean relationship $V(\mu)$ | `loss` |
+| **Zero-inflation** | Structural dropout modeling | `zero_inflation` |
+| **Robustness** | Outlier downweighting | `robust` |
+
+These compose multiplicatively: the final IRLS weight for entry $(i,j)$ is
+
+$$w_{ij} = w_{\text{dist}}(\mu_{ij}, \theta) \times w_{\text{robust}}(r^P_{ij})$$
+
+where $r^P_{ij} = (y_{ij} - \mu_{ij}) / \sqrt{V(\mu_{ij})}$ is the Pearson residual.
+
+## Available Distributions
+
+Each distribution defines a variance function $V(\mu)$ that determines
+how noise scales with the predicted value:
+
+| Distribution | `loss=` | $V(\mu)$ | IRLS Weight | Best For |
+|---|---|---|---|---|
+| Gaussian | `"mse"` | 1 | 1 | Dense continuous (images, spectra) |
+| Poisson | `"gp"` + `dispersion="none"` | $\mu$ | $1/\mu$ | Equidispersed counts |
+| Gen. Poisson | `"gp"` | $\mu(1+\theta)^2$ | Fisher info | Overdispersed counts |
+| Neg. Binomial | `"nb"` | $\mu + \mu^2/r$ | $r/(\mu(r+\mu))$ | scRNA-seq, high overdispersion |
+| Gamma | `"gamma"` | $\mu^2$ | $1/\mu^2$ | Positive continuous, CV constant |
+| Inv. Gaussian | `"inverse_gaussian"` | $\mu^3$ | $1/\mu^3$ | Heavy-tailed positive |
+| Tweedie | `"tweedie"` | $\mu^p$ | $1/\mu^p$ | Custom power $p$ |
+
+### Choosing a Distribution
+
+**Rule of thumb**: Plot the relationship between the mean and variance of your
+features (rows). The slope on a log-log scale tells you the power $p$:
+
+```{r choose-distribution}
+library(RcppML)
+library(Matrix)
+
+# Load example data
+data(hawaiibirds)
+
+# Compute per-row mean and variance
+row_means <- rowMeans(hawaiibirds)
+row_vars  <- apply(as.matrix(hawaiibirds), 1, var)
+
+# Log-log plot: slope ≈ p tells you the distribution
+plot(log10(row_means + 1), log10(row_vars + 1),
+     xlab = "log10(mean)", ylab = "log10(variance)",
+     main = "Variance-Mean Relationship", pch = 16, cex = 0.4)
+
+# Slope interpretation:
+# p ≈ 0 → Gaussian (flat)
+# p ≈ 1 → Poisson/GP (linear)
+# p ≈ 2 → Gamma/NB (quadratic)
+# p ≈ 3 → Inverse Gaussian (cubic)
+```
+
+Or let RcppML decide automatically:
+
+```{r auto-select}
+# Automatic distribution selection via score test
+model <- nmf(data, k = 10, distribution = "auto")
+```
+
+## Auto-Selection
+
+Setting `distribution = "auto"` runs a fast score test that does not require
+refitting:
+
+1. Fit a quick MSE baseline (≤ 20 iterations)
+2. Compute the score test statistic $T_p$ for each power $p \in \{0,1,2,3\}$:
+   $$T_p = \frac{1}{N} \sum_{ij} \left( \frac{r_{ij}^2}{\mu_{ij}^p} - 1 \right)$$
+3. Select $p^* = \arg\min_p |T_p|$, which maps to the best-fitting distribution
+4. For integer data, test for NB overdispersion:
+   $T_{\text{NB}} = \text{mean}\!\left( (r_{ij}^2 - \mu_{ij}) / \mu_{ij}^2 \right)$
+
+You can also compare distributions explicitly using AIC/BIC:
+
+```{r auto-compare}
+result <- auto_nmf_distribution(data, k = 10,
+                                 distributions = c("mse", "gp", "nb"),
+                                 criterion = "bic", verbose = TRUE)
+print(result$comparison)
+cat("Best distribution:", result$best, "\n")
+```
+
+## Dispersion Parameters
+
+For GP, NB, Gamma, and Inverse Gaussian, there is a **dispersion parameter**
+that controls the variance-to-mean ratio. RcppML estimates this parameter
+during fitting.
+
+### Dispersion Granularity
+
+The `dispersion` parameter controls the resolution of dispersion estimation:
+
+| `dispersion=` | Meaning | Use When |
+|---|---|---|
+| `"none"` | No dispersion ($\theta = 0$, pure Poisson) | Equidispersed counts |
+| `"global"` | One $\theta$ for entire matrix | Homogeneous overdispersion |
+| `"per_row"` (default) | $\theta_i$ per row/feature | Genes have different dispersions |
+| `"per_col"` | $\theta_j$ per column/sample | Samples have different quality |
+
+```{r dispersion}
+# GP with per-row dispersion (default)
+model <- nmf(data, k = 10, loss = "gp", dispersion = "per_row")
+
+# Pure Poisson (no dispersion)
+model <- nmf(data, k = 10, loss = "gp", dispersion = "none")
+```
+
+### GP Dispersion Parameters
+
+| Parameter | Default | Description |
+|---|---|---|
+| `theta_init` | 0.1 | Starting value for dispersion |
+| `theta_max` | 5.0 | Cap to prevent instability |
+| `theta_min` | 0.0 | Floor (0 = Poisson) |
+
+
+These go in the `distribution_config` list:
+
+```{r theta-config}
+model <- nmf(data, k = 10, loss = "gp",
+             distribution_config = list(
+               theta_init = 0.05,
+               theta_max  = 3.0,
+
+             ))
+```
+
+### NB Dispersion Parameters
+
+| Parameter | Default | Description |
+|---|---|---|
+| `nb_size_init` | 10.0 | Initial inverse-dispersion ($r$) |
+| `nb_size_max` | 1e6 | Cap (large $r$ → Poisson) |
+| `nb_size_min` | 0.01 | Floor |
+
+```{r nb-config}
+model <- nmf(data, k = 10, loss = "nb",
+             distribution_config = list(
+               nb_size_init = 5.0
+             ))
+```
+
+## Zero-Inflation
+
+Many datasets have **excess zeros** beyond what any count distribution predicts.
+RcppML models this as a two-component mixture:
+
+$$P(y_{ij} = 0) = \pi_{ij} + (1 - \pi_{ij}) \cdot P_{\text{dist}}(0 \mid \mu_{ij})$$
+
+where $\pi_{ij}$ is the probability that the zero is **structural** (dropout)
+rather than a true biological zero-count.
+
+### Zero-Inflation Modes
+
+| `zero_inflation=` | Model | Parameters | Use When |
+|---|---|---|---|
+| `"none"` | No ZI | — | Dense data, low sparsity |
+| `"row"` | $\pi_i$ per row | $m$ params | Gene-level dropout (e.g., detection limits) |
+| `"col"` | $\pi_j$ per column | $n$ params | Sample-level quality (e.g., sequencing depth) |
+| `"twoway"` | $\pi_{ij} = 1 - (1-\pi_i)(1-\pi_j)$ | $m + n$ params | Both gene and sample dropout |
+| `"auto"` | Diagnose from data | — | Unsure |
+
+```{r zero-inflation}
+# Gene-level dropout (common for scRNA-seq)
+model <- nmf(data, k = 10, loss = "gp", zero_inflation = "row")
+
+# Automatic: diagnoses excess zero pattern
+model <- nmf(data, k = 10, loss = "gp", zero_inflation = "auto")
+```
+
+Auto-detection compares observed vs expected zeros (under Poisson) per row and
+column, choosing the granularity that captures the most excess zero variance.
+
+## Robust Estimation
+
+Outliers can dominate MSE-based NMF. The `robust` parameter applies Huber
+downweighting to the **Pearson residuals** — entries that are far from their
+prediction (in units of the distribution's standard deviation) get reduced
+influence:
+
+$$w_{\text{robust}}(r^P) = \min\!\left(1, \; \frac{\delta}{|r^P|}\right)$$
+
+| `robust=` | Huber $\delta$ | Effect |
+|---|---|---|
+| `FALSE` (default) | — | No robustness |
+| `TRUE` | 1.345 | 95% efficiency under Gaussian, protects against outliers |
+| `"mae"` | 1e-4 | Near-MAE behavior (extreme downweighting) |
+| Numeric | Custom | Fine-tuned delta |
+
+Robustness composes with any distribution. For example, robust GP downweights
+outlier counts that deviate far from the Poisson prediction:
+
+```{r robust}
+# Robust GP: downweight outlier counts
+model <- nmf(data, k = 10, loss = "gp", robust = TRUE)
+
+# Custom Huber delta
+model <- nmf(data, k = 10, loss = "gp", robust = 2.0)
+```
+
+## IRLS Tuning
+
+The IRLS outer loop re-solves each column with updated weights. The defaults
+work well for most data, but you can tune:
+
+| Parameter | Default | Description |
+|---|---|---|
+| `irls_max_iter` | 5 | Max IRLS re-weighting iterations per column |
+| `irls_tol` | 1e-4 | Convergence: max relative change in solution |
+
+```{r irls-tune}
+# More IRLS iterations for better convergence
+model <- nmf(data, k = 10, loss = "gp",
+             irls_max_iter = 10, irls_tol = 1e-6)
+```
+
+Increasing `irls_max_iter` improves statistical accuracy at the cost of compute
+time (each IRLS iteration is roughly as expensive as one CD solve).
+
+## Complete Example: scRNA-seq Analysis
+
+```{r complete-example}
+library(RcppML)
+library(Matrix)
+
+# Load sparse count matrix (genes × cells)
+data(pbmc3k)
+
+# Step 1: Auto-select distribution
+result <- auto_nmf_distribution(pbmc3k, k = 10, verbose = TRUE)
+# Typical output: GP or NB selected (count data)
+
+# Step 2: Full model with selected distribution + ZI + robustness
+model <- nmf(pbmc3k, k = 10,
+             loss = result$best,       # e.g., "gp"
+             dispersion = "per_row",   # gene-specific dispersion
+             zero_inflation = "auto",  # detect dropout pattern
+             robust = TRUE,            # protect against outlier counts
+             maxit = 100,
+             verbose = 1)
+
+# Step 3: Cross-validate rank
+cv <- nmf(pbmc3k, k = 2:20,
+          loss = result$best,
+          test_fraction = 0.05,
+          verbose = 1)
+plot(cv)
+```
+
+## When to Use What
+
+| Data Type | Recommended `loss` | `dispersion` | `zero_inflation` | `robust` |
+|---|---|---|---|---|
+| Dense continuous (images) | `"mse"` | — | `"none"` | `FALSE` |
+| Dense positive (spectra) | `"gamma"` | `"global"` | `"none"` | `TRUE` |
+| Sparse counts (scRNA-seq) | `"gp"` or `"nb"` | `"per_row"` | `"row"` or `"auto"` | `TRUE` |
+| Ratings (MovieLens) | `"mse"` | — | `"none"` | `TRUE` |
+| Ecological abundance | `"gp"` | `"per_row"` | `"twoway"` | `FALSE` |
+| Text (word counts) | `"gp"` | `"none"` | `"none"` | `FALSE` |
+
+## Mathematical Details
+
+### IRLS Algorithm
+
+For each column $j$ and IRLS iteration:
+
+1. **Reconstruct**: $\hat{\mu}_j = W^T h_j$ (predicted column)
+2. **Weight**: $w_i = V(\hat{\mu}_i)^{-1}$ (distribution-specific)
+3. **Weighted Gram**: $G_w = W^T \operatorname{diag}(w) W$ (reweighted normal equations)
+4. **Weighted RHS**: $b_w = W^T \operatorname{diag}(w) a_j$
+5. **Solve**: $h_j \leftarrow \text{NNLS}(G_w, b_w)$ via coordinate descent
+6. **Check convergence**: $\max_i |h_j^{(\text{new})}[i] - h_j^{(\text{old})}[i]| / (|h_j^{(\text{old})}[i]| + \epsilon) < \texttt{irls\_tol}$
+
+The Gram computation is $O(mk^2)$ per column per iteration. For $k \ll m$
+this is efficient, and the typically 3–5 IRLS iterations add modest overhead
+relative to the standard CD solve.
+
+### GP Dispersion Estimation
+
+After each NMF iteration, the GP dispersion parameter $\theta_i$ (per row $i$)
+is updated via moment matching on the Pearson residuals:
+
+$$\hat{\theta}_i = \frac{1}{|\mathcal{J}_i|} \sum_{j \in \mathcal{J}_i} \frac{(y_{ij} - \mu_{ij})^2 - \mu_{ij}}{\mu_{ij}^2}$$
+
+where $\mathcal{J}_i$ is the set of columns with nonzero entries in row $i$.
+
+
+### Score Test for Auto-Selection
+
+The variance function score statistic for power $p$ is:
+
+$$T_p = \frac{1}{N} \sum_{i,j} \left( \frac{(y_{ij} - \hat{\mu}_{ij})^2}{\hat{\mu}_{ij}^p} - 1 \right)$$
+
+Under the true variance model $V(\mu) = \mu^p$, the standardized residuals
+$r_{ij}^2 / \mu_{ij}^p$ have mean 1, so $T_p \approx 0$. The power minimizing
+$|T_p|$ identifies the best-fitting variance function without refitting.
+
+## Simulation and Recovery
+
+To verify that the distribution model recovers known ground truth:
+
+```{r simulation-recovery, eval = FALSE}
+# Generate Poisson-distributed data from known factors
+set.seed(42)
+W_true <- matrix(runif(100 * 5), 100, 5)
+H_true <- matrix(runif(5 * 80), 5, 80)
+mu <- W_true %*% H_true
+A <- matrix(rpois(length(mu), lambda = as.vector(mu)), nrow = 100)
+
+# Recover with GP loss (appropriate for Poisson data)
+model <- nmf(A, k = 5, loss = "gp", seed = 42, maxit = 200, verbose = FALSE)
+cat("Reconstruction error:", evaluate(A, model), "\n")
+```

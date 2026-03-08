@@ -10,11 +10,23 @@ bipartiteMatch(x)
 \item{x}{symmetric matrix giving the cost of every possible pairing}
 }
 \value{
-List of "cost" and "pairs"
+List with elements \code{cost} (total matching cost) and \code{assignment} (0-indexed column assignment for each row).
 }
 \description{
 Hungarian algorithm for matching samples in a bipartite graph from a distance ("cost") matrix
 }
 \details{
 This implementation was adapted from RcppHungarian, an Rcpp wrapper for the original C++ implementation by Cong Ma (2016).
+}
+\examples{
+cost <- matrix(c(1, 0.5, 0.2,
+                  0.5, 1, 0.3,
+                  0.2, 0.3, 1), nrow = 3, byrow = TRUE)
+result <- bipartiteMatch(cost)
+result$cost
+result$assignment
+
+}
+\seealso{
+\code{\link{align}}, \code{\link{consensus_nmf}}
 }

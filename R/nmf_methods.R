@@ -207,6 +207,7 @@ setMethod("coerce", signature(from = "nmf", to = "list"), function(from, to) {
 #' @param object object of class \code{nmf}.
 #' @param ... additional parameters
 #' @return A \code{data.frame} with columns \code{factor}, \code{sparsity}, and \code{model} ("w" or "h").
+#' @seealso \code{\link{nmf}}, \code{\link{summary,nmf-method}}
 #' @examples
 #' \donttest{
 #' data <- simulateNMF(50, 30, k = 3, seed = 1)
@@ -242,6 +243,7 @@ setMethod("sparsity", signature = "nmf", function(object, ...) {
 #' @param method either \code{cosine} or \code{cor}
 #' @param ... arguments passed to or from other methods
 #' @return An \code{nmf} object with factors reordered to best match \code{ref}.
+#' @seealso \code{\link{bipartiteMatch}}, \code{\link{cosine}}, \code{\link{nmf}}
 #' @export
 #' @importFrom stats cor
 #' @examples
@@ -277,6 +279,7 @@ setMethod("align", signature = "nmf", function(object, ref, method = "cosine", .
 #' @param ... arguments passed to or from other methods
 #' @export
 #' @return \code{data.frame} with columns \code{group}, \code{factor}, and \code{stat}
+#' @seealso \code{\link{nmf}}, \code{\link{sparsity}}
 #'
 #' @examples
 #' \donttest{
@@ -337,6 +340,7 @@ setMethod("summary", signature = "nmf", function(object, group_by, stat = "sum",
 #' @param verbose print progress information (default FALSE)
 #' @importFrom methods is
 #' @return A single numeric value: the loss (MSE, MAE, Huber, or KL divergence) of the model on the data.
+#' @seealso \code{\link{nmf}}
 #' @export
 #' @examples
 #' \donttest{
@@ -351,7 +355,7 @@ setGeneric("evaluate", function(x, ...) standardGeneric("evaluate"))
 #' @rdname evaluate
 #' @method evaluate nmf
 setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, missing_only = FALSE, 
-                                                   loss = c("mse", "mae", "huber", "kl"),
+                                                   loss = c("mse", "mae", "huber", "gp"),
                                                    huber_delta = 1.0,
                                                    test_fraction = 0,
                                                    test_seed = NULL,
@@ -363,13 +367,19 @@ setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, missing_
 
   if (missing_only && is.null(mask)) stop("a mask matrix must be specified to set 'missing_only = TRUE'")
 
+  # Deprecation shim: "kl" → "gp"
+  if (is.character(loss) && length(loss) == 1 && loss == "kl") {
+    .Deprecated(msg = 'loss="kl" is deprecated in evaluate(). Use loss="gp" instead.')
+    loss <- "gp"
+  }
+
   # Validate and convert loss parameter
   loss <- match.arg(loss)
   loss_type <- switch(loss,
     "mse" = 0L,
     "mae" = 1L,
     "huber" = 2L,
-    "kl" = 3L
+    "gp" = 3L  # KL divergence formula (LossType::KL internally)
   )
 
   # Unified input validation (supports file paths, sparse, dense)
@@ -458,29 +468,19 @@ setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, missing_
 
   # Unified loss evaluation — always use general loss functions
   # (loss_type=0 corresponds to MSE, handled by compute_loss_general)
-  if (class(data)[[1]] == "dgCMatrix") {
-    if (missing_only) {
-      Rcpp_evaluate_loss_missing_sparse(data, mask_matrix, x@w, x@d, x@h, 
-                                        loss_type, huber_delta, as.integer(threads))
-    } else {
-      Rcpp_evaluate_loss_sparse(data, mask_matrix, x@w, x@d, x@h, 
-                                loss_type, huber_delta, as.integer(threads), mask_zeros)
-    }
+  if (missing_only) {
+    Rcpp_evaluate_loss_missing(data, mask_matrix, x@w, x@d, x@h, 
+                               loss_type, huber_delta, as.integer(threads))
   } else {
-    if (missing_only) {
-      Rcpp_evaluate_loss_missing_dense(data, mask_matrix, x@w, x@d, x@h, 
-                                       loss_type, huber_delta, as.integer(threads))
-    } else {
-      Rcpp_evaluate_loss_dense(data, mask_matrix, x@w, x@d, x@h, 
-                               loss_type, huber_delta, as.integer(threads), mask_zeros)
-    }
+    Rcpp_evaluate_loss(data, mask_matrix, x@w, x@d, x@h, 
+                       loss_type, huber_delta, as.integer(threads), mask_zeros)
   }
 })
 
 #' Mean squared error of factor model
 #' 
 #' Same as the \code{evaluate} S4 method for the \code{nmf} class, but allows one to input the `w`, `d`, `h`, and `data` independently.
-#' @export
+#' @keywords internal
 #' @param w feature factor matrix (features as rows)
 #' @param h sample factor matrix (samples as columns)
 #' @param d scaling diagonal vector (if applicable)
@@ -492,7 +492,7 @@ setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, missing_
 #' \donttest{
 #' data <- simulateNMF(50, 30, k = 3, seed = 1)
 #' model <- nmf(data$A, 3, seed = 1, maxit = 50)
-#' mse(model$w, model$d, model$h, data$A)
+#' RcppML:::mse(model$w, model$d, model$h, data$A)
 #' }
 mse <- function(w, d = NULL, h, data, mask = NULL, missing_only = FALSE, ...) {
   # Backward compat: old API was mse(A, w, d, h) with data first.

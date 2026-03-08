@@ -5,72 +5,49 @@
 // No NMF or SVD algorithm headers — keeps this TU fast to compile.
 
 #include "RcppFunctions_common.h"
-#include "../inst/include/RcppML/gateway/clustering.hpp"
-#include "../inst/include/RcppML/primitives/cpu/nnls_batch.hpp"
-#include "../inst/include/RcppML/primitives/cpu/gram.hpp"
-#include "../inst/include/RcppML/primitives/cpu/rhs.hpp"
+#include "../inst/include/FactorNet/clustering/gateway.hpp"
+#include "../inst/include/FactorNet/primitives/cpu/nnls_batch.hpp"
+#include "../inst/include/FactorNet/primitives/cpu/gram.hpp"
+#include "../inst/include/FactorNet/primitives/cpu/rhs.hpp"
+#include "../inst/include/FactorNet/nmf/nnls_streaming.hpp"
 
-using namespace RcppML::algorithms;
-using namespace RcppML::algorithms::clustering;
-using RcppML::tiny_num;
+
+using namespace FactorNet::clustering;
+using FactorNet::tiny_num;
 
 // ============================================================================
 // PREDICTION (PROJECT NEW SAMPLES)
 // ============================================================================
 
 // [[Rcpp::export]]
-Eigen::MatrixXd Rcpp_predict_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eigen::MatrixXd w,
-                                    const double L1, const double L2, const unsigned int threads,
-                                    const bool mask_zeros, const double upper_bound = 0) {
-    RcppML::gateway::ThreadGuard guard(static_cast<int>(threads));
-    auto A_mapped = mapSparseMatrix(A);
-    Eigen::SparseMatrix<double> A_copy(A_mapped);
-    
-    // R predict method passes w as k×m (already transposed)
-    // gram(H, G) computes G = H·H^T, rhs(A, H, B) computes B = H·A
-    // So we pass w directly (k×m), no need to transpose
-    const int k = static_cast<int>(w.rows());
-    const int n = static_cast<int>(A_copy.cols());
-    
-    // Compute Gram and RHS using unified primitives
-    Eigen::MatrixXd G(k, k);
-    RcppML::primitives::gram<RcppML::primitives::CPU, double>(w, G);
-    G.diagonal().array() += tiny_num<double>();
-    
-    Eigen::MatrixXd B(k, n);
-    RcppML::primitives::rhs<RcppML::primitives::CPU, double>(A_copy, w, B);
-    
-    // Apply L2 externally to Gram diagonal; pass L1 internally for proper sparsity
-    if (L2 > 0) G.diagonal().array() += L2;
-    
-    Eigen::MatrixXd h(k, n);
-    RcppML::primitives::nnls_batch<RcppML::primitives::CPU, double>(
-        G, B, h, 100, 1e-8, L1, 0.0, true, static_cast<int>(threads), upper_bound);
-    return h;
-}
-
-// [[Rcpp::export]]
-Eigen::MatrixXd Rcpp_predict_dense(const Eigen::MatrixXd& A_, const Rcpp::S4& mask, Eigen::MatrixXd w,
-                                   const double L1, const double L2, const unsigned int threads,
-                                   const bool mask_zeros, const double upper_bound = 0) {
-    RcppML::gateway::ThreadGuard guard(static_cast<int>(threads));
+Eigen::MatrixXd Rcpp_predict(SEXP A_sexp, const Rcpp::S4& mask, Eigen::MatrixXd w,
+                             const double L1, const double L2, const unsigned int threads,
+                             const bool mask_zeros, const double upper_bound = 0) {
+    FactorNet::clustering::ThreadGuard guard(static_cast<int>(threads));
     // R predict method passes w as k×m (already transposed)
     const int k = static_cast<int>(w.rows());
-    const int n = static_cast<int>(A_.cols());
     
-    // Compute Gram and RHS using unified primitives
+    // Compute Gram matrix (shared for sparse and dense)
     Eigen::MatrixXd G(k, k);
-    RcppML::primitives::gram<RcppML::primitives::CPU, double>(w, G);
+    FactorNet::primitives::gram<FactorNet::primitives::CPU, double>(w, G);
     G.diagonal().array() += tiny_num<double>();
-    
-    Eigen::MatrixXd B(k, n);
-    RcppML::primitives::rhs<RcppML::primitives::CPU, double>(A_, w, B);
-    
-    // Apply L2 externally to Gram diagonal; pass L1 internally for proper sparsity
     if (L2 > 0) G.diagonal().array() += L2;
     
-    Eigen::MatrixXd h(k, n);
-    RcppML::primitives::nnls_batch<RcppML::primitives::CPU, double>(
+    // Compute RHS — dispatch on sparse vs dense
+    Eigen::MatrixXd B;
+    if (Rf_isS4(A_sexp)) {
+        auto A_mapped = mapSparseMatrix(Rcpp::S4(A_sexp));
+        Eigen::SparseMatrix<double> A_copy(A_mapped);
+        B.resize(k, A_copy.cols());
+        FactorNet::primitives::rhs<FactorNet::primitives::CPU, double>(A_copy, w, B);
+    } else {
+        Eigen::MatrixXd A_dense = Rcpp::as<Eigen::MatrixXd>(A_sexp);
+        B.resize(k, A_dense.cols());
+        FactorNet::primitives::rhs<FactorNet::primitives::CPU, double>(A_dense, w, B);
+    }
+    
+    Eigen::MatrixXd h(k, B.cols());
+    FactorNet::primitives::nnls_batch<FactorNet::primitives::CPU, double>(
         G, B, h, 100, 1e-8, L1, 0.0, true, static_cast<int>(threads), upper_bound);
     return h;
 }
@@ -83,11 +60,11 @@ template<typename MatrixType>
 double compute_mse(const MatrixType& A, const Eigen::MatrixXd& W, 
                    const Eigen::VectorXd& d, const Eigen::MatrixXd& H,
                    bool mask_zeros = false) {
-    using namespace RcppML;
+    using namespace FactorNet;
     // Reconstruct: A_hat = W * diag(d) * H
     Eigen::MatrixXd WH = W * d.asDiagonal() * H;
     
-    if constexpr (RcppML::is_sparse_v<MatrixType>) {
+    if constexpr (FactorNet::is_sparse_v<MatrixType>) {
         if (mask_zeros) {
             // Only compute MSE over nonzero entries
             double mse = 0;
@@ -121,10 +98,10 @@ double compute_loss_general(const MatrixType& A, const Eigen::MatrixXd& W,
                            const Eigen::VectorXd& d, const Eigen::MatrixXd& H,
                            int loss_type, double huber_delta,
                            bool mask_zeros = false) {
-    using namespace RcppML;
+    using namespace FactorNet;
     
     // Set up loss configuration
-    RcppML::LossConfig<double> loss_config;
+    FactorNet::LossConfig<double> loss_config;
     loss_config.type = static_cast<LossType>(loss_type);
     loss_config.huber_delta = huber_delta;
     
@@ -134,7 +111,7 @@ double compute_loss_general(const MatrixType& A, const Eigen::MatrixXd& W,
     double total_loss = 0;
     int count = 0;
     
-    if constexpr (RcppML::is_sparse_v<MatrixType>) {
+    if constexpr (FactorNet::is_sparse_v<MatrixType>) {
         if (mask_zeros) {
             // Only compute loss over nonzero entries in A
             for (int k = 0; k < A.outerSize(); ++k) {
@@ -172,79 +149,59 @@ double compute_loss_general(const MatrixType& A, const Eigen::MatrixXd& W,
 }
 
 // [[Rcpp::export]]
-double Rcpp_evaluate_loss_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, 
-                                 Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h,
-                                 int loss_type, double huber_delta,
-                                 const unsigned int threads, const bool mask_zeros) {
-    auto A_mapped = mapSparseMatrix(A);
-    return compute_loss_general(A_mapped, w, d, h, loss_type, huber_delta, mask_zeros);
+double Rcpp_evaluate_loss(SEXP A_sexp, const Rcpp::S4& mask, 
+                          Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h,
+                          int loss_type, double huber_delta,
+                          const unsigned int threads, const bool mask_zeros) {
+    if (Rf_isS4(A_sexp)) {
+        auto A_mapped = mapSparseMatrix(Rcpp::S4(A_sexp));
+        return compute_loss_general(A_mapped, w, d, h, loss_type, huber_delta, mask_zeros);
+    } else {
+        Eigen::MatrixXd A_dense = Rcpp::as<Eigen::MatrixXd>(A_sexp);
+        return compute_loss_general(A_dense, w, d, h, loss_type, huber_delta, mask_zeros);
+    }
 }
 
 // [[Rcpp::export]]
-double Rcpp_evaluate_loss_dense(const Eigen::MatrixXd& A_, const Rcpp::S4& mask,
-                                Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h,
-                                int loss_type, double huber_delta,
-                                const unsigned int threads, const bool mask_zeros) {
-    return compute_loss_general(A_, w, d, h, loss_type, huber_delta, mask_zeros);
-}
-
-// [[Rcpp::export]]
-double Rcpp_evaluate_loss_missing_sparse(const Rcpp::S4& A, const Rcpp::S4& mask,
-                                         Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h,
-                                         int loss_type, double huber_delta,
-                                         const unsigned int threads) {
-    using namespace RcppML;
-    auto A_mapped = mapSparseMatrix(A);
+double Rcpp_evaluate_loss_missing(SEXP A_sexp, const Rcpp::S4& mask,
+                                  Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h,
+                                  int loss_type, double huber_delta,
+                                  const unsigned int threads) {
+    using namespace FactorNet;
     auto mask_mapped = mapSparseMatrix(mask);
     
     // Set up loss configuration
-    RcppML::LossConfig<double> loss_config;
+    FactorNet::LossConfig<double> loss_config;
     loss_config.type = static_cast<LossType>(loss_type);
     loss_config.huber_delta = huber_delta;
     
-    // Compute loss only on masked locations
+    // Reconstruct WH (shared for both paths)
     Eigen::MatrixXd WH = w * d.asDiagonal() * h;
     double total_loss = 0;
     int count = 0;
     
-    for (int k = 0; k < mask_mapped.outerSize(); ++k) {
-        for (MappedSpMat::InnerIterator it(mask_mapped, k); it; ++it) {
-            if (it.value() > 0) {  // Masked position
-                double observed = A_mapped.coeff(it.row(), it.col());
-                double predicted = WH(it.row(), it.col());
-                total_loss += compute_loss(observed, predicted, loss_config);
-                count++;
+    if (Rf_isS4(A_sexp)) {
+        auto A_mapped = mapSparseMatrix(Rcpp::S4(A_sexp));
+        for (int k = 0; k < mask_mapped.outerSize(); ++k) {
+            for (MappedSpMat::InnerIterator it(mask_mapped, k); it; ++it) {
+                if (it.value() > 0) {
+                    double observed = A_mapped.coeff(it.row(), it.col());
+                    double predicted = WH(it.row(), it.col());
+                    total_loss += compute_loss(observed, predicted, loss_config);
+                    count++;
+                }
             }
         }
-    }
-    
-    return count > 0 ? total_loss / count : 0;
-}
-
-// [[Rcpp::export]]
-double Rcpp_evaluate_loss_missing_dense(const Eigen::MatrixXd& A_, const Rcpp::S4& mask,
-                                        Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h,
-                                        int loss_type, double huber_delta,
-                                        const unsigned int threads) {
-    using namespace RcppML;
-    auto mask_mapped = mapSparseMatrix(mask);
-    
-    // Set up loss configuration
-    RcppML::LossConfig<double> loss_config;
-    loss_config.type = static_cast<LossType>(loss_type);
-    loss_config.huber_delta = huber_delta;
-    
-    Eigen::MatrixXd WH = w * d.asDiagonal() * h;
-    double total_loss = 0;
-    int count = 0;
-    
-    for (int k = 0; k < mask_mapped.outerSize(); ++k) {
-        for (MappedSpMat::InnerIterator it(mask_mapped, k); it; ++it) {
-            if (it.value() > 0) {
-                double observed = A_(it.row(), it.col());
-                double predicted = WH(it.row(), it.col());
-                total_loss += compute_loss(observed, predicted, loss_config);
-                count++;
+    } else {
+        Eigen::MatrixXd A_dense = Rcpp::as<Eigen::MatrixXd>(A_sexp);
+        for (int k = 0; k < mask_mapped.outerSize(); ++k) {
+            for (MappedSpMat::InnerIterator it(mask_mapped, k); it; ++it) {
+                if (it.value() > 0) {
+                    double observed = A_dense(it.row(), it.col());
+                    double predicted = WH(it.row(), it.col());
+                    total_loss += compute_loss(observed, predicted, loss_config);
+                    count++;
+                }
             }
         }
     }
@@ -257,50 +214,40 @@ double Rcpp_evaluate_loss_missing_dense(const Eigen::MatrixXd& A_, const Rcpp::S
 // ============================================================================
 
 // [[Rcpp::export]]
-Rcpp::List Rcpp_bipartition_sparse(const Rcpp::S4& A, const double tol, const unsigned int maxit,
-                                   const bool nonneg, const std::vector<unsigned int>& samples,
-                                   const unsigned int seed, const bool verbose = false,
-                                   const bool calc_dist = false, const bool diag = true,
-                                   const int threads = 0) {
-    auto A_mapped = mapSparseMatrix(A);
-    // Route through gateway for RAII thread management
-    auto model = RcppML::gateway::bipartition_gateway(
-        A_mapped, tol, maxit, nonneg, samples, seed,
-        verbose, calc_dist, diag, threads);
-
-    return Rcpp::List::create(
-        Rcpp::Named("v") = model.v,
-        Rcpp::Named("dist") = model.dist,
-        Rcpp::Named("size1") = model.size1,
-        Rcpp::Named("size2") = model.size2,
-        Rcpp::Named("samples1") = model.samples1,
-        Rcpp::Named("samples2") = model.samples2,
-        Rcpp::Named("center1") = model.center1,
-        Rcpp::Named("center2") = model.center2
-    );
-}
-
-// [[Rcpp::export]]
-Rcpp::List Rcpp_bipartition_dense(Eigen::MatrixXd& A, const double tol, const unsigned int maxit,
-                                  const bool nonneg, const std::vector<unsigned int>& samples,
-                                  const unsigned int seed, const bool verbose = false,
-                                  const bool calc_dist = false, const bool diag = true,
-                                  const int threads = 0) {
-    // Route through gateway for RAII thread management
-    auto model = RcppML::gateway::bipartition_gateway(
-        A, tol, maxit, nonneg, samples, seed,
-        verbose, calc_dist, diag, threads);
-
-    return Rcpp::List::create(
-        Rcpp::Named("v") = model.v,
-        Rcpp::Named("dist") = model.dist,
-        Rcpp::Named("size1") = model.size1,
-        Rcpp::Named("size2") = model.size2,
-        Rcpp::Named("samples1") = model.samples1,
-        Rcpp::Named("samples2") = model.samples2,
-        Rcpp::Named("center1") = model.center1,
-        Rcpp::Named("center2") = model.center2
-    );
+Rcpp::List Rcpp_bipartition(SEXP A_sexp, const double tol, const unsigned int maxit,
+                            const bool nonneg, const std::vector<unsigned int>& samples,
+                            const unsigned int seed, const bool verbose = false,
+                            const bool calc_dist = false, const bool diag = true,
+                            const int threads = 0) {
+    // Use lambda to capture result from either branch
+    auto make_model = [&](auto& A) {
+        return FactorNet::clustering::bipartition_gateway(
+            A, tol, maxit, nonneg, samples, seed,
+            verbose, calc_dist, diag, threads);
+    };
+    
+    auto to_list = [](const auto& model) {
+        return Rcpp::List::create(
+            Rcpp::Named("v") = model.v,
+            Rcpp::Named("dist") = model.dist,
+            Rcpp::Named("size1") = model.size1,
+            Rcpp::Named("size2") = model.size2,
+            Rcpp::Named("samples1") = model.samples1,
+            Rcpp::Named("samples2") = model.samples2,
+            Rcpp::Named("center1") = model.center1,
+            Rcpp::Named("center2") = model.center2
+        );
+    };
+    
+    if (Rf_isS4(A_sexp)) {
+        auto A_mapped = mapSparseMatrix(Rcpp::S4(A_sexp));
+        auto model = make_model(A_mapped);
+        return to_list(model);
+    } else {
+        Eigen::MatrixXd A_dense = Rcpp::as<Eigen::MatrixXd>(A_sexp);
+        auto model = make_model(A_dense);
+        return to_list(model);
+    }
 }
 
 // ============================================================================
@@ -316,7 +263,7 @@ Rcpp::List Rcpp_dclust_sparse(const Rcpp::S4& A, const unsigned int min_samples,
     auto A_mapped = mapSparseMatrix(A);
     
     // Route through gateway for RAII thread management
-    auto clusters = RcppML::gateway::dclust_gateway<double>(
+    auto clusters = FactorNet::clustering::dclust_gateway<double>(
         A_mapped, min_samples, min_dist, verbose,
         tol, maxit, nonneg, seed, threads);
     
@@ -354,7 +301,7 @@ Eigen::MatrixXd c_solve(Eigen::MatrixXd a, Eigen::MatrixXd b,
     for (int col = 0; col < b.cols(); ++col) {
         Eigen::VectorXd b_col = b.col(col);
         Eigen::VectorXd x_col = x.col(col);
-        RcppML::primitives::detail::cd_nnls_col_fixed(
+        FactorNet::primitives::detail::cd_nnls_col_fixed(
             a, b_col.data(), x_col.data(), k,
             L1, 0.0, nonneg, static_cast<int>(cd_maxit), upper_bound);
         x.col(col) = x_col;
@@ -364,32 +311,41 @@ Eigen::MatrixXd c_solve(Eigen::MatrixXd a, Eigen::MatrixXd b,
 }
 
 // [[Rcpp::export]]
-Eigen::MatrixXd c_nnls_dense(const Eigen::MatrixXd& w, const Eigen::MatrixXd& A,
-                             unsigned int cd_maxit = 100, const double cd_tol = 1e-8,
-                             const double L1 = 0, const double L2 = 0,
-                             const double upper_bound = 0, const bool nonneg = true,
-                             const unsigned int threads = 0,
-                             Rcpp::Nullable<Eigen::MatrixXd> warm_start = R_NilValue) {
+Eigen::MatrixXd c_nnls(const Eigen::MatrixXd& w, SEXP A_sexp,
+                       unsigned int cd_maxit = 100, const double cd_tol = 1e-8,
+                       const double L1 = 0, const double L2 = 0,
+                       const double upper_bound = 0, const bool nonneg = true,
+                       const unsigned int threads = 0,
+                       Rcpp::Nullable<Eigen::MatrixXd> warm_start = R_NilValue) {
     
-    RcppML::gateway::ThreadGuard guard(static_cast<int>(threads));
+    FactorNet::clustering::ThreadGuard guard(static_cast<int>(threads));
     const int k = static_cast<int>(w.cols());
-    const int n = static_cast<int>(A.cols());
     Eigen::MatrixXd w_T = w.transpose();
     
-    // Compute Gram and RHS using unified primitives
+    // Compute Gram matrix (shared for sparse and dense)
     Eigen::MatrixXd G(k, k);
-    RcppML::primitives::gram<RcppML::primitives::CPU, double>(w_T, G);
+    FactorNet::primitives::gram<FactorNet::primitives::CPU, double>(w_T, G);
     G.diagonal().array() += tiny_num<double>();
-    
-    Eigen::MatrixXd B(k, n);
-    RcppML::primitives::rhs<RcppML::primitives::CPU, double>(A, w_T, B);
-    
-    // Apply L2 externally to Gram diagonal; pass L1 internally for proper sparsity
     if (L2 > 0) G.diagonal().array() += L2;
+    
+    // Compute RHS — dispatch on sparse vs dense
+    Eigen::MatrixXd B;
+    int n;
+    if (Rf_isS4(A_sexp)) {
+        auto A_mapped = mapSparseMatrix(Rcpp::S4(A_sexp));
+        Eigen::SparseMatrix<double> A_copy(A_mapped);
+        n = static_cast<int>(A_copy.cols());
+        B.resize(k, n);
+        FactorNet::primitives::rhs<FactorNet::primitives::CPU, double>(A_copy, w_T, B);
+    } else {
+        Eigen::MatrixXd A_dense = Rcpp::as<Eigen::MatrixXd>(A_sexp);
+        n = static_cast<int>(A_dense.cols());
+        B.resize(k, n);
+        FactorNet::primitives::rhs<FactorNet::primitives::CPU, double>(A_dense, w_T, B);
+    }
     
     Eigen::MatrixXd h;
     if (warm_start.isNotNull()) {
-        // Warm start: use cd_nnls_col_fixed directly since nnls_batch always cold starts
         h = Rcpp::as<Eigen::MatrixXd>(warm_start);
         B.noalias() -= G * h;
         #ifdef _OPENMP
@@ -397,65 +353,36 @@ Eigen::MatrixXd c_nnls_dense(const Eigen::MatrixXd& w, const Eigen::MatrixXd& A,
         #pragma omp parallel for schedule(dynamic) num_threads(n_threads)
         #endif
         for (int j = 0; j < n; ++j) {
-            RcppML::primitives::detail::cd_nnls_col_fixed(
+            FactorNet::primitives::detail::cd_nnls_col_fixed(
                 G, B.col(j).data(), h.col(j).data(), k,
                 L1, 0.0, nonneg, static_cast<int>(cd_maxit), upper_bound);
         }
     } else {
-        RcppML::primitives::nnls_batch<RcppML::primitives::CPU, double>(
+        FactorNet::primitives::nnls_batch<FactorNet::primitives::CPU, double>(
             G, B, h, static_cast<int>(cd_maxit), cd_tol,
             L1, 0.0, nonneg, static_cast<int>(threads), upper_bound);
     }
     return h;
 }
 
+// ============================================================================
+// STREAMING NNLS (for SPZ files)
+// ============================================================================
+
 // [[Rcpp::export]]
-Eigen::MatrixXd c_nnls_sparse(const Eigen::MatrixXd& w, const Rcpp::S4& A,
-                              unsigned int cd_maxit = 100, const double cd_tol = 1e-8,
-                              const double L1 = 0, const double L2 = 0,
-                              const double upper_bound = 0, const bool nonneg = true,
-                              const unsigned int threads = 0,
-                              Rcpp::Nullable<Eigen::MatrixXd> warm_start = R_NilValue) {
-    
-    RcppML::gateway::ThreadGuard guard(static_cast<int>(threads));
-    auto A_mapped = mapSparseMatrix(A);
-    Eigen::SparseMatrix<double> A_copy(A_mapped);
-    
-    const int k = static_cast<int>(w.cols());
-    const int n = static_cast<int>(A_copy.cols());
-    Eigen::MatrixXd w_T = w.transpose();
-    
-    // Compute Gram and RHS using unified primitives
-    Eigen::MatrixXd G(k, k);
-    RcppML::primitives::gram<RcppML::primitives::CPU, double>(w_T, G);
-    G.diagonal().array() += tiny_num<double>();
-    
-    Eigen::MatrixXd B(k, n);
-    RcppML::primitives::rhs<RcppML::primitives::CPU, double>(A_copy, w_T, B);
-    
-    // Apply L2 externally to Gram diagonal; pass L1 internally for proper sparsity
-    if (L2 > 0) G.diagonal().array() += L2;
-    
-    Eigen::MatrixXd h;
-    if (warm_start.isNotNull()) {
-        // Warm start: use cd_nnls_col_fixed directly since nnls_batch always cold starts
-        h = Rcpp::as<Eigen::MatrixXd>(warm_start);
-        B.noalias() -= G * h;
-        #ifdef _OPENMP
-        int n_threads = (static_cast<int>(threads) > 0) ? static_cast<int>(threads) : omp_get_max_threads();
-        #pragma omp parallel for schedule(dynamic) num_threads(n_threads)
-        #endif
-        for (int j = 0; j < n; ++j) {
-            RcppML::primitives::detail::cd_nnls_col_fixed(
-                G, B.col(j).data(), h.col(j).data(), k,
-                L1, 0.0, nonneg, static_cast<int>(cd_maxit), upper_bound);
-        }
-    } else {
-        RcppML::primitives::nnls_batch<RcppML::primitives::CPU, double>(
-            G, B, h, static_cast<int>(cd_maxit), cd_tol,
-            L1, 0.0, nonneg, static_cast<int>(threads), upper_bound);
-    }
-    return h;
+Eigen::MatrixXd c_nnls_streaming(const std::string& path,
+                                  const Eigen::MatrixXd& w,
+                                  unsigned int cd_maxit = 100,
+                                  const double cd_tol = 1e-8,
+                                  const double L1 = 0, const double L2 = 0,
+                                  const double upper_bound = 0,
+                                  const bool nonneg = true,
+                                  const unsigned int threads = 0) {
+    return FactorNet::nmf::nnls_streaming_spz<double>(
+        path, w,
+        static_cast<int>(cd_maxit), cd_tol,
+        L1, L2, upper_bound, nonneg,
+        /* solver_mode = */ 0, static_cast<int>(threads));
 }
 
 // ============================================================================
@@ -465,7 +392,7 @@ Eigen::MatrixXd c_nnls_sparse(const Eigen::MatrixXd& w, const Rcpp::S4& A,
 // [[Rcpp::export]]
 Rcpp::NumericMatrix c_rmatrix(uint32_t nrow, uint32_t ncol, uint32_t rng_seed) {
     Eigen::MatrixXd mat(nrow, ncol);
-    RcppML::rng::SplitMix64 rng(rng_seed);
+    FactorNet::rng::SplitMix64 rng(rng_seed);
     rng.fill_uniform(mat);
     return Rcpp::wrap(mat);
 }
@@ -473,7 +400,7 @@ Rcpp::NumericMatrix c_rmatrix(uint32_t nrow, uint32_t ncol, uint32_t rng_seed) {
 // [[Rcpp::export]]
 Rcpp::NumericMatrix c_rtimatrix(uint32_t nrow, uint32_t ncol, uint32_t rng_seed) {
     Eigen::MatrixXd mat(nrow, ncol);
-    RcppML::rng::SplitMix64 rng(rng_seed);
+    FactorNet::rng::SplitMix64 rng(rng_seed);
     rng.fill_uniform(mat);
     // Make upper triangular
     for (uint32_t i = 0; i < nrow; ++i) {
@@ -487,7 +414,7 @@ Rcpp::NumericMatrix c_rtimatrix(uint32_t nrow, uint32_t ncol, uint32_t rng_seed)
 // [[Rcpp::export]]
 Rcpp::NumericVector c_runif(const uint32_t n, const float min, const float max,
                             const uint32_t rng_seed, const uint32_t rng2) {
-    RcppML::rng::SplitMix64 rng(rng_seed);
+    FactorNet::rng::SplitMix64 rng(rng_seed);
     Rcpp::NumericVector result(n);
     for (uint32_t i = 0; i < n; ++i) {
         result[i] = rng.uniform() * (max - min) + min;
@@ -498,7 +425,7 @@ Rcpp::NumericVector c_runif(const uint32_t n, const float min, const float max,
 // [[Rcpp::export]]
 Rcpp::IntegerVector c_rbinom(const uint32_t n, uint32_t size, const uint32_t inv_probability,
                              const uint32_t rng_seed, const uint32_t rng2) {
-    RcppML::rng::SplitMix64 rng(rng_seed);
+    FactorNet::rng::SplitMix64 rng(rng_seed);
     Rcpp::IntegerVector result(n);
     double p = 1.0 / inv_probability;
     for (uint32_t i = 0; i < n; ++i) {
@@ -515,7 +442,7 @@ Rcpp::IntegerVector c_rbinom(const uint32_t n, uint32_t size, const uint32_t inv
 std::vector<uint32_t> c_sample(const uint32_t n, const uint32_t size,
                                 const bool replace, const uint32_t rng_seed,
                                 const uint32_t rng2) {
-    RcppML::rng::SplitMix64 rng(rng_seed);
+    FactorNet::rng::SplitMix64 rng(rng_seed);
     std::vector<uint32_t> result;
     result.reserve(size);
     
@@ -540,7 +467,7 @@ std::vector<uint32_t> c_sample(const uint32_t n, const uint32_t size,
 Rcpp::S4 c_rtisparsematrix(const uint32_t nrow, const uint32_t ncol,
                            const uint32_t inv_probability, const bool pattern_only,
                            uint32_t rng_seed) {
-    RcppML::rng::SplitMix64 rng(rng_seed);
+    FactorNet::rng::SplitMix64 rng(rng_seed);
     double p = 1.0 / inv_probability;
     
     std::vector<int> i_vec, p_vec;
@@ -570,7 +497,7 @@ Rcpp::S4 c_rtisparsematrix(const uint32_t nrow, const uint32_t ncol,
 Rcpp::S4 c_rsparsematrix(const uint32_t nrow, const uint32_t ncol,
                          const uint32_t inv_probability, const bool pattern_only,
                          uint32_t rng_seed) {
-    RcppML::rng::SplitMix64 rng(rng_seed);
+    FactorNet::rng::SplitMix64 rng(rng_seed);
     double p = 1.0 / inv_probability;
     
     std::vector<int> i_vec, p_vec;

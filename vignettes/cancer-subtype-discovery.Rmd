@@ -1,0 +1,370 @@
+---
+title: "Cancer Subtype Discovery with Consensus NMF"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Cancer Subtype Discovery with Consensus NMF}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+NOT_CRAN <- identical(tolower(Sys.getenv("NOT_CRAN")), "true")
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5,
+  dpi = 100,
+  eval = NOT_CRAN
+)
+```
+
+## The Problem: Robust Classification from Noisy Data
+
+Cancer is not a single disease — molecular profiling reveals **subtypes** with
+distinct biology, prognosis, and treatment response. NMF has been a workhorse for
+cancer subtype discovery since Brunet et al. (2004) showed that it could
+distinguish acute leukemia subtypes from gene expression alone.
+
+But a single NMF run is sensitive to initialization. Different random seeds produce
+different factorizations, raising the question: **which groupings are robust and
+which are artifacts of initialization?**
+
+**Consensus NMF** answers this by running many NMF replicates with different
+initializations and measuring how consistently pairs of samples cluster together.
+If two samples are always assigned to the same factor across 50 runs, their
+co-clustering is robust. If they only co-cluster in half the runs, the grouping
+is unstable.
+
+## The Golub Leukemia Dataset
+
+The `golub` dataset is the classic benchmark from Golub et al. (1999) — gene
+expression profiles from 38 leukemia patients:
+
+```{r load-golub}
+library(RcppML)
+library(ggplot2)
+library(Matrix)
+
+data(golub)
+cancer_type <- attr(golub, "cancer_type")
+
+cat("Dimensions:", nrow(golub), "samples ×", ncol(golub), "genes\n")
+cat("Cancer types:", table(cancer_type), "\n")
+cat("True rank: 2 (ALL vs AML)\n")
+cat("Expected optimal: ~3 (ALL has subtypes)\n")
+```
+
+The ground truth has two major classes — Acute Lymphoblastic Leukemia (ALL, 27
+patients) and Acute Myeloid Leukemia (AML, 11 patients) — but ALL itself contains
+subtypes that may warrant a third factor.
+
+## Consensus NMF for Rank Selection
+
+The cophenetic correlation coefficient measures how well the consensus matrix
+preserves hierarchical clustering structure. A high cophenetic correlation indicates
+stable cluster assignments across replicates. As $k$ increases, the cophenetic
+correlation typically decreases — the rank with the highest cophenetic value
+represents the most robust number of subtypes:
+
+```{r consensus-sweep, fig.width=7, fig.height=5}
+# Sweep k = 2 to 6, each with 20 replicates
+coph_scores <- numeric(5)
+consensus_models <- list()
+
+for (k in 2:6) {
+  con <- consensus_nmf(golub, k = k, reps = 20, method = "hard",
+                       seed = 42, verbose = FALSE)
+  coph_scores[k - 1] <- con$cophenetic
+  consensus_models[[k - 1]] <- con
+  cat(sprintf("k = %d: cophenetic = %.3f\n", k, con$cophenetic))
+}
+
+# Plot cophenetic correlation vs rank
+coph_df <- data.frame(k = 2:6, cophenetic = coph_scores)
+ggplot(coph_df, aes(x = k, y = cophenetic)) +
+  geom_line(linewidth = 1, color = "steelblue") +
+  geom_point(size = 3, color = "steelblue") +
+  geom_vline(xintercept = coph_df$k[which.max(coph_df$cophenetic)],
+             linetype = "dashed", color = "red") +
+  labs(title = "Consensus Cophenetic Correlation vs. Rank",
+       subtitle = "Highest cophenetic indicates most robust clustering",
+       x = "Number of Factors (k)", y = "Cophenetic Correlation") +
+  ylim(0, 1) +
+  theme_minimal()
+```
+
+### Consensus Matrix at Optimal Rank
+
+```{r consensus-heatmap, fig.width=6, fig.height=5}
+# Use the best k
+best_idx <- which.max(coph_scores)
+best_con <- consensus_models[[best_idx]]
+cat("Optimal k:", best_idx + 1, "\n")
+
+# Visualize consensus matrix
+plot(best_con, show_clusters = TRUE) +
+  ggtitle(paste0("Consensus Matrix (k = ", best_idx + 1, ", 20 replicates)"))
+```
+
+A perfect consensus matrix shows solid diagonal blocks (within-cluster agreement
+= 1) and off-diagonal zeros (between-cluster agreement = 0). For this classic
+leukemia dataset, k=2 achieves near-perfect consensus, confirming the strong
+ALL vs. AML separation.
+
+```{r consensus-summary}
+summary(best_con)
+```
+
+### Comparing Consensus Methods
+
+RcppML offers two consensus methods:
+
+- **"hard"**: Traditional connectivity-based consensus (Brunet et al. 2004). Each
+  sample is assigned to its maximum-loading factor.
+- **"knn_jaccard"**: KNN-Jaccard consensus. Instead of hard assignments, measures
+  how much samples' k-nearest neighbor sets overlap across replicates. More
+  robust to factor rotation.
+
+```{r consensus-knn, fig.width=6, fig.height=5}
+con_knn <- consensus_nmf(golub, k = best_idx + 1, reps = 20,
+                         method = "knn_jaccard", seed = 42, verbose = FALSE)
+
+cat("Hard consensus cophenetic:      ", best_con$cophenetic, "\n")
+cat("KNN-Jaccard consensus cophenetic:", con_knn$cophenetic, "\n")
+
+plot(con_knn, show_clusters = TRUE) +
+  ggtitle(paste0("KNN-Jaccard Consensus (k = ", best_idx + 1, ")"))
+```
+
+### Validation Against Known Labels
+
+```{r validate-clusters}
+# Check if consensus clusters match known cancer types
+cluster_labels <- best_con$clusters
+ct <- table(Cluster = cluster_labels, Cancer = cancer_type)
+cat("Cluster vs. Cancer Type:\n")
+print(ct)
+
+# Classification accuracy (best matching)
+accuracy <- sum(apply(ct, 2, max)) / sum(ct)
+cat(sprintf("\nClassification accuracy: %.1f%%\n", accuracy * 100))
+if (accuracy < 1.0) {
+  cat("Note: any misclassified samples may represent biological ambiguity\n")
+  cat("at the molecular level, not necessarily algorithmic failure.\n")
+}
+```
+
+## The AML ATAC-seq Dataset: Dense Data Analysis
+
+The `aml` dataset provides a different modality — chromatin accessibility
+(ATAC-seq) from 135 AML patient samples plus healthy controls. This is a
+**dense** matrix:
+
+```{r load-aml}
+data(aml)
+aml_meta <- attr(aml, "metadata_h")
+
+cat("Dimensions:", nrow(aml), "regions ×", ncol(aml), "samples\n")
+cat("Data type:", class(aml)[1], "\n")
+cat("Sparsity:", round(sum(aml == 0) / prod(dim(aml)), 3), "\n")
+cat("\nSample categories:\n")
+print(table(aml_meta$category))
+```
+
+Unlike the sparse gene expression data, ATAC-seq produces nearly dense matrices —
+most chromatin regions have measurable accessibility in most samples.
+
+### Robust NMF with Huber Loss
+
+Chromatin accessibility data can contain outlier peaks — extremely high values in a
+few samples. The **Huber loss** is ideal here: it behaves like MSE for small errors
+but like MAE for large errors, reducing the influence of outliers:
+
+$$L_\delta(r) = \begin{cases} \frac{1}{2}r^2 & \text{if } |r| \le \delta \\ \delta(|r| - \frac{1}{2}\delta) & \text{otherwise} \end{cases}$$
+
+```{r aml-huber}
+model_aml_mse <- nmf(aml, k = 6, tol = 1e-5, maxit = 200,
+                     loss = "mse", seed = 42, verbose = FALSE)
+model_aml_huber <- nmf(aml, k = 6, tol = 1e-5, maxit = 200,
+                       loss = "huber", huber_delta = 1.0,
+                       seed = 42, verbose = FALSE)
+
+compare_nmf(MSE = model_aml_mse, Huber = model_aml_huber) +
+  ggtitle("Training Convergence: MSE vs Huber Loss on AML Data")
+```
+
+Note: the convergence curves track each model's own objective, so they are not
+directly comparable in magnitude. The key comparison is in the resulting factors.
+
+### Aligning and Comparing Models
+
+When comparing two NMF models, factors may be in different orders. The `align()`
+function reorders one model's factors to best match another using the Hungarian
+algorithm for optimal bipartite matching:
+
+```{r align-models}
+model_aml_huber_aligned <- align(model_aml_huber, ref = model_aml_mse)
+
+# Cosine similarity between aligned factors
+cos_sim <- cosine(model_aml_mse@w, model_aml_huber_aligned@w)
+cat("Cosine similarity between MSE and Huber factors (after alignment):\n")
+print(round(cos_sim, 3))
+```
+
+Diagonal values near 1.0 indicate that MSE and Huber loss discover similar biological
+factors; lower values suggest the factors have diverged, often because Huber down-weights
+outlier accessibility peaks that strongly influence the MSE solution.
+
+### Semi-NMF for Signed Chromatin Changes
+
+Chromatin accessibility changes can go in both directions — regions can become
+more or less accessible. Semi-NMF allows $W$ to have negative values, capturing
+regions that are specifically *closed* in certain subtypes:
+
+```{r semi-nmf-aml}
+model_semi <- nmf(aml, k = 6, nonneg = c(FALSE, TRUE),
+                  tol = 1e-5, maxit = 200, seed = 42, verbose = FALSE)
+
+cat("Standard W range:", range(model_aml_mse@w), "\n")
+cat("Semi-NMF W range:", range(model_semi@w), "\n")
+cat("Semi-NMF H range:", range(model_semi@h), "(constrained ≥ 0)\n")
+```
+
+Negative values in $W$ represent chromatin regions that are specifically *not*
+associated with a factor — a richer biological model than pure non-negative
+factorization.
+
+## SparsePress: Efficient Data Storage
+
+For large genomic datasets, storage and I/O are practical concerns. RcppML's
+**SparsePress** format provides high-compression storage for sparse matrices
+using rANS entropy coding, delta encoding, and value prediction.
+
+SparsePress is most effective on truly sparse data. Let's demonstrate with the
+PBMC single-cell dataset:
+
+```{r sparsepress, eval = NOT_CRAN && "pbmc3k" %in% data(package = "RcppML")$results[, "Item"]}
+data(pbmc3k)
+cat("pbmc3k sparsity:", round(1 - nnzero(pbmc3k) / prod(dim(pbmc3k)), 3), "\n")
+
+# Save as SparsePress format
+tmpfile <- tempfile(fileext = ".spz")
+sp_write(pbmc3k, tmpfile)
+
+# Check file info without reading
+info <- sp_info(tmpfile)
+cat("\nSparsePress file info:\n")
+for (nm in names(info)) {
+  cat(sprintf("  %s: %s\n", nm, info[[nm]]))
+}
+
+# Read back and verify
+pbmc_reload <- sp_read(tmpfile)
+cat("\nReloaded dimensions:", dim(pbmc_reload), "\n")
+cat("Values match:", all.equal(as.matrix(pbmc3k), as.matrix(pbmc_reload),
+                               check.attributes = FALSE), "\n")
+```
+
+### In-Memory Compression
+
+For transmission or caching, the internal `sp_compress()` and `sp_decompress()`
+functions work with raw byte vectors:
+
+```{r compress-decompress, eval = FALSE}
+raw_bytes <- RcppML:::sp_compress(pbmc3k)
+cat("Compressed size:", format(length(raw_bytes), big.mark = ","), "bytes\n")
+cat("Original R object size:", format(as.numeric(object.size(pbmc3k)), big.mark = ","), "bytes\n")
+cat("Compression ratio:", round(as.numeric(object.size(pbmc3k)) / length(raw_bytes), 1), "x\n")
+
+pbmc_from_raw <- RcppML:::sp_decompress(raw_bytes)
+cat("Decompressed matches:", all.equal(as.matrix(pbmc3k), as.matrix(pbmc_from_raw),
+                                       check.attributes = FALSE), "\n")
+```
+
+The compression ratio depends on data sparsity and value distribution — highly
+sparse matrices with low-entropy values achieve the best ratios.
+
+## Bipartite Matching: Optimal Factor Correspondence
+
+The Hungarian algorithm (`bipartiteMatch()`) finds the optimal one-to-one assignment
+between factors of two models, minimizing total cost. This is used internally by
+`align()`, but is also useful directly:
+
+```{r bipartite-match}
+# Cost matrix: 1 - cosine similarity between factor pairs
+cost <- 1 - abs(cosine(model_aml_mse@w, model_aml_huber@w))
+match_result <- bipartiteMatch(cost)
+
+cat("Optimal assignment (0-indexed):", match_result$assignment, "\n")
+cat("Total cost:", round(match_result$cost, 4), "\n")
+```
+
+## Putting It Together: AML Subtype Analysis
+
+```{r aml-subtypes, fig.width=7, fig.height=5}
+# For consensus clustering of *samples*, we transpose so samples are rows
+aml_t <- t(aml)
+con_aml <- consensus_nmf(aml_t, k = 6, reps = 15, method = "hard",
+                         seed = 42, verbose = FALSE)
+
+cat("AML consensus cophenetic:", con_aml$cophenetic, "\n")
+
+# Compare discovered clusters with known subtypes
+ct_aml <- table(
+  Cluster = con_aml$clusters,
+  Subtype = aml_meta$category
+)
+cat("\nConsensus clusters vs. AML subtypes:\n")
+print(ct_aml)
+```
+
+```{r aml-consensus-plot, fig.width=6, fig.height=5}
+plot(con_aml, show_clusters = TRUE) +
+  ggtitle("AML Sample Consensus Matrix (k = 6)")
+```
+
+## Key Takeaways
+
+1. **Consensus NMF** provides robustness that single runs cannot: by aggregating
+   many random initializations, it identifies groupings that are stable features
+   of the data, not artifacts of optimization.
+
+2. **Cophenetic correlation** offers a principled metric for rank selection in
+   consensus NMF — complementary to cross-validation.
+
+3. **KNN-Jaccard consensus** is more robust than hard-assignment consensus,
+   especially when factors are not well-separated, because it measures
+   neighborhood structure rather than discrete assignments.
+
+4. **Huber loss** is ideal for genomic data with outliers — it provides MSE-like
+   behavior for typical observations while limiting the influence of extreme values.
+
+5. **Semi-NMF** captures bidirectional changes (increase/decrease in accessibility),
+   producing a richer biological model than standard non-negative factorization.
+
+6. **Factor alignment** via the Hungarian algorithm (`align()`, `bipartiteMatch()`)
+   enables principled comparison between models — essential when comparing loss
+   functions, regularization strategies, or biological conditions.
+
+7. **SparsePress** provides efficient storage for large sparse genomic matrices,
+   with compression ratios that depend on sparsity and value entropy.
+
+## References
+
+- Brunet, J.P., Tamayo, P., Golub, T.R., & Mesirov, J.P. (2004). Metagenes and
+  molecular pattern discovery using matrix factorization. *PNAS*, 101(12), 4164-4169.
+
+- Golub, T.R., et al. (1999). Molecular classification of cancer: class discovery
+  and class prediction by gene expression monitoring. *Science*, 286(5439), 531-537.
+
+- Lee, D.D. & Seung, H.S. (1999). Learning the parts of objects by non-negative
+  matrix factorization. *Nature*, 401(6755), 788-791.
+
+## Further Reading
+
+- [Getting started with RcppML](getting-started.html) — Core NMF concepts
+- [Cross-validation for rank selection](cross-validation.html) — Detailed CV guide
+- [Single-cell genomics](single-cell-genomics.html) — Cell type discovery with NMF
+- [Image decomposition](image-decomposition.html) — Parts-based representations
+- [Ecological biodiversity](ecological-biodiversity.html) — Community ecology with NMF

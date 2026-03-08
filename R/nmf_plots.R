@@ -1,28 +1,33 @@
 #' @rdname summary-nmf-method
 #' @export
 #' @param x \code{nmfSummary} object, the result of calling \code{summary} on an \code{nmf} object
+#' @param ... Additional arguments (unused).
+#' @return A \code{ggplot2} object showing factor representation by group.
+#' @seealso \code{\link{summary,nmf-method}}, \code{\link{nmf}}
+#'
+#' @examples
+#' \donttest{
+#' library(Matrix)
+#' A <- rsparsematrix(100, 50, 0.1)
+#' model <- nmf(A, k = 3, seed = 42, tol = 1e-2, maxit = 10)
+#' groups <- factor(sample(c("A", "B"), 50, replace = TRUE))
+#' s <- summary(model, group_by = groups)
+#' if (requireNamespace("ggplot2", quietly = TRUE)) {
+#'   plot(s)
+#' }
+#' }
+#'
 #' @method plot nmfSummary
 plot.nmfSummary <- function(x, ...){
-  ggplot(x, aes(x = factor(factor, levels = unique(factor)), y = stat, fill = group)) + 
-    geom_bar(position = "fill", stat = "identity") +
-    theme_classic() +
-    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
-    labs(x = "NMF factor", y = "Representation in group") + 
-    scale_y_continuous(expand = c(0, 0))
-}
-
-#' @rdname crossValidate
-#' @export
-#' @param x \code{nmfCrossValidate} object, the result of \code{crossValidate}
-#' @method plot nmfCrossValidate
-plot.nmfCrossValidate <- function(x, ...){
-  ggplot(x, aes(x = k, y = value, color = rep)) + 
-    geom_point() + 
-    geom_line() + 
-    theme_classic() +
-    theme(plot.title = element_text(hjust = 0.5)) +
-    theme(aspect.ratio = 1) +
-    scale_y_continuous(trans = "log10")
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("Package 'ggplot2' is required for plotting. Please install it.", call. = FALSE)
+  }
+  ggplot2::ggplot(x, ggplot2::aes(x = factor(factor, levels = unique(factor)), y = stat, fill = group)) + 
+    ggplot2::geom_bar(position = "fill", stat = "identity") +
+    ggplot2::theme_classic() +
+    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, vjust = 1, hjust = 1)) + 
+    ggplot2::labs(x = "NMF factor", y = "Representation in group") + 
+    ggplot2::scale_y_continuous(expand = c(0, 0))
 }
 
 #' Biplot for NMF factors
@@ -36,9 +41,23 @@ plot.nmfCrossValidate <- function(x, ...){
 #' @param ... for consistency with \code{biplot} generic
 #' @export
 #' @return ggplot2 object
+#'
+#' @examples
+#' \donttest{
+#' library(Matrix)
+#' A <- rsparsematrix(100, 50, 0.1)
+#' model <- nmf(A, k = 3, seed = 42, tol = 1e-2, maxit = 10)
+#' if (requireNamespace("ggplot2", quietly = TRUE)) {
+#'   biplot(model, factors = c(1, 2))
+#' }
+#' }
+#'
 #' @method biplot nmf
 #' @seealso \code{\link{nmf}}
 setMethod("biplot", signature = "nmf", function(x, factors = c(1,2), matrix = "w", group_by = NULL, ...) {
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("Package 'ggplot2' is required for plotting. Please install it.", call. = FALSE)
+  }
   validObject(x)
   if(length(factors) != 2 || max(factors) > ncol(x$w)) stop("'factors' must be of length 2 containing values less than the rank of the nmf model")
   if(!(matrix %in% c("w", "h"))) stop("'matrix' must be either 'w' or 'h'")
@@ -48,18 +67,18 @@ setMethod("biplot", signature = "nmf", function(x, factors = c(1,2), matrix = "w
   }
   if(matrix == "w") model <- x$w[, factors]
   if(matrix == "h") model <- t(x$h[factors, ])
+  if(is.null(rownames(model))) rownames(model) <- paste0("item", 1:nrow(model))
   if(!is.null(group_by)) {
-    if(is.null(rownames(model))) rownames(model) <- paste0("item", 1:nrow(model))
     df <- data.frame("group" = group_by, "factor1" = model[,1], "factor2" = model[,2], "labels" = rownames(model))
-    ggplot(df, aes(x = factor1, y = factor2, color = group, label = labels)) + 
-      geom_point() + 
-      theme_classic() + 
-      labs(x = paste0("NMF factor ", factors[1]), y = paste0("NMF factor ", factors[2]))
+    ggplot2::ggplot(df, ggplot2::aes(x = factor1, y = factor2, color = group, label = labels)) + 
+      ggplot2::geom_point() + 
+      ggplot2::theme_classic() + 
+      ggplot2::labs(x = paste0("NMF factor ", factors[1]), y = paste0("NMF factor ", factors[2]))
   } else {
     df <- data.frame("factor1" = model[,1], "factor2" = model[,2], "labels" = rownames(model))
-    ggplot(df, aes(x = factor1, y = factor2, label = labels)) + 
-      geom_point() + 
-      theme_classic() + 
-      labs(x = paste0("NMF factor ", factors[1]), y = paste0("NMF factor ", factors[2]))
+    ggplot2::ggplot(df, ggplot2::aes(x = factor1, y = factor2, label = labels)) + 
+      ggplot2::geom_point() + 
+      ggplot2::theme_classic() + 
+      ggplot2::labs(x = paste0("NMF factor ", factors[1]), y = paste0("NMF factor ", factors[2]))
   }
 })

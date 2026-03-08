@@ -1,33 +1,28 @@
 // RcppFunctions_svd.cpp
 // SVD/PCA exports: in-memory (sparse+dense) and streaming (SPZ) variants.
-// fp32-only: always runs float<> path. Fixes the reinterpret_cast UB that
-// was present in the original monolithic file for graph Laplacians.
+// All method dispatch routes through svd/gateway.hpp — one include handles
+// deflation, randomized, lanczos, irlba, krylov, and streaming paths.
 
 #include "RcppFunctions_common.h"
-#include "../inst/include/RcppML/algorithms/svd/deflation_svd.hpp"
-#include "../inst/include/RcppML/algorithms/svd/randomized_svd.hpp"
-#include "../inst/include/RcppML/algorithms/svd/lanczos_svd.hpp"
-#include "../inst/include/RcppML/algorithms/svd/irlba_svd.hpp"
-#include "../inst/include/RcppML/algorithms/svd/krylov_constrained_svd.hpp"
-#include "../inst/include/RcppML/algorithms/svd/streaming_matvec.hpp"
-#include "../inst/include/RcppML/algorithms/svd/streaming_svd.hpp"
+#include "../inst/include/FactorNet/svd/gateway.hpp"
 // trace_AtA is inline in cpu/rhs.hpp; not reachable from SVD headers
-#include "../inst/include/RcppML/primitives/cpu/rhs.hpp"
+#include "../inst/include/FactorNet/primitives/cpu/rhs.hpp"
 
-using RcppML::tiny_num;
+using FactorNet::tiny_num;
 
 // ============================================================================
-// SVD result → R list (casts to double at R boundary)
+// Helper: SVD result → R list (casts to double at R boundary)
 // ============================================================================
 
 template<typename Scalar>
-Rcpp::List svd_result_to_list(const RcppML::SVDResult<Scalar>& result) {
+static Rcpp::List svd_result_to_list(const FactorNet::SVDResult<Scalar>& result) {
     Rcpp::List ret = Rcpp::List::create(
         Rcpp::Named("u") = result.U.template cast<double>(),
         Rcpp::Named("d") = result.d.template cast<double>(),
         Rcpp::Named("v") = result.V.template cast<double>(),
         Rcpp::Named("k") = result.k_selected,
         Rcpp::Named("centered") = result.centered,
+        Rcpp::Named("scaled") = result.scaled,
         Rcpp::Named("iters_per_factor") = result.iters_per_factor,
         Rcpp::Named("wall_time_ms") = result.wall_time_ms,
         Rcpp::Named("frobenius_norm_sq") = result.frobenius_norm_sq
@@ -35,6 +30,10 @@ Rcpp::List svd_result_to_list(const RcppML::SVDResult<Scalar>& result) {
 
     if (result.centered && result.row_means.size() > 0) {
         ret["row_means"] = result.row_means.template cast<double>();
+    }
+
+    if (result.scaled && result.row_sds.size() > 0) {
+        ret["row_sds"] = result.row_sds.template cast<double>();
     }
 
     if (!result.test_loss_trajectory.empty()) {
@@ -53,7 +52,7 @@ Rcpp::List svd_result_to_list(const RcppML::SVDResult<Scalar>& result) {
 }
 
 // ============================================================================
-// Deflation SVD / PCA (in-memory)
+// Deflation SVD / PCA (in-memory, sparse or dense A)
 // ============================================================================
 
 // [[Rcpp::export]]
@@ -63,6 +62,7 @@ Rcpp::List Rcpp_svd_pca(
     double tol,
     int max_iter,
     bool center,
+    bool scale,
     bool verbose,
     unsigned int seed,
     int threads,
@@ -79,110 +79,65 @@ Rcpp::List Rcpp_svd_pca(
     unsigned int cv_seed,
     int patience,
     bool mask_zeros,
+    Rcpp::Nullable<Rcpp::S4> obs_mask,
     std::string convergence = "factor",
-    std::string method = "deflation")
+    std::string method = "deflation",
+    double robust_delta = 0.0,
+    int irls_max_iter = 5,
+    double irls_tol = 1e-4)
 {
-    bool is_sparse = Rf_isS4(A_sexp);
-
-    // Extract graph Laplacians (double storage; cast to float below)
-    GraphData graph_u_data = extract_graph(graph_u, graph_u_lambda);
-    GraphData graph_v_data = extract_graph(graph_v, graph_v_lambda);
-
-    // Parse convergence mode
-    RcppML::SVDConvergence conv_mode = RcppML::SVDConvergence::FACTOR;
-    if (convergence == "loss") conv_mode = RcppML::SVDConvergence::LOSS;
-    else if (convergence == "both") conv_mode = RcppML::SVDConvergence::BOTH;
-
-    // Always float (fp32-only)
     using Scalar = float;
 
-    RcppML::SVDConfig<Scalar> config;
-    config.k_max = k_max;
-    config.tol = static_cast<Scalar>(tol);
-    config.max_iter = max_iter;
-    config.center = center;
-    config.verbose = verbose;
-    config.seed = seed;
-    config.threads = threads;
-    config.convergence = conv_mode;
+    // Build config from plain-old-data parameters
+    auto config = FactorNet::svd::build_svd_config_scalars<Scalar>(
+        k_max, static_cast<Scalar>(tol), max_iter, center, scale,
+        verbose, seed, threads,
+        FactorNet::svd::parse_svd_convergence(convergence),
+        static_cast<Scalar>(L1_u), static_cast<Scalar>(L1_v),
+        static_cast<Scalar>(L2_u), static_cast<Scalar>(L2_v),
+        nonneg_u, nonneg_v,
+        static_cast<Scalar>(upper_bound_u), static_cast<Scalar>(upper_bound_v),
+        static_cast<Scalar>(L21_u), static_cast<Scalar>(L21_v),
+        static_cast<Scalar>(angular_u), static_cast<Scalar>(angular_v),
+        static_cast<Scalar>(test_fraction), cv_seed, patience, mask_zeros,
+        "",  // spz_path (not streaming)
+        static_cast<Scalar>(robust_delta),
+        irls_max_iter,
+        static_cast<Scalar>(irls_tol));
 
-    // Per-element regularization
-    config.L1_u = static_cast<Scalar>(L1_u);
-    config.L1_v = static_cast<Scalar>(L1_v);
-    config.L2_u = static_cast<Scalar>(L2_u);
-    config.L2_v = static_cast<Scalar>(L2_v);
-    config.nonneg_u = nonneg_u;
-    config.nonneg_v = nonneg_v;
-    config.upper_bound_u = static_cast<Scalar>(upper_bound_u);
-    config.upper_bound_v = static_cast<Scalar>(upper_bound_v);
-
-    // Gram-level regularization
-    config.L21_u = static_cast<Scalar>(L21_u);
-    config.L21_v = static_cast<Scalar>(L21_v);
-    config.angular_u = static_cast<Scalar>(angular_u);
-    config.angular_v = static_cast<Scalar>(angular_v);
-
-    // Graph Laplacians: proper float cast (fixes reinterpret_cast UB from old code)
-    Eigen::SparseMatrix<float> graph_u_f, graph_v_f;
+    // Graph Laplacians: extract + cast to float (must outlive config dispatch)
+    GraphData graph_u_data = extract_graph(graph_u, graph_u_lambda);
+    GraphData graph_v_data = extract_graph(graph_v, graph_v_lambda);
+    Eigen::SparseMatrix<Scalar> graph_u_f, graph_v_f;
     if (graph_u_data.valid) {
-        graph_u_f = graph_u_data.matrix.cast<float>();
-        config.graph_u = &graph_u_f;
+        graph_u_f = graph_u_data.matrix.cast<Scalar>();
+        config.graph_u        = &graph_u_f;
         config.graph_u_lambda = static_cast<Scalar>(graph_u_lambda);
     }
     if (graph_v_data.valid) {
-        graph_v_f = graph_v_data.matrix.cast<float>();
-        config.graph_v = &graph_v_f;
+        graph_v_f = graph_v_data.matrix.cast<Scalar>();
+        config.graph_v        = &graph_v_f;
         config.graph_v_lambda = static_cast<Scalar>(graph_v_lambda);
     }
 
-    // CV fields
-    config.test_fraction = static_cast<Scalar>(test_fraction);
-    config.cv_seed = cv_seed;
-    config.patience = patience;
-    config.mask_zeros = mask_zeros;
+    // Observation mask
+    Eigen::SparseMatrix<Scalar> obs_mask_f;
+    if (obs_mask.isNotNull()) {
+        obs_mask_f = mapSparseMatrix(Rcpp::S4(obs_mask.get())).cast<Scalar>();
+        config.obs_mask = &obs_mask_f;
+    }
 
-    // Dispatch helper: run an SVD algorithm on sparse or dense A
-    auto dispatch_svd = [&](auto svd_func) -> Rcpp::List {
-        if (is_sparse) {
-            auto A = mapSparseMatrix(Rcpp::S4(A_sexp));
-            // Cast sparse to float at R boundary
-            Eigen::SparseMatrix<float> A_f = A.cast<float>();
-            auto result = svd_func(A_f, config);
-            return svd_result_to_list(result);
-        } else {
-            Eigen::MatrixXd A_dense = Rcpp::as<Eigen::MatrixXd>(A_sexp);
-            Eigen::MatrixXf A_f = A_dense.cast<float>();
-            auto result = svd_func(A_f, config);
-            return svd_result_to_list(result);
-        }
-    };
-
-    if (method == "randomized") {
-        return dispatch_svd([](const auto& A, const auto& c) {
-            using AType = std::remove_cv_t<std::remove_reference_t<decltype(A)>>;
-            return RcppML::svd::randomized_svd<AType, Scalar>(A, c);
-        });
-    } else if (method == "lanczos") {
-        return dispatch_svd([](const auto& A, const auto& c) {
-            using AType = std::remove_cv_t<std::remove_reference_t<decltype(A)>>;
-            return RcppML::svd::lanczos_svd<AType, Scalar>(A, c);
-        });
-    } else if (method == "irlba") {
-        return dispatch_svd([](const auto& A, const auto& c) {
-            using AType = std::remove_cv_t<std::remove_reference_t<decltype(A)>>;
-            return RcppML::svd::irlba_svd<AType, Scalar>(A, c);
-        });
-    } else if (method == "krylov") {
-        return dispatch_svd([](const auto& A, const auto& c) {
-            using AType = std::remove_cv_t<std::remove_reference_t<decltype(A)>>;
-            return RcppML::svd::krylov_constrained_svd<AType, Scalar>(A, c);
-        });
+    // Dispatch: sparse or dense A → gateway → algorithm
+    if (Rf_isS4(A_sexp)) {
+        Eigen::SparseMatrix<Scalar> A_f =
+            mapSparseMatrix(Rcpp::S4(A_sexp)).cast<Scalar>();
+        return svd_result_to_list(
+            FactorNet::svd::svd_gateway(A_f, config, method));
     } else {
-        // Default: deflation SVD
-        return dispatch_svd([](const auto& A, const auto& c) {
-            using AType = std::remove_cv_t<std::remove_reference_t<decltype(A)>>;
-            return RcppML::svd::deflation_svd<AType, Scalar>(A, c);
-        });
+        Eigen::MatrixXf A_f =
+            Rcpp::as<Eigen::MatrixXd>(A_sexp).cast<Scalar>();
+        return svd_result_to_list(
+            FactorNet::svd::svd_gateway(A_f, config, method));
     }
 }
 
@@ -197,6 +152,7 @@ Rcpp::List Rcpp_svd_streaming_spz(
     double tol,
     int max_iter,
     bool center,
+    bool scale,
     bool verbose,
     unsigned int seed,
     int threads,
@@ -213,81 +169,54 @@ Rcpp::List Rcpp_svd_streaming_spz(
     unsigned int cv_seed,
     int patience,
     bool mask_zeros,
+    Rcpp::Nullable<Rcpp::S4> obs_mask,
     std::string convergence = "factor",
-    std::string method = "deflation")
+    std::string method = "deflation",
+    double robust_delta = 0.0,
+    int irls_max_iter = 5,
+    double irls_tol = 1e-4)
 {
-    // Extract graph Laplacians (double storage; cast to float below)
-    GraphData graph_u_data = extract_graph(graph_u, graph_u_lambda);
-    GraphData graph_v_data = extract_graph(graph_v, graph_v_lambda);
-
-    // Parse convergence mode
-    RcppML::SVDConvergence conv_mode = RcppML::SVDConvergence::FACTOR;
-    if (convergence == "loss") conv_mode = RcppML::SVDConvergence::LOSS;
-    else if (convergence == "both") conv_mode = RcppML::SVDConvergence::BOTH;
-
-    // Always float (fp32-only)
     using Scalar = float;
 
-    RcppML::SVDConfig<Scalar> config;
-    config.k_max = k_max;
-    config.tol = static_cast<Scalar>(tol);
-    config.max_iter = max_iter;
-    config.center = center;
-    config.verbose = verbose;
-    config.seed = seed;
-    config.threads = threads;
-    config.convergence = conv_mode;
-    config.spz_path = path;
+    // Build config — spz_path supplied here
+    auto config = FactorNet::svd::build_svd_config_scalars<Scalar>(
+        k_max, static_cast<Scalar>(tol), max_iter, center, scale,
+        verbose, seed, threads,
+        FactorNet::svd::parse_svd_convergence(convergence),
+        static_cast<Scalar>(L1_u), static_cast<Scalar>(L1_v),
+        static_cast<Scalar>(L2_u), static_cast<Scalar>(L2_v),
+        nonneg_u, nonneg_v,
+        static_cast<Scalar>(upper_bound_u), static_cast<Scalar>(upper_bound_v),
+        static_cast<Scalar>(L21_u), static_cast<Scalar>(L21_v),
+        static_cast<Scalar>(angular_u), static_cast<Scalar>(angular_v),
+        static_cast<Scalar>(test_fraction), cv_seed, patience, mask_zeros,
+        path,  // <-- streaming path
+        static_cast<Scalar>(robust_delta),
+        irls_max_iter,
+        static_cast<Scalar>(irls_tol));
 
-    // Per-element regularization
-    config.L1_u = static_cast<Scalar>(L1_u);
-    config.L1_v = static_cast<Scalar>(L1_v);
-    config.L2_u = static_cast<Scalar>(L2_u);
-    config.L2_v = static_cast<Scalar>(L2_v);
-    config.nonneg_u = nonneg_u;
-    config.nonneg_v = nonneg_v;
-    config.upper_bound_u = static_cast<Scalar>(upper_bound_u);
-    config.upper_bound_v = static_cast<Scalar>(upper_bound_v);
-
-    // Gram-level regularization
-    config.L21_u = static_cast<Scalar>(L21_u);
-    config.L21_v = static_cast<Scalar>(L21_v);
-    config.angular_u = static_cast<Scalar>(angular_u);
-    config.angular_v = static_cast<Scalar>(angular_v);
-
-    // Graph Laplacians: proper float cast (fixes reinterpret_cast UB from old code)
-    Eigen::SparseMatrix<float> graph_u_f, graph_v_f;
+    // Graph Laplacians
+    GraphData graph_u_data = extract_graph(graph_u, graph_u_lambda);
+    GraphData graph_v_data = extract_graph(graph_v, graph_v_lambda);
+    Eigen::SparseMatrix<Scalar> graph_u_f, graph_v_f;
     if (graph_u_data.valid) {
-        graph_u_f = graph_u_data.matrix.cast<float>();
-        config.graph_u = &graph_u_f;
+        graph_u_f = graph_u_data.matrix.cast<Scalar>();
+        config.graph_u        = &graph_u_f;
         config.graph_u_lambda = static_cast<Scalar>(graph_u_lambda);
     }
     if (graph_v_data.valid) {
-        graph_v_f = graph_v_data.matrix.cast<float>();
-        config.graph_v = &graph_v_f;
+        graph_v_f = graph_v_data.matrix.cast<Scalar>();
+        config.graph_v        = &graph_v_f;
         config.graph_v_lambda = static_cast<Scalar>(graph_v_lambda);
     }
 
-    // CV fields
-    config.test_fraction = static_cast<Scalar>(test_fraction);
-    config.cv_seed = cv_seed;
-    config.patience = patience;
-    config.mask_zeros = mask_zeros;
-
-    RcppML::SVDResult<Scalar> result;
-
-    if (method == "randomized") {
-        result = RcppML::svd::streaming_randomized_svd<Scalar>(config);
-    } else if (method == "lanczos") {
-        result = RcppML::svd::streaming_lanczos_svd<Scalar>(config);
-    } else if (method == "irlba") {
-        result = RcppML::svd::streaming_irlba_svd<Scalar>(config);
-    } else if (method == "krylov") {
-        result = RcppML::svd::streaming_krylov_svd<Scalar>(config);
-    } else {
-        // Default: streaming deflation
-        result = RcppML::svd::streaming_deflation_svd<Scalar>(config);
+    // Observation mask
+    Eigen::SparseMatrix<Scalar> obs_mask_f;
+    if (obs_mask.isNotNull()) {
+        obs_mask_f = mapSparseMatrix(Rcpp::S4(obs_mask.get())).cast<Scalar>();
+        config.obs_mask = &obs_mask_f;
     }
 
-    return svd_result_to_list(result);
+    return svd_result_to_list(
+        FactorNet::svd::svd_streaming_gateway<Scalar>(config, method));
 }

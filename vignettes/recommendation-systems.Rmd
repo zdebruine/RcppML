@@ -1,0 +1,308 @@
+---
+title: "Building a Movie Recommendation Engine with NMF"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Building a Movie Recommendation Engine with NMF}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+NOT_CRAN <- identical(tolower(Sys.getenv("NOT_CRAN")), "true")
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5,
+  dpi = 100,
+  eval = NOT_CRAN
+)
+```
+
+## Collaborative Filtering with Matrix Factorization
+
+Recommendation systems power some of the most impactful applications of machine
+learning — from Netflix suggestions to Spotify playlists. The core idea behind
+**collaborative filtering** is simple: users who agreed in the past will agree in the
+future.
+
+Mathematically, we observe a sparse ratings matrix $A$ where entry $A_{ij}$ is user
+$j$'s rating of movie $i$ (or zero if unrated). NMF decomposes this into:
+
+$$A \approx W \cdot \text{diag}(d) \cdot H$$
+
+where:
+
+- $W$ (movies × k): **movie factors** — latent attributes of each movie (e.g., "action
+  content", "romantic tone", "critical acclaim")
+- $H$ (k × users): **user factors** — each user's affinity for these latent attributes
+- $d$: relative importance of each latent dimension
+
+To predict whether user $j$ would enjoy movie $i$, we simply compute the dot product
+of their latent representations: $\hat{A}_{ij} = (W \cdot \text{diag}(d) \cdot H)_{ij}$.
+
+## The MovieLens Dataset
+
+The `movielens` dataset contains 100,000 ratings from 610 users across 3,867 movies:
+
+```{r load-data}
+library(RcppML)
+library(ggplot2)
+library(Matrix)
+
+data(movielens)
+cat("Dimensions:", nrow(movielens), "movies ×", ncol(movielens), "users\n")
+cat("Non-zero ratings:", nnzero(movielens), "\n")
+cat("Sparsity:", round(1 - nnzero(movielens) / prod(dim(movielens)), 4), "\n")
+cat("Rating range:", range(movielens@x), "\n")
+
+# Genre metadata
+genres <- attr(movielens, "genres")
+cat("\nGenre matrix:", nrow(genres), "genres ×", ncol(genres), "movies\n")
+cat("Genres:", rownames(genres), "\n")
+```
+
+This matrix is over 95% sparse — each user has rated only a small fraction of
+available movies. This extreme sparsity is what makes recommendation challenging
+and interesting.
+
+### Rating Distribution
+
+```{r rating-dist, fig.width=6, fig.height=3.5}
+hist(movielens@x, breaks = seq(0.25, 5.25, 0.5), col = "coral",
+     border = "white", main = "Distribution of Ratings",
+     xlab = "Rating (stars)", ylab = "Count")
+```
+
+Ratings are discrete (0.5 to 5 stars) with a left skew — users tend to rate movies
+they like, creating selection bias that the model must account for.
+
+## The Prediction Challenge: Sparse Cross-Validation
+
+For recommendation, the key question is: **how well can we predict ratings a user
+*would* give to movies they haven't seen?**
+
+Standard cross-validation holds out random entries, but the semantics matter:
+
+- `mask_zeros = TRUE`: Only existing ratings are split into train/test. The model never
+  tries to predict zeros (unobserved entries). This matches the recommendation task.
+- `mask_zeros = FALSE`: All entries (including zeros) can be in the test set. This
+  measures full matrix reconstruction.
+
+For recommendation, `mask_zeros = TRUE` is the correct choice:
+
+```{r cross-validation, fig.width=7, fig.height=4}
+cv <- nmf(movielens, k = 2:20, test_fraction = 0.2, mask_zeros = TRUE,
+          tol = 1e-5, maxit = 100, verbose = FALSE)
+plot(cv) + ggtitle("Cross-Validation: Predicting Held-Out Ratings")
+```
+
+The test error curve reveals the optimal complexity for this rating matrix — too
+few factors underfit (can't capture genre nuances), too many overfit (memorize
+noise in ratings).
+
+```{r optimal-rank}
+best_k <- cv$k[which.min(cv$test_mse)]
+cat("Optimal rank:", best_k, "\n")
+```
+
+## Fitting the Recommendation Model
+
+We fit the final model with regularization appropriate for the recommendation setting:
+
+- **L1 on H** (user factors): Encourages each user to be described by a few dominant
+  taste dimensions, reflecting that most people have a handful of strong preferences.
+- **L2 on W** (movie factors): Prevents any single latent dimension from dominating,
+  producing more balanced factor representations.
+
+```{r fit-model}
+model <- nmf(movielens, k = best_k, L1 = c(0, 0.3), L2 = c(0.1, 0),
+             tol = 1e-6, maxit = 300, seed = 42, verbose = FALSE)
+model
+```
+
+## Comparing Loss Functions
+
+Ratings data can be noisy — users occasionally give ratings that don't reflect
+their typical preferences. Different loss functions handle this differently:
+
+- **MSE** (mean squared error): The standard choice, penalizing errors quadratically.
+  Sensitive to outliers but produces the minimum-variance estimate.
+- **MAE** (mean absolute error): Penalizes errors linearly, potentially more robust
+  to extreme ratings but may converge to a different optimum.
+
+```{r compare-losses, fig.width=7, fig.height=5}
+model_mse <- nmf(movielens, k = best_k, L1 = c(0, 0.3), loss = "mse",
+                 tol = 1e-5, maxit = 150, seed = 42, verbose = FALSE)
+model_mae <- nmf(movielens, k = best_k, L1 = c(0, 0.3), loss = "mae",
+                 tol = 1e-5, maxit = 150, seed = 42, verbose = FALSE)
+
+compare_nmf(MSE = model_mse, MAE = model_mae) +
+  ggtitle("Training Convergence: MSE vs MAE Loss")
+```
+
+Note that the convergence curves are not directly comparable since each model
+optimizes a different objective. Let's evaluate both models on common metrics:
+
+```{r evaluate-losses}
+cat("Evaluation on all observed ratings:\n")
+cat(sprintf("  MSE model — MSE: %.3f, MAE: %.3f\n",
+            evaluate(model_mse, movielens, loss = "mse"),
+            evaluate(model_mse, movielens, loss = "mae")))
+cat(sprintf("  MAE model — MSE: %.3f, MAE: %.3f\n",
+            evaluate(model_mae, movielens, loss = "mse"),
+            evaluate(model_mae, movielens, loss = "mae")))
+```
+
+Each model optimizes its own loss best, as expected. In practice, the choice between
+MSE and MAE depends on whether you care more about closely predicting typical ratings
+(MSE) or about reducing the average absolute prediction error (MAE).
+
+## Discovering Latent Taste Dimensions
+
+The movie factors $W$ reveal what each latent dimension captures. By linking factors
+to genre metadata, we can interpret what each dimension represents:
+
+```{r genre-analysis, fig.width=7, fig.height=5}
+# Compute average genre loading per factor
+# genres is 19 x 3867 (genre x movies), W is 3867 x k (movies x factors)
+genre_factor <- as.matrix(genres %*% model@w)  # 19 x k
+
+# Normalize by number of movies in each genre
+genre_counts <- rowSums(genres)
+genre_factor_norm <- genre_factor / genre_counts
+
+# Heatmap
+genre_df <- expand.grid(
+  Genre = rownames(genres),
+  Factor = paste0("F", 1:ncol(model@w))
+)
+genre_df$Loading <- as.vector(genre_factor_norm)
+
+ggplot(genre_df, aes(x = Factor, y = Genre, fill = Loading)) +
+  geom_tile(color = "white", linewidth = 0.3) +
+  scale_fill_gradient(low = "white", high = "darkred") +
+  labs(title = "Genre Signatures of Latent Taste Dimensions",
+       x = "Latent Factor", y = "Genre") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Each column shows the "genre fingerprint" of a latent factor. A factor that loads
+heavily on Action and Sci-Fi but not Romance likely captures affinity for
+action-oriented films.
+
+## Projecting New Users with NNLS
+
+When a new user arrives and rates a few movies, we can compute their taste profile
+without refitting the entire model. The `nnls()` function solves the non-negative
+least squares problem: given the movie factors $W$, find the user loadings $h$ that
+best reconstruct the new user's ratings.
+
+```{r nnls-projection}
+# Simulate a new user who rated 20 movies
+set.seed(123)
+rated_movies <- sample(nrow(movielens), 20)
+actual_ratings <- sample(1:5, 20, replace = TRUE)
+
+# Key: only pass the RATED movies to NNLS (not the full vector with zeros)
+# Since the model was fit with sparse=TRUE, zeros mean "unobserved",
+# so we must not include them in the projection.
+W_scaled <- model@w * model@d[col(model@w)]  # m x k, scaled by d
+W_rated <- W_scaled[rated_movies, , drop = FALSE]
+A_rated <- matrix(actual_ratings, ncol = 1)
+
+# Project onto existing model using only observed ratings
+h_new <- nnls(w = W_rated, A = A_rated, nonneg = TRUE)
+
+cat("User taste profile:\n")
+barplot(h_new[, 1], names.arg = paste0("F", 1:nrow(h_new)),
+        col = "steelblue", border = NA,
+        main = "New User's Latent Taste Profile",
+        ylab = "Factor Loading")
+```
+
+```{r predict-ratings}
+# Predict this user's rating for all movies using the full W matrix
+predicted <- as.vector(W_scaled %*% h_new)
+
+# Show top recommended movies (highest predicted rating among unrated)
+unrated <- setdiff(1:nrow(movielens), rated_movies)
+top_recs <- unrated[order(predicted[unrated], decreasing = TRUE)[1:10]]
+cat("\nTop 10 recommended movies:\n")
+for (i in seq_along(top_recs)) {
+  cat(sprintf("  %d. %s (predicted: %.1f stars)\n",
+              i, rownames(movielens)[top_recs[i]], predicted[top_recs[i]]))
+}
+```
+
+## Regularization Effects on Recommendations
+
+Different regularization strategies produce qualitatively different recommendations.
+Let's compare:
+
+```{r regularization-compare, fig.width=7, fig.height=4}
+# No regularization
+m_noreg <- nmf(movielens, k = best_k, tol = 1e-5, maxit = 150,
+               seed = 42, verbose = FALSE)
+
+# L1 sparsity
+m_l1 <- nmf(movielens, k = best_k, L1 = c(0.3, 0.3), tol = 1e-5,
+            maxit = 150, seed = 42, verbose = FALSE)
+
+# L2 ridge
+m_l2 <- nmf(movielens, k = best_k, L2 = c(0.1, 0.1), tol = 1e-5,
+            maxit = 150, seed = 42, verbose = FALSE)
+
+compare_nmf(
+  `No Regularization` = m_noreg,
+  `L1 (Sparse)` = m_l1,
+  `L2 (Ridge)` = m_l2
+) + ggtitle("Effect of Regularization on Training Loss")
+```
+
+```{r reg-eval}
+cat("Training reconstruction error (MSE):\n")
+for (name in c("No reg", "L1", "L2")) {
+  m <- list(m_noreg, m_l1, m_l2)[[match(name, c("No reg", "L1", "L2"))]]
+  cat(sprintf("  %s: %.4f\n", name, evaluate(m, movielens, loss = "mse")))
+}
+```
+
+Regularization increases training error (the model fits the observed data less
+tightly) but can improve generalization to unseen ratings. The tradeoff depends
+on data sparsity and user behavior:
+
+- **No regularization** fits training data tightly but may overfit for sparse users.
+- **L1** produces sharper taste profiles (fewer dominant factors per user) — better
+  for users with narrow tastes.
+- **L2** produces smoother predictions — better for users with diverse viewing habits.
+
+## Key Takeaways
+
+1. **Sparse cross-validation** (`mask_zeros = TRUE`) is essential for recommendation:
+   it evaluates the model on the task it actually performs — predicting observed
+   ratings, not reconstructing zeros.
+
+2. **Rank selection via CV** prevents overfitting: too few factors underfit (can't
+   capture genre nuances), too many overfit (memorize noise in ratings).
+
+3. **MSE and MAE loss** optimize different objectives: MSE minimizes squared
+   prediction error (sensitive to outliers), MAE minimizes absolute error
+   (more uniform weighting). Choose based on your evaluation criteria.
+
+4. **NNLS projection** enables real-time recommendation: new users can be profiled
+   in milliseconds without refitting the entire model.
+
+5. **Genre analysis** of latent factors confirms that NMF discovers interpretable
+   taste dimensions that align with meaningful movie attributes.
+
+6. **Regularization** controls the complexity–accuracy tradeoff: L1 for focused
+   recommendations (specialist users), L2 for balanced recommendations (generalists).
+
+## Further Reading
+
+- [Getting started with RcppML](getting-started.html) — Core NMF concepts
+- [Cross-validation for rank selection](cross-validation.html) — Detailed CV guide
+- [Ecological community analysis](ecological-biodiversity.html) — NMF for ecological data
+- [Image decomposition](image-decomposition.html) — Parts-based visual representations

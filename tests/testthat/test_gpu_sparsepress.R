@@ -5,7 +5,7 @@
 # skip_if_no_gpu defined in helper-test-utils.R
 
 test_that("sp_read_gpu reads .spz v2 to GPU memory", {
-  skip_if_no_gpu()
+  skip_if_no_sp_gpu()
 
   data(pbmc3k)
   A <- pbmc3k[1:200, 1:100]
@@ -37,7 +37,7 @@ test_that("sp_read_gpu reads .spz v2 to GPU memory", {
 
 
 test_that("sp_free_gpu frees GPU memory", {
-  skip_if_no_gpu()
+  skip_if_no_sp_gpu()
 
   data(pbmc3k)
   A <- pbmc3k[1:100, 1:50]
@@ -62,7 +62,7 @@ test_that("sp_free_gpu frees GPU memory", {
 
 
 test_that("sp_free_gpu errors on non-gpu_sparse_matrix input", {
-  skip_if_no_gpu()
+  skip_if_no_sp_gpu()
 
   expect_error(sp_free_gpu(list(a = 1)), "gpu_sparse_matrix")
   expect_error(sp_free_gpu("not_a_matrix"), "gpu_sparse_matrix")
@@ -70,14 +70,14 @@ test_that("sp_free_gpu errors on non-gpu_sparse_matrix input", {
 
 
 test_that("sp_read_gpu errors on missing file", {
-  skip_if_no_gpu()
+  skip_if_no_sp_gpu()
 
   expect_error(sp_read_gpu("/nonexistent/path.spz"))
 })
 
 
 test_that("gpu_sparse_matrix has correct print/dim methods", {
-  skip_if_no_gpu()
+  skip_if_no_sp_gpu()
 
   data(pbmc3k)
   A <- pbmc3k[1:100, 1:50]
@@ -101,8 +101,7 @@ test_that("gpu_sparse_matrix has correct print/dim methods", {
 
 
 test_that("NMF with gpu_sparse_matrix input works (zero-copy)", {
-  skip_if_no_gpu()
-  skip("Zero-copy NMF from gpu_sparse_matrix not yet implemented")
+  skip_if_no_sp_gpu()
 
   data(pbmc3k)
   A <- pbmc3k[1:300, 1:150]
@@ -145,8 +144,7 @@ test_that("NMF with gpu_sparse_matrix input works (zero-copy)", {
 
 
 test_that("GPU NMF from .spz matches CPU NMF from dgCMatrix", {
-  skip_if_no_gpu()
-  skip("Zero-copy NMF from gpu_sparse_matrix not yet implemented")
+  skip_if_no_sp_gpu()
 
   data(pbmc3k)
   A <- pbmc3k[1:300, 1:150]

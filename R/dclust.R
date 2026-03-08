@@ -30,15 +30,22 @@
 #' @param tol in rank-2 NMF, the correlation distance (\eqn{1 - R^2}) between \eqn{w} across consecutive iterations at which to stop factorization
 #' @param nonneg in rank-2 NMF, enforce non-negativity
 #' @param seed random seed for rank-2 NMF model initialization
+#' @param threads number of threads for OpenMP parallelization (default 0 = all available)
+#' @param verbose print progress information (default FALSE)
 #' @return
 #' A list of lists corresponding to individual clusters:
 #' 	\itemize{
 #'    \item id      : character sequence of "0" and "1" giving position of clusters along splitting hierarchy
-#'    \item samples : indices of samples in the cluster
+#'    \item samples : 0-indexed integer indices of samples in the cluster (add 1 for R-style indexing)
 #'    \item center  : mean feature expression of all samples in the cluster
-#'    \item dist    : if applicable, relative cosine distance of samples in cluster to assigned/unassigned cluster center.
-#'    \item leaf    : is cluster a leaf node
+#'    \item size    : number of samples in the cluster
 #'  }
+#'
+#' @note \code{dclust()} uses \code{A} for the data matrix and scalar
+#' \code{nonneg}/\code{tol} parameters (matching \code{\link{bipartition}()}).
+#' The default \code{tol = 1e-5} is tighter than \code{\link{nmf}()}'s
+#' \code{1e-4} because rank-2 subproblems converge faster and benefit
+#' from higher precision.
 #'
 #' @author Zach DeBruine
 #'
@@ -54,23 +61,84 @@
 #' @seealso \code{\link{bipartition}}, \code{\link{nmf}}
 #' @md
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' data(USArrests)
-#' A <- Matrix::as(as.matrix(t(USArrests)), "dgCMatrix")
+#' A <- as(as.matrix(t(USArrests)), "dgCMatrix")
 #' clusters <- dclust(A, min_samples = 2, min_dist = 0.001)
 #' str(clusters)
 #' }
-dclust <- function(A, min_samples, min_dist = 0, tol = 1e-5, maxit = 100, nonneg = TRUE, seed = NULL) {
+dclust <- function(A, min_samples, min_dist = 0, tol = 1e-5, maxit = 100, nonneg = TRUE, seed = NULL, threads = 0, verbose = FALSE) {
     if (!is.numeric(seed)) seed <- 0
 
-    if (canCoerce(A, "dgCMatrix")) {
-        A <- as(A, "dgCMatrix")
-    } else if (canCoerce(A, "matrix")) {
-        A <- as.matrix(A)
-        A <- as(A, "dgCMatrix")
-    } else {
-        stop("'A' could not be coerced to a dgCMatrix")
-    }
+    # Unified input validation (supports file paths, sparse, dense)
+    data_info <- validate_data(A)
+    A <- data_info$data
+    # dclust requires sparse input — coerce dense to dgCMatrix
+    if (is.matrix(A)) A <- .to_dgCMatrix(A)
 
-    Rcpp_dclust_sparse(A, min_samples, min_dist, getOption("RcppML.verbose"), tol, maxit, nonneg, seed, getOption("RcppML.threads"))
+    # GPU fast path
+    gpu_result <- .try_gpu_dclust(A, min_samples, min_dist, tol, maxit, nonneg, seed, verbose)
+    if (!is.null(gpu_result)) return(gpu_result)
+
+    Rcpp_dclust_sparse(A, min_samples, min_dist, verbose, tol, maxit, nonneg, seed, as.integer(threads))
+}
+
+#' Try GPU dispatch for divisive clustering
+#' @keywords internal
+.try_gpu_dclust <- function(A, min_samples, min_dist, tol, maxit, nonneg, seed, verbose) {
+  use_gpu <- getOption("RcppML.gpu", "auto")
+  if (identical(use_gpu, FALSE)) return(NULL)
+
+  gpu_ok <- if (identical(use_gpu, TRUE)) {
+    gpu_available()
+  } else {
+    (length(A@x) >= 100000 || ncol(A) >= 5000) && gpu_available()
+  }
+  if (!gpu_ok) return(NULL)
+
+  tryCatch({
+    m <- nrow(A)
+    n <- ncol(A)
+    nnz <- length(A@x)
+    max_clusters <- as.integer(0)  # no limit
+
+    assignments <- integer(n)
+    out_num_clusters <- integer(1)
+
+    ret <- .gpu_call("rcppml_gpu_dclust_double",
+              col_ptr = as.integer(A@p),
+              row_idx = as.integer(A@i),
+              values = as.double(A@x),
+              m = as.integer(m), n = as.integer(n), nnz = as.integer(nnz),
+              max_clusters = max_clusters,
+              min_samples = as.integer(min_samples),
+              min_dist = as.double(min_dist),
+              max_iter = as.integer(maxit),
+              tol = as.double(tol),
+              nonneg = as.integer(nonneg),
+              seed = as.double(if (is.numeric(seed)) seed else 0),
+              assignments = assignments,
+              out_num_clusters = out_num_clusters,
+              out_status = integer(1))
+
+    if (ret$out_status != 0L) return(NULL)
+
+    # Convert to list-of-clusters format matching CPU output
+    cluster_ids <- unique(ret$assignments)
+    cluster_ids <- cluster_ids[cluster_ids >= 0]  # drop unassigned
+    clusters <- lapply(cluster_ids, function(cid) {
+      samples <- which(ret$assignments == cid)
+      center <- Matrix::rowMeans(A[, samples, drop = FALSE])
+      list(
+        samples = as.integer(samples - 1L),
+        center = as.numeric(center),
+        id = as.integer(cid),
+        size = length(samples)
+      )
+    })
+    clusters
+  }, error = function(e) {
+    if (verbose) message("GPU dclust failed: ", conditionMessage(e), "\nFalling back to CPU.")
+    NULL
+  })
 }

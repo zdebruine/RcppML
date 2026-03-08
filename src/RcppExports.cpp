@@ -12,13 +12,24 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
-// Rcpp_nmf_rank_cv_sparse
-Rcpp::List Rcpp_nmf_rank_cv_sparse(const Rcpp::S4& A, int k_init, int max_k, int tolerance, double holdout_fraction, unsigned int cv_seed, double tol, unsigned int maxit, bool verbose, const std::vector<double> L1, const std::vector<double> L2, unsigned int threads);
-RcppExport SEXP _RcppML_Rcpp_nmf_rank_cv_sparse(SEXP ASEXP, SEXP k_initSEXP, SEXP max_kSEXP, SEXP toleranceSEXP, SEXP holdout_fractionSEXP, SEXP cv_seedSEXP, SEXP tolSEXP, SEXP maxitSEXP, SEXP verboseSEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP threadsSEXP) {
+// Rcpp_factor_net_fit
+Rcpp::List Rcpp_factor_net_fit(Rcpp::List descriptor);
+RcppExport SEXP _RcppML_Rcpp_factor_net_fit(SEXP descriptorSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Rcpp::S4& >::type A(ASEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type descriptor(descriptorSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_factor_net_fit(descriptor));
+    return rcpp_result_gen;
+END_RCPP
+}
+// Rcpp_nmf_rank_cv
+Rcpp::List Rcpp_nmf_rank_cv(SEXP A_sexp, int k_init, int max_k, int tolerance, double holdout_fraction, unsigned int cv_seed, double tol, unsigned int maxit, bool verbose, const std::vector<double> L1, const std::vector<double> L2, unsigned int threads);
+RcppExport SEXP _RcppML_Rcpp_nmf_rank_cv(SEXP A_sexpSEXP, SEXP k_initSEXP, SEXP max_kSEXP, SEXP toleranceSEXP, SEXP holdout_fractionSEXP, SEXP cv_seedSEXP, SEXP tolSEXP, SEXP maxitSEXP, SEXP verboseSEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type A_sexp(A_sexpSEXP);
     Rcpp::traits::input_parameter< int >::type k_init(k_initSEXP);
     Rcpp::traits::input_parameter< int >::type max_k(max_kSEXP);
     Rcpp::traits::input_parameter< int >::type tolerance(toleranceSEXP);
@@ -30,13 +41,13 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const std::vector<double> >::type L1(L1SEXP);
     Rcpp::traits::input_parameter< const std::vector<double> >::type L2(L2SEXP);
     Rcpp::traits::input_parameter< unsigned int >::type threads(threadsSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_nmf_rank_cv_sparse(A, k_init, max_k, tolerance, holdout_fraction, cv_seed, tol, maxit, verbose, L1, L2, threads));
+    rcpp_result_gen = Rcpp::wrap(Rcpp_nmf_rank_cv(A_sexp, k_init, max_k, tolerance, holdout_fraction, cv_seed, tol, maxit, verbose, L1, L2, threads));
     return rcpp_result_gen;
 END_RCPP
 }
 // Rcpp_nmf_full
-Rcpp::List Rcpp_nmf_full(SEXP A_sexp, std::vector<int> k_vec, bool k_auto, int k_auto_min, int k_auto_max, std::vector<double> L1, std::vector<double> L2, std::vector<double> L21, std::vector<double> ortho, std::vector<double> upper_bound, std::vector<double> graph_lambda, double tol, int maxit, int cd_maxit, double cd_tol, double cd_abs_tol, int threads, unsigned int seed, bool nonneg_w, bool nonneg_h, bool sort_model, bool mask_zeros, bool track_loss_history, bool track_train_loss, std::string loss_str, double huber_delta, std::string convergence_str, double holdout_fraction, std::vector<unsigned int> cv_seeds, int cv_patience, std::string resource_override, std::string norm_str, Rcpp::Nullable<Rcpp::S4> graph_W_sexp, Rcpp::Nullable<Rcpp::S4> graph_H_sexp, Rcpp::Nullable<Eigen::MatrixXd> w_init_sexp, bool verbose, Rcpp::Nullable<Rcpp::S4> mask_sexp, bool projective, bool symmetric_nmf, int solver_mode, int init_mode, int adaptive_solver_switch, double chol_adaptive_threshold);
-RcppExport SEXP _RcppML_Rcpp_nmf_full(SEXP A_sexpSEXP, SEXP k_vecSEXP, SEXP k_autoSEXP, SEXP k_auto_minSEXP, SEXP k_auto_maxSEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP L21SEXP, SEXP orthoSEXP, SEXP upper_boundSEXP, SEXP graph_lambdaSEXP, SEXP tolSEXP, SEXP maxitSEXP, SEXP cd_maxitSEXP, SEXP cd_tolSEXP, SEXP cd_abs_tolSEXP, SEXP threadsSEXP, SEXP seedSEXP, SEXP nonneg_wSEXP, SEXP nonneg_hSEXP, SEXP sort_modelSEXP, SEXP mask_zerosSEXP, SEXP track_loss_historySEXP, SEXP track_train_lossSEXP, SEXP loss_strSEXP, SEXP huber_deltaSEXP, SEXP convergence_strSEXP, SEXP holdout_fractionSEXP, SEXP cv_seedsSEXP, SEXP cv_patienceSEXP, SEXP resource_overrideSEXP, SEXP norm_strSEXP, SEXP graph_W_sexpSEXP, SEXP graph_H_sexpSEXP, SEXP w_init_sexpSEXP, SEXP verboseSEXP, SEXP mask_sexpSEXP, SEXP projectiveSEXP, SEXP symmetric_nmfSEXP, SEXP solver_modeSEXP, SEXP init_modeSEXP, SEXP adaptive_solver_switchSEXP, SEXP chol_adaptive_thresholdSEXP) {
+Rcpp::List Rcpp_nmf_full(SEXP A_sexp, std::vector<int> k_vec, bool k_auto, int k_auto_min, int k_auto_max, std::vector<double> L1, std::vector<double> L2, std::vector<double> L21, std::vector<double> angular, std::vector<double> upper_bound, std::vector<double> graph_lambda, double tol, int maxit, int cd_maxit, double cd_tol, double cd_abs_tol, int threads, unsigned int seed, bool nonneg_w, bool nonneg_h, bool sort_model, bool mask_zeros, bool track_loss_history, bool track_train_loss, std::string loss_str, double huber_delta, double holdout_fraction, std::vector<unsigned int> cv_seeds, int cv_patience, std::string resource_override, std::string norm_str, Rcpp::Nullable<Rcpp::S4> graph_W_sexp, Rcpp::Nullable<Rcpp::S4> graph_H_sexp, Rcpp::Nullable<Eigen::MatrixXd> w_init_sexp, Rcpp::Nullable<Eigen::MatrixXd> h_init_sexp, bool verbose, Rcpp::Nullable<Rcpp::S4> mask_sexp, bool projective, bool symmetric_nmf, int solver_mode, int init_mode, int irls_max_iter, double irls_tol, int gp_dispersion_mode, double gp_theta_init, double gp_theta_max, int zi_mode, int zi_em_iters, double gp_theta_min, double nb_size_init, double nb_size_max, double nb_size_min, double gamma_phi_init, double gamma_phi_max, double gamma_phi_min, double robust_delta, double tweedie_power, SEXP on_iteration_r, SEXP guides_list, bool enable_profiling);
+RcppExport SEXP _RcppML_Rcpp_nmf_full(SEXP A_sexpSEXP, SEXP k_vecSEXP, SEXP k_autoSEXP, SEXP k_auto_minSEXP, SEXP k_auto_maxSEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP L21SEXP, SEXP angularSEXP, SEXP upper_boundSEXP, SEXP graph_lambdaSEXP, SEXP tolSEXP, SEXP maxitSEXP, SEXP cd_maxitSEXP, SEXP cd_tolSEXP, SEXP cd_abs_tolSEXP, SEXP threadsSEXP, SEXP seedSEXP, SEXP nonneg_wSEXP, SEXP nonneg_hSEXP, SEXP sort_modelSEXP, SEXP mask_zerosSEXP, SEXP track_loss_historySEXP, SEXP track_train_lossSEXP, SEXP loss_strSEXP, SEXP huber_deltaSEXP, SEXP holdout_fractionSEXP, SEXP cv_seedsSEXP, SEXP cv_patienceSEXP, SEXP resource_overrideSEXP, SEXP norm_strSEXP, SEXP graph_W_sexpSEXP, SEXP graph_H_sexpSEXP, SEXP w_init_sexpSEXP, SEXP h_init_sexpSEXP, SEXP verboseSEXP, SEXP mask_sexpSEXP, SEXP projectiveSEXP, SEXP symmetric_nmfSEXP, SEXP solver_modeSEXP, SEXP init_modeSEXP, SEXP irls_max_iterSEXP, SEXP irls_tolSEXP, SEXP gp_dispersion_modeSEXP, SEXP gp_theta_initSEXP, SEXP gp_theta_maxSEXP, SEXP zi_modeSEXP, SEXP zi_em_itersSEXP, SEXP gp_theta_minSEXP, SEXP nb_size_initSEXP, SEXP nb_size_maxSEXP, SEXP nb_size_minSEXP, SEXP gamma_phi_initSEXP, SEXP gamma_phi_maxSEXP, SEXP gamma_phi_minSEXP, SEXP robust_deltaSEXP, SEXP tweedie_powerSEXP, SEXP on_iteration_rSEXP, SEXP guides_listSEXP, SEXP enable_profilingSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -48,7 +59,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< std::vector<double> >::type L1(L1SEXP);
     Rcpp::traits::input_parameter< std::vector<double> >::type L2(L2SEXP);
     Rcpp::traits::input_parameter< std::vector<double> >::type L21(L21SEXP);
-    Rcpp::traits::input_parameter< std::vector<double> >::type ortho(orthoSEXP);
+    Rcpp::traits::input_parameter< std::vector<double> >::type angular(angularSEXP);
     Rcpp::traits::input_parameter< std::vector<double> >::type upper_bound(upper_boundSEXP);
     Rcpp::traits::input_parameter< std::vector<double> >::type graph_lambda(graph_lambdaSEXP);
     Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
@@ -66,7 +77,6 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type track_train_loss(track_train_lossSEXP);
     Rcpp::traits::input_parameter< std::string >::type loss_str(loss_strSEXP);
     Rcpp::traits::input_parameter< double >::type huber_delta(huber_deltaSEXP);
-    Rcpp::traits::input_parameter< std::string >::type convergence_str(convergence_strSEXP);
     Rcpp::traits::input_parameter< double >::type holdout_fraction(holdout_fractionSEXP);
     Rcpp::traits::input_parameter< std::vector<unsigned int> >::type cv_seeds(cv_seedsSEXP);
     Rcpp::traits::input_parameter< int >::type cv_patience(cv_patienceSEXP);
@@ -75,43 +85,39 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::S4> >::type graph_W_sexp(graph_W_sexpSEXP);
     Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::S4> >::type graph_H_sexp(graph_H_sexpSEXP);
     Rcpp::traits::input_parameter< Rcpp::Nullable<Eigen::MatrixXd> >::type w_init_sexp(w_init_sexpSEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Eigen::MatrixXd> >::type h_init_sexp(h_init_sexpSEXP);
     Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
     Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::S4> >::type mask_sexp(mask_sexpSEXP);
     Rcpp::traits::input_parameter< bool >::type projective(projectiveSEXP);
     Rcpp::traits::input_parameter< bool >::type symmetric_nmf(symmetric_nmfSEXP);
     Rcpp::traits::input_parameter< int >::type solver_mode(solver_modeSEXP);
     Rcpp::traits::input_parameter< int >::type init_mode(init_modeSEXP);
-    Rcpp::traits::input_parameter< int >::type adaptive_solver_switch(adaptive_solver_switchSEXP);
-    Rcpp::traits::input_parameter< double >::type chol_adaptive_threshold(chol_adaptive_thresholdSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_nmf_full(A_sexp, k_vec, k_auto, k_auto_min, k_auto_max, L1, L2, L21, ortho, upper_bound, graph_lambda, tol, maxit, cd_maxit, cd_tol, cd_abs_tol, threads, seed, nonneg_w, nonneg_h, sort_model, mask_zeros, track_loss_history, track_train_loss, loss_str, huber_delta, convergence_str, holdout_fraction, cv_seeds, cv_patience, resource_override, norm_str, graph_W_sexp, graph_H_sexp, w_init_sexp, verbose, mask_sexp, projective, symmetric_nmf, solver_mode, init_mode, adaptive_solver_switch, chol_adaptive_threshold));
-    return rcpp_result_gen;
-END_RCPP
-}
-// Rcpp_nmf_rank_cv_dense
-Rcpp::List Rcpp_nmf_rank_cv_dense(Eigen::MatrixXd A, int k_init, int max_k, int tolerance, double holdout_fraction, unsigned int cv_seed, double tol, unsigned int maxit, bool verbose, const std::vector<double> L1, const std::vector<double> L2, unsigned int threads);
-RcppExport SEXP _RcppML_Rcpp_nmf_rank_cv_dense(SEXP ASEXP, SEXP k_initSEXP, SEXP max_kSEXP, SEXP toleranceSEXP, SEXP holdout_fractionSEXP, SEXP cv_seedSEXP, SEXP tolSEXP, SEXP maxitSEXP, SEXP verboseSEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP threadsSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< Eigen::MatrixXd >::type A(ASEXP);
-    Rcpp::traits::input_parameter< int >::type k_init(k_initSEXP);
-    Rcpp::traits::input_parameter< int >::type max_k(max_kSEXP);
-    Rcpp::traits::input_parameter< int >::type tolerance(toleranceSEXP);
-    Rcpp::traits::input_parameter< double >::type holdout_fraction(holdout_fractionSEXP);
-    Rcpp::traits::input_parameter< unsigned int >::type cv_seed(cv_seedSEXP);
-    Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
-    Rcpp::traits::input_parameter< unsigned int >::type maxit(maxitSEXP);
-    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
-    Rcpp::traits::input_parameter< const std::vector<double> >::type L1(L1SEXP);
-    Rcpp::traits::input_parameter< const std::vector<double> >::type L2(L2SEXP);
-    Rcpp::traits::input_parameter< unsigned int >::type threads(threadsSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_nmf_rank_cv_dense(A, k_init, max_k, tolerance, holdout_fraction, cv_seed, tol, maxit, verbose, L1, L2, threads));
+    Rcpp::traits::input_parameter< int >::type irls_max_iter(irls_max_iterSEXP);
+    Rcpp::traits::input_parameter< double >::type irls_tol(irls_tolSEXP);
+    Rcpp::traits::input_parameter< int >::type gp_dispersion_mode(gp_dispersion_modeSEXP);
+    Rcpp::traits::input_parameter< double >::type gp_theta_init(gp_theta_initSEXP);
+    Rcpp::traits::input_parameter< double >::type gp_theta_max(gp_theta_maxSEXP);
+    Rcpp::traits::input_parameter< int >::type zi_mode(zi_modeSEXP);
+    Rcpp::traits::input_parameter< int >::type zi_em_iters(zi_em_itersSEXP);
+    Rcpp::traits::input_parameter< double >::type gp_theta_min(gp_theta_minSEXP);
+    Rcpp::traits::input_parameter< double >::type nb_size_init(nb_size_initSEXP);
+    Rcpp::traits::input_parameter< double >::type nb_size_max(nb_size_maxSEXP);
+    Rcpp::traits::input_parameter< double >::type nb_size_min(nb_size_minSEXP);
+    Rcpp::traits::input_parameter< double >::type gamma_phi_init(gamma_phi_initSEXP);
+    Rcpp::traits::input_parameter< double >::type gamma_phi_max(gamma_phi_maxSEXP);
+    Rcpp::traits::input_parameter< double >::type gamma_phi_min(gamma_phi_minSEXP);
+    Rcpp::traits::input_parameter< double >::type robust_delta(robust_deltaSEXP);
+    Rcpp::traits::input_parameter< double >::type tweedie_power(tweedie_powerSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type on_iteration_r(on_iteration_rSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type guides_list(guides_listSEXP);
+    Rcpp::traits::input_parameter< bool >::type enable_profiling(enable_profilingSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_nmf_full(A_sexp, k_vec, k_auto, k_auto_min, k_auto_max, L1, L2, L21, angular, upper_bound, graph_lambda, tol, maxit, cd_maxit, cd_tol, cd_abs_tol, threads, seed, nonneg_w, nonneg_h, sort_model, mask_zeros, track_loss_history, track_train_loss, loss_str, huber_delta, holdout_fraction, cv_seeds, cv_patience, resource_override, norm_str, graph_W_sexp, graph_H_sexp, w_init_sexp, h_init_sexp, verbose, mask_sexp, projective, symmetric_nmf, solver_mode, init_mode, irls_max_iter, irls_tol, gp_dispersion_mode, gp_theta_init, gp_theta_max, zi_mode, zi_em_iters, gp_theta_min, nb_size_init, nb_size_max, nb_size_min, gamma_phi_init, gamma_phi_max, gamma_phi_min, robust_delta, tweedie_power, on_iteration_r, guides_list, enable_profiling));
     return rcpp_result_gen;
 END_RCPP
 }
 // Rcpp_nmf_streaming_spz
-Rcpp::List Rcpp_nmf_streaming_spz(std::string path, int k, double tol, int maxit, std::vector<double> L1, std::vector<double> L2, std::vector<double> L21, std::vector<double> angular, std::vector<double> upper_bound, std::vector<double> graph_lambda, bool nonneg_w, bool nonneg_h, int cd_maxit, double cd_tol, int threads, unsigned int seed, bool verbose, std::string loss_str, double huber_delta, double holdout_fraction, bool mask_zeros, unsigned int cv_seed, std::string norm_str, Rcpp::Nullable<Rcpp::S4> mask_sexp, Rcpp::Nullable<Rcpp::S4> graph_W_sexp, Rcpp::Nullable<Rcpp::S4> graph_H_sexp, int solver_mode, int init_mode);
-RcppExport SEXP _RcppML_Rcpp_nmf_streaming_spz(SEXP pathSEXP, SEXP kSEXP, SEXP tolSEXP, SEXP maxitSEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP L21SEXP, SEXP angularSEXP, SEXP upper_boundSEXP, SEXP graph_lambdaSEXP, SEXP nonneg_wSEXP, SEXP nonneg_hSEXP, SEXP cd_maxitSEXP, SEXP cd_tolSEXP, SEXP threadsSEXP, SEXP seedSEXP, SEXP verboseSEXP, SEXP loss_strSEXP, SEXP huber_deltaSEXP, SEXP holdout_fractionSEXP, SEXP mask_zerosSEXP, SEXP cv_seedSEXP, SEXP norm_strSEXP, SEXP mask_sexpSEXP, SEXP graph_W_sexpSEXP, SEXP graph_H_sexpSEXP, SEXP solver_modeSEXP, SEXP init_modeSEXP) {
+Rcpp::List Rcpp_nmf_streaming_spz(std::string path, int k, double tol, int maxit, std::vector<double> L1, std::vector<double> L2, std::vector<double> L21, std::vector<double> angular, std::vector<double> upper_bound, std::vector<double> graph_lambda, bool nonneg_w, bool nonneg_h, int cd_maxit, double cd_tol, int threads, unsigned int seed, bool verbose, std::string loss_str, double huber_delta, double holdout_fraction, bool mask_zeros, unsigned int cv_seed, std::string norm_str, Rcpp::Nullable<Rcpp::S4> mask_sexp, Rcpp::Nullable<Rcpp::S4> graph_W_sexp, Rcpp::Nullable<Rcpp::S4> graph_H_sexp, int solver_mode, int init_mode, bool projective, bool symmetric, bool enable_profiling);
+RcppExport SEXP _RcppML_Rcpp_nmf_streaming_spz(SEXP pathSEXP, SEXP kSEXP, SEXP tolSEXP, SEXP maxitSEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP L21SEXP, SEXP angularSEXP, SEXP upper_boundSEXP, SEXP graph_lambdaSEXP, SEXP nonneg_wSEXP, SEXP nonneg_hSEXP, SEXP cd_maxitSEXP, SEXP cd_tolSEXP, SEXP threadsSEXP, SEXP seedSEXP, SEXP verboseSEXP, SEXP loss_strSEXP, SEXP huber_deltaSEXP, SEXP holdout_fractionSEXP, SEXP mask_zerosSEXP, SEXP cv_seedSEXP, SEXP norm_strSEXP, SEXP mask_sexpSEXP, SEXP graph_W_sexpSEXP, SEXP graph_H_sexpSEXP, SEXP solver_modeSEXP, SEXP init_modeSEXP, SEXP projectiveSEXP, SEXP symmetricSEXP, SEXP enable_profilingSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -143,13 +149,16 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::S4> >::type graph_H_sexp(graph_H_sexpSEXP);
     Rcpp::traits::input_parameter< int >::type solver_mode(solver_modeSEXP);
     Rcpp::traits::input_parameter< int >::type init_mode(init_modeSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_nmf_streaming_spz(path, k, tol, maxit, L1, L2, L21, angular, upper_bound, graph_lambda, nonneg_w, nonneg_h, cd_maxit, cd_tol, threads, seed, verbose, loss_str, huber_delta, holdout_fraction, mask_zeros, cv_seed, norm_str, mask_sexp, graph_W_sexp, graph_H_sexp, solver_mode, init_mode));
+    Rcpp::traits::input_parameter< bool >::type projective(projectiveSEXP);
+    Rcpp::traits::input_parameter< bool >::type symmetric(symmetricSEXP);
+    Rcpp::traits::input_parameter< bool >::type enable_profiling(enable_profilingSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_nmf_streaming_spz(path, k, tol, maxit, L1, L2, L21, angular, upper_bound, graph_lambda, nonneg_w, nonneg_h, cd_maxit, cd_tol, threads, seed, verbose, loss_str, huber_delta, holdout_fraction, mask_zeros, cv_seed, norm_str, mask_sexp, graph_W_sexp, graph_H_sexp, solver_mode, init_mode, projective, symmetric, enable_profiling));
     return rcpp_result_gen;
 END_RCPP
 }
 // Rcpp_svd_pca
-Rcpp::List Rcpp_svd_pca(SEXP A_sexp, int k_max, double tol, int max_iter, bool center, bool verbose, unsigned int seed, int threads, double L1_u, double L1_v, double L2_u, double L2_v, bool nonneg_u, bool nonneg_v, double upper_bound_u, double upper_bound_v, double L21_u, double L21_v, double angular_u, double angular_v, Rcpp::Nullable<Rcpp::S4> graph_u, Rcpp::Nullable<Rcpp::S4> graph_v, double graph_u_lambda, double graph_v_lambda, double test_fraction, unsigned int cv_seed, int patience, bool mask_zeros, std::string convergence, std::string method);
-RcppExport SEXP _RcppML_Rcpp_svd_pca(SEXP A_sexpSEXP, SEXP k_maxSEXP, SEXP tolSEXP, SEXP max_iterSEXP, SEXP centerSEXP, SEXP verboseSEXP, SEXP seedSEXP, SEXP threadsSEXP, SEXP L1_uSEXP, SEXP L1_vSEXP, SEXP L2_uSEXP, SEXP L2_vSEXP, SEXP nonneg_uSEXP, SEXP nonneg_vSEXP, SEXP upper_bound_uSEXP, SEXP upper_bound_vSEXP, SEXP L21_uSEXP, SEXP L21_vSEXP, SEXP angular_uSEXP, SEXP angular_vSEXP, SEXP graph_uSEXP, SEXP graph_vSEXP, SEXP graph_u_lambdaSEXP, SEXP graph_v_lambdaSEXP, SEXP test_fractionSEXP, SEXP cv_seedSEXP, SEXP patienceSEXP, SEXP mask_zerosSEXP, SEXP convergenceSEXP, SEXP methodSEXP) {
+Rcpp::List Rcpp_svd_pca(SEXP A_sexp, int k_max, double tol, int max_iter, bool center, bool scale, bool verbose, unsigned int seed, int threads, double L1_u, double L1_v, double L2_u, double L2_v, bool nonneg_u, bool nonneg_v, double upper_bound_u, double upper_bound_v, double L21_u, double L21_v, double angular_u, double angular_v, Rcpp::Nullable<Rcpp::S4> graph_u, Rcpp::Nullable<Rcpp::S4> graph_v, double graph_u_lambda, double graph_v_lambda, double test_fraction, unsigned int cv_seed, int patience, bool mask_zeros, Rcpp::Nullable<Rcpp::S4> obs_mask, std::string convergence, std::string method, double robust_delta, int irls_max_iter, double irls_tol);
+RcppExport SEXP _RcppML_Rcpp_svd_pca(SEXP A_sexpSEXP, SEXP k_maxSEXP, SEXP tolSEXP, SEXP max_iterSEXP, SEXP centerSEXP, SEXP scaleSEXP, SEXP verboseSEXP, SEXP seedSEXP, SEXP threadsSEXP, SEXP L1_uSEXP, SEXP L1_vSEXP, SEXP L2_uSEXP, SEXP L2_vSEXP, SEXP nonneg_uSEXP, SEXP nonneg_vSEXP, SEXP upper_bound_uSEXP, SEXP upper_bound_vSEXP, SEXP L21_uSEXP, SEXP L21_vSEXP, SEXP angular_uSEXP, SEXP angular_vSEXP, SEXP graph_uSEXP, SEXP graph_vSEXP, SEXP graph_u_lambdaSEXP, SEXP graph_v_lambdaSEXP, SEXP test_fractionSEXP, SEXP cv_seedSEXP, SEXP patienceSEXP, SEXP mask_zerosSEXP, SEXP obs_maskSEXP, SEXP convergenceSEXP, SEXP methodSEXP, SEXP robust_deltaSEXP, SEXP irls_max_iterSEXP, SEXP irls_tolSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -158,6 +167,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
     Rcpp::traits::input_parameter< int >::type max_iter(max_iterSEXP);
     Rcpp::traits::input_parameter< bool >::type center(centerSEXP);
+    Rcpp::traits::input_parameter< bool >::type scale(scaleSEXP);
     Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
     Rcpp::traits::input_parameter< unsigned int >::type seed(seedSEXP);
     Rcpp::traits::input_parameter< int >::type threads(threadsSEXP);
@@ -181,15 +191,19 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< unsigned int >::type cv_seed(cv_seedSEXP);
     Rcpp::traits::input_parameter< int >::type patience(patienceSEXP);
     Rcpp::traits::input_parameter< bool >::type mask_zeros(mask_zerosSEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::S4> >::type obs_mask(obs_maskSEXP);
     Rcpp::traits::input_parameter< std::string >::type convergence(convergenceSEXP);
     Rcpp::traits::input_parameter< std::string >::type method(methodSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_svd_pca(A_sexp, k_max, tol, max_iter, center, verbose, seed, threads, L1_u, L1_v, L2_u, L2_v, nonneg_u, nonneg_v, upper_bound_u, upper_bound_v, L21_u, L21_v, angular_u, angular_v, graph_u, graph_v, graph_u_lambda, graph_v_lambda, test_fraction, cv_seed, patience, mask_zeros, convergence, method));
+    Rcpp::traits::input_parameter< double >::type robust_delta(robust_deltaSEXP);
+    Rcpp::traits::input_parameter< int >::type irls_max_iter(irls_max_iterSEXP);
+    Rcpp::traits::input_parameter< double >::type irls_tol(irls_tolSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_svd_pca(A_sexp, k_max, tol, max_iter, center, scale, verbose, seed, threads, L1_u, L1_v, L2_u, L2_v, nonneg_u, nonneg_v, upper_bound_u, upper_bound_v, L21_u, L21_v, angular_u, angular_v, graph_u, graph_v, graph_u_lambda, graph_v_lambda, test_fraction, cv_seed, patience, mask_zeros, obs_mask, convergence, method, robust_delta, irls_max_iter, irls_tol));
     return rcpp_result_gen;
 END_RCPP
 }
 // Rcpp_svd_streaming_spz
-Rcpp::List Rcpp_svd_streaming_spz(std::string path, int k_max, double tol, int max_iter, bool center, bool verbose, unsigned int seed, int threads, double L1_u, double L1_v, double L2_u, double L2_v, bool nonneg_u, bool nonneg_v, double upper_bound_u, double upper_bound_v, double L21_u, double L21_v, double angular_u, double angular_v, Rcpp::Nullable<Rcpp::S4> graph_u, Rcpp::Nullable<Rcpp::S4> graph_v, double graph_u_lambda, double graph_v_lambda, double test_fraction, unsigned int cv_seed, int patience, bool mask_zeros, std::string convergence, std::string method);
-RcppExport SEXP _RcppML_Rcpp_svd_streaming_spz(SEXP pathSEXP, SEXP k_maxSEXP, SEXP tolSEXP, SEXP max_iterSEXP, SEXP centerSEXP, SEXP verboseSEXP, SEXP seedSEXP, SEXP threadsSEXP, SEXP L1_uSEXP, SEXP L1_vSEXP, SEXP L2_uSEXP, SEXP L2_vSEXP, SEXP nonneg_uSEXP, SEXP nonneg_vSEXP, SEXP upper_bound_uSEXP, SEXP upper_bound_vSEXP, SEXP L21_uSEXP, SEXP L21_vSEXP, SEXP angular_uSEXP, SEXP angular_vSEXP, SEXP graph_uSEXP, SEXP graph_vSEXP, SEXP graph_u_lambdaSEXP, SEXP graph_v_lambdaSEXP, SEXP test_fractionSEXP, SEXP cv_seedSEXP, SEXP patienceSEXP, SEXP mask_zerosSEXP, SEXP convergenceSEXP, SEXP methodSEXP) {
+Rcpp::List Rcpp_svd_streaming_spz(std::string path, int k_max, double tol, int max_iter, bool center, bool scale, bool verbose, unsigned int seed, int threads, double L1_u, double L1_v, double L2_u, double L2_v, bool nonneg_u, bool nonneg_v, double upper_bound_u, double upper_bound_v, double L21_u, double L21_v, double angular_u, double angular_v, Rcpp::Nullable<Rcpp::S4> graph_u, Rcpp::Nullable<Rcpp::S4> graph_v, double graph_u_lambda, double graph_v_lambda, double test_fraction, unsigned int cv_seed, int patience, bool mask_zeros, Rcpp::Nullable<Rcpp::S4> obs_mask, std::string convergence, std::string method, double robust_delta, int irls_max_iter, double irls_tol);
+RcppExport SEXP _RcppML_Rcpp_svd_streaming_spz(SEXP pathSEXP, SEXP k_maxSEXP, SEXP tolSEXP, SEXP max_iterSEXP, SEXP centerSEXP, SEXP scaleSEXP, SEXP verboseSEXP, SEXP seedSEXP, SEXP threadsSEXP, SEXP L1_uSEXP, SEXP L1_vSEXP, SEXP L2_uSEXP, SEXP L2_vSEXP, SEXP nonneg_uSEXP, SEXP nonneg_vSEXP, SEXP upper_bound_uSEXP, SEXP upper_bound_vSEXP, SEXP L21_uSEXP, SEXP L21_vSEXP, SEXP angular_uSEXP, SEXP angular_vSEXP, SEXP graph_uSEXP, SEXP graph_vSEXP, SEXP graph_u_lambdaSEXP, SEXP graph_v_lambdaSEXP, SEXP test_fractionSEXP, SEXP cv_seedSEXP, SEXP patienceSEXP, SEXP mask_zerosSEXP, SEXP obs_maskSEXP, SEXP convergenceSEXP, SEXP methodSEXP, SEXP robust_deltaSEXP, SEXP irls_max_iterSEXP, SEXP irls_tolSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -198,6 +212,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
     Rcpp::traits::input_parameter< int >::type max_iter(max_iterSEXP);
     Rcpp::traits::input_parameter< bool >::type center(centerSEXP);
+    Rcpp::traits::input_parameter< bool >::type scale(scaleSEXP);
     Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
     Rcpp::traits::input_parameter< unsigned int >::type seed(seedSEXP);
     Rcpp::traits::input_parameter< int >::type threads(threadsSEXP);
@@ -221,19 +236,23 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< unsigned int >::type cv_seed(cv_seedSEXP);
     Rcpp::traits::input_parameter< int >::type patience(patienceSEXP);
     Rcpp::traits::input_parameter< bool >::type mask_zeros(mask_zerosSEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::S4> >::type obs_mask(obs_maskSEXP);
     Rcpp::traits::input_parameter< std::string >::type convergence(convergenceSEXP);
     Rcpp::traits::input_parameter< std::string >::type method(methodSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_svd_streaming_spz(path, k_max, tol, max_iter, center, verbose, seed, threads, L1_u, L1_v, L2_u, L2_v, nonneg_u, nonneg_v, upper_bound_u, upper_bound_v, L21_u, L21_v, angular_u, angular_v, graph_u, graph_v, graph_u_lambda, graph_v_lambda, test_fraction, cv_seed, patience, mask_zeros, convergence, method));
+    Rcpp::traits::input_parameter< double >::type robust_delta(robust_deltaSEXP);
+    Rcpp::traits::input_parameter< int >::type irls_max_iter(irls_max_iterSEXP);
+    Rcpp::traits::input_parameter< double >::type irls_tol(irls_tolSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_svd_streaming_spz(path, k_max, tol, max_iter, center, scale, verbose, seed, threads, L1_u, L1_v, L2_u, L2_v, nonneg_u, nonneg_v, upper_bound_u, upper_bound_v, L21_u, L21_v, angular_u, angular_v, graph_u, graph_v, graph_u_lambda, graph_v_lambda, test_fraction, cv_seed, patience, mask_zeros, obs_mask, convergence, method, robust_delta, irls_max_iter, irls_tol));
     return rcpp_result_gen;
 END_RCPP
 }
-// Rcpp_predict_sparse
-Eigen::MatrixXd Rcpp_predict_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eigen::MatrixXd w, const double L1, const double L2, const unsigned int threads, const bool mask_zeros, const double upper_bound);
-RcppExport SEXP _RcppML_Rcpp_predict_sparse(SEXP ASEXP, SEXP maskSEXP, SEXP wSEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP threadsSEXP, SEXP mask_zerosSEXP, SEXP upper_boundSEXP) {
+// Rcpp_predict
+Eigen::MatrixXd Rcpp_predict(SEXP A_sexp, const Rcpp::S4& mask, Eigen::MatrixXd w, const double L1, const double L2, const unsigned int threads, const bool mask_zeros, const double upper_bound);
+RcppExport SEXP _RcppML_Rcpp_predict(SEXP A_sexpSEXP, SEXP maskSEXP, SEXP wSEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP threadsSEXP, SEXP mask_zerosSEXP, SEXP upper_boundSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Rcpp::S4& >::type A(ASEXP);
+    Rcpp::traits::input_parameter< SEXP >::type A_sexp(A_sexpSEXP);
     Rcpp::traits::input_parameter< const Rcpp::S4& >::type mask(maskSEXP);
     Rcpp::traits::input_parameter< Eigen::MatrixXd >::type w(wSEXP);
     Rcpp::traits::input_parameter< const double >::type L1(L1SEXP);
@@ -241,35 +260,17 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const unsigned int >::type threads(threadsSEXP);
     Rcpp::traits::input_parameter< const bool >::type mask_zeros(mask_zerosSEXP);
     Rcpp::traits::input_parameter< const double >::type upper_bound(upper_boundSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_predict_sparse(A, mask, w, L1, L2, threads, mask_zeros, upper_bound));
+    rcpp_result_gen = Rcpp::wrap(Rcpp_predict(A_sexp, mask, w, L1, L2, threads, mask_zeros, upper_bound));
     return rcpp_result_gen;
 END_RCPP
 }
-// Rcpp_predict_dense
-Eigen::MatrixXd Rcpp_predict_dense(const Eigen::MatrixXd& A_, const Rcpp::S4& mask, Eigen::MatrixXd w, const double L1, const double L2, const unsigned int threads, const bool mask_zeros, const double upper_bound);
-RcppExport SEXP _RcppML_Rcpp_predict_dense(SEXP A_SEXP, SEXP maskSEXP, SEXP wSEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP threadsSEXP, SEXP mask_zerosSEXP, SEXP upper_boundSEXP) {
+// Rcpp_evaluate_loss
+double Rcpp_evaluate_loss(SEXP A_sexp, const Rcpp::S4& mask, Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h, int loss_type, double huber_delta, const unsigned int threads, const bool mask_zeros);
+RcppExport SEXP _RcppML_Rcpp_evaluate_loss(SEXP A_sexpSEXP, SEXP maskSEXP, SEXP wSEXP, SEXP dSEXP, SEXP hSEXP, SEXP loss_typeSEXP, SEXP huber_deltaSEXP, SEXP threadsSEXP, SEXP mask_zerosSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type A_(A_SEXP);
-    Rcpp::traits::input_parameter< const Rcpp::S4& >::type mask(maskSEXP);
-    Rcpp::traits::input_parameter< Eigen::MatrixXd >::type w(wSEXP);
-    Rcpp::traits::input_parameter< const double >::type L1(L1SEXP);
-    Rcpp::traits::input_parameter< const double >::type L2(L2SEXP);
-    Rcpp::traits::input_parameter< const unsigned int >::type threads(threadsSEXP);
-    Rcpp::traits::input_parameter< const bool >::type mask_zeros(mask_zerosSEXP);
-    Rcpp::traits::input_parameter< const double >::type upper_bound(upper_boundSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_predict_dense(A_, mask, w, L1, L2, threads, mask_zeros, upper_bound));
-    return rcpp_result_gen;
-END_RCPP
-}
-// Rcpp_evaluate_loss_sparse
-double Rcpp_evaluate_loss_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h, int loss_type, double huber_delta, const unsigned int threads, const bool mask_zeros);
-RcppExport SEXP _RcppML_Rcpp_evaluate_loss_sparse(SEXP ASEXP, SEXP maskSEXP, SEXP wSEXP, SEXP dSEXP, SEXP hSEXP, SEXP loss_typeSEXP, SEXP huber_deltaSEXP, SEXP threadsSEXP, SEXP mask_zerosSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Rcpp::S4& >::type A(ASEXP);
+    Rcpp::traits::input_parameter< SEXP >::type A_sexp(A_sexpSEXP);
     Rcpp::traits::input_parameter< const Rcpp::S4& >::type mask(maskSEXP);
     Rcpp::traits::input_parameter< Eigen::MatrixXd >::type w(wSEXP);
     Rcpp::traits::input_parameter< Eigen::VectorXd >::type d(dSEXP);
@@ -278,17 +279,17 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type huber_delta(huber_deltaSEXP);
     Rcpp::traits::input_parameter< const unsigned int >::type threads(threadsSEXP);
     Rcpp::traits::input_parameter< const bool >::type mask_zeros(mask_zerosSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_evaluate_loss_sparse(A, mask, w, d, h, loss_type, huber_delta, threads, mask_zeros));
+    rcpp_result_gen = Rcpp::wrap(Rcpp_evaluate_loss(A_sexp, mask, w, d, h, loss_type, huber_delta, threads, mask_zeros));
     return rcpp_result_gen;
 END_RCPP
 }
-// Rcpp_evaluate_loss_dense
-double Rcpp_evaluate_loss_dense(const Eigen::MatrixXd& A_, const Rcpp::S4& mask, Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h, int loss_type, double huber_delta, const unsigned int threads, const bool mask_zeros);
-RcppExport SEXP _RcppML_Rcpp_evaluate_loss_dense(SEXP A_SEXP, SEXP maskSEXP, SEXP wSEXP, SEXP dSEXP, SEXP hSEXP, SEXP loss_typeSEXP, SEXP huber_deltaSEXP, SEXP threadsSEXP, SEXP mask_zerosSEXP) {
+// Rcpp_evaluate_loss_missing
+double Rcpp_evaluate_loss_missing(SEXP A_sexp, const Rcpp::S4& mask, Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h, int loss_type, double huber_delta, const unsigned int threads);
+RcppExport SEXP _RcppML_Rcpp_evaluate_loss_missing(SEXP A_sexpSEXP, SEXP maskSEXP, SEXP wSEXP, SEXP dSEXP, SEXP hSEXP, SEXP loss_typeSEXP, SEXP huber_deltaSEXP, SEXP threadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type A_(A_SEXP);
+    Rcpp::traits::input_parameter< SEXP >::type A_sexp(A_sexpSEXP);
     Rcpp::traits::input_parameter< const Rcpp::S4& >::type mask(maskSEXP);
     Rcpp::traits::input_parameter< Eigen::MatrixXd >::type w(wSEXP);
     Rcpp::traits::input_parameter< Eigen::VectorXd >::type d(dSEXP);
@@ -296,54 +297,17 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type loss_type(loss_typeSEXP);
     Rcpp::traits::input_parameter< double >::type huber_delta(huber_deltaSEXP);
     Rcpp::traits::input_parameter< const unsigned int >::type threads(threadsSEXP);
-    Rcpp::traits::input_parameter< const bool >::type mask_zeros(mask_zerosSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_evaluate_loss_dense(A_, mask, w, d, h, loss_type, huber_delta, threads, mask_zeros));
+    rcpp_result_gen = Rcpp::wrap(Rcpp_evaluate_loss_missing(A_sexp, mask, w, d, h, loss_type, huber_delta, threads));
     return rcpp_result_gen;
 END_RCPP
 }
-// Rcpp_evaluate_loss_missing_sparse
-double Rcpp_evaluate_loss_missing_sparse(const Rcpp::S4& A, const Rcpp::S4& mask, Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h, int loss_type, double huber_delta, const unsigned int threads);
-RcppExport SEXP _RcppML_Rcpp_evaluate_loss_missing_sparse(SEXP ASEXP, SEXP maskSEXP, SEXP wSEXP, SEXP dSEXP, SEXP hSEXP, SEXP loss_typeSEXP, SEXP huber_deltaSEXP, SEXP threadsSEXP) {
+// Rcpp_bipartition
+Rcpp::List Rcpp_bipartition(SEXP A_sexp, const double tol, const unsigned int maxit, const bool nonneg, const std::vector<unsigned int>& samples, const unsigned int seed, const bool verbose, const bool calc_dist, const bool diag, const int threads);
+RcppExport SEXP _RcppML_Rcpp_bipartition(SEXP A_sexpSEXP, SEXP tolSEXP, SEXP maxitSEXP, SEXP nonnegSEXP, SEXP samplesSEXP, SEXP seedSEXP, SEXP verboseSEXP, SEXP calc_distSEXP, SEXP diagSEXP, SEXP threadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Rcpp::S4& >::type A(ASEXP);
-    Rcpp::traits::input_parameter< const Rcpp::S4& >::type mask(maskSEXP);
-    Rcpp::traits::input_parameter< Eigen::MatrixXd >::type w(wSEXP);
-    Rcpp::traits::input_parameter< Eigen::VectorXd >::type d(dSEXP);
-    Rcpp::traits::input_parameter< Eigen::MatrixXd >::type h(hSEXP);
-    Rcpp::traits::input_parameter< int >::type loss_type(loss_typeSEXP);
-    Rcpp::traits::input_parameter< double >::type huber_delta(huber_deltaSEXP);
-    Rcpp::traits::input_parameter< const unsigned int >::type threads(threadsSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_evaluate_loss_missing_sparse(A, mask, w, d, h, loss_type, huber_delta, threads));
-    return rcpp_result_gen;
-END_RCPP
-}
-// Rcpp_evaluate_loss_missing_dense
-double Rcpp_evaluate_loss_missing_dense(const Eigen::MatrixXd& A_, const Rcpp::S4& mask, Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h, int loss_type, double huber_delta, const unsigned int threads);
-RcppExport SEXP _RcppML_Rcpp_evaluate_loss_missing_dense(SEXP A_SEXP, SEXP maskSEXP, SEXP wSEXP, SEXP dSEXP, SEXP hSEXP, SEXP loss_typeSEXP, SEXP huber_deltaSEXP, SEXP threadsSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type A_(A_SEXP);
-    Rcpp::traits::input_parameter< const Rcpp::S4& >::type mask(maskSEXP);
-    Rcpp::traits::input_parameter< Eigen::MatrixXd >::type w(wSEXP);
-    Rcpp::traits::input_parameter< Eigen::VectorXd >::type d(dSEXP);
-    Rcpp::traits::input_parameter< Eigen::MatrixXd >::type h(hSEXP);
-    Rcpp::traits::input_parameter< int >::type loss_type(loss_typeSEXP);
-    Rcpp::traits::input_parameter< double >::type huber_delta(huber_deltaSEXP);
-    Rcpp::traits::input_parameter< const unsigned int >::type threads(threadsSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_evaluate_loss_missing_dense(A_, mask, w, d, h, loss_type, huber_delta, threads));
-    return rcpp_result_gen;
-END_RCPP
-}
-// Rcpp_bipartition_sparse
-Rcpp::List Rcpp_bipartition_sparse(const Rcpp::S4& A, const double tol, const unsigned int maxit, const bool nonneg, const std::vector<unsigned int>& samples, const unsigned int seed, const bool verbose, const bool calc_dist, const bool diag, const int threads);
-RcppExport SEXP _RcppML_Rcpp_bipartition_sparse(SEXP ASEXP, SEXP tolSEXP, SEXP maxitSEXP, SEXP nonnegSEXP, SEXP samplesSEXP, SEXP seedSEXP, SEXP verboseSEXP, SEXP calc_distSEXP, SEXP diagSEXP, SEXP threadsSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Rcpp::S4& >::type A(ASEXP);
+    Rcpp::traits::input_parameter< SEXP >::type A_sexp(A_sexpSEXP);
     Rcpp::traits::input_parameter< const double >::type tol(tolSEXP);
     Rcpp::traits::input_parameter< const unsigned int >::type maxit(maxitSEXP);
     Rcpp::traits::input_parameter< const bool >::type nonneg(nonnegSEXP);
@@ -353,27 +317,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const bool >::type calc_dist(calc_distSEXP);
     Rcpp::traits::input_parameter< const bool >::type diag(diagSEXP);
     Rcpp::traits::input_parameter< const int >::type threads(threadsSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_bipartition_sparse(A, tol, maxit, nonneg, samples, seed, verbose, calc_dist, diag, threads));
-    return rcpp_result_gen;
-END_RCPP
-}
-// Rcpp_bipartition_dense
-Rcpp::List Rcpp_bipartition_dense(Eigen::MatrixXd& A, const double tol, const unsigned int maxit, const bool nonneg, const std::vector<unsigned int>& samples, const unsigned int seed, const bool verbose, const bool calc_dist, const bool diag, const int threads);
-RcppExport SEXP _RcppML_Rcpp_bipartition_dense(SEXP ASEXP, SEXP tolSEXP, SEXP maxitSEXP, SEXP nonnegSEXP, SEXP samplesSEXP, SEXP seedSEXP, SEXP verboseSEXP, SEXP calc_distSEXP, SEXP diagSEXP, SEXP threadsSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type A(ASEXP);
-    Rcpp::traits::input_parameter< const double >::type tol(tolSEXP);
-    Rcpp::traits::input_parameter< const unsigned int >::type maxit(maxitSEXP);
-    Rcpp::traits::input_parameter< const bool >::type nonneg(nonnegSEXP);
-    Rcpp::traits::input_parameter< const std::vector<unsigned int>& >::type samples(samplesSEXP);
-    Rcpp::traits::input_parameter< const unsigned int >::type seed(seedSEXP);
-    Rcpp::traits::input_parameter< const bool >::type verbose(verboseSEXP);
-    Rcpp::traits::input_parameter< const bool >::type calc_dist(calc_distSEXP);
-    Rcpp::traits::input_parameter< const bool >::type diag(diagSEXP);
-    Rcpp::traits::input_parameter< const int >::type threads(threadsSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_bipartition_dense(A, tol, maxit, nonneg, samples, seed, verbose, calc_dist, diag, threads));
+    rcpp_result_gen = Rcpp::wrap(Rcpp_bipartition(A_sexp, tol, maxit, nonneg, samples, seed, verbose, calc_dist, diag, threads));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -414,14 +358,14 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// c_nnls_dense
-Eigen::MatrixXd c_nnls_dense(const Eigen::MatrixXd& w, const Eigen::MatrixXd& A, unsigned int cd_maxit, const double cd_tol, const double L1, const double L2, const double upper_bound, const bool nonneg, const unsigned int threads, Rcpp::Nullable<Eigen::MatrixXd> warm_start);
-RcppExport SEXP _RcppML_c_nnls_dense(SEXP wSEXP, SEXP ASEXP, SEXP cd_maxitSEXP, SEXP cd_tolSEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP upper_boundSEXP, SEXP nonnegSEXP, SEXP threadsSEXP, SEXP warm_startSEXP) {
+// c_nnls
+Eigen::MatrixXd c_nnls(const Eigen::MatrixXd& w, SEXP A_sexp, unsigned int cd_maxit, const double cd_tol, const double L1, const double L2, const double upper_bound, const bool nonneg, const unsigned int threads, Rcpp::Nullable<Eigen::MatrixXd> warm_start);
+RcppExport SEXP _RcppML_c_nnls(SEXP wSEXP, SEXP A_sexpSEXP, SEXP cd_maxitSEXP, SEXP cd_tolSEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP upper_boundSEXP, SEXP nonnegSEXP, SEXP threadsSEXP, SEXP warm_startSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type w(wSEXP);
-    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type A(ASEXP);
+    Rcpp::traits::input_parameter< SEXP >::type A_sexp(A_sexpSEXP);
     Rcpp::traits::input_parameter< unsigned int >::type cd_maxit(cd_maxitSEXP);
     Rcpp::traits::input_parameter< const double >::type cd_tol(cd_tolSEXP);
     Rcpp::traits::input_parameter< const double >::type L1(L1SEXP);
@@ -430,18 +374,18 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const bool >::type nonneg(nonnegSEXP);
     Rcpp::traits::input_parameter< const unsigned int >::type threads(threadsSEXP);
     Rcpp::traits::input_parameter< Rcpp::Nullable<Eigen::MatrixXd> >::type warm_start(warm_startSEXP);
-    rcpp_result_gen = Rcpp::wrap(c_nnls_dense(w, A, cd_maxit, cd_tol, L1, L2, upper_bound, nonneg, threads, warm_start));
+    rcpp_result_gen = Rcpp::wrap(c_nnls(w, A_sexp, cd_maxit, cd_tol, L1, L2, upper_bound, nonneg, threads, warm_start));
     return rcpp_result_gen;
 END_RCPP
 }
-// c_nnls_sparse
-Eigen::MatrixXd c_nnls_sparse(const Eigen::MatrixXd& w, const Rcpp::S4& A, unsigned int cd_maxit, const double cd_tol, const double L1, const double L2, const double upper_bound, const bool nonneg, const unsigned int threads, Rcpp::Nullable<Eigen::MatrixXd> warm_start);
-RcppExport SEXP _RcppML_c_nnls_sparse(SEXP wSEXP, SEXP ASEXP, SEXP cd_maxitSEXP, SEXP cd_tolSEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP upper_boundSEXP, SEXP nonnegSEXP, SEXP threadsSEXP, SEXP warm_startSEXP) {
+// c_nnls_streaming
+Eigen::MatrixXd c_nnls_streaming(const std::string& path, const Eigen::MatrixXd& w, unsigned int cd_maxit, const double cd_tol, const double L1, const double L2, const double upper_bound, const bool nonneg, const unsigned int threads);
+RcppExport SEXP _RcppML_c_nnls_streaming(SEXP pathSEXP, SEXP wSEXP, SEXP cd_maxitSEXP, SEXP cd_tolSEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP upper_boundSEXP, SEXP nonnegSEXP, SEXP threadsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const std::string& >::type path(pathSEXP);
     Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type w(wSEXP);
-    Rcpp::traits::input_parameter< const Rcpp::S4& >::type A(ASEXP);
     Rcpp::traits::input_parameter< unsigned int >::type cd_maxit(cd_maxitSEXP);
     Rcpp::traits::input_parameter< const double >::type cd_tol(cd_tolSEXP);
     Rcpp::traits::input_parameter< const double >::type L1(L1SEXP);
@@ -449,8 +393,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const double >::type upper_bound(upper_boundSEXP);
     Rcpp::traits::input_parameter< const bool >::type nonneg(nonnegSEXP);
     Rcpp::traits::input_parameter< const unsigned int >::type threads(threadsSEXP);
-    Rcpp::traits::input_parameter< Rcpp::Nullable<Eigen::MatrixXd> >::type warm_start(warm_startSEXP);
-    rcpp_result_gen = Rcpp::wrap(c_nnls_sparse(w, A, cd_maxit, cd_tol, L1, L2, upper_bound, nonneg, threads, warm_start));
+    rcpp_result_gen = Rcpp::wrap(c_nnls_streaming(path, w, cd_maxit, cd_tol, L1, L2, upper_bound, nonneg, threads));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -655,26 +598,58 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// Rcpp_sp_write_dense
+List Rcpp_sp_write_dense(const NumericMatrix& A, const std::string& path, bool include_transpose, int chunk_cols);
+RcppExport SEXP _RcppML_Rcpp_sp_write_dense(SEXP ASEXP, SEXP pathSEXP, SEXP include_transposeSEXP, SEXP chunk_colsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const NumericMatrix& >::type A(ASEXP);
+    Rcpp::traits::input_parameter< const std::string& >::type path(pathSEXP);
+    Rcpp::traits::input_parameter< bool >::type include_transpose(include_transposeSEXP);
+    Rcpp::traits::input_parameter< int >::type chunk_cols(chunk_colsSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_sp_write_dense(A, path, include_transpose, chunk_cols));
+    return rcpp_result_gen;
+END_RCPP
+}
+// Rcpp_sp_read_dense
+NumericMatrix Rcpp_sp_read_dense(const std::string& path);
+RcppExport SEXP _RcppML_Rcpp_sp_read_dense(SEXP pathSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const std::string& >::type path(pathSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_sp_read_dense(path));
+    return rcpp_result_gen;
+END_RCPP
+}
+// Rcpp_sp_metadata_v3
+List Rcpp_sp_metadata_v3(const std::string& path);
+RcppExport SEXP _RcppML_Rcpp_sp_metadata_v3(SEXP pathSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const std::string& >::type path(pathSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_sp_metadata_v3(path));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_RcppML_Rcpp_nmf_rank_cv_sparse", (DL_FUNC) &_RcppML_Rcpp_nmf_rank_cv_sparse, 12},
-    {"_RcppML_Rcpp_nmf_full", (DL_FUNC) &_RcppML_Rcpp_nmf_full, 43},
-    {"_RcppML_Rcpp_nmf_rank_cv_dense", (DL_FUNC) &_RcppML_Rcpp_nmf_rank_cv_dense, 12},
-    {"_RcppML_Rcpp_nmf_streaming_spz", (DL_FUNC) &_RcppML_Rcpp_nmf_streaming_spz, 28},
-    {"_RcppML_Rcpp_svd_pca", (DL_FUNC) &_RcppML_Rcpp_svd_pca, 30},
-    {"_RcppML_Rcpp_svd_streaming_spz", (DL_FUNC) &_RcppML_Rcpp_svd_streaming_spz, 30},
-    {"_RcppML_Rcpp_predict_sparse", (DL_FUNC) &_RcppML_Rcpp_predict_sparse, 8},
-    {"_RcppML_Rcpp_predict_dense", (DL_FUNC) &_RcppML_Rcpp_predict_dense, 8},
-    {"_RcppML_Rcpp_evaluate_loss_sparse", (DL_FUNC) &_RcppML_Rcpp_evaluate_loss_sparse, 9},
-    {"_RcppML_Rcpp_evaluate_loss_dense", (DL_FUNC) &_RcppML_Rcpp_evaluate_loss_dense, 9},
-    {"_RcppML_Rcpp_evaluate_loss_missing_sparse", (DL_FUNC) &_RcppML_Rcpp_evaluate_loss_missing_sparse, 8},
-    {"_RcppML_Rcpp_evaluate_loss_missing_dense", (DL_FUNC) &_RcppML_Rcpp_evaluate_loss_missing_dense, 8},
-    {"_RcppML_Rcpp_bipartition_sparse", (DL_FUNC) &_RcppML_Rcpp_bipartition_sparse, 10},
-    {"_RcppML_Rcpp_bipartition_dense", (DL_FUNC) &_RcppML_Rcpp_bipartition_dense, 10},
+    {"_RcppML_Rcpp_factor_net_fit", (DL_FUNC) &_RcppML_Rcpp_factor_net_fit, 1},
+    {"_RcppML_Rcpp_nmf_rank_cv", (DL_FUNC) &_RcppML_Rcpp_nmf_rank_cv, 12},
+    {"_RcppML_Rcpp_nmf_full", (DL_FUNC) &_RcppML_Rcpp_nmf_full, 60},
+    {"_RcppML_Rcpp_nmf_streaming_spz", (DL_FUNC) &_RcppML_Rcpp_nmf_streaming_spz, 31},
+    {"_RcppML_Rcpp_svd_pca", (DL_FUNC) &_RcppML_Rcpp_svd_pca, 35},
+    {"_RcppML_Rcpp_svd_streaming_spz", (DL_FUNC) &_RcppML_Rcpp_svd_streaming_spz, 35},
+    {"_RcppML_Rcpp_predict", (DL_FUNC) &_RcppML_Rcpp_predict, 8},
+    {"_RcppML_Rcpp_evaluate_loss", (DL_FUNC) &_RcppML_Rcpp_evaluate_loss, 9},
+    {"_RcppML_Rcpp_evaluate_loss_missing", (DL_FUNC) &_RcppML_Rcpp_evaluate_loss_missing, 8},
+    {"_RcppML_Rcpp_bipartition", (DL_FUNC) &_RcppML_Rcpp_bipartition, 10},
     {"_RcppML_Rcpp_dclust_sparse", (DL_FUNC) &_RcppML_Rcpp_dclust_sparse, 9},
     {"_RcppML_c_solve", (DL_FUNC) &_RcppML_c_solve, 8},
-    {"_RcppML_c_nnls_dense", (DL_FUNC) &_RcppML_c_nnls_dense, 10},
-    {"_RcppML_c_nnls_sparse", (DL_FUNC) &_RcppML_c_nnls_sparse, 10},
+    {"_RcppML_c_nnls", (DL_FUNC) &_RcppML_c_nnls, 10},
+    {"_RcppML_c_nnls_streaming", (DL_FUNC) &_RcppML_c_nnls_streaming, 9},
     {"_RcppML_c_rmatrix", (DL_FUNC) &_RcppML_c_rmatrix, 3},
     {"_RcppML_c_rtimatrix", (DL_FUNC) &_RcppML_c_rtimatrix, 3},
     {"_RcppML_c_runif", (DL_FUNC) &_RcppML_c_runif, 5},
@@ -690,6 +665,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_RcppML_Rcpp_sp_metadata", (DL_FUNC) &_RcppML_Rcpp_sp_metadata, 1},
     {"_RcppML_Rcpp_sp_compress", (DL_FUNC) &_RcppML_Rcpp_sp_compress, 3},
     {"_RcppML_Rcpp_sp_decompress", (DL_FUNC) &_RcppML_Rcpp_sp_decompress, 1},
+    {"_RcppML_Rcpp_sp_write_dense", (DL_FUNC) &_RcppML_Rcpp_sp_write_dense, 4},
+    {"_RcppML_Rcpp_sp_read_dense", (DL_FUNC) &_RcppML_Rcpp_sp_read_dense, 1},
+    {"_RcppML_Rcpp_sp_metadata_v3", (DL_FUNC) &_RcppML_Rcpp_sp_metadata_v3, 1},
     {NULL, NULL, 0}
 };
 

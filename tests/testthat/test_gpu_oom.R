@@ -135,3 +135,37 @@ test_that("GPU handles medium-scale matrix correctly", {
   expect_true(abs(cpu_mse - gpu_mse) / max(cpu_mse, 1e-16) < 0.15,
               label = sprintf("Medium-scale MSE: CPU=%.6e, GPU=%.6e", cpu_mse, gpu_mse))
 })
+
+
+test_that("GPU NMF with large k succeeds or falls back gracefully", {
+  skip_if_no_gpu()
+
+  data(pbmc3k)
+  A <- pbmc3k[1:500, 1:200]
+  A <- as(A, "dgCMatrix")
+
+  # Large k relative to matrix dimensions — stresses GPU memory
+  result <- nmf(A, k = 50, seed = 42, resource = "gpu",
+                maxit = 10, tol = 1e-10, verbose = FALSE)
+
+  expect_true(is.finite(result@misc$loss))
+  expect_true(result@misc$loss > 0)
+  expect_true(all(is.finite(result@w)))
+  expect_true(all(is.finite(result@h)))
+  expect_equal(ncol(result@w), 50)
+})
+
+test_that("GPU ZI NMF memory guard passes on normal-sized input", {
+  skip_if_no_gpu()
+
+  data(pbmc3k)
+  A <- pbmc3k[1:500, 1:200]
+  A <- as(A, "dgCMatrix")
+
+  # ZI NMF allocates dense imputed matrices — memory guard checks free VRAM
+  # For 500x200 this is negligible, so it should succeed
+  result <- nmf(A, k = 5, loss = "gp", zi = "row", seed = 42,
+                resource = "gpu", maxit = 10, tol = 1e-10, verbose = FALSE)
+
+  expect_true(is.finite(result@misc$loss))
+})

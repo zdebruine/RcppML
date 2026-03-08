@@ -16,13 +16,41 @@
 
 \item{stat}{either \code{sum} (sum of factor weights falling within each group), or \code{mean} (mean factor weight falling within each group).}
 
-\item{...}{arguments passed to or from other methods}
+\item{...}{Additional arguments (unused).}
 
 \item{x}{\code{nmfSummary} object, the result of calling \code{summary} on an \code{nmf} object}
 }
 \value{
 \code{data.frame} with columns \code{group}, \code{factor}, and \code{stat}
+
+A \code{ggplot2} object showing factor representation by group.
 }
 \description{
 \code{summary} method for class "\code{nmf}". Describes metadata representation in NMF factors. Returns object of class \code{nmfSummary}. Plot results using \code{plot}.
+}
+\examples{
+\donttest{
+library(Matrix)
+A <- rsparsematrix(100, 50, 0.1)
+model <- nmf(A, k = 3, seed = 42, tol = 1e-2, maxit = 10)
+groups <- factor(sample(c("A", "B"), 50, replace = TRUE))
+s <- summary(model, group_by = groups)
+}
+
+\donttest{
+library(Matrix)
+A <- rsparsematrix(100, 50, 0.1)
+model <- nmf(A, k = 3, seed = 42, tol = 1e-2, maxit = 10)
+groups <- factor(sample(c("A", "B"), 50, replace = TRUE))
+s <- summary(model, group_by = groups)
+if (requireNamespace("ggplot2", quietly = TRUE)) {
+  plot(s)
+}
+}
+
+}
+\seealso{
+\code{\link{nmf}}, \code{\link{sparsity}}
+
+\code{\link{summary,nmf-method}}, \code{\link{nmf}}
 }

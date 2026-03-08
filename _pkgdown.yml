@@ -1,4 +1,160 @@
-url: ~
+url: https://zdebruine.github.io/RcppML/
 template:
   bootstrap: 5
 
+articles:
+  - title: "Getting Started"
+    navbar: ~
+    contents:
+      - getting-started
+  - title: "Applications"
+    contents:
+      - single-cell-genomics
+      - recommendation-systems
+      - image-decomposition
+      - ecological-biodiversity
+      - cancer-subtype-discovery
+  - title: "Advanced Topics"
+    contents:
+      - nmf-deep-dive
+      - cross-validation
+      - distribution-api
+      - factor-net-graphs
+      - gpu-acceleration
+      - sparsepress
+
+reference:
+  - title: "Non-negative Matrix Factorization"
+    desc: "Core NMF functions and model class"
+    contents:
+      - nmf
+      - nmf-class
+      - "`subset,nmf-method`"
+      - "`summary,nmf-method`"
+      - "`biplot,nmf-method`"
+      - nnls
+      - solve
+      - project
+      - reconstruct
+
+  - title: "Singular Value Decomposition"
+    desc: "SVD and PCA functions"
+    contents:
+      - svd
+      - pca
+      - nn_pca
+      - svd_pca
+      - sparse_pca
+      - variance_explained
+
+  - title: "Model Evaluation & Diagnostics"
+    desc: "Functions for evaluating and comparing NMF models"
+    contents:
+      - evaluate
+      - sparsity
+      - align
+      - compare_nmf
+      - cosine
+
+  - title: "Distribution Selection"
+    desc: "Automatic distribution and zero-inflation diagnostics"
+    contents:
+      - auto_nmf_distribution
+      - score_test_distribution
+      - diagnose_zero_inflation
+      - diagnose_dispersion
+
+  - title: "Visualization"
+    desc: "Plotting functions for NMF results"
+    contents:
+      - plot.nmf
+      - plot.nmfCrossValidate
+
+  - title: "Consensus Clustering"
+    desc: "Multi-replicate consensus NMF"
+    contents:
+      - consensus_nmf
+      - plot.consensus_nmf
+      - summary.consensus_nmf
+
+  - title: "Clustering"
+    desc: "NMF-based clustering algorithms"
+    contents:
+      - bipartition
+      - dclust
+      - bipartiteMatch
+
+  - title: "Composable Factorization Graphs"
+    desc: "Build complex factorization pipelines with factor_net"
+    contents:
+      - factor_net
+      - factor_input
+      - factor_config
+      - nmf_layer
+      - svd_layer
+      - factor_shared
+      - factor_concat
+      - factor_add
+      - factor_condition
+      - fit
+      - W
+      - cross_validate_graph
+      - predict.factor_net_result
+      - guide_callback
+      - guide_classifier
+      - guide_external
+      - guide_reference
+      - training_logger
+      - export_log
+      - plot.training_logger
+      - as.data.frame.training_logger
+      - classify_embedding
+      - classify_logistic
+      - classify_rf
+      - "`$.factor_net_result`"
+      - print.factor_net
+      - print.factor_net_cv
+      - print.factor_net_result
+      - print.fn_factor_config
+      - print.fn_global_config
+      - print.fn_node
+      - print.fn_classifier_eval
+      - summary.factor_net_result
+      - summary.fn_classifier_eval
+      - print.nmf_guide
+      - print.training_logger
+
+  - title: "Simulation"
+    desc: "Functions for generating synthetic data"
+    contents:
+      - simulateNMF
+      - simulateSwimmer
+
+  - title: "Random Number Generation"
+    desc: "Fast RNG utilities"
+    contents:
+      - starts_with("r_")
+
+  - title: "SparsePress I/O"
+    desc: "High-performance sparse matrix compression format"
+    contents:
+      - starts_with("sp_")
+      - sparsepress
+
+  - title: "GPU Support"
+    desc: "GPU acceleration functions"
+    contents:
+      - gpu_available
+      - gpu_info
+      - gpu-backend
+      - gpu_sparse_matrix-methods
+
+  - title: "Datasets"
+    desc: "Built-in datasets for examples and benchmarks"
+    contents:
+      - aml
+      - digits_full
+      - golub
+      - hawaiibirds
+      - movielens
+      - olivetti

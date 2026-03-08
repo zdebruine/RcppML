@@ -27,6 +27,13 @@ r_binom(n, size = 1, inv_prob = 2)
 
 \item{inv_prob}{inverse probability of success for each trial, must be integral (e.g. 50 percent success = 2, 10 percent success = 10)}
 }
+\value{
+For \code{r_sample}: a vector of sampled elements from \code{x}.
+
+For \code{r_unif}: a numeric vector of random values from the uniform distribution.
+
+For \code{r_binom}: a numeric vector of random values from the binomial distribution.
+}
 \description{
 \code{r_sample} is just like \code{base::sample}, only faster.
 \code{r_sample} takes a sample of the specified size from the elements of \code{x} using replacement if indicated.
@@ -39,21 +46,23 @@ All RNGs make use of Marsaglia's xorshift method to generate random integers.
 \code{r_unif} takes the random integer and divides it by the seed and returns the floating decimal portion of the result.
 }
 \examples{
+\dontrun{
 # draw all integers from 1 to 10 in a random order
-sample(10)
+r_sample(10)
 
 # shuffle a vector of values
 v <- r_unif(3)
 v
-v_ <- sample(v)
+v_ <- r_sample(v)
 v_
 
 # draw values from a vector
-sample(r_unif(100), 3)
+r_sample(r_unif(100), 3)
 
 # draw some integers between 1 and 1000
-sample(1000, 3)
-
+r_sample(1000, 3)
+}
+\dontrun{
 # simulate a uniform distribution
 v <- r_unif(10000)
 plot(density(v))
@@ -69,8 +78,9 @@ sum(v) / length(v)
 v <- r_binom(100, 1, 20)
 successful_trials <- slot(as(v, "nsparseVector"), "i")
 successful_trials
-
+}
 }
 \seealso{
 \code{\link{r_matrix}}, \code{\link{r_sparsematrix}}
 }
+\keyword{internal}

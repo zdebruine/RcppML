@@ -11,17 +11,22 @@
 #' @param x matrix or vector of, or coercible to, class "dgCMatrix" or "sparseVector"
 #' @param y (optional) matrix or vector of, or coercible to, class "dgCMatrix" or "sparseVector"
 #' @returns dense matrix, vector, or value giving cosine distances
+#' @seealso \code{\link{nmf}}, \code{\link{bipartiteMatch}}
 #' @export
+#' @examples
+#' x <- matrix(runif(20), 4, 5)
+#' cosine(x)         # self-similarity: 5x5 matrix
+#' cosine(x, x[,1])  # similarity of columns to first column
 #'
 cosine <- function(x, y = NULL) {
-  if (grepl("atrix", class(x)[1])) {
+  if (inherits(x, c("matrix", "Matrix"))) {
     colnames(x) <- rownames(x) <- NULL
-    if (class(x)[1] != "dgCMatrix") x <- as(x, "dgCMatrix")
+    if (class(x)[1] != "dgCMatrix") x <- .to_dgCMatrix(x)
     if (!is.null(y)) {
-      if (grepl("atrix", class(y)[1])) {
+      if (inherits(y, c("matrix", "Matrix"))) {
         # x is a matrix, y is a matrix
         colnames(y) <- rownames(y) <- NULL
-        if (class(y)[1] != "dgCMatrix") y <- as(y, "dgCMatrix")
+        if (class(y)[1] != "dgCMatrix") y <- .to_dgCMatrix(y)
         res <- crossprod(tcrossprod(x, Diagonal(x = as.vector(crossprod(x ^ 2, rep(1, x@Dim[1]))) ^ -0.5)), tcrossprod(y, Diagonal(x = as.vector(crossprod(y ^ 2, rep(1, x@Dim[1]))) ^ -0.5)))
         return(as.matrix(res))
       } else {
@@ -35,9 +40,9 @@ cosine <- function(x, y = NULL) {
     }
   } else {
     if (is.null(y)) stop("x is a vector and y is NULL")
-    if (grepl("atrix", class(y)[1])) {
+    if (inherits(y, c("matrix", "Matrix"))) {
       # x is a vector, y is a matrix
-      if (class(y)[1] != "dgCMatrix") y <- as(y, "dgCMatrix")
+      if (class(y)[1] != "dgCMatrix") y <- .to_dgCMatrix(y)
       colnames(y) <- rownames(y) <- NULL
       return(as.vector(crossprod(tcrossprod(x, crossprod(x ^ 2, rep(1, length(x)))), tcrossprod(y, Diagonal(x = as.vector(crossprod(y ^ 2, rep(1, length(x)))) ^ -0.5)))))
     } else {
