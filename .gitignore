@@ -7,8 +7,9 @@
 # IDE
 .vscode/
 
-# Superseded plans
-HARDENING_PLAN.md
+# Superseded plans (now archived to docs/dev/)
+/HARDENING_PLAN.md
+/WORKSTREAMS.md
 
 # Compiled files
 src/*.o

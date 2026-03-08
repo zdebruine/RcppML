@@ -115,8 +115,7 @@ test_that("config hierarchy: layer L1 < factor H override", {
 # =========================================================================
 
 test_that("multi-modal shared-H matches concatenated nmf()", {
-  # GPU factor_net uses different normalization than CPU nmf(), d values differ
-  skip_if(!identical(getOption("RcppML.gpu", FALSE), FALSE), "GPU factor_net normalization differs from CPU nmf()")
+  # Test compares factor_net CPU to nmf() CPU; explicitly force cpu resource
   m1 <- 25; m2 <- 25
   X1 <- X[1:m1, ]
   X2 <- X[(m1 + 1):(m1 + m2), ]
@@ -126,11 +125,11 @@ test_that("multi-modal shared-H matches concatenated nmf()", {
   shared <- factor_shared(inp1, inp2)
   L1 <- shared |> nmf_layer(k = 5)
   net <- factor_net(inputs = list(inp1, inp2), output = L1,
-                    config = factor_config(maxit = 100, seed = 42))
+                    config = factor_config(maxit = 100, seed = 42, resource = "cpu"))
   fn_result <- fit(net)
 
   X_cat <- rbind(X1, X2)
-  nmf_cat <- nmf(X_cat, k = 5, maxit = 100, seed = 42)
+  nmf_cat <- nmf(X_cat, k = 5, maxit = 100, seed = 42, resource = "cpu")
 
   fn_d <- sort(fn_result$L1$d, decreasing = TRUE)
   nmf_d <- sort(nmf_cat@d, decreasing = TRUE)
@@ -531,12 +530,11 @@ test_that("print methods execute without error", {
 # =========================================================================
 
 test_that("TEST-GRAPH-SINGLE-DENSE: single-layer factor_net works with dense input", {
-  # GPU factor_net normalization differs from CPU nmf(), d values not equal
-  skip_if(!identical(getOption("RcppML.gpu", FALSE), FALSE), "GPU factor_net normalization differs from CPU nmf()")
+  # Test compares factor_net CPU to nmf() CPU; explicitly force cpu resource
   inp <- factor_input(X, "X_dense")
   L1 <- inp |> nmf_layer(k = 5)
   net <- factor_net(inputs = inp, output = L1,
-                    config = factor_config(maxit = 50, tol = 1e-4, seed = 42))
+                    config = factor_config(maxit = 50, tol = 1e-4, seed = 42, resource = "cpu"))
   fn_result <- fit(net)
 
   # Verify valid results
@@ -546,7 +544,7 @@ test_that("TEST-GRAPH-SINGLE-DENSE: single-layer factor_net works with dense inp
   expect_equal(dim(fn_result$L1$H), c(5L, n))
 
   # Compare to direct nmf() on dense matrix
-  nmf_result <- nmf(X, k = 5, maxit = 50, tol = 1e-4, seed = 42)
+  nmf_result <- nmf(X, k = 5, maxit = 50, tol = 1e-4, seed = 42, resource = "cpu")
   fn_d <- sort(fn_result$L1$d, decreasing = TRUE)
   nmf_d <- sort(nmf_result@d, decreasing = TRUE)
   expect_equal(fn_d, nmf_d, tolerance = 1e-4)
