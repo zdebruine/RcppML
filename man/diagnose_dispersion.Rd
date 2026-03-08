@@ -37,6 +37,14 @@ If the coefficient of variation (CV) of per-row estimates exceeds
 \code{cv_threshold}, per-row dispersion is recommended; similarly for
 per-column. If both CVs are low, global dispersion suffices.
 }
+\examples{
+\donttest{
+data(aml)
+model <- nmf(aml, k = 3, maxit = 10, seed = 1)
+disp <- diagnose_dispersion(aml, model)
+disp$mode
+}
+}
 \seealso{
 \code{\link{auto_nmf_distribution}}, \code{\link{nmf}}
 }

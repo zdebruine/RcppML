@@ -19,3 +19,8 @@ An \code{fn_node} object of type "input".
 Wraps a data matrix as a graph input node. The matrix can be dense
 or sparse (dgCMatrix), or a file path to a .spz file for streaming.
 }
+\examples{
+data(aml)
+inp <- factor_input(aml, name = "aml")
+inp
+}

@@ -20,3 +20,11 @@ Appends columns from a metadata matrix Z to the H factor before
 passing downstream. The next layer's W learns to factor out the
 conditioning variables.
 }
+\examples{
+data(aml)
+inp <- factor_input(aml)
+layer1 <- nmf_layer(inp, k = 5)
+# Condition on batch metadata (2 batches)
+Z <- matrix(rep(c(1, 0, 0, 1), c(60, 75, 60, 75)), nrow = 135, ncol = 2)
+conditioned <- factor_condition(layer1, Z)
+}

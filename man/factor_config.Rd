@@ -75,6 +75,13 @@ override these where specified.
     level; it cannot be set globally in \code{factor_config()}.
 }
 }
+\examples{
+# Default config
+cfg <- factor_config()
+
+# Poisson NMF with cross-validation
+cfg <- factor_config(loss = "gp", test_fraction = 0.1, maxit = 50)
+}
 \seealso{
 \code{\link{factor_net}}, \code{\link{nmf_layer}}, \code{\link{fit}}
 }

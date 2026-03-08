@@ -18,6 +18,8 @@
 #include <sparsepress/sparsepress_v3.hpp>
 #include <sparsepress/format/header_v2.hpp>
 #include <sparsepress/format/header_v3.hpp>
+#include <FactorNet/core/platform.hpp>  // get_available_ram_bytes()
+#include <streampress/transpose.hpp>
 
 using namespace Rcpp;
 
@@ -146,17 +148,16 @@ List Rcpp_sp_write(const S4& A, const std::string& path,
                    bool verbose = false,
                    const std::string& precision = "auto",
                    bool row_sort = false,
-                   bool include_transpose = false) {
+                   bool include_transpose = false,
+                   int chunk_cols = 2048) {
     sparsepress::CSCMatrix mat = dgc_to_csc(A);
 
     // Extract dimnames for metadata
     std::vector<std::string> rownames, colnames;
     extract_dimnames(A, rownames, colnames);
 
-    // Use v2 if any v2-specific features are requested
-    bool use_v2 = (precision != "auto" && precision != "fp64") ||
-                  row_sort || include_transpose ||
-                  !rownames.empty() || !colnames.empty();
+    // Always use v2 format — v1 is legacy
+    bool use_v2 = true;
 
     if (use_v2) {
         sparsepress::v2::CompressConfig_v2 cfg2;
@@ -164,6 +165,7 @@ List Rcpp_sp_write(const S4& A, const std::string& path,
         cfg2.row_sort = row_sort;
         cfg2.include_transpose = include_transpose;
         cfg2.verbose = verbose ? 2 : 0;
+        cfg2.chunk_cols = static_cast<uint32_t>(chunk_cols);
 
         sparsepress::v2::CompressStats_v2 stats2;
         std::vector<uint8_t> compressed = sparsepress::v2::compress_v2(mat, cfg2, &stats2);
@@ -453,17 +455,27 @@ S4 Rcpp_sp_decompress(const RawVector& data) {
 //' @param path Output file path (.spz)
 //' @param include_transpose Also store transposed panels for streaming NMF
 //' @param chunk_cols Columns per chunk (default 256)
+//' @param codec Compression codec: 0=RAW_FP32, 1=FP16, 2=QUANT8, 3=FP16_RANS, 4=FP32_RANS
+//' @param delta Apply XOR-delta encoding before entropy coding
 //' @return A list with write statistics
 //' @keywords internal
 // [[Rcpp::export]]
 List Rcpp_sp_write_dense(const NumericMatrix& A, const std::string& path,
                          bool include_transpose = false,
-                         int chunk_cols = 256) {
+                         int chunk_cols = 256,
+                         int codec = 0,
+                         bool delta = false) {
     uint32_t m = static_cast<uint32_t>(A.nrow());
     uint32_t n = static_cast<uint32_t>(A.ncol());
 
+    // Validate codec
+    if (codec < 0 || codec > 4)
+        stop("Invalid codec value. Must be 0-4.");
+
+    sparsepress::v3::DenseCodec dc =
+        static_cast<sparsepress::v3::DenseCodec>(codec);
+
     // Convert R's column-major double matrix to float for storage
-    // (R uses double internally, SPZ v3 default is float32)
     std::vector<float> fdata(static_cast<size_t>(m) * n);
     const double* src = A.begin();
     for (size_t k = 0; k < fdata.size(); ++k) {
@@ -472,7 +484,7 @@ List Rcpp_sp_write_dense(const NumericMatrix& A, const std::string& path,
 
     sparsepress::v3::write_v3<float>(
         path, fdata.data(), m, n,
-        static_cast<uint32_t>(chunk_cols), include_transpose);
+        static_cast<uint32_t>(chunk_cols), include_transpose, dc, delta);
 
     uint32_t num_chunks = (n + chunk_cols - 1) / chunk_cols;
     double raw_bytes = static_cast<double>(m) * n * sizeof(float);
@@ -493,7 +505,9 @@ List Rcpp_sp_write_dense(const NumericMatrix& A, const std::string& path,
         Named("rows") = static_cast<int>(m),
         Named("cols") = static_cast<int>(n),
         Named("num_chunks") = static_cast<int>(num_chunks),
-        Named("has_transpose") = include_transpose
+        Named("has_transpose") = include_transpose,
+        Named("codec") = sparsepress::v3::dense_codec_name(dc),
+        Named("delta") = delta
     );
 }
 
@@ -580,4 +594,32 @@ List Rcpp_sp_metadata_v3(const std::string& path) {
         Named("file_bytes") = static_cast<double>(file_size),
         Named("raw_bytes") = raw_bytes
     );
+}
+
+
+
+// =============================================================================
+// RAM detection: expose platform-conditional RAM query to R
+// =============================================================================
+
+//' @title Get available system RAM in megabytes
+//' @return Double: available RAM in MB
+//' @keywords internal
+// [[Rcpp::export]]
+double Rcpp_get_available_ram_mb() {
+    return static_cast<double>(FactorNet::get_available_ram_bytes()) / (1024.0 * 1024.0);
+}
+
+// =============================================================================
+// st_add_transpose: add transpose section to existing v2 .spz file
+// =============================================================================
+
+//' @title Add transpose section to an existing v2 .spz file
+//' @param path Path to the .spz v2 file
+//' @param verbose Logical; print progress
+//' @return Logical TRUE on success
+//' @keywords internal
+// [[Rcpp::export]]
+bool Rcpp_st_add_transpose(const std::string& path, bool verbose = true) {
+    return streampress::add_transpose(path, verbose);
 }

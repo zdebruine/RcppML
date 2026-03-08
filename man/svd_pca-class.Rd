@@ -84,3 +84,16 @@ singular vectors. Equivalent to PCA "out-of-sample prediction".
 iters_per_factor, wall_time_ms, auto_rank}
 }}
 
+\examples{
+\donttest{
+A <- matrix(rnorm(200), 20, 10)
+s <- RcppML::svd(A, k = 3)
+Ahat <- reconstruct(s)
+dim(Ahat)
+}
+\donttest{
+A <- matrix(rnorm(200), 20, 10)
+s <- RcppML::svd(A, k = 3)
+variance_explained(s)
+}
+}

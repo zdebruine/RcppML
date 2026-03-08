@@ -23,6 +23,13 @@ The function is called each ALS iteration with the current factor matrix
 and iteration number, and must return a target matrix of matching
 dimensions.
 }
+\examples{
+# Guide that steers factors toward a decaying target
+g <- guide_callback(
+  fn = function(factor, iter) factor * exp(-0.01 * iter),
+  lambda = 1.0
+)
+}
 \seealso{
 \code{\link{guide_classifier}}, \code{\link{guide_external}}, \code{\link{nmf}}
 }

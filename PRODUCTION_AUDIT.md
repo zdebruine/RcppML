@@ -15,6 +15,7 @@ what needs architectural rework before CRAN/publication release.
 3. [Streaming Out-of-Core: Architecture Critique](#3-streaming-out-of-core-architecture-critique)
 4. [CRAN Submission Checklist](#4-cran-submission-checklist)
 5. [Publication Readiness](#5-publication-readiness)
+6. [StreamPress Architecture Revision Plan](#6-streampress-architecture-revision-plan)
 
 ---
 
@@ -598,7 +599,7 @@ prerequisite is completing §2.3 (documentation gaps) and §2.4 (benchmarks).
 | P1 — RcppML overview (JSS/R Journal) | Not started | Needs README, vignettes, benchmarks |
 | P2 — GPU CV via per-column Gram (Bio/JCGS) | Not started | Needs benchmark harness |
 | P3 — IRLS framework (Biostatistics) | Not started | Needs algorithm docs |
-| P4 — SparsePress streaming (SoftwareX) | Not started | Needs streaming critique fixes |
+| P4 — StreamPress streaming (SoftwareX) | Not started | Needs §6 StreamPress revision + GEO k=64 benchmark |
 | P5 — FactorNet graph (JMLR/NeurIPS) | Not started | Needs FactorNet graph docs |
 | P6 — Constrained SVD (Comp Stats) | Not started | Needs SVD algorithm docs |
 
@@ -607,3 +608,478 @@ prerequisite is completing §2.3 (documentation gaps) and §2.4 (benchmarks).
 *This document replaces `HARDENING_PLAN.md` and `WORKSTREAMS.md`, both of which
 have been archived to `docs/dev/`. The coverage matrix remains live at
 `docs/dev/COVERAGE_MATRIX.yaml`.*
+
+---
+
+## 6. StreamPress Architecture Revision Plan
+
+**Status**: ✅ All phases (0–7) implemented. See individual phase sections below.  
+**Priority**: Implement after CRAN blockers in §2.1 are resolved.  
+**Compatibility guarantee**: All existing sparse v2 `.spz` files (GEO reprocessed
+corpus, ~1 TB) remain fully readable with zero format changes. Only the dense v3
+format and loader infrastructure are being extended.
+
+### 6.0 Context and Motivation
+
+The `.spz` file format and the R API around it are currently named **SparsePress**
+(`sp_*` functions, `sparsepress` C++ namespace). The format has grown to support
+both sparse (v2) and dense (v3) matrices. The next phase of development elevates
+it to a first-class streaming I/O library — **StreamPress** — with real
+compression for dense panels, true out-of-core streaming (not just reading the
+entire file into RAM), adaptive chunking for modern hardware, and
+memory-aware dispatch that automatically selects the right execution mode.
+
+The flagship use case for the StreamPress revision is: **`nmf(path_to_geo_spz,
+k=64, loss="nb")`** on the full GEO reprocessed single-cell corpus, running on a
+compute node with hundreds of GB RAM, demonstrated without any manual tuning
+from the user. This is the primary benchmark target for Publication P4.
+
+#### Key findings from architecture review
+
+- **Critical loader bug**: Both `SpzLoader` and `DenseSpzLoader` read the
+  *entire file into RAM* in their constructors (`file_data_.resize(file_size_);
+  fread(...)`) — this completely defeats out-of-core streaming. A 50 GB `.spz`
+  file requires 50 GB RAM just to open it. This is a correctness bug, not
+  a performance issue.
+- **Dense v3 has no compression**: Raw float32/float64 bytes only. The 48
+  reserved bytes in `FileHeader_v3` are unused and can carry codec metadata.
+- **Chunk size 256 is severely sub-optimal**: `DEFAULT_CHUNK_COLS=256` causes
+  hundreds to thousands of PCIe transfers and kernel launches per epoch on GPU.
+  The optimal range for modern hardware is 2048–4096+ columns per chunk.
+- **Streaming I/O dominates at low k**: From `benchmarks/stream_opt/STREAMING_ANALYSIS.md`,
+  I/O accounts for 71–73% of total time at k=8. Chunk size directly controls
+  this overhead.
+- **No `/proc/meminfo` on Windows**: Memory detection logic must be
+  platform-conditional. Laptop users (Windows, macOS, 8–16 GB RAM) are an
+  important target — auto-dispatch must handle low-memory environments safely.
+
+### 6.1 Phase 0: Locate and Verify GEO Reprocessed Corpus
+
+**Goal**: Confirm the exact paths and format of the GEO reprocessed `.spz`
+files before any implementation work begins. The old `cellcensus_500k.spz`
+and `cellcensus_900k.spz` benchmarking files have been deleted. The new
+corpus comes from reprocessed GEO downloads stored somewhere under
+`/mnt/projects/debruinz_project/`.
+
+**Steps**:
+
+1. Identify active SLURM jobs writing `.spz` output:
+   ```bash
+   squeue -u debruinz -t R -o "%j %Z %N" | grep -i spz
+   ```
+2. Enumerate finished `.spz` files:
+   ```bash
+   find /mnt/projects/debruinz_project/ -name "*.spz" 2>/dev/null | head -30
+   du -sh /mnt/projects/debruinz_project/*.spz 2>/dev/null
+   ```
+3. Run header validation on a sample of 100 files:
+   - Check magic bytes (`SPRZ`), version field, dimensions m × n
+   - Confirm all files are v2 sparse (no v3 dense files expected in GEO corpus)
+   - Log any files with unexpected version numbers or truncated headers
+4. Record the authoritative directory path in this document once confirmed.
+
+**✅ CONFIRMED (2026-03-08)**:
+- **Corpus directory**: `/mnt/projects/debruinz_project/cellarium/pipeline/quant/`
+- **File count**: 9,119 `counts.spz` files (9,121 total `.spz` including 3 test exports)
+- **Total size**: 717 GB
+- **Format**: All v2 sparse (`version=2`, magic `SPRZ`)
+- **Active jobs**: `scgeo-v5b` (bigmem), `scgeo-v5c` (cpu), `scgeo-v5h` (gpu-h100) — still writing
+
+**Compatibility guarantee**: No Phase 0 action modifies any v2 format bytes.
+All subsequent phases are tested against this corpus before merge.
+
+**Test script**: `tools/verify_spz_corpus.R` — to be written in Phase 7.
+
+### 6.2 Phase 1: Fix SpzLoader — True Seek-Based Streaming [CRITICAL]
+
+**Files**: `inst/include/FactorNet/io/spz_loader.hpp`,
+`inst/include/FactorNet/io/dense_spz_loader.hpp`
+
+This is the highest-priority fix — it is a **correctness bug**. The current
+behaviour makes it impossible to stream a file larger than available RAM.
+
+#### Approach
+
+Replace the `file_data_` bulk-read approach with a seek-based random-access
+reader that keeps only the header and chunk index table in RAM:
+
+- **RAM resident** (small, O(num_chunks)): complete `FileHeader_v2`, all
+  `ChunkDescriptor_v2` entries (24 bytes × num_chunks ≈ up to ~100 KB for a
+  3M-cell matrix with chunk_cols=256, or ~12 KB at chunk_cols=2048)
+- **Streamed on demand**: actual chunk bytes — decompressed, used, discarded
+
+#### Platform-conditional I/O
+
+True random-access file reads require different APIs per platform:
+
+| Platform | API | Notes |
+|----------|-----|-------|
+| Linux/macOS (POSIX) | `pread(fd, buf, size, offset)` | Thread-safe, no cursor race, O_DIRECT possible |
+| Windows | `ReadFile()` with `OVERLAPPED` + `LARGE_INTEGER` offset | Must be used instead of `pread` |
+| NFS (all platforms) | `pread()` via standard POSIX | Works correctly on NFS |
+
+The new `FileReader` abstraction in `inst/include/streampress/io/file_reader.hpp`
+wraps this platform difference behind a single `pread(offset, buf, size)` call.
+On Windows, it wraps `ReadFile()` with `OVERLAPPED`. This is the correct
+foundation for Windows/laptop support throughout the codebase.
+
+#### Optional in-core threshold
+
+For small files (default threshold: 2 GB), auto-loading into RAM is still
+optimal. The loader checks file size at open and decides:
+```
+if file_size < ram_threshold → legacy bulk-read (fast, RAM permitting)
+else             → seek-based streaming (any file size)
+```
+The threshold is configurable; on a laptop with 8 GB RAM the threshold should
+be much smaller (e.g., 512 MB). This connects directly to §6.7 auto-dispatch.
+
+### 6.3 Phase 2: Dense v3 Compression
+
+**Files**: `inst/include/sparsepress/format/header_v3.hpp`,
+`inst/include/sparsepress/sparsepress_v3.hpp`
+
+The dense v3 format has 48 reserved bytes in `FileHeader_v3.reserved[48]`. Use
+the first two bytes as codec metadata:
+
+```cpp
+// reserved[0]: compression codec
+enum DenseCodec : uint8_t {
+    RAW_FP32   = 0,  // current format — no change, fully backwards compatible
+    FP16       = 1,  // lossless fp16 truncation (50% size)
+    QUANT8     = 2,  // 8-bit quantization (75% size, ~0.4% error)
+    FP16_RANS  = 3,  // fp16 + XOR-delta columns + rANS entropy (best ratio)
+    FP32_RANS  = 4,  // fp32 + XOR-delta columns + rANS entropy
+};
+// reserved[1]: delta encoding flag (0=none, 1=XOR-delta between adjacent columns)
+```
+
+Because existing v3 files were written with `reserved[0]=0` (zero-filled by
+default), they read as `RAW_FP32` — automatically backwards compatible. No
+new version number is needed.
+
+#### Codec pipeline (write path)
+```
+float32 panel → fp16_convert (value_map.hpp) → XOR-delta transform
+              → rANS encode (rans.hpp) → compressed bytes → DenseChunkDescriptor
+```
+The `DenseChunkDescriptor` gains an `uncompressed_size` field (currently
+`byte_size == m × nc × val_bytes` exactly; now `byte_size` = compressed
+bytes and `uncompressed_size` = original bytes for decompression buffer sizing).
+
+Reuse existing codecs without modification:
+- `sparsepress/codec/rans.hpp` — rANS entropy codec
+- `sparsepress/transform/value_map.hpp` — fp16/quant8 conversion
+
+No existing v3 files are in production → no backwards compat needed for the v3
+chunk descriptor extension.
+
+### 6.4 Phase 3: User-Configurable Chunk Size (Default 2048)
+
+**Default change**: `DEFAULT_CHUNK_COLS` raised from **256 → 2048**.
+
+This single change is expected to reduce streaming I/O overhead by ~8× at low k
+(direct scaling with chunk size for the same per-chunk cost) and significantly
+improve GPU utilisation.
+
+#### User-facing API
+
+Expose `chunk_cols` as a named parameter on the write function:
+```r
+st_write(x, path, chunk_cols = 2048, compression = "fp16_rans", ...)
+```
+
+- `chunk_cols = 2048`: default; good balance for HPC and laptop
+- `chunk_cols = "auto"`: system-aware selection (§6.7)
+- A numeric value: explicit override; power users can set 256 for debugging
+  or 8192 for a beefy server
+
+**No validation hazard**: chunk_cols affects only write-time layout. The reader
+always consults `ChunkDescriptor.num_cols` from the file header, so reading
+a file written with any chunk size always works correctly.
+
+#### Auto-sizing heuristic (`choose_chunk_cols()`)
+
+```cpp
+uint32_t choose_chunk_cols(uint64_t m, uint32_t k, uint64_t ram_avail_bytes) {
+    // Target: one chunk decompressed ≈ 1% of available memory budget
+    // (ensures ~100 chunks can be kept in memory simultaneously during transpose)
+    uint64_t bytes_per_col = m * sizeof(float);
+    uint64_t target_chunk_bytes = ram_avail_bytes / 100;
+    uint32_t auto_cols = (uint32_t)(target_chunk_bytes / bytes_per_col);
+    return std::clamp(auto_cols, (uint32_t)256, (uint32_t)32768);
+}
+```
+
+On a laptop with 8 GB RAM and m=30K genes, this gives ~2,700 columns/chunk.
+On a 256 GB HPC node, ~85,000 columns/chunk — the whole matrix in one chunk,
+falling back to in-core mode automatically.
+
+### 6.5 Phase 4: Full Rename SparsePress → StreamPress
+
+All user-visible names change from `sparsepress`/`sp_*` to `streampress`/`st_*`.
+Old names are retained as `@Deprecated` aliases for one release cycle.
+
+| Before | After | Scope |
+|--------|-------|-------|
+| `namespace sparsepress` | `namespace streampress` | All C++ headers |
+| `#include <sparsepress/...>` | `#include <streampress/...>` | All consumers |
+| `inst/include/sparsepress/` | `inst/include/streampress/` | Directory |
+| `sp_write()` | `st_write()` | R API |
+| `sp_read()` | `st_read()` | R API |
+| `sp_info()` | `st_info()` | R API |
+| `sp_convert()` | `st_convert()` | R API |
+| `R/sparsepress.R` | `R/streampress.R` | R source |
+
+The v1/v2/v3 on-disk magic bytes (`SPRZ`, `SPEN`) are **not changed** — they
+are format-level constants and changing them would invalidate the entire GEO
+corpus. The rename is purely at the software API level.
+
+Deprecation wrappers in `R/sparsepress_compat.R`:
+```r
+#' @export
+#' @rdname streampress-deprecated
+sp_write <- function(...) {
+  .Deprecated("st_write", package = "RcppML")
+  st_write(...)
+}
+```
+
+### 6.6 Phase 5: Distributed Streaming Transpose
+
+Two complementary modes:
+
+**During write** (`include_transpose=TRUE`):
+```r
+st_write(x, path, include_transpose = TRUE)
+```
+While streaming `x` chunk by chunk (col-major), accumulate a sorted-row
+buffer for the transpose section. Working memory is O(m × chunk_cols × val_bytes)
+— the same as one forward chunk. No second pass required. The transpose section
+is appended to the same file; `FileHeader` offsets are patched at close.
+
+**Post-hoc** (`st_add_transpose()`):
+```r
+st_add_transpose(path, tmpdir = tempdir(), verbose = TRUE)
+```
+For existing `.spz` files that lack a transpose section. Uses the same
+streaming sort algorithm with `tmpdir` for intermediate chunk buffers.
+Memory requirement: O(chunk_cols × m × val_bytes) at any time.
+
+Both modes produce an identical on-disk result. The forward and transpose
+sections are independently addressable via `FileHeader` offsets, so
+`SpzLoader::next_forward()` and `SpzLoader::next_transpose()` continue to
+work unchanged.
+
+### 6.7 Phase 6: Memory-Aware Auto-Dispatch
+
+Whenever a `.spz` file path is passed to `nmf()` or `cv_nmf()`, the dispatch
+mode is determined **automatically** without user intervention. The user never
+needs to set `resource=` or `streaming=` manually for `.spz` inputs.
+
+#### Dispatch modes
+
+```
+IN_CORE_GPU    matrix fits in GPU VRAM → load all to device, run in-core GPU NMF
+CPU_TO_GPU     fits in CPU RAM but not VRAM → pin to CPU RAM, stream chunks to GPU
+STREAMING_GPU  matrix too large for CPU RAM → I/O→CPU→GPU pipeline (1 chunk at a time)
+IN_CORE_CPU    matrix fits in CPU RAM, no GPU → load all, run in-core CPU NMF
+STREAMING_CPU  matrix too large for CPU RAM, no GPU → streaming CPU NMF
+```
+
+The threshold decision:
+```
+compressed_file_size × decompression_ratio < available × safety_margin
+```
+where `safety_margin=0.70` and `decompression_ratio` is read from the
+file header (fp16≈2.0, raw≈1.0, rANS≈0.5—2.0).
+
+#### Memory detection — platform-conditional
+
+| Platform | CPU RAM query | GPU VRAM query |
+|----------|--------------|----------------|
+| Linux | `/proc/meminfo` `MemAvailable` | `cudaMemGetInfo()` |
+| macOS | `sysctl hw.memsize` + `vm_stat` | Metal API or skip |
+| Windows | `GlobalMemoryStatusEx()` | `cudaMemGetInfo()` or skip |
+
+This is essential for laptop support. A Windows laptop with 8 GB RAM and
+no GPU must auto-select `STREAMING_CPU` for any file exceeding ~5 GB.
+A 256 GB HPC node with an 80 GB H100 would auto-select `IN_CORE_GPU` for
+most single-cell datasets.
+
+#### Advanced manual override
+
+A power-user escape hatch is exposed as a named parameter:
+
+```r
+nmf("data.spz", k = 32,
+    dispatch = "STREAMING_CPU")  # manual override — dangerous!
+```
+
+When `dispatch` is set explicitly, auto-detection is **skipped entirely**. A
+bold `WARNING` is emitted at the R level:
+
+```
+Warning: `dispatch` is set manually. Auto-dispatch ensures sufficient RAM
+  is available before loading. Manual dispatch may cause out-of-memory errors
+  or crashes. Current setting: STREAMING_CPU.
+  Remove `dispatch=` to restore safe automatic mode.
+```
+
+This warning is **non-suppressable** (not going through `suppressWarnings`)
+via a direct `message()` call, ensuring users who copy-paste production code
+always see the caveat.
+
+#### Integration point
+
+Auto-dispatch is wired into `nmf_thin.R` before any C++ call is made:
+```r
+if (is.character(A) && grepl("\\.spz$", A)) {
+  mode <- .auto_dispatch(A, k, resource = resource)
+  resource <- mode$resource    # "cpu" or "gpu"
+  streaming <- mode$streaming  # TRUE or FALSE
+  # ... proceed ...
+}
+```
+
+### 6.8 Phase 7: GEO Corpus Compatibility and k=64 Benchmark
+
+#### Compatibility verification
+
+The test target is the **GEO reprocessed download corpus** under
+`/mnt/projects/debruinz_project/` (exact path confirmed in Phase 0). The old
+`cellcensus_500k.spz` and `cellcensus_900k.spz` files have been deleted and
+are **not** the test target.
+
+Compatibility test script: `tools/verify_spz_corpus.R`
+```r
+# Sample 100 files from GEO corpus, check header + first chunk
+for (f in sample(geo_files, 100)) {
+  info <- st_info(f)  # must succeed without error
+  stopifnot(info$version == 2L)
+  stopifnot(info$m > 0, info$n > 0, info$nnz > 0)
+}
+```
+
+This does **not** decompress full content — just header + first chunk. A full
+dataaset round-trip test is reserved for a dedicated benchmark job.
+
+#### Unit tests
+
+`tests/testthat/test_streampress_compat.R`:
+- Round-trip: write sparse matrix → `st_write()` → `st_read()` → identical
+- Round-trip: write dense matrix → `st_write(codec="fp16_rans")` → `st_read()` → within fp16 tolerance
+- Read v2 file (pbmc3k.spz): dimensions and nnz match expected values
+- Memory test: `SpzLoader` on a 5 GB `.spz` uses < 50 MB non-file RAM after fix
+- Auto-dispatch test: mock a 200 GB file, verify `IN_CORE_GPU` selected when
+  mocked VRAM > file size, `STREAMING_GPU` when VRAM < file size
+
+#### k=64 benchmark on GEO corpus
+
+This is the **flagship publication benchmark** target for Paper P4:
+
+```r
+# Real-world benchmark: GEO single-cell dataset, k=64, NB loss
+result <- nmf(
+  path_to_geo_spz_file,  # confirmed from Phase 0
+  k   = 64,
+  loss = "nb",
+  maxit = 100,
+  tol   = 1e-4
+)
+```
+
+The benchmark should record:
+- Total wall time (and per-iteration breakdown)
+- Peak RAM usage (not just available RAM)
+- Chunk I/O time vs. NNLS compute time vs. other (using the
+  per-section timing from `benchmarks/stream_opt/STREAMING_ANALYSIS.md` as
+  baseline comparison)
+- Whether auto-dispatch selected the correct mode
+- Convergence curve (MSE or NB loss per iteration)
+
+This demonstrates that a researcher on an HPC node can run
+`nmf("mydata.spz", k=64)` on a multi-GB single-cell dataset with **no
+configuration required** — the auto-dispatch, chunk sizing, and memory
+management are all handled transparently.
+
+### 6.9 Cross-Platform and Laptop Strategy
+
+The StreamPress revision must work correctly on Windows laptops, not just
+Linux HPC nodes. This affects three subsystems:
+
+#### Random-access file I/O (Phase 1)
+
+POSIX `pread()` does not exist on Windows. The `FileReader` abstraction
+must compile and work on all platforms:
+
+```cpp
+#ifdef _WIN32
+  // Windows: use ReadFile() with OVERLAPPED for positional reads
+  HANDLE hFile_;
+  size_t pread(size_t offset, void* buf, size_t size);
+#else
+  // POSIX (Linux, macOS, NFS): pread()
+  int fd_;
+  size_t pread(size_t offset, void* buf, size_t size);
+#endif
+```
+
+#### Memory detection (Phase 6)
+
+See §6.7 table above. On Windows, `GlobalMemoryStatusEx()` is used instead
+of `/proc/meminfo`. On macOS, `sysctl hw.memsize`. All paths must be compiled
+and tested — missing a platform branch would cause auto-dispatch to assume
+"unlimited RAM" and crash on a laptop.
+
+#### Chunk size defaults (Phase 3)
+
+The default `chunk_cols=2048` is chosen to be safe for laptops. A 30K-gene matrix
+with chunk_cols=2048 requires 30,000 × 2,048 × 4 bytes ≈ **246 MB per chunk**.
+That is reasonable for an 8 GB laptop (one chunk < 3% of RAM).
+
+For very small laptops (4 GB RAM), even this may be tight. The `auto` setting
+from `choose_chunk_cols()` will automatically select a smaller chunk size based
+on `MemAvailable`.
+
+#### Windows CI
+
+Once Phase 1 (FileReader) and Phase 4 (rename) are complete, add a Windows
+`R CMD check` target to the GitHub Actions workflow (`.github/workflows/`).
+This is a CRAN requirement for packages claiming Windows compatibility.
+
+### 6.10 Implementation Order and Dependencies
+
+```
+Phase 0  → Phase 1  (must know file locations before testing loader fix)
+Phase 1  → Phase 7  (loader fix is prerequisite for any streaming test)
+Phase 2  ← independent (dense compression, doesn't touch sparse loader)
+Phase 3  → Phase 6  (chunk sizing is part of auto-dispatch decision)
+Phase 4  ← independent (rename, can run in parallel with other phases)
+Phase 5  ← after Phase 1 (transpose uses same FileReader abstraction)
+Phase 6  ← after Phase 3 and Phase 1 (dispatch needs accurate memory + loader)
+Phase 7  ← after all other phases (final integration + benchmarks)
+```
+
+**Recommended order**: Phase 0 → Phase 1 → Phase 4 (rename interleaved) →
+Phase 2 → Phase 3 → Phase 5 → Phase 6 → Phase 7
+
+### 6.11 Relevant Files Summary
+
+| File | Role | Change |
+|------|------|--------|
+| `inst/include/FactorNet/io/spz_loader.hpp` | SpzLoader — sparse v2 | Fix loader bug (Phase 1) |
+| `inst/include/FactorNet/io/dense_spz_loader.hpp` | DenseSpzLoader — dense v3 | Fix loader bug (Phase 1) |
+| `inst/include/FactorNet/io/loader.hpp` | DataLoader interface | No change |
+| `inst/include/sparsepress/format/header_v2.hpp` | v2 format spec | **DO NOT MODIFY** |
+| `inst/include/sparsepress/format/header_v3.hpp` | v3 format spec | Add codec in reserved[0:1] (Phase 2) |
+| `inst/include/sparsepress/sparsepress_v3.hpp` | v3 write/read | Add compression pipeline (Phase 2) |
+| `inst/include/sparsepress/codec/rans.hpp` | rANS codec | Reuse as-is — no changes |
+| `inst/include/sparsepress/transform/value_map.hpp` | fp16/quant8 convert | Reuse as-is — no changes |
+| `inst/include/FactorNet/nmf/fit_streaming_spz.hpp` | Streaming NMF entry | Update to streampress ns (Phase 4) |
+| `inst/include/FactorNet/nmf/fit_chunked.hpp` | Chunked CPU NMF | Update chunk_cols default (Phase 3) |
+| `inst/include/FactorNet/nmf/fit_chunked_gpu.cuh` | Chunked GPU NMF | Update chunk_cols default (Phase 3) |
+| `R/sparsepress.R` → `R/streampress.R` | R API | Full rename + deprecated wrappers (Phase 4) |
+| `R/nmf_thin.R` | Dispatch logic | Wire auto-dispatch for .spz input (Phase 6) |
+| `tools/verify_spz_corpus.R` | Corpus compat check | New (Phase 7) |
+| `tests/testthat/test_streampress_compat.R` | Unit tests | New (Phase 7) |

@@ -17,6 +17,7 @@
 #include <FactorNet/core/result.hpp>
 #include <FactorNet/core/logging.hpp>
 #include <FactorNet/core/resources.hpp>
+#include <FactorNet/core/platform.hpp>
 #include <FactorNet/io/spz_loader.hpp>
 #include <FactorNet/io/dense_spz_loader.hpp>
 #include <FactorNet/nmf/fit_chunked.hpp>
@@ -111,10 +112,25 @@ FactorNet::NMFResult<Scalar> nmf_streaming_spz(
     std::unique_ptr<MatS> W_init_ptr;
     std::unique_ptr<MatS> H_init_ptr;
 
-    if (config.init_mode == 1 || config.init_mode == 2) {
+    int init_mode_effective = config.init_mode;
+    if (init_mode_effective == 1 || init_mode_effective == 2) {
+        // Check if the decompressed matrix fits in available RAM
+        uint64_t est_bytes = static_cast<uint64_t>(m) * static_cast<uint64_t>(n) * sizeof(Scalar);
+        uint64_t avail_bytes = FactorNet::get_available_ram_bytes();
+        if (avail_bytes > 0 && est_bytes > static_cast<uint64_t>(avail_bytes * 0.70)) {
+            Rcpp::warning(
+                "SVD initialization requires decompressing the full matrix (%s GB), "
+                "but only %s GB RAM is available. Falling back to random initialization. "
+                "Pass init=\"random\" to suppress this warning.",
+                FactorNet::to_gb_str(est_bytes), FactorNet::to_gb_str(avail_bytes));
+            init_mode_effective = 0;  // fall back to random
+        }
+    }
+
+    if (init_mode_effective == 1 || init_mode_effective == 2) {
         FACTORNET_LOG_NMF(FactorNet::LogLevel::SUMMARY, verbose,
             "Building temporary matrix for %s init...\n",
-            config.init_mode == 1 ? "Lanczos" : "IRLBA");
+            init_mode_effective == 1 ? "Lanczos" : "IRLBA");
 
         // Decompress all forward chunks into a full sparse matrix
         std::vector<int> full_colptr(n + 1, 0);
@@ -147,13 +163,13 @@ FactorNet::NMFResult<Scalar> nmf_streaming_spz(
 
         FACTORNET_LOG_NMF(FactorNet::LogLevel::SUMMARY, verbose,
             "Running %s SVD (k=%d)...\n",
-            config.init_mode == 1 ? "Lanczos" : "IRLBA", k);
+            init_mode_effective == 1 ? "Lanczos" : "IRLBA", k);
 
         MatS W_T_svd(k, m);
         MatS H_svd(k, n);
         VecS d_svd(k);
 
-        if (config.init_mode == 1) {
+        if (init_mode_effective == 1) {
             detail::initialize_lanczos(W_T_svd, H_svd, d_svd, A_full,
                                        k, static_cast<int>(m), static_cast<int>(n),
                                        config.seed, config.threads, verbose);

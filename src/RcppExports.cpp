@@ -522,8 +522,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // Rcpp_sp_write
-List Rcpp_sp_write(const S4& A, const std::string& path, bool use_delta, bool use_value_pred, bool verbose, const std::string& precision, bool row_sort, bool include_transpose);
-RcppExport SEXP _RcppML_Rcpp_sp_write(SEXP ASEXP, SEXP pathSEXP, SEXP use_deltaSEXP, SEXP use_value_predSEXP, SEXP verboseSEXP, SEXP precisionSEXP, SEXP row_sortSEXP, SEXP include_transposeSEXP) {
+List Rcpp_sp_write(const S4& A, const std::string& path, bool use_delta, bool use_value_pred, bool verbose, const std::string& precision, bool row_sort, bool include_transpose, int chunk_cols);
+RcppExport SEXP _RcppML_Rcpp_sp_write(SEXP ASEXP, SEXP pathSEXP, SEXP use_deltaSEXP, SEXP use_value_predSEXP, SEXP verboseSEXP, SEXP precisionSEXP, SEXP row_sortSEXP, SEXP include_transposeSEXP, SEXP chunk_colsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -535,7 +535,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const std::string& >::type precision(precisionSEXP);
     Rcpp::traits::input_parameter< bool >::type row_sort(row_sortSEXP);
     Rcpp::traits::input_parameter< bool >::type include_transpose(include_transposeSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_sp_write(A, path, use_delta, use_value_pred, verbose, precision, row_sort, include_transpose));
+    Rcpp::traits::input_parameter< int >::type chunk_cols(chunk_colsSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_sp_write(A, path, use_delta, use_value_pred, verbose, precision, row_sort, include_transpose, chunk_cols));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -599,8 +600,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // Rcpp_sp_write_dense
-List Rcpp_sp_write_dense(const NumericMatrix& A, const std::string& path, bool include_transpose, int chunk_cols);
-RcppExport SEXP _RcppML_Rcpp_sp_write_dense(SEXP ASEXP, SEXP pathSEXP, SEXP include_transposeSEXP, SEXP chunk_colsSEXP) {
+List Rcpp_sp_write_dense(const NumericMatrix& A, const std::string& path, bool include_transpose, int chunk_cols, int codec, bool delta);
+RcppExport SEXP _RcppML_Rcpp_sp_write_dense(SEXP ASEXP, SEXP pathSEXP, SEXP include_transposeSEXP, SEXP chunk_colsSEXP, SEXP codecSEXP, SEXP deltaSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -608,7 +609,9 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const std::string& >::type path(pathSEXP);
     Rcpp::traits::input_parameter< bool >::type include_transpose(include_transposeSEXP);
     Rcpp::traits::input_parameter< int >::type chunk_cols(chunk_colsSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_sp_write_dense(A, path, include_transpose, chunk_cols));
+    Rcpp::traits::input_parameter< int >::type codec(codecSEXP);
+    Rcpp::traits::input_parameter< bool >::type delta(deltaSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_sp_write_dense(A, path, include_transpose, chunk_cols, codec, delta));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -631,6 +634,28 @@ BEGIN_RCPP
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< const std::string& >::type path(pathSEXP);
     rcpp_result_gen = Rcpp::wrap(Rcpp_sp_metadata_v3(path));
+    return rcpp_result_gen;
+END_RCPP
+}
+// Rcpp_get_available_ram_mb
+double Rcpp_get_available_ram_mb();
+RcppExport SEXP _RcppML_Rcpp_get_available_ram_mb() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    rcpp_result_gen = Rcpp::wrap(Rcpp_get_available_ram_mb());
+    return rcpp_result_gen;
+END_RCPP
+}
+// Rcpp_st_add_transpose
+bool Rcpp_st_add_transpose(const std::string& path, bool verbose);
+RcppExport SEXP _RcppML_Rcpp_st_add_transpose(SEXP pathSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const std::string& >::type path(pathSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_st_add_transpose(path, verbose));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -659,15 +684,17 @@ static const R_CallMethodDef CallEntries[] = {
     {"_RcppML_c_rsparsematrix", (DL_FUNC) &_RcppML_c_rsparsematrix, 5},
     {"_RcppML_Rcpp_bipartite_match", (DL_FUNC) &_RcppML_Rcpp_bipartite_match, 1},
     {"_RcppML_c_knn_jaccard", (DL_FUNC) &_RcppML_c_knn_jaccard, 2},
-    {"_RcppML_Rcpp_sp_write", (DL_FUNC) &_RcppML_Rcpp_sp_write, 8},
+    {"_RcppML_Rcpp_sp_write", (DL_FUNC) &_RcppML_Rcpp_sp_write, 9},
     {"_RcppML_Rcpp_sp_read", (DL_FUNC) &_RcppML_Rcpp_sp_read, 3},
     {"_RcppML_Rcpp_sp_read_transpose", (DL_FUNC) &_RcppML_Rcpp_sp_read_transpose, 1},
     {"_RcppML_Rcpp_sp_metadata", (DL_FUNC) &_RcppML_Rcpp_sp_metadata, 1},
     {"_RcppML_Rcpp_sp_compress", (DL_FUNC) &_RcppML_Rcpp_sp_compress, 3},
     {"_RcppML_Rcpp_sp_decompress", (DL_FUNC) &_RcppML_Rcpp_sp_decompress, 1},
-    {"_RcppML_Rcpp_sp_write_dense", (DL_FUNC) &_RcppML_Rcpp_sp_write_dense, 4},
+    {"_RcppML_Rcpp_sp_write_dense", (DL_FUNC) &_RcppML_Rcpp_sp_write_dense, 6},
     {"_RcppML_Rcpp_sp_read_dense", (DL_FUNC) &_RcppML_Rcpp_sp_read_dense, 1},
     {"_RcppML_Rcpp_sp_metadata_v3", (DL_FUNC) &_RcppML_Rcpp_sp_metadata_v3, 1},
+    {"_RcppML_Rcpp_get_available_ram_mb", (DL_FUNC) &_RcppML_Rcpp_get_available_ram_mb, 0},
+    {"_RcppML_Rcpp_st_add_transpose", (DL_FUNC) &_RcppML_Rcpp_st_add_transpose, 2},
     {NULL, NULL, 0}
 };
 

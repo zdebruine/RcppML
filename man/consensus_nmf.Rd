@@ -77,10 +77,10 @@ library(Matrix)
 A <- rsparsematrix(100, 50, 0.3)
 
 # Traditional hard clustering consensus
-cons_hard <- consensus_nmf(A, k = 5, reps = 30, method = "hard", seed = 123)
+cons_hard <- consensus_nmf(A, k = 5, reps = 10, method = "hard", seed = 123)
 
 # KNN Jaccard consensus (more robust)
-cons_knn <- consensus_nmf(A, k = 5, reps = 30, method = "knn_jaccard", knn = 15, seed = 123)
+cons_knn <- consensus_nmf(A, k = 5, reps = 10, method = "knn_jaccard", knn = 15, seed = 123)
 
 # Plot consensus heatmap
 plot(cons_hard)

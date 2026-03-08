@@ -293,6 +293,13 @@ score_test_distribution <- function(data, model,
 #' have high variance (suggesting different rows/cols have different ZI levels).
 #'
 #' @seealso \code{\link{auto_nmf_distribution}}, \code{\link{nmf}}
+#' @examples
+#' \donttest{
+#' data(aml)
+#' model <- nmf(aml, k = 3, maxit = 10, seed = 1)
+#' zi <- diagnose_zero_inflation(aml, model)
+#' zi$has_zi
+#' }
 #' @export
 diagnose_zero_inflation <- function(data, model, threshold = 0.05) {
   W <- model@w
@@ -387,6 +394,13 @@ diagnose_zero_inflation <- function(data, model, threshold = 0.05) {
 #' per-column. If both CVs are low, global dispersion suffices.
 #'
 #' @seealso \code{\link{auto_nmf_distribution}}, \code{\link{nmf}}
+#' @examples
+#' \donttest{
+#' data(aml)
+#' model <- nmf(aml, k = 3, maxit = 10, seed = 1)
+#' disp <- diagnose_dispersion(aml, model)
+#' disp$mode
+#' }
 #' @export
 diagnose_dispersion <- function(data, model, cv_threshold = 0.5,
                                  min_mu = 1e-6) {

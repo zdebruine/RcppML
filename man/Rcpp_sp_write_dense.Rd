@@ -4,7 +4,14 @@
 \alias{Rcpp_sp_write_dense}
 \title{Write a dense matrix to an SPZ v3 file}
 \usage{
-Rcpp_sp_write_dense(A, path, include_transpose = FALSE, chunk_cols = 256L)
+Rcpp_sp_write_dense(
+  A,
+  path,
+  include_transpose = FALSE,
+  chunk_cols = 256L,
+  codec = 0L,
+  delta = FALSE
+)
 }
 \arguments{
 \item{A}{A numeric matrix (dense)}
@@ -14,6 +21,10 @@ Rcpp_sp_write_dense(A, path, include_transpose = FALSE, chunk_cols = 256L)
 \item{include_transpose}{Also store transposed panels for streaming NMF}
 
 \item{chunk_cols}{Columns per chunk (default 256)}
+
+\item{codec}{Compression codec: 0=RAW_FP32, 1=FP16, 2=QUANT8, 3=FP16_RANS, 4=FP32_RANS}
+
+\item{delta}{Apply XOR-delta encoding before entropy coding}
 }
 \value{
 A list with write statistics

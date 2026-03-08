@@ -34,6 +34,16 @@ Trains a multinomial logistic regression on factor embeddings using
 \code{stats::glm} (one-vs-rest for > 2 classes) and evaluates on test
 samples with the same comprehensive metrics as \code{classify_embedding}.
 }
+\examples{
+\donttest{
+# Logistic regression on random embeddings
+set.seed(42)
+embed <- matrix(rnorm(200), nrow = 40, ncol = 5)
+labels <- factor(rep(1:4, each = 10))
+eval <- classify_logistic(embed, labels, seed = 1)
+eval$accuracy
+}
+}
 \seealso{
 \code{\link{classify_embedding}}, \code{\link{classify_rf}}
 }

@@ -104,8 +104,8 @@ c_knn_jaccard <- function(sim_matrix, knn) {
 #' @param include_transpose Also store CSC(A^T) in file
 #' @return A list with compression statistics
 #' @keywords internal
-Rcpp_sp_write <- function(A, path, use_delta = TRUE, use_value_pred = FALSE, verbose = FALSE, precision = "auto", row_sort = FALSE, include_transpose = FALSE) {
-    .Call(`_RcppML_Rcpp_sp_write`, A, path, use_delta, use_value_pred, verbose, precision, row_sort, include_transpose)
+Rcpp_sp_write <- function(A, path, use_delta = TRUE, use_value_pred = FALSE, verbose = FALSE, precision = "auto", row_sort = FALSE, include_transpose = FALSE, chunk_cols = 2048L) {
+    .Call(`_RcppML_Rcpp_sp_write`, A, path, use_delta, use_value_pred, verbose, precision, row_sort, include_transpose, chunk_cols)
 }
 
 #' @title Read a SparsePress (.spz) file into a dgCMatrix
@@ -157,10 +157,12 @@ Rcpp_sp_decompress <- function(data) {
 #' @param path Output file path (.spz)
 #' @param include_transpose Also store transposed panels for streaming NMF
 #' @param chunk_cols Columns per chunk (default 256)
+#' @param codec Compression codec: 0=RAW_FP32, 1=FP16, 2=QUANT8, 3=FP16_RANS, 4=FP32_RANS
+#' @param delta Apply XOR-delta encoding before entropy coding
 #' @return A list with write statistics
 #' @keywords internal
-Rcpp_sp_write_dense <- function(A, path, include_transpose = FALSE, chunk_cols = 256L) {
-    .Call(`_RcppML_Rcpp_sp_write_dense`, A, path, include_transpose, chunk_cols)
+Rcpp_sp_write_dense <- function(A, path, include_transpose = FALSE, chunk_cols = 256L, codec = 0L, delta = FALSE) {
+    .Call(`_RcppML_Rcpp_sp_write_dense`, A, path, include_transpose, chunk_cols, codec, delta)
 }
 
 #' @title Read an SPZ v3 dense file into a numeric matrix
@@ -177,5 +179,21 @@ Rcpp_sp_read_dense <- function(path) {
 #' @keywords internal
 Rcpp_sp_metadata_v3 <- function(path) {
     .Call(`_RcppML_Rcpp_sp_metadata_v3`, path)
+}
+
+#' @title Get available system RAM in megabytes
+#' @return Double: available RAM in MB
+#' @keywords internal
+Rcpp_get_available_ram_mb <- function() {
+    .Call(`_RcppML_Rcpp_get_available_ram_mb`)
+}
+
+#' @title Add transpose section to an existing v2 .spz file
+#' @param path Path to the .spz v2 file
+#' @param verbose Logical; print progress
+#' @return Logical TRUE on success
+#' @keywords internal
+Rcpp_st_add_transpose <- function(path, verbose = TRUE) {
+    .Call(`_RcppML_Rcpp_st_add_transpose`, path, verbose)
 }
 

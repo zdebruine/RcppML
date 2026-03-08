@@ -21,6 +21,12 @@ An \code{nmf_guide} object to pass to \code{nmf(guides = ...)}.
 Steers a factor toward a fixed target matrix. Useful for transfer
 learning, prior knowledge, or cross-layer coupling.
 }
+\examples{
+# Create an external target guide
+target <- matrix(runif(30), nrow = 5, ncol = 6)
+g <- guide_external(target, lambda = 2.0)
+g
+}
 \seealso{
 \code{\link{guide_classifier}}, \code{\link{guide_callback}}, \code{\link{nmf}}
 }

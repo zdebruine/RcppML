@@ -17,6 +17,12 @@ Invisibly returns the data frame written.
 \description{
 Export training log to CSV
 }
+\examples{
+\donttest{
+logger <- training_logger()
+# After fitting: export_log(logger, tempfile(fileext = ".csv"))
+}
+}
 \seealso{
 \code{\link{training_logger}}, \code{\link{as.data.frame.training_logger}}
 }

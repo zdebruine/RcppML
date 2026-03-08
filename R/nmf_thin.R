@@ -326,6 +326,7 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
                 on_iteration = NULL,
                 h_init = NULL,
                 profile = FALSE,
+                dispatch = NULL,
                 ...) {
   
   start_time <- Sys.time()
@@ -588,7 +589,12 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
     } else if (use_gpu) {
       solver <- if (max(k) <= 32) "cd" else "cholesky"
     } else {
-      solver <- "cholesky"
+      # CPU: Cholesky for small k with no L1; CD otherwise
+      if (max(k) < 32 && all(L1 == 0)) {
+        solver <- "cholesky"
+      } else {
+        solver <- "cd"
+      }
     }
   }
   # Cholesky solver does not support IRLS (non-MSE distributions)
@@ -623,6 +629,26 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
     n_samples <- data$n
   }
   
+  # --- StreamPress auto-dispatch ---
+  # If data is a .spz file path, auto-detect the optimal execution mode
+  # based on available RAM/VRAM and estimated data size.
+  if (is.character(data) && length(data) == 1 &&
+      grepl("\\.spz$", data, ignore.case = TRUE)) {
+    if (is.null(dispatch) || identical(dispatch, "auto")) {
+      mode_info <- .st_dispatch(data, k, resource = resource)
+      if (verbose) message("StreamPress auto-dispatch: ", mode_info$mode)
+      resource <- mode_info$resource
+      streaming <- mode_info$streaming
+    } else {
+      message(
+        "WARNING: `dispatch` is set manually to '", dispatch, "'.\n",
+        "  Auto-dispatch ensures sufficient RAM is available before loading.\n",
+        "  Manual dispatch may cause out-of-memory errors or crashes.\n",
+        "  Remove `dispatch=` to restore safe automatic mode."
+      )
+    }
+  }
+
   # --- Streaming SPZ shortcut ---
   # If data is a .spz file path AND streaming is enabled,
   # use streaming NMF directly (no decompression into memory).
@@ -655,6 +681,16 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
       } else {
         spz_mask <- .to_dgCMatrix(as(mask, "dMatrix"))
       }
+    }
+
+    # NB streaming: fixed dispersion warning (§2.2.1)
+    if (loss == "nb") {
+      warning(
+        "Streaming NB NMF uses fixed dispersion throughout all iterations.\n",
+        "  The in-memory path re-estimates dispersion per iteration, but streaming cannot.\n",
+        "  Supply a pre-estimated nb_size_init if your data has strong overdispersion.",
+        call. = FALSE
+      )
     }
 
     if (length(nonneg) == 1) nonneg <- rep(nonneg, 2)
@@ -779,7 +815,8 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
       loss = result$loss,
       runtime = difftime(Sys.time(), start_time, units = "secs"),
       streaming = TRUE,
-      spz_file = data
+      spz_file = data,
+      solver_mode = solver_mode
     )
     if (!is.null(result$train_loss_history) && length(result$train_loss_history) > 0)
       misc$loss_history <- result$train_loss_history
@@ -1388,7 +1425,8 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
     iter = result$iter,
     loss_type = loss,
     runtime = difftime(Sys.time(), start_time, units = "secs"),
-    w_init = if (!is.null(w_init_mat)) w_init_mat else NULL
+    w_init = if (!is.null(w_init_mat)) w_init_mat else NULL,
+    solver_mode = solver_mode
   )
   
   # CV outputs

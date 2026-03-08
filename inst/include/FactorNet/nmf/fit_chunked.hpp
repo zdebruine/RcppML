@@ -25,6 +25,7 @@
 #include <FactorNet/core/logging.hpp>
 #include <FactorNet/rng/rng.hpp>
 #include <FactorNet/io/loader.hpp>
+#include <FactorNet/io/ping_pong_prefetch.hpp>
 
 // Feature headers
 #include <FactorNet/features/L21.hpp>
@@ -37,6 +38,7 @@
 #include <FactorNet/primitives/cpu/nnls_batch_irls.hpp>
 #include <FactorNet/nmf/speckled_cv.hpp>
 #include <FactorNet/nmf/variant_helpers.hpp>
+#include <FactorNet/math/loss.hpp>
 #include <FactorNet/profiling/stream_timer.hpp>
 
 #include <Eigen/Dense>
@@ -44,7 +46,6 @@
 #include <vector>
 #include <algorithm>
 #include <type_traits>
-#include <future>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -89,6 +90,9 @@ FactorNet::NMFResult<Scalar> nmf_chunked(
     FACTORNET_LOG_NMF(FactorNet::LogLevel::SUMMARY, verbose,
         "Rank: %d, maxit: %d, tol: %.1e, threads: %d\n",
         k, config.max_iter, config.tol, config.threads);
+
+    FACTORNET_LOG_NMF(FactorNet::LogLevel::SUMMARY, verbose,
+        "XYZZY_BUILD_CHECK: entering init phase\n");
 
     // ---- Initialize W, d, H ----
     FactorNet::NMFResult<Scalar> result;
@@ -157,10 +161,6 @@ FactorNet::NMFResult<Scalar> nmf_chunked(
     MatS B_panel(k, 0);
     MatS H_panel;
     MatS W_T(k, m);  // Pre-transposed W for cache-friendly RHS computation
-    // Double-buffered chunk reading: overlap I/O with compute
-    FactorNet::io::Chunk<Scalar> chunk_buf_a, chunk_buf_b;
-    FactorNet::io::Chunk<Scalar>* chunk_cur = &chunk_buf_a;
-    FactorNet::io::Chunk<Scalar>* chunk_next = &chunk_buf_b;
 
     // NB: per-row inverse-dispersion (size) vector, initialized from config
     DenseVector<Scalar> nb_size_vec;
@@ -181,6 +181,8 @@ FactorNet::NMFResult<Scalar> nmf_chunked(
     FactorNet::profiling::StreamTimer stream_timer(config.enable_profiling);
 
     for (int iter = 0; iter < config.max_iter; ++iter) {
+        FACTORNET_LOG_NMF(FactorNet::LogLevel::SUMMARY, verbose,
+            "XYZZY iter %d: gram\n", iter);
         stream_timer.iter_begin();
         // ---- G_W = W'W + regularization ----
         // Pre-transpose W for cache-friendly sparse RHS: W_T(fi, row) is
@@ -212,29 +214,29 @@ FactorNet::NMFResult<Scalar> nmf_chunked(
             G_H.noalias() = W_T * W_T.transpose();
         } else {
 
-        // ---- Process each forward chunk (H-update, double-buffered) ----
+        // ---- Process each forward chunk (H-update, PingPongPrefetcher) ----
+        FACTORNET_LOG_NMF(FactorNet::LogLevel::SUMMARY, verbose,
+            "XYZZY iter %d: fwd reset\n", iter);
         loader.reset_forward();
-        // Pre-load first chunk
+        FACTORNET_LOG_NMF(FactorNet::LogLevel::SUMMARY, verbose,
+            "XYZZY iter %d: fwd pp ctor\n", iter);
         {
-            stream_timer.begin("chunk_read");
-            bool has_first = loader.next_forward(*chunk_cur);
-            stream_timer.end();
-            if (!has_first) goto forward_done;
-        }
-        // Start async prefetch of second chunk
-        {
-            auto prefetch = std::async(std::launch::async, [&loader, &chunk_next]() {
-                return loader.next_forward(*chunk_next);
-            });
+            FactorNet::io::PingPongPrefetcher<FactorNet::io::Chunk<Scalar>> fwd_pp(
+                [&loader](FactorNet::io::Chunk<Scalar>& c) {
+                    return loader.next_forward(c);
+                });
+            FACTORNET_LOG_NMF(FactorNet::LogLevel::SUMMARY, verbose,
+                "XYZZY iter %d: fwd pp next\n", iter);
+            FactorNet::io::Chunk<Scalar>* chunk_ptr = nullptr;
 
-        while (true) {
-            const uint32_t col_start = chunk_cur->col_start;
-            const uint32_t nc = chunk_cur->num_cols;
-            const SpMat& A_panel = chunk_cur->matrix;
+        while (fwd_pp.next(chunk_ptr)) {
+            const uint32_t col_start = chunk_ptr->col_start;
+            const uint32_t nc = chunk_ptr->num_cols;
+            const SpMat& A_panel = chunk_ptr->matrix;
 
             FACTORNET_LOG_NMF(FactorNet::LogLevel::DEBUG, verbose,
                 "  Fwd chunk: cols %u-%u, nnz=%llu\n",
-                col_start, col_start + nc - 1, (unsigned long long)chunk_cur->nnz);
+                col_start, col_start + nc - 1, (unsigned long long)chunk_ptr->nnz);
 
             H_panel.resize(k, nc);
             H_panel.setZero();
@@ -277,13 +279,7 @@ FactorNet::NMFResult<Scalar> nmf_chunked(
                             std::vector<int> nz_rows;
                             for (typename SpMat::InnerIterator it(A_panel, jj); it; ++it)
                                 nz_rows.push_back(static_cast<int>(it.row()));
-                            size_t ni = 0;
-                            for (uint32_t i = 0; i < m; ++i) {
-                                if (ni < nz_rows.size() &&
-                                    nz_rows[ni] == static_cast<int>(i)) { ++ni; continue; }
-                                if (cv_mask->is_holdout(i, gj))
-                                    excl_rows.push_back(static_cast<int>(i));
-                            }
+                            cv_mask->holdout_zero_rows(gj, m, nz_rows, excl_rows);
                         }
 
                         // Gram correction: G_loc = G_W - W_excl * W_excl^T
@@ -336,40 +332,106 @@ FactorNet::NMFResult<Scalar> nmf_chunked(
                         H_panel.col(jj) = x_loc;
 
                         // Loss at nonzero entries
+                        // NOTE: when use_irls=true, loss_history contains the IRLS objective
+                        // (distribution-specific deviance/NLL), not MSE.
                         for (typename SpMat::InnerIterator it(A_panel, jj); it; ++it) {
                             if (has_mask && config.mask->coeff(it.row(), gj) != 0)
                                 continue;
                             Scalar recon = 0;
                             for (int fi = 0; fi < k; ++fi)
                                 recon += result.W(it.row(), fi) * result.d(fi) * x_loc(fi);
-                            Scalar diff = it.value() - recon;
-                            double sq = static_cast<double>(diff * diff);
-                            if (has_cv && cv_mask->is_holdout(it.row(), gj)) {
-                                chunk_test += sq; chunk_n_test++;
+                            double loss_val;
+                            if (use_irls) {
+                                // Distribution-specific loss (GP NLL, NB NLL, Gamma deviance, etc.)
+                                Scalar theta_val = static_cast<Scalar>(0);
+                                if (is_nb && static_cast<uint32_t>(it.row()) < static_cast<uint32_t>(nb_size_vec.size()))
+                                    theta_val = nb_size_vec(it.row());
+                                loss_val = static_cast<double>(FactorNet::compute_loss(
+                                    it.value(), recon, config.loss, theta_val));
                             } else {
-                                chunk_train += sq; chunk_n_train++;
+                                Scalar diff = it.value() - recon;
+                                loss_val = static_cast<double>(diff * diff);
+                            }
+                            if (has_cv && cv_mask->is_holdout(it.row(), gj)) {
+                                chunk_test += loss_val; chunk_n_test++;
+                            } else {
+                                chunk_train += loss_val; chunk_n_train++;
                             }
                         }
 
                         // mask_zeros=false CV: loss on zero entries
                         if (has_cv && !config.mask_zeros) {
-                            std::vector<int> nz_rows;
-                            for (typename SpMat::InnerIterator it(A_panel, jj); it; ++it)
-                                nz_rows.push_back(static_cast<int>(it.row()));
-                            size_t ni = 0;
-                            for (uint32_t i = 0; i < m; ++i) {
-                                if (ni < nz_rows.size() &&
-                                    nz_rows[ni] == static_cast<int>(i)) { ++ni; continue; }
-                                if (has_mask && config.mask->coeff(i, gj) != 0) continue;
-                                Scalar recon = 0;
-                                for (int fi = 0; fi < k; ++fi)
-                                    recon += result.W(i, fi) * result.d(fi) * x_loc(fi);
-                                double sq = static_cast<double>(recon * recon);
-                                if (cv_mask->is_holdout(i, gj)) {
-                                    chunk_test += sq; chunk_n_test++;
-                                } else {
-                                    chunk_train += sq; chunk_n_train++;
+                            VecS dh(k);
+                            for (int fi = 0; fi < k; ++fi)
+                                dh(fi) = result.d(fi) * x_loc(fi);
+
+                            if (use_irls) {
+                                // IRLS: distribution-specific loss at zero entries (GP/NB/Gamma/etc.)
+                                // Cannot use Gram trick since loss(0, recon) is non-quadratic.
+                                std::vector<int> nz_set;
+                                for (typename SpMat::InnerIterator it(A_panel, jj); it; ++it)
+                                    nz_set.push_back(static_cast<int>(it.row()));
+                                size_t ni = 0;
+                                for (uint32_t i = 0; i < m; ++i) {
+                                    if (ni < nz_set.size() && nz_set[ni] == static_cast<int>(i)) { ++ni; continue; }
+                                    if (has_mask && config.mask->coeff(i, gj) != 0) continue;
+                                    Scalar recon = 0;
+                                    for (int fi = 0; fi < k; ++fi)
+                                        recon += result.W(i, fi) * dh(fi);
+                                    Scalar theta_val = static_cast<Scalar>(0);
+                                    if (is_nb && i < static_cast<uint32_t>(nb_size_vec.size()))
+                                        theta_val = nb_size_vec(i);
+                                    double loss_val = static_cast<double>(FactorNet::compute_loss(
+                                        static_cast<Scalar>(0), recon, config.loss, theta_val));
+                                    if (cv_mask->is_holdout(i, gj)) {
+                                        chunk_test += loss_val; chunk_n_test++;
+                                    } else {
+                                        chunk_train += loss_val; chunk_n_train++;
+                                    }
                                 }
+                            } else {
+                                // MSE: Gram trick for O(k²) aggregate instead of O(m·k)
+                                // total zero-entry MSE = h^T*D*G_W*D*h - Σ_{nz}(recon_i²)
+                                double total_recon_sq = 0;
+                                for (int fi = 0; fi < k; ++fi)
+                                    for (int fj = 0; fj < k; ++fj)
+                                        total_recon_sq += static_cast<double>(dh(fi)) *
+                                            static_cast<double>(G_W_clean(fi, fj)) *
+                                            static_cast<double>(dh(fj));
+
+                                double nz_recon_sq = 0;
+                                for (typename SpMat::InnerIterator it(A_panel, jj); it; ++it) {
+                                    Scalar recon = 0;
+                                    for (int fi = 0; fi < k; ++fi)
+                                        recon += result.W(it.row(), fi) * dh(fi);
+                                    nz_recon_sq += static_cast<double>(recon * recon);
+                                }
+                                double zero_recon_sq = total_recon_sq - nz_recon_sq;
+
+                                // Holdout zeros → test loss
+                                std::vector<int> nz_rows;
+                                for (typename SpMat::InnerIterator it(A_panel, jj); it; ++it)
+                                    nz_rows.push_back(static_cast<int>(it.row()));
+                                std::vector<int> holdout_zeros;
+                                cv_mask->holdout_zero_rows(gj, m, nz_rows, holdout_zeros);
+
+                                double holdout_zero_sq = 0;
+                                for (int hi : holdout_zeros) {
+                                    if (has_mask && config.mask->coeff(hi, gj) != 0) continue;
+                                    Scalar recon = 0;
+                                    for (int fi = 0; fi < k; ++fi)
+                                        recon += result.W(hi, fi) * dh(fi);
+                                    holdout_zero_sq += static_cast<double>(recon * recon);
+                                }
+
+                                int n_zeros = static_cast<int>(m) - static_cast<int>(nz_rows.size());
+                                int n_holdout_zeros = static_cast<int>(holdout_zeros.size());
+                                int n_train_zeros = n_zeros - n_holdout_zeros;
+
+                                chunk_test += holdout_zero_sq;
+                                chunk_n_test += n_holdout_zeros;
+                                chunk_train += (zero_recon_sq - holdout_zero_sq);
+                                chunk_n_train += n_train_zeros;
                             }
                         }
                     }
@@ -454,19 +516,8 @@ FactorNet::NMFResult<Scalar> nmf_chunked(
             G_H.noalias() += H_panel * H_panel.transpose();
             stream_timer.end();
 
-            // Wait for prefetched chunk and swap buffers
-            stream_timer.begin("chunk_read");
-            bool has_next = prefetch.get();
-            stream_timer.end();
-            if (!has_next) break;
-            std::swap(chunk_cur, chunk_next);
-            // Start prefetching the next chunk
-            prefetch = std::async(std::launch::async, [&loader, &chunk_next]() {
-                return loader.next_forward(*chunk_next);
-            });
         }  // end forward chunk loop
-        }  // end prefetch scope
-        forward_done:
+        }  // end PingPongPrefetcher scope
 
         // ---- Gram-trick loss finalization (batch path) ----
         // loss = trAtA - 2*cross_term + recon_norm
@@ -509,17 +560,17 @@ FactorNet::NMFResult<Scalar> nmf_chunked(
         // ---- W-update via transpose chunks ----
         loader.reset_transpose();
         if (needs_per_column) {
-            // ---- Per-row W-update with Gram correction (double-buffered) ----
+            // ---- Per-row W-update with Gram correction (PingPongPrefetcher) ----
             {
-            bool has_first_t = loader.next_transpose(*chunk_cur);
-            if (has_first_t) {
-            auto t_prefetch = std::async(std::launch::async, [&loader, &chunk_next]() {
-                return loader.next_transpose(*chunk_next);
-            });
-            while (true) {
-                const uint32_t tc_col_start = chunk_cur->col_start;
-                const uint32_t tc_nc = chunk_cur->num_cols;
-                const SpMat& AT_panel = chunk_cur->matrix;
+            FactorNet::io::PingPongPrefetcher<FactorNet::io::Chunk<Scalar>> t_pp(
+                [&loader](FactorNet::io::Chunk<Scalar>& c) {
+                    return loader.next_transpose(c);
+                });
+            FactorNet::io::Chunk<Scalar>* t_chunk_ptr = nullptr;
+            while (t_pp.next(t_chunk_ptr)) {
+                const uint32_t tc_col_start = t_chunk_ptr->col_start;
+                const uint32_t tc_nc = t_chunk_ptr->num_cols;
+                const SpMat& AT_panel = t_chunk_ptr->matrix;
 
                 #pragma omp parallel num_threads(config.threads) if(config.threads > 1)
                 {
@@ -552,17 +603,11 @@ FactorNet::NMFResult<Scalar> nmf_chunked(
 
                         // mask_zeros=false: zero entries can be holdout
                         if (has_cv && !config.mask_zeros) {
-                            std::vector<uint32_t> nz_cols;
+                            std::vector<int> nz_cols;
                             for (typename SpMat::InnerIterator it(AT_panel, jj); it; ++it)
-                                nz_cols.push_back(static_cast<uint32_t>(it.row()));
+                                nz_cols.push_back(static_cast<int>(it.row()));
                             std::sort(nz_cols.begin(), nz_cols.end());
-                            size_t ni = 0;
-                            for (uint32_t j = 0; j < n; ++j) {
-                                if (ni < nz_cols.size() && nz_cols[ni] == j)
-                                    { ++ni; continue; }
-                                if (cv_mask->is_holdout(row_A, j))
-                                    excl_cols.push_back(static_cast<int>(j));
-                            }
+                            cv_mask->holdout_zero_cols(row_A, n, nz_cols, excl_cols);
                         }
 
                         // Gram correction
@@ -618,31 +663,21 @@ FactorNet::NMFResult<Scalar> nmf_chunked(
                     }
                 }  // end omp parallel
 
-                // Wait for prefetched transpose chunk and swap
-                bool has_next_t = t_prefetch.get();
-                if (!has_next_t) break;
-                std::swap(chunk_cur, chunk_next);
-                t_prefetch = std::async(std::launch::async, [&loader, &chunk_next]() {
-                    return loader.next_transpose(*chunk_next);
-                });
             }  // end per-column transpose loop
-            }  // end if (has_first_t)
-            }  // end per-column transpose scope
+            }  // end PingPongPrefetcher transpose scope
         } else {
-            // ---- Batch W-update (double-buffered) ----
+            // ---- Batch W-update (PingPongPrefetcher) ----
             B_W.setZero();
             {
-            stream_timer.begin("w_transpose_read");
-            bool has_first_t = loader.next_transpose(*chunk_cur);
-            stream_timer.end();
-            if (has_first_t) {
-            auto t_prefetch = std::async(std::launch::async, [&loader, &chunk_next]() {
-                return loader.next_transpose(*chunk_next);
-            });
-            while (true) {
-                const uint32_t tc_col_start = chunk_cur->col_start;
-                const uint32_t tc_nc = chunk_cur->num_cols;
-                const SpMat& AT_panel = chunk_cur->matrix;
+            FactorNet::io::PingPongPrefetcher<FactorNet::io::Chunk<Scalar>> bt_pp(
+                [&loader](FactorNet::io::Chunk<Scalar>& c) {
+                    return loader.next_transpose(c);
+                });
+            FactorNet::io::Chunk<Scalar>* bt_chunk_ptr = nullptr;
+            while (bt_pp.next(bt_chunk_ptr)) {
+                const uint32_t tc_col_start = bt_chunk_ptr->col_start;
+                const uint32_t tc_nc = bt_chunk_ptr->num_cols;
+                const SpMat& AT_panel = bt_chunk_ptr->matrix;
 
                 stream_timer.begin("w_rhs");
                 #pragma omp parallel for num_threads(config.threads) schedule(dynamic, 64) if(config.threads > 1)
@@ -655,18 +690,8 @@ FactorNet::NMFResult<Scalar> nmf_chunked(
                 }
                 stream_timer.end();
 
-                // Wait for prefetched transpose chunk and swap
-                stream_timer.begin("w_transpose_read");
-                bool has_next_t = t_prefetch.get();
-                stream_timer.end();
-                if (!has_next_t) break;
-                std::swap(chunk_cur, chunk_next);
-                t_prefetch = std::async(std::launch::async, [&loader, &chunk_next]() {
-                    return loader.next_transpose(*chunk_next);
-                });
             }  // end batch transpose loop
-            }  // end if (has_first_t)
-            }  // end batch transpose scope
+            }  // end batch PingPongPrefetcher scope
 
             stream_timer.begin("w_nnls");
             MatS W_T(k, m);

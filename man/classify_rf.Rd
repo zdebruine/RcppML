@@ -36,6 +36,18 @@ An \code{fn_classifier_eval} object (same structure as KNN variant).
 Trains a random forest on factor embeddings using the \pkg{randomForest}
 package (must be installed) and evaluates on test samples.
 }
+\examples{
+\donttest{
+# Random forest on random embeddings (requires randomForest package)
+if (requireNamespace("randomForest", quietly = TRUE)) {
+  set.seed(42)
+  embed <- matrix(rnorm(200), nrow = 40, ncol = 5)
+  labels <- factor(rep(1:4, each = 10))
+  eval <- classify_rf(embed, labels, ntree = 100, seed = 1)
+  eval$accuracy
+}
+}
+}
 \seealso{
 \code{\link{classify_embedding}}, \code{\link{classify_logistic}}
 }

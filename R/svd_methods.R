@@ -100,6 +100,13 @@ setMethod("dim", signature("svd_pca"), function(x) {
 #'
 #' @param object An \code{svd_pca} object
 #' @return Dense matrix: \eqn{U \cdot diag(d) \cdot V'} (plus row means if centered)
+#' @examples
+#' \donttest{
+#' A <- matrix(rnorm(200), 20, 10)
+#' s <- RcppML::svd(A, k = 3)
+#' Ahat <- reconstruct(s)
+#' dim(Ahat)
+#' }
 #' @export
 #' @rdname svd_pca-class
 setGeneric("reconstruct", function(object, ...) standardGeneric("reconstruct"))
@@ -170,6 +177,12 @@ setMethod("predict", signature("svd_pca"), function(object, newdata, ...) {
 #'
 #' @param object An \code{svd_pca} object
 #' @return Numeric vector of proportion of variance explained by each factor
+#' @examples
+#' \donttest{
+#' A <- matrix(rnorm(200), 20, 10)
+#' s <- RcppML::svd(A, k = 3)
+#' variance_explained(s)
+#' }
 #' @export
 #' @rdname svd_pca-class
 setGeneric("variance_explained", function(object, ...) standardGeneric("variance_explained"))

@@ -209,6 +209,11 @@ as.data.frame.training_logger <- function(x, ...) {
 #' @param logger A \code{training_logger} object.
 #' @param file Path to write the CSV file.
 #' @return Invisibly returns the data frame written.
+#' @examples
+#' \donttest{
+#' logger <- training_logger()
+#' # After fitting: export_log(logger, tempfile(fileext = ".csv"))
+#' }
 #' @seealso \code{\link{training_logger}}, \code{\link{as.data.frame.training_logger}}
 #' @export
 export_log <- function(logger, file) {

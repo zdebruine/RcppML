@@ -67,6 +67,7 @@ nmf(
   on_iteration = NULL,
   h_init = NULL,
   profile = FALSE,
+  dispatch = NULL,
   ...
 )
 }

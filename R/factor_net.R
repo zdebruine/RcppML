@@ -31,6 +31,10 @@
 #' @param graph Sparse graph Laplacian matrix (or NULL).
 #' @param graph_lambda Graph regularization strength. Default 0.
 #' @return An \code{fn_factor_config} object.
+#' @examples
+#' # Per-factor config for W with L1 sparsity
+#' w_cfg <- W(L1 = 0.1, nonneg = TRUE)
+#' h_cfg <- H(L2 = 0.01)
 #' @export
 W <- function(L1 = NULL, L2 = NULL, L21 = NULL, angular = NULL,
               upper_bound = NULL, nonneg = NULL,
@@ -102,6 +106,12 @@ H <- function(L1 = NULL, L2 = NULL, L21 = NULL, angular = NULL,
 #'     level; it cannot be set globally in \code{factor_config()}.
 #' }
 #' @return An \code{fn_global_config} object.
+#' @examples
+#' # Default config
+#' cfg <- factor_config()
+#'
+#' # Poisson NMF with cross-validation
+#' cfg <- factor_config(loss = "gp", test_fraction = 0.1, maxit = 50)
 #' @seealso \code{\link{factor_net}}, \code{\link{nmf_layer}}, \code{\link{fit}}
 #' @export
 factor_config <- function(maxit = 100, tol = 1e-4,
@@ -160,6 +170,10 @@ factor_config <- function(maxit = 100, tol = 1e-4,
 #'   string path to a .spz file for out-of-core streaming NMF.
 #' @param name Optional name for the input (used in multi-modal results).
 #' @return An \code{fn_node} object of type "input".
+#' @examples
+#' data(aml)
+#' inp <- factor_input(aml, name = "aml")
+#' inp
 #' @export
 factor_input <- function(data, name = NULL) {
   is_path <- is.character(data) && length(data) == 1 && file.exists(data)
@@ -200,6 +214,11 @@ factor_input <- function(data, name = NULL) {
 #' @param H Optional \code{H()} config to override H-specific settings.
 #' @param name Optional layer name (for results access).
 #' @return An \code{fn_node} of type "nmf_layer".
+#' @examples
+#' data(aml)
+#' inp <- factor_input(aml)
+#' layer <- nmf_layer(inp, k = 5)
+#' layer
 #' @seealso \code{\link{svd_layer}}, \code{\link{factor_net}}, \code{\link{factor_input}}
 #' @export
 nmf_layer <- function(input, k, L1 = 0, L2 = 0, L21 = 0, angular = 0,
@@ -229,6 +248,10 @@ nmf_layer <- function(input, k, L1 = 0, L2 = 0, L21 = 0, angular = 0,
 #'
 #' @inheritParams nmf_layer
 #' @return An \code{fn_node} of type "svd_layer".
+#' @examples
+#' data(aml)
+#' inp <- factor_input(aml)
+#' layer <- svd_layer(inp, k = 5)
 #' @export
 svd_layer <- function(input, k, L1 = 0, L2 = 0, L21 = 0, angular = 0,
                       upper_bound = 0, W = NULL, H = NULL, name = NULL) {
@@ -262,6 +285,12 @@ svd_layer <- function(input, k, L1 = 0, L2 = 0, L21 = 0, angular = 0,
 #'
 #' @param ... Two or more \code{fn_node} objects (inputs or layers).
 #' @return An \code{fn_node} of type "shared".
+#' @examples
+#' data(aml)
+#' # Split into two views
+#' inp1 <- factor_input(aml[1:400, ], name = "view1")
+#' inp2 <- factor_input(aml[401:824, ], name = "view2")
+#' shared <- factor_shared(inp1, inp2)
 #' @export
 factor_shared <- function(...) {
   inputs <- list(...)
@@ -288,6 +317,12 @@ factor_shared <- function(...) {
 #'
 #' @param ... Two or more \code{fn_node} objects (layer outputs).
 #' @return An \code{fn_node} of type "concat".
+#' @examples
+#' data(aml)
+#' inp <- factor_input(aml)
+#' branch1 <- nmf_layer(inp, k = 3)
+#' branch2 <- nmf_layer(inp, k = 5)
+#' combined <- factor_concat(branch1, branch2)
 #' @export
 factor_concat <- function(...) {
   inputs <- list(...)
@@ -308,6 +343,12 @@ factor_concat <- function(...) {
 #'
 #' @param ... Two or more \code{fn_node} objects with matching ranks.
 #' @return An \code{fn_node} of type "add".
+#' @examples
+#' data(aml)
+#' inp <- factor_input(aml)
+#' branch1 <- nmf_layer(inp, k = 5)
+#' branch2 <- nmf_layer(inp, k = 5)
+#' added <- factor_add(branch1, branch2)
 #' @export
 factor_add <- function(...) {
   inputs <- list(...)
@@ -339,6 +380,13 @@ factor_add <- function(...) {
 #' @param Z Conditioning matrix (n x p) or (p x n). Will be oriented
 #'   to match H dimensions.
 #' @return An \code{fn_node} of type "condition".
+#' @examples
+#' data(aml)
+#' inp <- factor_input(aml)
+#' layer1 <- nmf_layer(inp, k = 5)
+#' # Condition on batch metadata (2 batches)
+#' Z <- matrix(rep(c(1, 0, 0, 1), c(60, 75, 60, 75)), nrow = 135, ncol = 2)
+#' conditioned <- factor_condition(layer1, Z)
 #' @export
 factor_condition <- function(input, Z) {
   if (!inherits(input, "fn_node"))
@@ -368,6 +416,12 @@ factor_condition <- function(input, Z) {
 #' @param config A \code{fn_global_config} from \code{factor_config()}.
 #'   Default uses \code{factor_config()} defaults.
 #' @return A \code{factor_net} object.
+#' @examples
+#' data(aml)
+#' inp <- factor_input(aml, "aml")
+#' out <- nmf_layer(inp, k = 5)
+#' net <- factor_net(inp, out, config = factor_config(maxit = 10))
+#' net
 #' @seealso \code{\link{fit}}, \code{\link{factor_config}}, \code{\link{nmf_layer}},
 #'   \code{\link{svd_layer}}, \code{\link{cross_validate_graph}}
 #' @export

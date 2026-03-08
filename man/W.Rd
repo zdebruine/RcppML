@@ -56,3 +56,8 @@ Use \code{W()} and \code{H()} inside \code{nmf_layer()} or
 \code{svd_layer()} to set factor-specific regularization, constraints,
 and guides. Parameters not set inherit from the layer defaults.
 }
+\examples{
+# Per-factor config for W with L1 sparsity
+w_cfg <- W(L1 = 0.1, nonneg = TRUE)
+h_cfg <- H(L2 = 0.01)
+}

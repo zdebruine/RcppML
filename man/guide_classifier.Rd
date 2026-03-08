@@ -24,6 +24,12 @@ An \code{nmf_guide} object to pass to \code{nmf(guides = ...)}.
 Steers a factor toward class-consistent structure using per-class
 centroid targets computed from the current factor at each iteration.
 }
+\examples{
+# Create a classifier guide for 3 classes
+labels <- rep(0:2, each = 10)
+g <- guide_classifier(labels, lambda = 0.5)
+g
+}
 \seealso{
 \code{\link{guide_external}}, \code{\link{guide_callback}}, \code{\link{nmf}}
 }

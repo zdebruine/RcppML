@@ -21,6 +21,11 @@ Steers a factor toward another layer's output matrix. The target
 changes each ALS iteration as the referenced layer updates. Used
 for cross-layer consistency or hierarchical alignment.
 }
+\examples{
+# Reference guide coupling to another layer
+g <- guide_reference("L1", lambda = 0.5, side = "H")
+g
+}
 \seealso{
 \code{\link{guide_classifier}}, \code{\link{guide_external}}, \code{\link{nmf}}
 }

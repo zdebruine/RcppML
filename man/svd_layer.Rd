@@ -45,3 +45,8 @@ An \code{fn_node} of type "svd_layer".
 Creates an unconstrained (SVD/PCA) factorization layer. No
 non-negativity constraint; factors are signed.
 }
+\examples{
+data(aml)
+inp <- factor_input(aml)
+layer <- svd_layer(inp, k = 5)
+}

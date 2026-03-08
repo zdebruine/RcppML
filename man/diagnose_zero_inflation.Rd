@@ -35,6 +35,14 @@ the observed zero count, and recommends ZI if the excess is large.
 ZI granularity is determined by whether per-row and per-col excess rates
 have high variance (suggesting different rows/cols have different ZI levels).
 }
+\examples{
+\donttest{
+data(aml)
+model <- nmf(aml, k = 3, maxit = 10, seed = 1)
+zi <- diagnose_zero_inflation(aml, model)
+zi$has_zi
+}
+}
 \seealso{
 \code{\link{auto_nmf_distribution}}, \code{\link{nmf}}
 }

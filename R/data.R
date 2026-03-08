@@ -5,6 +5,7 @@
 # pbmc3k dataset: excluded from CRAN package (2.6MB, too large).
 # Data file is in data/pbmc3k.rda but excluded via .Rbuildignore.
 # Available for local development and benchmarking only.
+# Documentation removed to avoid code/documentation mismatch WARNING in R CMD check.
 
 #' Acute Myelogenous Leukemia (AML) Dataset
 #'
@@ -219,8 +220,8 @@
 #' face_img <- matrix(olivetti[1,], nrow=64, ncol=64, byrow=TRUE)
 #' image(t(face_img)[,64:1], col=grey.colors(256))
 #'
-#' # Run NMF to discover face components
-#' model <- nmf(t(olivetti), k = 40, maxit = 100)
+#' # Run NMF to discover face components (small k for speed)
+#' model <- nmf(t(olivetti), k = 5, maxit = 10)
 #' }
 #'
 #' @keywords datasets

@@ -1,0 +1,1546 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+
+<title>NMF Deep Dive: Regularization, Masking, and Model Selection</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">NMF Deep Dive: Regularization, Masking, and
+Model Selection</h1>
+
+
+
+<div id="introduction" class="section level2">
+<h2>Introduction</h2>
+<p>Non-negative matrix factorization (NMF) decomposes a non-negative
+matrix <span class="math inline">\(A \in \mathbb{R}_{\geq 0}^{m \times
+n}\)</span> into lower-rank factors:</p>
+<p><span class="math display">\[A \approx W \cdot \text{diag}(d) \cdot
+H\]</span></p>
+<p>where <span class="math inline">\(W \in \mathbb{R}_{\geq 0}^{m \times
+k}\)</span> contains feature loadings, <span class="math inline">\(H \in
+\mathbb{R}_{\geq 0}^{k \times n}\)</span> contains sample embeddings,
+and <span class="math inline">\(d \in \mathbb{R}_{&gt;0}^k\)</span> is a
+diagonal scaling vector.</p>
+<p>The non-negativity constraint ensures that factors can only
+<em>add</em>, never subtract. This produces <strong>parts-based
+representations</strong> where each factor captures a distinct component
+of the data. But the basic algorithm is only the starting point. RcppML
+exposes a comprehensive set of controls — loss functions, regularization
+penalties, masking strategies, and cross-validation — that shape the
+factorization to match the structure of your problem.</p>
+<p>This vignette walks through these capabilities with synthetic
+experiments (where ground truth is known) and real demonstrations on
+built-in datasets. For domain-specific applications, see the links in <a href="#further-reading">Further Reading</a>.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(RcppML)</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="fu">library</span>(Matrix)</span></code></pre></div>
+</div>
+<div id="the-optimization-problem" class="section level2">
+<h2>1. The Optimization Problem</h2>
+<p>RcppML minimizes a loss function over the non-negative factors:</p>
+<p><span class="math display">\[\min_{W \geq 0,\, H \geq 0} \;
+\mathcal{L}(A, W \cdot \text{diag}(d) \cdot H) + \lambda \cdot
+\mathcal{R}(W, H)\]</span></p>
+<p>where <span class="math inline">\(\mathcal{L}\)</span> is the
+reconstruction loss and <span class="math inline">\(\mathcal{R}\)</span>
+is a regularization penalty.</p>
+<p>The algorithm uses <strong>alternating least squares</strong> (ALS):
+it fixes <span class="math inline">\(H\)</span> and solves for <span class="math inline">\(W\)</span> (as a batch of non-negative least
+squares problems), then fixes <span class="math inline">\(W\)</span> and
+solves for <span class="math inline">\(H\)</span>. Each NNLS subproblem
+is solved by fast sequential coordinate descent initialized from an
+unconstrained Cholesky solution. After each full update cycle, columns
+of <span class="math inline">\(W\)</span> and rows of <span class="math inline">\(H\)</span> are rescaled to unit norm, with the
+scale factors absorbed into <span class="math inline">\(d\)</span>.</p>
+<p><strong>The diagonal scaling <span class="math inline">\(d\)</span></strong>: After each iteration, RcppML
+normalizes columns of <span class="math inline">\(W\)</span> and rows of
+<span class="math inline">\(H\)</span> to unit <span class="math inline">\(\ell_1\)</span> norm (by default), storing the
+absorbed scale in <span class="math inline">\(d\)</span>. This
+means:</p>
+<ul>
+<li><span class="math inline">\(W\)</span> and <span class="math inline">\(H\)</span> contain normalized, comparable factor
+profiles</li>
+<li><span class="math inline">\(d\)</span> captures the overall
+“importance” or magnitude of each factor</li>
+<li>Regularization (L1, L2, upper bound) acts on the normalized factors,
+not the raw product</li>
+</ul>
+<p>This design is critical for understanding how penalties interact with
+the model. For instance, an upper bound constraint of 0.1 on <span class="math inline">\(W\)</span> means that <em>no single feature can
+account for more than 10% of a factor’s total loading</em>.</p>
+<div id="convergence" class="section level3">
+<h3>Convergence</h3>
+<p>Convergence is measured as the relative change in the loss function
+between iterations. When the change drops below <code>tol</code>, the
+algorithm terminates:</p>
+<p><span class="math display">\[\frac{|\mathcal{L}^{(t)} -
+\mathcal{L}^{(t-1)}|}{|\mathcal{L}^{(t-1)}| + \epsilon} &lt;
+\texttt{tol}\]</span></p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="co"># Generate data with known rank</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>sim <span class="ot">&lt;-</span> <span class="fu">simulateNMF</span>(<span class="at">nrow =</span> <span class="dv">200</span>, <span class="at">ncol =</span> <span class="dv">150</span>, <span class="at">k =</span> <span class="dv">5</span>, <span class="at">noise =</span> <span class="fl">0.1</span>, <span class="at">seed =</span> <span class="dv">42</span>)</span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>A <span class="ot">&lt;-</span> sim<span class="sc">$</span>A</span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="co"># Fit with different tolerances and track convergence</span></span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a>m_tight  <span class="ot">&lt;-</span> <span class="fu">nmf</span>(A, <span class="at">k =</span> <span class="dv">5</span>, <span class="at">tol =</span> <span class="fl">1e-6</span>, <span class="at">maxit =</span> <span class="dv">500</span>, <span class="at">seed =</span> <span class="dv">1</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>m_normal <span class="ot">&lt;-</span> <span class="fu">nmf</span>(A, <span class="at">k =</span> <span class="dv">5</span>, <span class="at">tol =</span> <span class="fl">1e-4</span>, <span class="at">maxit =</span> <span class="dv">500</span>, <span class="at">seed =</span> <span class="dv">1</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a>m_loose  <span class="ot">&lt;-</span> <span class="fu">nmf</span>(A, <span class="at">k =</span> <span class="dv">5</span>, <span class="at">tol =</span> <span class="fl">1e-2</span>, <span class="at">maxit =</span> <span class="dv">500</span>, <span class="at">seed =</span> <span class="dv">1</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a></span>
+<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;Tight  (tol=1e-6): %3d iterations, loss = %.6f</span><span class="sc">\n</span><span class="st">&quot;</span>,</span>
+<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a>            m_tight<span class="sc">$</span>iter, m_tight<span class="sc">$</span>loss))</span>
+<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;Normal (tol=1e-4): %3d iterations, loss = %.6f</span><span class="sc">\n</span><span class="st">&quot;</span>,</span>
+<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a>            m_normal<span class="sc">$</span>iter, m_normal<span class="sc">$</span>loss))</span>
+<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;Loose  (tol=1e-2): %3d iterations, loss = %.6f</span><span class="sc">\n</span><span class="st">&quot;</span>,</span>
+<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a>            m_loose<span class="sc">$</span>iter, m_loose<span class="sc">$</span>loss))</span>
+<span id="cb2-16"><a href="#cb2-16" tabindex="-1"></a></span>
+<span id="cb2-17"><a href="#cb2-17" tabindex="-1"></a><span class="co"># Plot per-iteration loss convergence</span></span>
+<span id="cb2-18"><a href="#cb2-18" tabindex="-1"></a>loss_hist <span class="ot">&lt;-</span> m_tight<span class="sc">@</span>misc<span class="sc">$</span>loss_history</span>
+<span id="cb2-19"><a href="#cb2-19" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">is.null</span>(loss_hist) <span class="sc">&amp;&amp;</span> <span class="fu">length</span>(loss_hist) <span class="sc">&gt;</span> <span class="dv">1</span>) {</span>
+<span id="cb2-20"><a href="#cb2-20" tabindex="-1"></a>  df_conv <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb2-21"><a href="#cb2-21" tabindex="-1"></a>    <span class="at">iteration =</span> <span class="fu">seq_along</span>(loss_hist),</span>
+<span id="cb2-22"><a href="#cb2-22" tabindex="-1"></a>    <span class="at">loss =</span> loss_hist</span>
+<span id="cb2-23"><a href="#cb2-23" tabindex="-1"></a>  )</span>
+<span id="cb2-24"><a href="#cb2-24" tabindex="-1"></a>  <span class="fu">ggplot</span>(df_conv, <span class="fu">aes</span>(<span class="at">x =</span> iteration, <span class="at">y =</span> loss)) <span class="sc">+</span></span>
+<span id="cb2-25"><a href="#cb2-25" tabindex="-1"></a>    <span class="fu">geom_line</span>(<span class="at">color =</span> <span class="st">&quot;steelblue&quot;</span>, <span class="at">linewidth =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
+<span id="cb2-26"><a href="#cb2-26" tabindex="-1"></a>    <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> m_normal<span class="sc">@</span>misc<span class="sc">$</span>loss, <span class="at">linetype =</span> <span class="st">&quot;dashed&quot;</span>,</span>
+<span id="cb2-27"><a href="#cb2-27" tabindex="-1"></a>               <span class="at">color =</span> <span class="st">&quot;coral&quot;</span>, <span class="at">linewidth =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb2-28"><a href="#cb2-28" tabindex="-1"></a>    <span class="fu">annotate</span>(<span class="st">&quot;text&quot;</span>, <span class="at">x =</span> <span class="fu">max</span>(df_conv<span class="sc">$</span>iteration) <span class="sc">*</span> <span class="fl">0.6</span>,</span>
+<span id="cb2-29"><a href="#cb2-29" tabindex="-1"></a>             <span class="at">y =</span> m_normal<span class="sc">@</span>misc<span class="sc">$</span>loss <span class="sc">*</span> <span class="fl">1.02</span>,</span>
+<span id="cb2-30"><a href="#cb2-30" tabindex="-1"></a>             <span class="at">label =</span> <span class="fu">sprintf</span>(<span class="st">&quot;tol=1e-4 stops at iter %d&quot;</span>, m_normal<span class="sc">$</span>iter),</span>
+<span id="cb2-31"><a href="#cb2-31" tabindex="-1"></a>             <span class="at">color =</span> <span class="st">&quot;coral&quot;</span>, <span class="at">size =</span> <span class="fl">3.2</span>) <span class="sc">+</span></span>
+<span id="cb2-32"><a href="#cb2-32" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">&quot;Convergence: Per-Iteration Loss&quot;</span>,</span>
+<span id="cb2-33"><a href="#cb2-33" tabindex="-1"></a>         <span class="at">x =</span> <span class="st">&quot;Iteration&quot;</span>, <span class="at">y =</span> <span class="st">&quot;Loss&quot;</span>) <span class="sc">+</span></span>
+<span id="cb2-34"><a href="#cb2-34" tabindex="-1"></a>    <span class="fu">theme_minimal</span>()</span>
+<span id="cb2-35"><a href="#cb2-35" tabindex="-1"></a>}</span></code></pre></div>
+<p>In practice, <code>tol = 1e-4</code> (the default) provides a good
+balance between accuracy and speed. Tightening to <code>1e-6</code>
+yields marginal loss improvement at substantially higher iteration
+cost.</p>
+</div>
+</div>
+<div id="loss-functions" class="section level2">
+<h2>2. Loss Functions</h2>
+<p>The choice of loss function determines how the algorithm weighs
+different types of errors.</p>
+<div id="mean-squared-error-mse" class="section level3">
+<h3>Mean Squared Error (MSE)</h3>
+<p>The default. Minimizes the Frobenius norm squared:</p>
+<p><span class="math display">\[\mathcal{L}_{\text{MSE}} = \frac{1}{mn}
+\sum_{ij} (A_{ij} - \hat{A}_{ij})^2\]</span></p>
+<p>MSE is solved directly via least squares — no reweighting needed —
+making it the fastest option.</p>
+</div>
+<div id="mean-absolute-error-mae" class="section level3">
+<h3>Mean Absolute Error (MAE)</h3>
+<p>Penalizes errors linearly rather than quadratically, providing
+<strong>robustness to outliers</strong>:</p>
+<p><span class="math display">\[\mathcal{L}_{\text{MAE}} = \frac{1}{mn}
+\sum_{ij} |A_{ij} - \hat{A}_{ij}|\]</span></p>
+<p>MAE is implemented via Iteratively Reweighted Least Squares (IRLS):
+each element receives a weight inversely proportional to its residual
+magnitude, so large errors are effectively down-weighted.</p>
+</div>
+<div id="huber-loss" class="section level3">
+<h3>Huber Loss</h3>
+<p>A smooth interpolation between MSE (for small residuals) and MAE (for
+large residuals):</p>
+<p><span class="math display">\[\mathcal{L}_{\delta}(r) = \begin{cases}
+\frac{1}{2}r^2 &amp; \text{if } |r| \leq \delta \\ \delta(|r| -
+\frac{1}{2}\delta) &amp; \text{otherwise} \end{cases}\]</span></p>
+<p>The <code>huber_delta</code> parameter controls the transition point.
+Small <span class="math inline">\(\delta\)</span> behaves like MAE;
+large <span class="math inline">\(\delta\)</span> behaves like MSE.</p>
+</div>
+<div id="kullback-leibler-divergence-kl" class="section level3">
+<h3>Kullback-Leibler Divergence (KL)</h3>
+<p>Natural for count data (e.g., scRNA-seq UMI counts):</p>
+<p><span class="math display">\[\mathcal{L}_{\text{KL}} = \sum_{ij}
+\left( A_{ij} \log \frac{A_{ij}}{\hat{A}_{ij}} - A_{ij} + \hat{A}_{ij}
+\right)\]</span></p>
+</div>
+<div id="comparing-loss-functions" class="section level3">
+<h3>Comparing Loss Functions</h3>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="co"># Add outliers to test robustness</span></span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">99</span>)</span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>A_clean <span class="ot">&lt;-</span> sim<span class="sc">$</span>A</span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>A_noisy <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(A_clean)</span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>outlier_idx <span class="ot">&lt;-</span> <span class="fu">sample</span>(<span class="fu">length</span>(A_noisy), <span class="dv">50</span>)</span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a>A_noisy[outlier_idx] <span class="ot">&lt;-</span> A_noisy[outlier_idx] <span class="sc">+</span> <span class="fu">runif</span>(<span class="dv">50</span>, <span class="dv">10</span>, <span class="dv">30</span>)</span>
+<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a>A_noisy <span class="ot">&lt;-</span> <span class="fu">as</span>(A_noisy, <span class="st">&quot;dgCMatrix&quot;</span>)</span>
+<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a></span>
+<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a><span class="co"># Fit with each loss</span></span>
+<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a>m_mse   <span class="ot">&lt;-</span> <span class="fu">nmf</span>(A_noisy, <span class="at">k =</span> <span class="dv">5</span>, <span class="at">loss =</span> <span class="st">&quot;mse&quot;</span>,   <span class="at">tol =</span> <span class="fl">1e-5</span>, <span class="at">maxit =</span> <span class="dv">200</span>, <span class="at">seed =</span> <span class="dv">1</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a>m_mae   <span class="ot">&lt;-</span> <span class="fu">nmf</span>(A_noisy, <span class="at">k =</span> <span class="dv">5</span>, <span class="at">loss =</span> <span class="st">&quot;mae&quot;</span>,   <span class="at">tol =</span> <span class="fl">1e-5</span>, <span class="at">maxit =</span> <span class="dv">200</span>, <span class="at">seed =</span> <span class="dv">1</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb3-12"><a href="#cb3-12" tabindex="-1"></a>m_huber <span class="ot">&lt;-</span> <span class="fu">nmf</span>(A_noisy, <span class="at">k =</span> <span class="dv">5</span>, <span class="at">loss =</span> <span class="st">&quot;huber&quot;</span>, <span class="at">huber_delta =</span> <span class="fl">1.0</span>,</span>
+<span id="cb3-13"><a href="#cb3-13" tabindex="-1"></a>               <span class="at">tol =</span> <span class="fl">1e-5</span>, <span class="at">maxit =</span> <span class="dv">200</span>, <span class="at">seed =</span> <span class="dv">1</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb3-14"><a href="#cb3-14" tabindex="-1"></a></span>
+<span id="cb3-15"><a href="#cb3-15" tabindex="-1"></a><span class="co"># Evaluate all on the CLEAN data (how well did each recover the true signal?)</span></span>
+<span id="cb3-16"><a href="#cb3-16" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;Reconstruction error on clean data (lower = better recovery):</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb3-17"><a href="#cb3-17" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;  MSE loss:   %.5f</span><span class="sc">\n</span><span class="st">&quot;</span>, <span class="fu">evaluate</span>(m_mse,   A_clean)))</span>
+<span id="cb3-18"><a href="#cb3-18" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;  MAE loss:   %.5f</span><span class="sc">\n</span><span class="st">&quot;</span>, <span class="fu">evaluate</span>(m_mae,   A_clean)))</span>
+<span id="cb3-19"><a href="#cb3-19" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;  Huber loss: %.5f</span><span class="sc">\n</span><span class="st">&quot;</span>, <span class="fu">evaluate</span>(m_huber, A_clean)))</span>
+<span id="cb3-20"><a href="#cb3-20" tabindex="-1"></a></span>
+<span id="cb3-21"><a href="#cb3-21" tabindex="-1"></a><span class="co"># Measure factor recovery via cosine similarity to ground truth</span></span>
+<span id="cb3-22"><a href="#cb3-22" tabindex="-1"></a>recover_quality <span class="ot">&lt;-</span> <span class="cf">function</span>(model, W_true) {</span>
+<span id="cb3-23"><a href="#cb3-23" tabindex="-1"></a>  cos_mat <span class="ot">&lt;-</span> <span class="fu">cosine</span>(W_true, model<span class="sc">@</span>w)</span>
+<span id="cb3-24"><a href="#cb3-24" tabindex="-1"></a>  cost <span class="ot">&lt;-</span> <span class="dv">1</span> <span class="sc">-</span> <span class="fu">abs</span>(cos_mat)</span>
+<span id="cb3-25"><a href="#cb3-25" tabindex="-1"></a>  match <span class="ot">&lt;-</span> <span class="fu">bipartiteMatch</span>(cost)</span>
+<span id="cb3-26"><a href="#cb3-26" tabindex="-1"></a>  <span class="fu">mean</span>(<span class="dv">1</span> <span class="sc">-</span> cost[<span class="fu">cbind</span>(<span class="dv">1</span><span class="sc">:</span><span class="fu">nrow</span>(cost), match<span class="sc">$</span>assignment <span class="sc">+</span> <span class="dv">1</span>)])</span>
+<span id="cb3-27"><a href="#cb3-27" tabindex="-1"></a>}</span>
+<span id="cb3-28"><a href="#cb3-28" tabindex="-1"></a></span>
+<span id="cb3-29"><a href="#cb3-29" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;</span><span class="sc">\n</span><span class="st">Factor recovery (cosine similarity to ground truth):</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb3-30"><a href="#cb3-30" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;  MSE loss:   %.4f</span><span class="sc">\n</span><span class="st">&quot;</span>, <span class="fu">recover_quality</span>(m_mse,   sim<span class="sc">$</span>w)))</span>
+<span id="cb3-31"><a href="#cb3-31" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;  MAE loss:   %.4f</span><span class="sc">\n</span><span class="st">&quot;</span>, <span class="fu">recover_quality</span>(m_mae,   sim<span class="sc">$</span>w)))</span>
+<span id="cb3-32"><a href="#cb3-32" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;  Huber loss: %.4f</span><span class="sc">\n</span><span class="st">&quot;</span>, <span class="fu">recover_quality</span>(m_huber, sim<span class="sc">$</span>w)))</span></code></pre></div>
+<p>When outliers are present, MAE and Huber produce factors that better
+recover the true signal. The tradeoff: IRLS-based losses are 10-20×
+slower per iteration than MSE.</p>
+</div>
+</div>
+<div id="regularization" class="section level2">
+<h2>3. Regularization</h2>
+<p>Regularization adds penalties to the loss function, trading
+reconstruction accuracy for desirable structural properties. The total
+objective is:</p>
+<p><span class="math display">\[\text{Total loss} =
+\underbrace{\mathcal{L}(A, WdH)}_{\text{reconstruction}} +
+\underbrace{\lambda \cdot \mathcal{R}(W,
+H)}_{\text{regularization}}\]</span></p>
+<p>A higher reconstruction error in a regularized model is not a failure
+— it means the penalties are doing their job, imposing the desired
+structural constraints.</p>
+<div id="l1-lasso-encouraging-sparsity" class="section level3">
+<h3>L1 (LASSO): Encouraging Sparsity</h3>
+<p>L1 regularization adds an <span class="math inline">\(\ell_1\)</span>-norm penalty that drives small
+factor values to exactly zero:</p>
+<p><span class="math display">\[\mathcal{R}_{L_1} = \alpha_w \|W\|_1 +
+\alpha_h \|H\|_1\]</span></p>
+<p>This produces <strong>sparse factors</strong> — each factor is
+defined by a small number of features and each sample loads on a small
+number of factors — improving interpretability and reducing noise.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>sim_sparse <span class="ot">&lt;-</span> <span class="fu">simulateNMF</span>(<span class="at">nrow =</span> <span class="dv">300</span>, <span class="at">ncol =</span> <span class="dv">200</span>, <span class="at">k =</span> <span class="dv">8</span>, <span class="at">noise =</span> <span class="fl">0.05</span>,</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>                          <span class="at">dropout =</span> <span class="fl">0.5</span>, <span class="at">seed =</span> <span class="dv">42</span>)</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>A_sp <span class="ot">&lt;-</span> sim_sparse<span class="sc">$</span>A</span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a></span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="co"># Sweep L1 values</span></span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a>l1_vals <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="fl">0.01</span>, <span class="fl">0.05</span>, <span class="fl">0.1</span>, <span class="fl">0.3</span>, <span class="fl">0.5</span>)</span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a>results <span class="ot">&lt;-</span> <span class="fu">data.frame</span>()</span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a>l1_models <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a></span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a><span class="cf">for</span> (l1 <span class="cf">in</span> l1_vals) {</span>
+<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a>  m <span class="ot">&lt;-</span> <span class="fu">nmf</span>(A_sp, <span class="at">k =</span> <span class="dv">8</span>, <span class="at">L1 =</span> <span class="fu">c</span>(l1, l1), <span class="at">tol =</span> <span class="fl">1e-5</span>, <span class="at">maxit =</span> <span class="dv">200</span>, <span class="at">seed =</span> <span class="dv">1</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a>  l1_models[[<span class="fu">as.character</span>(l1)]] <span class="ot">&lt;-</span> m</span>
+<span id="cb4-13"><a href="#cb4-13" tabindex="-1"></a>  sp <span class="ot">&lt;-</span> <span class="fu">sparsity</span>(m)</span>
+<span id="cb4-14"><a href="#cb4-14" tabindex="-1"></a>  w_sp <span class="ot">&lt;-</span> <span class="fu">mean</span>(sp<span class="sc">$</span>sparsity[sp<span class="sc">$</span>model <span class="sc">==</span> <span class="st">&quot;w&quot;</span>])</span>
+<span id="cb4-15"><a href="#cb4-15" tabindex="-1"></a>  h_sp <span class="ot">&lt;-</span> <span class="fu">mean</span>(sp<span class="sc">$</span>sparsity[sp<span class="sc">$</span>model <span class="sc">==</span> <span class="st">&quot;h&quot;</span>])</span>
+<span id="cb4-16"><a href="#cb4-16" tabindex="-1"></a>  mse_val <span class="ot">&lt;-</span> <span class="fu">evaluate</span>(m, A_sp)</span>
+<span id="cb4-17"><a href="#cb4-17" tabindex="-1"></a>  results <span class="ot">&lt;-</span> <span class="fu">rbind</span>(results, <span class="fu">data.frame</span>(<span class="at">L1 =</span> l1, <span class="at">W_sparsity =</span> w_sp,</span>
+<span id="cb4-18"><a href="#cb4-18" tabindex="-1"></a>                                       <span class="at">H_sparsity =</span> h_sp, <span class="at">MSE =</span> mse_val))</span>
+<span id="cb4-19"><a href="#cb4-19" tabindex="-1"></a>}</span>
+<span id="cb4-20"><a href="#cb4-20" tabindex="-1"></a></span>
+<span id="cb4-21"><a href="#cb4-21" tabindex="-1"></a><span class="co"># Sparsity-MSE tradeoff plot</span></span>
+<span id="cb4-22"><a href="#cb4-22" tabindex="-1"></a>df_trade <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb4-23"><a href="#cb4-23" tabindex="-1"></a>  <span class="at">L1 =</span> <span class="fu">rep</span>(results<span class="sc">$</span>L1, <span class="dv">2</span>),</span>
+<span id="cb4-24"><a href="#cb4-24" tabindex="-1"></a>  <span class="at">value =</span> <span class="fu">c</span>(results<span class="sc">$</span>W_sparsity, results<span class="sc">$</span>MSE <span class="sc">/</span> <span class="fu">max</span>(results<span class="sc">$</span>MSE)),</span>
+<span id="cb4-25"><a href="#cb4-25" tabindex="-1"></a>  <span class="at">metric =</span> <span class="fu">rep</span>(<span class="fu">c</span>(<span class="st">&quot;W Sparsity&quot;</span>, <span class="st">&quot;Relative MSE&quot;</span>), <span class="at">each =</span> <span class="fu">nrow</span>(results))</span>
+<span id="cb4-26"><a href="#cb4-26" tabindex="-1"></a>)</span>
+<span id="cb4-27"><a href="#cb4-27" tabindex="-1"></a><span class="fu">ggplot</span>(df_trade, <span class="fu">aes</span>(<span class="at">x =</span> L1, <span class="at">y =</span> value, <span class="at">color =</span> metric)) <span class="sc">+</span></span>
+<span id="cb4-28"><a href="#cb4-28" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">linewidth =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
+<span id="cb4-29"><a href="#cb4-29" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="fl">2.5</span>) <span class="sc">+</span></span>
+<span id="cb4-30"><a href="#cb4-30" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">&quot;W Sparsity&quot;</span> <span class="ot">=</span> <span class="st">&quot;steelblue&quot;</span>, <span class="st">&quot;Relative MSE&quot;</span> <span class="ot">=</span> <span class="st">&quot;coral&quot;</span>)) <span class="sc">+</span></span>
+<span id="cb4-31"><a href="#cb4-31" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">&quot;L1 Regularization: Sparsity-Accuracy Tradeoff&quot;</span>,</span>
+<span id="cb4-32"><a href="#cb4-32" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">&quot;L1 Penalty&quot;</span>, <span class="at">y =</span> <span class="st">&quot;Value (sparsity or relative MSE)&quot;</span>, <span class="at">color =</span> <span class="st">&quot;&quot;</span>) <span class="sc">+</span></span>
+<span id="cb4-33"><a href="#cb4-33" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div>
+<p>The plot shows the fundamental tradeoff: as L1 increases, sparsity
+rises (more zeros in the factors) while reconstruction error increases.
+Values in the range 0.01–0.1 typically give a good balance. The penalty
+is applied within the coordinate descent NNLS solver, so it is cheap —
+there is essentially no runtime cost for using L1.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="co"># Histograms of W values under three L1 settings</span></span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>w_list <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a><span class="cf">for</span> (lbl <span class="cf">in</span> <span class="fu">c</span>(<span class="st">&quot;0&quot;</span>, <span class="st">&quot;0.05&quot;</span>, <span class="st">&quot;0.3&quot;</span>)) {</span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a>  w_vals <span class="ot">&lt;-</span> <span class="fu">as.vector</span>(l1_models[[lbl]]<span class="sc">@</span>w)</span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a>  w_pos  <span class="ot">&lt;-</span> w_vals[w_vals <span class="sc">&gt;</span> <span class="dv">0</span>]</span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a>  w_list <span class="ot">&lt;-</span> <span class="fu">c</span>(w_list, <span class="fu">list</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a>    <span class="at">value =</span> w_pos,</span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a>    <span class="at">L1 =</span> <span class="fu">paste0</span>(<span class="st">&quot;L1 = &quot;</span>, lbl),</span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a>    <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a>  )))</span>
+<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a>}</span>
+<span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a>df_w <span class="ot">&lt;-</span> <span class="fu">do.call</span>(rbind, w_list)</span>
+<span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a></span>
+<span id="cb5-14"><a href="#cb5-14" tabindex="-1"></a><span class="fu">ggplot</span>(df_w, <span class="fu">aes</span>(<span class="at">x =</span> value, <span class="at">fill =</span> L1)) <span class="sc">+</span></span>
+<span id="cb5-15"><a href="#cb5-15" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">bins =</span> <span class="dv">40</span>, <span class="at">alpha =</span> <span class="fl">0.7</span>, <span class="at">position =</span> <span class="st">&quot;identity&quot;</span>) <span class="sc">+</span></span>
+<span id="cb5-16"><a href="#cb5-16" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> L1, <span class="at">ncol =</span> <span class="dv">3</span>, <span class="at">scales =</span> <span class="st">&quot;free_y&quot;</span>) <span class="sc">+</span></span>
+<span id="cb5-17"><a href="#cb5-17" tabindex="-1"></a>  <span class="fu">scale_fill_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">&quot;L1 = 0&quot;</span> <span class="ot">=</span> <span class="st">&quot;steelblue&quot;</span>,</span>
+<span id="cb5-18"><a href="#cb5-18" tabindex="-1"></a>                                <span class="st">&quot;L1 = 0.05&quot;</span> <span class="ot">=</span> <span class="st">&quot;coral&quot;</span>,</span>
+<span id="cb5-19"><a href="#cb5-19" tabindex="-1"></a>                                <span class="st">&quot;L1 = 0.3&quot;</span> <span class="ot">=</span> <span class="st">&quot;forestgreen&quot;</span>)) <span class="sc">+</span></span>
+<span id="cb5-20"><a href="#cb5-20" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">&quot;Distribution of Non-Zero W Values Under L1 Regularization&quot;</span>,</span>
+<span id="cb5-21"><a href="#cb5-21" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">&quot;W value&quot;</span>, <span class="at">y =</span> <span class="st">&quot;Count&quot;</span>) <span class="sc">+</span></span>
+<span id="cb5-22"><a href="#cb5-22" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
+<span id="cb5-23"><a href="#cb5-23" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">&quot;none&quot;</span>)</span>
+<span id="cb5-24"><a href="#cb5-24" tabindex="-1"></a></span>
+<span id="cb5-25"><a href="#cb5-25" tabindex="-1"></a><span class="co"># Same for H</span></span>
+<span id="cb5-26"><a href="#cb5-26" tabindex="-1"></a>h_list <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb5-27"><a href="#cb5-27" tabindex="-1"></a><span class="cf">for</span> (lbl <span class="cf">in</span> <span class="fu">c</span>(<span class="st">&quot;0&quot;</span>, <span class="st">&quot;0.05&quot;</span>, <span class="st">&quot;0.3&quot;</span>)) {</span>
+<span id="cb5-28"><a href="#cb5-28" tabindex="-1"></a>  h_vals <span class="ot">&lt;-</span> <span class="fu">as.vector</span>(l1_models[[lbl]]<span class="sc">@</span>h)</span>
+<span id="cb5-29"><a href="#cb5-29" tabindex="-1"></a>  h_pos  <span class="ot">&lt;-</span> h_vals[h_vals <span class="sc">&gt;</span> <span class="dv">0</span>]</span>
+<span id="cb5-30"><a href="#cb5-30" tabindex="-1"></a>  h_list <span class="ot">&lt;-</span> <span class="fu">c</span>(h_list, <span class="fu">list</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb5-31"><a href="#cb5-31" tabindex="-1"></a>    <span class="at">value =</span> h_pos,</span>
+<span id="cb5-32"><a href="#cb5-32" tabindex="-1"></a>    <span class="at">L1 =</span> <span class="fu">paste0</span>(<span class="st">&quot;L1 = &quot;</span>, lbl),</span>
+<span id="cb5-33"><a href="#cb5-33" tabindex="-1"></a>    <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb5-34"><a href="#cb5-34" tabindex="-1"></a>  )))</span>
+<span id="cb5-35"><a href="#cb5-35" tabindex="-1"></a>}</span>
+<span id="cb5-36"><a href="#cb5-36" tabindex="-1"></a>df_h <span class="ot">&lt;-</span> <span class="fu">do.call</span>(rbind, h_list)</span>
+<span id="cb5-37"><a href="#cb5-37" tabindex="-1"></a></span>
+<span id="cb5-38"><a href="#cb5-38" tabindex="-1"></a><span class="fu">ggplot</span>(df_h, <span class="fu">aes</span>(<span class="at">x =</span> value, <span class="at">fill =</span> L1)) <span class="sc">+</span></span>
+<span id="cb5-39"><a href="#cb5-39" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">bins =</span> <span class="dv">40</span>, <span class="at">alpha =</span> <span class="fl">0.7</span>, <span class="at">position =</span> <span class="st">&quot;identity&quot;</span>) <span class="sc">+</span></span>
+<span id="cb5-40"><a href="#cb5-40" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> L1, <span class="at">ncol =</span> <span class="dv">3</span>, <span class="at">scales =</span> <span class="st">&quot;free_y&quot;</span>) <span class="sc">+</span></span>
+<span id="cb5-41"><a href="#cb5-41" tabindex="-1"></a>  <span class="fu">scale_fill_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">&quot;L1 = 0&quot;</span> <span class="ot">=</span> <span class="st">&quot;steelblue&quot;</span>,</span>
+<span id="cb5-42"><a href="#cb5-42" tabindex="-1"></a>                                <span class="st">&quot;L1 = 0.05&quot;</span> <span class="ot">=</span> <span class="st">&quot;coral&quot;</span>,</span>
+<span id="cb5-43"><a href="#cb5-43" tabindex="-1"></a>                                <span class="st">&quot;L1 = 0.3&quot;</span> <span class="ot">=</span> <span class="st">&quot;forestgreen&quot;</span>)) <span class="sc">+</span></span>
+<span id="cb5-44"><a href="#cb5-44" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">&quot;Distribution of Non-Zero H Values Under L1 Regularization&quot;</span>,</span>
+<span id="cb5-45"><a href="#cb5-45" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">&quot;H value&quot;</span>, <span class="at">y =</span> <span class="st">&quot;Count&quot;</span>) <span class="sc">+</span></span>
+<span id="cb5-46"><a href="#cb5-46" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
+<span id="cb5-47"><a href="#cb5-47" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">&quot;none&quot;</span>)</span></code></pre></div>
+<p>The histograms reveal L1’s mechanism: small values are clipped to
+exactly zero (creating sparsity), and the surviving non-zero values tend
+to be larger and more concentrated. Under strong L1, the distribution
+shifts rightward — the model retains only the most important
+loadings.</p>
+</div>
+<div id="l2-ridge-shrinkage" class="section level3">
+<h3>L2 (Ridge): Shrinkage</h3>
+<p>L2 regularization penalizes the squared <span class="math inline">\(\ell_2\)</span> norm of factor values:</p>
+<p><span class="math display">\[\mathcal{R}_{L_2} = \beta_w \|W\|_F^2 +
+\beta_h \|H\|_F^2\]</span></p>
+<p>Unlike L1, L2 does not produce exact zeros — it
+<strong>shrinks</strong> all values toward zero proportionally. This is
+useful for preventing individual features from dominating a factor and
+for numerical stability when the problem is ill-conditioned.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>l2_vals <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="fl">0.01</span>, <span class="fl">0.1</span>, <span class="fl">1.0</span>)</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>l2_models <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>results_l2 <span class="ot">&lt;-</span> <span class="fu">data.frame</span>()</span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a></span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a><span class="cf">for</span> (l2 <span class="cf">in</span> l2_vals) {</span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a>  m <span class="ot">&lt;-</span> <span class="fu">nmf</span>(A_sp, <span class="at">k =</span> <span class="dv">8</span>, <span class="at">L2 =</span> <span class="fu">c</span>(l2, l2), <span class="at">tol =</span> <span class="fl">1e-5</span>, <span class="at">maxit =</span> <span class="dv">200</span>, <span class="at">seed =</span> <span class="dv">1</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a>  l2_models[[<span class="fu">as.character</span>(l2)]] <span class="ot">&lt;-</span> m</span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a>  max_w <span class="ot">&lt;-</span> <span class="fu">max</span>(m<span class="sc">@</span>w)</span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a>  mean_w <span class="ot">&lt;-</span> <span class="fu">mean</span>(m<span class="sc">@</span>w[m<span class="sc">@</span>w <span class="sc">&gt;</span> <span class="dv">0</span>])</span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a>  mse_val <span class="ot">&lt;-</span> <span class="fu">evaluate</span>(m, A_sp)</span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a>  results_l2 <span class="ot">&lt;-</span> <span class="fu">rbind</span>(results_l2, <span class="fu">data.frame</span>(<span class="at">L2 =</span> l2, <span class="at">max_W =</span> max_w,</span>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a>                                             <span class="at">mean_W =</span> mean_w, <span class="at">MSE =</span> mse_val))</span>
+<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a>}</span>
+<span id="cb6-14"><a href="#cb6-14" tabindex="-1"></a></span>
+<span id="cb6-15"><a href="#cb6-15" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;Effect of L2 regularization on W factor values:</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb6-16"><a href="#cb6-16" tabindex="-1"></a><span class="fu">print</span>(results_l2, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb6-17"><a href="#cb6-17" tabindex="-1"></a></span>
+<span id="cb6-18"><a href="#cb6-18" tabindex="-1"></a><span class="co"># Histogram comparison under L2</span></span>
+<span id="cb6-19"><a href="#cb6-19" tabindex="-1"></a>w_l2_list <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb6-20"><a href="#cb6-20" tabindex="-1"></a><span class="cf">for</span> (lbl <span class="cf">in</span> <span class="fu">c</span>(<span class="st">&quot;0&quot;</span>, <span class="st">&quot;0.01&quot;</span>, <span class="st">&quot;0.1&quot;</span>, <span class="st">&quot;1&quot;</span>)) {</span>
+<span id="cb6-21"><a href="#cb6-21" tabindex="-1"></a>  w_vals <span class="ot">&lt;-</span> <span class="fu">as.vector</span>(l2_models[[lbl]]<span class="sc">@</span>w)</span>
+<span id="cb6-22"><a href="#cb6-22" tabindex="-1"></a>  w_pos  <span class="ot">&lt;-</span> w_vals[w_vals <span class="sc">&gt;</span> <span class="dv">0</span>]</span>
+<span id="cb6-23"><a href="#cb6-23" tabindex="-1"></a>  w_l2_list <span class="ot">&lt;-</span> <span class="fu">c</span>(w_l2_list, <span class="fu">list</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb6-24"><a href="#cb6-24" tabindex="-1"></a>    <span class="at">value =</span> w_pos,</span>
+<span id="cb6-25"><a href="#cb6-25" tabindex="-1"></a>    <span class="at">L2 =</span> <span class="fu">paste0</span>(<span class="st">&quot;L2 = &quot;</span>, lbl),</span>
+<span id="cb6-26"><a href="#cb6-26" tabindex="-1"></a>    <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb6-27"><a href="#cb6-27" tabindex="-1"></a>  )))</span>
+<span id="cb6-28"><a href="#cb6-28" tabindex="-1"></a>}</span>
+<span id="cb6-29"><a href="#cb6-29" tabindex="-1"></a>df_l2w <span class="ot">&lt;-</span> <span class="fu">do.call</span>(rbind, w_l2_list)</span>
+<span id="cb6-30"><a href="#cb6-30" tabindex="-1"></a></span>
+<span id="cb6-31"><a href="#cb6-31" tabindex="-1"></a><span class="fu">ggplot</span>(df_l2w, <span class="fu">aes</span>(<span class="at">x =</span> value, <span class="at">fill =</span> L2)) <span class="sc">+</span></span>
+<span id="cb6-32"><a href="#cb6-32" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">bins =</span> <span class="dv">40</span>, <span class="at">alpha =</span> <span class="fl">0.7</span>, <span class="at">position =</span> <span class="st">&quot;identity&quot;</span>) <span class="sc">+</span></span>
+<span id="cb6-33"><a href="#cb6-33" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> L2, <span class="at">ncol =</span> <span class="dv">2</span>, <span class="at">scales =</span> <span class="st">&quot;free_y&quot;</span>) <span class="sc">+</span></span>
+<span id="cb6-34"><a href="#cb6-34" tabindex="-1"></a>  <span class="fu">scale_fill_brewer</span>(<span class="at">palette =</span> <span class="st">&quot;Set2&quot;</span>) <span class="sc">+</span></span>
+<span id="cb6-35"><a href="#cb6-35" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">&quot;W Value Distribution Under L2 Regularization&quot;</span>,</span>
+<span id="cb6-36"><a href="#cb6-36" tabindex="-1"></a>       <span class="at">subtitle =</span> <span class="st">&quot;L2 compresses values toward zero without producing exact zeros&quot;</span>,</span>
+<span id="cb6-37"><a href="#cb6-37" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">&quot;W value&quot;</span>, <span class="at">y =</span> <span class="st">&quot;Count&quot;</span>) <span class="sc">+</span></span>
+<span id="cb6-38"><a href="#cb6-38" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
+<span id="cb6-39"><a href="#cb6-39" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">&quot;none&quot;</span>)</span></code></pre></div>
+<p>L2 is applied by augmenting the diagonal of the Gram matrix: <span class="math inline">\(G(i,i) \mathrel{+}= \beta\)</span>. This also
+improves conditioning, which can help convergence for near-degenerate
+problems. The histograms show how L2 compresses the distribution of
+factor values toward smaller magnitudes without introducing exact zeros
+— in contrast to L1’s hard thresholding.</p>
+</div>
+<div id="l21-group-sparsity-adaptive-row-wise-penalization" class="section level3">
+<h3>L21 (Group Sparsity): Adaptive Row-Wise Penalization</h3>
+<p>L21-norm regularization (group LASSO) applies an <strong>adaptive L2
+penalty per row</strong> of the factor matrix. Unlike a uniform L2
+penalty, L21 penalizes each row inversely proportional to its norm:</p>
+<p><span class="math display">\[G(i,i) \mathrel{+}=
+\frac{\lambda}{\|W_{i,:}\|_2}\]</span></p>
+<p>Rows with small norm receive a larger penalty (pushing them further
+toward zero), while rows with large norm receive a smaller penalty
+(preserving them). This creates a “rich get richer” dynamic: strong
+factors are preserved and weak factors are suppressed.</p>
+<p>Because the <span class="math inline">\(d\)</span> diagonal captures
+the overall scale of each factor after normalization, L21 affects the
+<span class="math inline">\(d\)</span> values — concentrating model
+energy into fewer dominant factors while suppressing minor ones. This
+makes L21 a tool for <strong>soft rank selection</strong>: fit with a
+rank higher than expected and let L21 determine how many factors the
+data supports.</p>
+<p>We demonstrate L21 on the Hawaiian birds dataset — a real ecological
+matrix with meaningful factor structure. By fitting with <span class="math inline">\(k = 12\)</span> (more than the expected number of
+bird communities), we test whether L21 suppresses unnecessary
+factors:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="fu">data</span>(hawaiibirds)</span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>meta_w <span class="ot">&lt;-</span> <span class="fu">attr</span>(hawaiibirds, <span class="st">&quot;metadata_w&quot;</span>)</span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a>meta_h <span class="ot">&lt;-</span> <span class="fu">attr</span>(hawaiibirds, <span class="st">&quot;metadata_h&quot;</span>)</span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a></span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a><span class="co"># Fit with k=12 (deliberately over-specified) under different L21 strengths</span></span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a>l21_vals <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="fl">0.5</span>, <span class="fl">1.0</span>, <span class="fl">2.0</span>, <span class="fl">5.0</span>)</span>
+<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a>l21_results <span class="ot">&lt;-</span> <span class="fu">data.frame</span>()</span>
+<span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a>l21_d_list <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a></span>
+<span id="cb7-10"><a href="#cb7-10" tabindex="-1"></a><span class="cf">for</span> (l21 <span class="cf">in</span> l21_vals) {</span>
+<span id="cb7-11"><a href="#cb7-11" tabindex="-1"></a>  m <span class="ot">&lt;-</span> <span class="fu">nmf</span>(hawaiibirds, <span class="at">k =</span> <span class="dv">12</span>, <span class="at">L21 =</span> <span class="fu">c</span>(l21, <span class="dv">0</span>), <span class="at">tol =</span> <span class="fl">1e-5</span>, <span class="at">maxit =</span> <span class="dv">200</span>,</span>
+<span id="cb7-12"><a href="#cb7-12" tabindex="-1"></a>           <span class="at">seed =</span> <span class="dv">42</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb7-13"><a href="#cb7-13" tabindex="-1"></a>  d_sorted <span class="ot">&lt;-</span> <span class="fu">sort</span>(m<span class="sc">@</span>d, <span class="at">decreasing =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb7-14"><a href="#cb7-14" tabindex="-1"></a>  l21_results <span class="ot">&lt;-</span> <span class="fu">rbind</span>(l21_results, <span class="fu">data.frame</span>(</span>
+<span id="cb7-15"><a href="#cb7-15" tabindex="-1"></a>    <span class="at">L21 =</span> l21,</span>
+<span id="cb7-16"><a href="#cb7-16" tabindex="-1"></a>    <span class="at">sum_d =</span> <span class="fu">sum</span>(m<span class="sc">@</span>d),</span>
+<span id="cb7-17"><a href="#cb7-17" tabindex="-1"></a>    <span class="at">max_d =</span> <span class="fu">max</span>(m<span class="sc">@</span>d),</span>
+<span id="cb7-18"><a href="#cb7-18" tabindex="-1"></a>    <span class="at">min_d =</span> <span class="fu">min</span>(m<span class="sc">@</span>d),</span>
+<span id="cb7-19"><a href="#cb7-19" tabindex="-1"></a>    <span class="at">ratio =</span> <span class="fu">max</span>(m<span class="sc">@</span>d) <span class="sc">/</span> <span class="fu">max</span>(<span class="fu">min</span>(m<span class="sc">@</span>d), <span class="fl">1e-10</span>),</span>
+<span id="cb7-20"><a href="#cb7-20" tabindex="-1"></a>    <span class="at">MSE =</span> <span class="fu">evaluate</span>(m, hawaiibirds)</span>
+<span id="cb7-21"><a href="#cb7-21" tabindex="-1"></a>  ))</span>
+<span id="cb7-22"><a href="#cb7-22" tabindex="-1"></a>  l21_d_list <span class="ot">&lt;-</span> <span class="fu">c</span>(l21_d_list, <span class="fu">list</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb7-23"><a href="#cb7-23" tabindex="-1"></a>    <span class="at">factor =</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">12</span>,</span>
+<span id="cb7-24"><a href="#cb7-24" tabindex="-1"></a>    <span class="at">d =</span> d_sorted,</span>
+<span id="cb7-25"><a href="#cb7-25" tabindex="-1"></a>    <span class="at">L21 =</span> <span class="fu">paste0</span>(<span class="st">&quot;L21 = &quot;</span>, l21)</span>
+<span id="cb7-26"><a href="#cb7-26" tabindex="-1"></a>  )))</span>
+<span id="cb7-27"><a href="#cb7-27" tabindex="-1"></a>}</span>
+<span id="cb7-28"><a href="#cb7-28" tabindex="-1"></a></span>
+<span id="cb7-29"><a href="#cb7-29" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;L21 effect on diagonal scaling (d) and MSE:</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb7-30"><a href="#cb7-30" tabindex="-1"></a><span class="fu">print</span>(l21_results[, <span class="fu">c</span>(<span class="st">&quot;L21&quot;</span>, <span class="st">&quot;sum_d&quot;</span>, <span class="st">&quot;max_d&quot;</span>, <span class="st">&quot;min_d&quot;</span>, <span class="st">&quot;ratio&quot;</span>, <span class="st">&quot;MSE&quot;</span>)], <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb7-31"><a href="#cb7-31" tabindex="-1"></a></span>
+<span id="cb7-32"><a href="#cb7-32" tabindex="-1"></a>df_d <span class="ot">&lt;-</span> <span class="fu">do.call</span>(rbind, l21_d_list)</span>
+<span id="cb7-33"><a href="#cb7-33" tabindex="-1"></a>df_d<span class="sc">$</span>L21 <span class="ot">&lt;-</span> <span class="fu">factor</span>(df_d<span class="sc">$</span>L21, <span class="at">levels =</span> <span class="fu">paste0</span>(<span class="st">&quot;L21 = &quot;</span>, l21_vals))</span>
+<span id="cb7-34"><a href="#cb7-34" tabindex="-1"></a></span>
+<span id="cb7-35"><a href="#cb7-35" tabindex="-1"></a><span class="fu">ggplot</span>(df_d, <span class="fu">aes</span>(<span class="at">x =</span> factor, <span class="at">y =</span> d)) <span class="sc">+</span></span>
+<span id="cb7-36"><a href="#cb7-36" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="at">fill =</span> <span class="st">&quot;steelblue&quot;</span>, <span class="at">width =</span> <span class="fl">0.7</span>) <span class="sc">+</span></span>
+<span id="cb7-37"><a href="#cb7-37" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> L21, <span class="at">ncol =</span> <span class="dv">3</span>, <span class="at">scales =</span> <span class="st">&quot;free_y&quot;</span>) <span class="sc">+</span></span>
+<span id="cb7-38"><a href="#cb7-38" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">&quot;L21 Effect on Factor Importance (Hawaiian Birds, k = 12)&quot;</span>,</span>
+<span id="cb7-39"><a href="#cb7-39" tabindex="-1"></a>       <span class="at">subtitle =</span> <span class="st">&quot;Sorted diagonal d values — L21 suppresses minor factors&quot;</span>,</span>
+<span id="cb7-40"><a href="#cb7-40" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">&quot;Factor (sorted by importance)&quot;</span>, <span class="at">y =</span> <span class="st">&quot;d value&quot;</span>) <span class="sc">+</span></span>
+<span id="cb7-41"><a href="#cb7-41" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div>
+<p>The bar charts show how L21 redistributes model energy. Without L21,
+the 12 factors have relatively uniform <span class="math inline">\(d\)</span> values. As L21 increases, the gap
+between dominant and minor factors widens: the <code>ratio</code> column
+(max <span class="math inline">\(d\)</span> / min <span class="math inline">\(d\)</span>) quantifies this effect. Strong factors
+that capture real community structure are preserved, while excess
+factors are driven toward negligible <span class="math inline">\(d\)</span> values. In practice, you can inspect
+the <span class="math inline">\(d\)</span> distribution to decide how
+many factors are truly needed.</p>
+</div>
+<div id="angular-regularization-factor-diversity" class="section level3">
+<h3>Angular Regularization: Factor Diversity</h3>
+<p>Angular regularization encourages orthogonality between factor
+columns by penalizing cross-factor correlations through the Gram
+matrix:</p>
+<p><span class="math display">\[G \mathrel{+}= \eta \cdot (W \cdot W^T -
+\text{diag})\]</span></p>
+<p>where only the off-diagonal terms penalize overlap between factors.
+This pushes the model toward solutions where each factor captures a
+distinct, non-redundant pattern.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a>K <span class="ot">&lt;-</span> <span class="dv">6</span></span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>ang_vals <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="fl">0.1</span>, <span class="fl">0.5</span>, <span class="fl">1.0</span>)</span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a>results_ang <span class="ot">&lt;-</span> <span class="fu">data.frame</span>()</span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a>ang_models <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a></span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a><span class="cf">for</span> (ang <span class="cf">in</span> ang_vals) {</span>
+<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a>  m <span class="ot">&lt;-</span> <span class="fu">nmf</span>(hawaiibirds, <span class="at">k =</span> K, <span class="at">angular =</span> <span class="fu">c</span>(ang, <span class="dv">0</span>), <span class="at">tol =</span> <span class="fl">1e-5</span>, <span class="at">maxit =</span> <span class="dv">200</span>,</span>
+<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a>           <span class="at">seed =</span> <span class="dv">42</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a>  ang_models[[<span class="fu">as.character</span>(ang)]] <span class="ot">&lt;-</span> m</span>
+<span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a>  cos_mat <span class="ot">&lt;-</span> <span class="fu">abs</span>(<span class="fu">cosine</span>(m<span class="sc">@</span>w))</span>
+<span id="cb8-11"><a href="#cb8-11" tabindex="-1"></a>  <span class="fu">diag</span>(cos_mat) <span class="ot">&lt;-</span> <span class="cn">NA</span></span>
+<span id="cb8-12"><a href="#cb8-12" tabindex="-1"></a>  mean_cos <span class="ot">&lt;-</span> <span class="fu">mean</span>(cos_mat, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb8-13"><a href="#cb8-13" tabindex="-1"></a>  max_cos <span class="ot">&lt;-</span> <span class="fu">max</span>(cos_mat, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb8-14"><a href="#cb8-14" tabindex="-1"></a>  results_ang <span class="ot">&lt;-</span> <span class="fu">rbind</span>(results_ang, <span class="fu">data.frame</span>(<span class="at">angular =</span> ang, <span class="at">mean_cosine =</span> mean_cos,</span>
+<span id="cb8-15"><a href="#cb8-15" tabindex="-1"></a>                                               <span class="at">max_cosine =</span> max_cos,</span>
+<span id="cb8-16"><a href="#cb8-16" tabindex="-1"></a>                                               <span class="at">MSE =</span> <span class="fu">evaluate</span>(m, hawaiibirds)))</span>
+<span id="cb8-17"><a href="#cb8-17" tabindex="-1"></a>}</span>
+<span id="cb8-18"><a href="#cb8-18" tabindex="-1"></a></span>
+<span id="cb8-19"><a href="#cb8-19" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;Effect of angular regularization on factor similarity:</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb8-20"><a href="#cb8-20" tabindex="-1"></a><span class="fu">print</span>(results_ang, <span class="at">row.names =</span> <span class="cn">FALSE</span>, <span class="at">digits =</span> <span class="dv">4</span>)</span>
+<span id="cb8-21"><a href="#cb8-21" tabindex="-1"></a></span>
+<span id="cb8-22"><a href="#cb8-22" tabindex="-1"></a><span class="co"># Cosine similarity heatmaps with ggplot2, viridis &quot;B&quot;, 1:1 aspect ratio</span></span>
+<span id="cb8-23"><a href="#cb8-23" tabindex="-1"></a>heat_list <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb8-24"><a href="#cb8-24" tabindex="-1"></a><span class="cf">for</span> (ang_str <span class="cf">in</span> <span class="fu">names</span>(ang_models)) {</span>
+<span id="cb8-25"><a href="#cb8-25" tabindex="-1"></a>  m <span class="ot">&lt;-</span> ang_models[[ang_str]]</span>
+<span id="cb8-26"><a href="#cb8-26" tabindex="-1"></a>  cos_mat <span class="ot">&lt;-</span> <span class="fu">abs</span>(<span class="fu">cosine</span>(m<span class="sc">@</span>w))</span>
+<span id="cb8-27"><a href="#cb8-27" tabindex="-1"></a>  <span class="cf">for</span> (i <span class="cf">in</span> <span class="fu">seq_len</span>(<span class="fu">nrow</span>(cos_mat))) {</span>
+<span id="cb8-28"><a href="#cb8-28" tabindex="-1"></a>    <span class="cf">for</span> (j <span class="cf">in</span> <span class="fu">seq_len</span>(<span class="fu">ncol</span>(cos_mat))) {</span>
+<span id="cb8-29"><a href="#cb8-29" tabindex="-1"></a>      heat_list <span class="ot">&lt;-</span> <span class="fu">c</span>(heat_list, <span class="fu">list</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb8-30"><a href="#cb8-30" tabindex="-1"></a>        <span class="at">row =</span> i, <span class="at">col =</span> j,</span>
+<span id="cb8-31"><a href="#cb8-31" tabindex="-1"></a>        <span class="at">cosine =</span> cos_mat[i, j],</span>
+<span id="cb8-32"><a href="#cb8-32" tabindex="-1"></a>        <span class="at">angular =</span> <span class="fu">paste0</span>(<span class="st">&quot;Angular = &quot;</span>, ang_str)</span>
+<span id="cb8-33"><a href="#cb8-33" tabindex="-1"></a>      )))</span>
+<span id="cb8-34"><a href="#cb8-34" tabindex="-1"></a>    }</span>
+<span id="cb8-35"><a href="#cb8-35" tabindex="-1"></a>  }</span>
+<span id="cb8-36"><a href="#cb8-36" tabindex="-1"></a>}</span>
+<span id="cb8-37"><a href="#cb8-37" tabindex="-1"></a>df_heat <span class="ot">&lt;-</span> <span class="fu">do.call</span>(rbind, heat_list)</span>
+<span id="cb8-38"><a href="#cb8-38" tabindex="-1"></a>df_heat<span class="sc">$</span>angular <span class="ot">&lt;-</span> <span class="fu">factor</span>(df_heat<span class="sc">$</span>angular,</span>
+<span id="cb8-39"><a href="#cb8-39" tabindex="-1"></a>                          <span class="at">levels =</span> <span class="fu">paste0</span>(<span class="st">&quot;Angular = &quot;</span>, <span class="fu">c</span>(<span class="st">&quot;0&quot;</span>, <span class="st">&quot;0.1&quot;</span>, <span class="st">&quot;0.5&quot;</span>, <span class="st">&quot;1&quot;</span>)))</span>
+<span id="cb8-40"><a href="#cb8-40" tabindex="-1"></a></span>
+<span id="cb8-41"><a href="#cb8-41" tabindex="-1"></a><span class="fu">ggplot</span>(df_heat, <span class="fu">aes</span>(<span class="at">x =</span> col, <span class="at">y =</span> row, <span class="at">fill =</span> cosine)) <span class="sc">+</span></span>
+<span id="cb8-42"><a href="#cb8-42" tabindex="-1"></a>  <span class="fu">geom_tile</span>() <span class="sc">+</span></span>
+<span id="cb8-43"><a href="#cb8-43" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> angular, <span class="at">ncol =</span> <span class="dv">2</span>) <span class="sc">+</span></span>
+<span id="cb8-44"><a href="#cb8-44" tabindex="-1"></a>  <span class="fu">scale_fill_viridis_c</span>(<span class="at">option =</span> <span class="st">&quot;B&quot;</span>, <span class="at">limits =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>), <span class="at">name =</span> <span class="st">&quot;|cosine|&quot;</span>) <span class="sc">+</span></span>
+<span id="cb8-45"><a href="#cb8-45" tabindex="-1"></a>  <span class="fu">scale_y_reverse</span>() <span class="sc">+</span></span>
+<span id="cb8-46"><a href="#cb8-46" tabindex="-1"></a>  <span class="fu">coord_fixed</span>() <span class="sc">+</span></span>
+<span id="cb8-47"><a href="#cb8-47" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">&quot;Inter-Factor Cosine Similarity Under Angular Regularization&quot;</span>,</span>
+<span id="cb8-48"><a href="#cb8-48" tabindex="-1"></a>       <span class="at">subtitle =</span> <span class="st">&quot;Hawaiian Birds (k = 6) — off-diagonal cooling indicates more distinct factors&quot;</span>,</span>
+<span id="cb8-49"><a href="#cb8-49" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">&quot;Factor&quot;</span>, <span class="at">y =</span> <span class="st">&quot;Factor&quot;</span>) <span class="sc">+</span></span>
+<span id="cb8-50"><a href="#cb8-50" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
+<span id="cb8-51"><a href="#cb8-51" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">panel.grid =</span> <span class="fu">element_blank</span>())</span></code></pre></div>
+<p>Higher angular penalties produce factors with lower inter-factor
+cosine similarity. The heatmaps show how the off-diagonal blocks cool
+(approach zero) as the penalty increases, indicating more distinct,
+non-redundant factors. This is particularly useful in ecological data
+like Hawaiian birds, where you want each factor to represent a distinct
+bird community.</p>
+</div>
+<div id="upper-bound-constraints" class="section level3">
+<h3>Upper Bound Constraints</h3>
+<p>Upper bound constraints clip factor values to a maximum during
+coordinate descent. Because RcppML normalizes factor columns to unit
+<span class="math inline">\(\ell_1\)</span> norm after each iteration, a
+factor value of <span class="math inline">\(x\)</span> in <span class="math inline">\(W\)</span> means that feature accounts for
+fraction <span class="math inline">\(x\)</span> of the factor’s total
+loading. An upper bound of 0.1 ensures no single feature can dominate —
+each factor’s loading is spread across at least 10 features.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a>A5 <span class="ot">&lt;-</span> sim<span class="sc">$</span>A  <span class="co"># 5 true factors</span></span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a>m_unbound <span class="ot">&lt;-</span> <span class="fu">nmf</span>(A5, <span class="at">k =</span> <span class="dv">5</span>, <span class="at">tol =</span> <span class="fl">1e-5</span>, <span class="at">maxit =</span> <span class="dv">200</span>, <span class="at">seed =</span> <span class="dv">1</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a></span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;Unconstrained W summary:</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;  Range:&quot;</span>, <span class="fu">round</span>(<span class="fu">range</span>(m_unbound<span class="sc">@</span>w), <span class="dv">4</span>), <span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;  Max:  &quot;</span>, <span class="fu">round</span>(<span class="fu">max</span>(m_unbound<span class="sc">@</span>w), <span class="dv">4</span>), <span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb9-7"><a href="#cb9-7" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;  Mean (nonzero):&quot;</span>, <span class="fu">round</span>(<span class="fu">mean</span>(m_unbound<span class="sc">@</span>w[m_unbound<span class="sc">@</span>w <span class="sc">&gt;</span> <span class="dv">0</span>]), <span class="dv">4</span>), <span class="st">&quot;</span><span class="sc">\n\n</span><span class="st">&quot;</span>)</span>
+<span id="cb9-8"><a href="#cb9-8" tabindex="-1"></a></span>
+<span id="cb9-9"><a href="#cb9-9" tabindex="-1"></a><span class="co"># Use bounds that actually constrain values</span></span>
+<span id="cb9-10"><a href="#cb9-10" tabindex="-1"></a>bounds <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="fl">0.3</span>, <span class="fl">0.1</span>, <span class="fl">0.05</span>)</span>
+<span id="cb9-11"><a href="#cb9-11" tabindex="-1"></a>bound_models <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb9-12"><a href="#cb9-12" tabindex="-1"></a><span class="cf">for</span> (b <span class="cf">in</span> bounds) {</span>
+<span id="cb9-13"><a href="#cb9-13" tabindex="-1"></a>  bound_models[[<span class="fu">as.character</span>(b)]] <span class="ot">&lt;-</span> <span class="fu">nmf</span>(A5, <span class="at">k =</span> <span class="dv">5</span>, <span class="at">upper_bound =</span> <span class="fu">c</span>(b, b),</span>
+<span id="cb9-14"><a href="#cb9-14" tabindex="-1"></a>                                          <span class="at">tol =</span> <span class="fl">1e-5</span>, <span class="at">maxit =</span> <span class="dv">200</span>, <span class="at">seed =</span> <span class="dv">1</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb9-15"><a href="#cb9-15" tabindex="-1"></a>}</span>
+<span id="cb9-16"><a href="#cb9-16" tabindex="-1"></a></span>
+<span id="cb9-17"><a href="#cb9-17" tabindex="-1"></a><span class="co"># Superimposed histogram comparison using ggplot2</span></span>
+<span id="cb9-18"><a href="#cb9-18" tabindex="-1"></a>ub_list <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb9-19"><a href="#cb9-19" tabindex="-1"></a>ub_list <span class="ot">&lt;-</span> <span class="fu">c</span>(ub_list, <span class="fu">list</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb9-20"><a href="#cb9-20" tabindex="-1"></a>  <span class="at">value =</span> <span class="fu">as.vector</span>(m_unbound<span class="sc">@</span>w[m_unbound<span class="sc">@</span>w <span class="sc">&gt;</span> <span class="dv">0</span>]),</span>
+<span id="cb9-21"><a href="#cb9-21" tabindex="-1"></a>  <span class="at">bound =</span> <span class="st">&quot;Unconstrained&quot;</span></span>
+<span id="cb9-22"><a href="#cb9-22" tabindex="-1"></a>)))</span>
+<span id="cb9-23"><a href="#cb9-23" tabindex="-1"></a><span class="cf">for</span> (b <span class="cf">in</span> bounds) {</span>
+<span id="cb9-24"><a href="#cb9-24" tabindex="-1"></a>  w_b <span class="ot">&lt;-</span> bound_models[[<span class="fu">as.character</span>(b)]]<span class="sc">@</span>w</span>
+<span id="cb9-25"><a href="#cb9-25" tabindex="-1"></a>  ub_list <span class="ot">&lt;-</span> <span class="fu">c</span>(ub_list, <span class="fu">list</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb9-26"><a href="#cb9-26" tabindex="-1"></a>    <span class="at">value =</span> <span class="fu">as.vector</span>(w_b[w_b <span class="sc">&gt;</span> <span class="dv">0</span>]),</span>
+<span id="cb9-27"><a href="#cb9-27" tabindex="-1"></a>    <span class="at">bound =</span> <span class="fu">paste0</span>(<span class="st">&quot;UB = &quot;</span>, b)</span>
+<span id="cb9-28"><a href="#cb9-28" tabindex="-1"></a>  )))</span>
+<span id="cb9-29"><a href="#cb9-29" tabindex="-1"></a>}</span>
+<span id="cb9-30"><a href="#cb9-30" tabindex="-1"></a>df_ub <span class="ot">&lt;-</span> <span class="fu">do.call</span>(rbind, ub_list)</span>
+<span id="cb9-31"><a href="#cb9-31" tabindex="-1"></a>df_ub<span class="sc">$</span>bound <span class="ot">&lt;-</span> <span class="fu">factor</span>(df_ub<span class="sc">$</span>bound,</span>
+<span id="cb9-32"><a href="#cb9-32" tabindex="-1"></a>                       <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">&quot;Unconstrained&quot;</span>, <span class="fu">paste0</span>(<span class="st">&quot;UB = &quot;</span>, bounds)))</span>
+<span id="cb9-33"><a href="#cb9-33" tabindex="-1"></a></span>
+<span id="cb9-34"><a href="#cb9-34" tabindex="-1"></a><span class="fu">ggplot</span>(df_ub, <span class="fu">aes</span>(<span class="at">x =</span> value, <span class="at">fill =</span> bound)) <span class="sc">+</span></span>
+<span id="cb9-35"><a href="#cb9-35" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">bins =</span> <span class="dv">40</span>, <span class="at">alpha =</span> <span class="fl">0.7</span>, <span class="at">position =</span> <span class="st">&quot;identity&quot;</span>) <span class="sc">+</span></span>
+<span id="cb9-36"><a href="#cb9-36" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> bound, <span class="at">ncol =</span> <span class="dv">2</span>, <span class="at">scales =</span> <span class="st">&quot;free_y&quot;</span>) <span class="sc">+</span></span>
+<span id="cb9-37"><a href="#cb9-37" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">data =</span> <span class="fu">data.frame</span>(</span>
+<span id="cb9-38"><a href="#cb9-38" tabindex="-1"></a>    <span class="at">bound =</span> <span class="fu">factor</span>(<span class="fu">paste0</span>(<span class="st">&quot;UB = &quot;</span>, bounds),</span>
+<span id="cb9-39"><a href="#cb9-39" tabindex="-1"></a>                   <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">&quot;Unconstrained&quot;</span>, <span class="fu">paste0</span>(<span class="st">&quot;UB = &quot;</span>, bounds))),</span>
+<span id="cb9-40"><a href="#cb9-40" tabindex="-1"></a>    <span class="at">xint =</span> bounds</span>
+<span id="cb9-41"><a href="#cb9-41" tabindex="-1"></a>  ), <span class="fu">aes</span>(<span class="at">xintercept =</span> xint), <span class="at">linetype =</span> <span class="st">&quot;dashed&quot;</span>, <span class="at">color =</span> <span class="st">&quot;red&quot;</span>, <span class="at">linewidth =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb9-42"><a href="#cb9-42" tabindex="-1"></a>  <span class="fu">scale_fill_brewer</span>(<span class="at">palette =</span> <span class="st">&quot;Set2&quot;</span>) <span class="sc">+</span></span>
+<span id="cb9-43"><a href="#cb9-43" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">&quot;W Value Distribution Under Upper Bound Constraints&quot;</span>,</span>
+<span id="cb9-44"><a href="#cb9-44" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">&quot;W value&quot;</span>, <span class="at">y =</span> <span class="st">&quot;Count&quot;</span>) <span class="sc">+</span></span>
+<span id="cb9-45"><a href="#cb9-45" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
+<span id="cb9-46"><a href="#cb9-46" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">&quot;none&quot;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="co"># d values comparison</span></span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;Diagonal scaling (d) under upper bounds:</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a>d_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">factor =</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">5</span>, <span class="at">unconstrained =</span> <span class="fu">sort</span>(m_unbound<span class="sc">@</span>d, <span class="at">decreasing =</span> <span class="cn">TRUE</span>))</span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a><span class="cf">for</span> (b <span class="cf">in</span> bounds) {</span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a>  d_df[[<span class="fu">paste0</span>(<span class="st">&quot;UB_&quot;</span>, b)]] <span class="ot">&lt;-</span> <span class="fu">sort</span>(bound_models[[<span class="fu">as.character</span>(b)]]<span class="sc">@</span>d, <span class="at">decreasing =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a>}</span>
+<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a><span class="fu">print</span>(d_df, <span class="at">row.names =</span> <span class="cn">FALSE</span>, <span class="at">digits =</span> <span class="dv">2</span>)</span>
+<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a></span>
+<span id="cb10-9"><a href="#cb10-9" tabindex="-1"></a><span class="co"># MSE comparison</span></span>
+<span id="cb10-10"><a href="#cb10-10" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;</span><span class="sc">\n</span><span class="st">Reconstruction MSE:</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb10-11"><a href="#cb10-11" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;  Unconstrained: %.5f</span><span class="sc">\n</span><span class="st">&quot;</span>, <span class="fu">evaluate</span>(m_unbound, A5)))</span>
+<span id="cb10-12"><a href="#cb10-12" tabindex="-1"></a><span class="cf">for</span> (b <span class="cf">in</span> bounds) {</span>
+<span id="cb10-13"><a href="#cb10-13" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;  Upper bound = %s: %.5f</span><span class="sc">\n</span><span class="st">&quot;</span>, b, <span class="fu">evaluate</span>(bound_models[[<span class="fu">as.character</span>(b)]], A5)))</span>
+<span id="cb10-14"><a href="#cb10-14" tabindex="-1"></a>}</span></code></pre></div>
+<p>When the upper bound clips values, the distribution shifts: peak
+loadings are capped and the model compensates by distributing weight
+more evenly across features. The dashed red lines show the bound. The
+<span class="math inline">\(d\)</span> values may increase to compensate
+for the restricted per-element range. This is useful when you want
+factors with broad, distributed support rather than concentrated on a
+few features.</p>
+</div>
+<div id="combining-regularizations" class="section level3">
+<h3>Combining Regularizations</h3>
+<p>Regularization types can be combined. A common pattern is L1 for
+sparsity plus L2 for numerical stability:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a>m_combined <span class="ot">&lt;-</span> <span class="fu">nmf</span>(A_sp, <span class="at">k =</span> <span class="dv">8</span>, <span class="at">L1 =</span> <span class="fu">c</span>(<span class="fl">0.1</span>, <span class="fl">0.1</span>), <span class="at">L2 =</span> <span class="fu">c</span>(<span class="fl">0.01</span>, <span class="fl">0.01</span>),</span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>                  <span class="at">tol =</span> <span class="fl">1e-5</span>, <span class="at">maxit =</span> <span class="dv">200</span>, <span class="at">seed =</span> <span class="dv">1</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a>m_l1_only <span class="ot">&lt;-</span> <span class="fu">nmf</span>(A_sp, <span class="at">k =</span> <span class="dv">8</span>, <span class="at">L1 =</span> <span class="fu">c</span>(<span class="fl">0.1</span>, <span class="fl">0.1</span>),</span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a>                 <span class="at">tol =</span> <span class="fl">1e-5</span>, <span class="at">maxit =</span> <span class="dv">200</span>, <span class="at">seed =</span> <span class="dv">1</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a>m_none    <span class="ot">&lt;-</span> <span class="fu">nmf</span>(A_sp, <span class="at">k =</span> <span class="dv">8</span>, <span class="at">tol =</span> <span class="fl">1e-5</span>, <span class="at">maxit =</span> <span class="dv">200</span>, <span class="at">seed =</span> <span class="dv">1</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a></span>
+<span id="cb11-7"><a href="#cb11-7" tabindex="-1"></a><span class="co"># MSE comparison</span></span>
+<span id="cb11-8"><a href="#cb11-8" tabindex="-1"></a>mse_vals <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb11-9"><a href="#cb11-9" tabindex="-1"></a>  <span class="at">config =</span> <span class="fu">factor</span>(<span class="fu">c</span>(<span class="st">&quot;None&quot;</span>, <span class="st">&quot;L1 only&quot;</span>, <span class="st">&quot;L1 + L2&quot;</span>),</span>
+<span id="cb11-10"><a href="#cb11-10" tabindex="-1"></a>                  <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">&quot;None&quot;</span>, <span class="st">&quot;L1 only&quot;</span>, <span class="st">&quot;L1 + L2&quot;</span>)),</span>
+<span id="cb11-11"><a href="#cb11-11" tabindex="-1"></a>  <span class="at">MSE =</span> <span class="fu">c</span>(<span class="fu">evaluate</span>(m_none, A_sp), <span class="fu">evaluate</span>(m_l1_only, A_sp), <span class="fu">evaluate</span>(m_combined, A_sp))</span>
+<span id="cb11-12"><a href="#cb11-12" tabindex="-1"></a>)</span>
+<span id="cb11-13"><a href="#cb11-13" tabindex="-1"></a></span>
+<span id="cb11-14"><a href="#cb11-14" tabindex="-1"></a><span class="co"># Sparsity comparison</span></span>
+<span id="cb11-15"><a href="#cb11-15" tabindex="-1"></a>sp_none <span class="ot">&lt;-</span> <span class="fu">sparsity</span>(m_none)</span>
+<span id="cb11-16"><a href="#cb11-16" tabindex="-1"></a>sp_l1 <span class="ot">&lt;-</span> <span class="fu">sparsity</span>(m_l1_only)</span>
+<span id="cb11-17"><a href="#cb11-17" tabindex="-1"></a>sp_comb <span class="ot">&lt;-</span> <span class="fu">sparsity</span>(m_combined)</span>
+<span id="cb11-18"><a href="#cb11-18" tabindex="-1"></a></span>
+<span id="cb11-19"><a href="#cb11-19" tabindex="-1"></a>sp_vals <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb11-20"><a href="#cb11-20" tabindex="-1"></a>  <span class="at">config =</span> <span class="fu">factor</span>(<span class="fu">c</span>(<span class="st">&quot;None&quot;</span>, <span class="st">&quot;L1 only&quot;</span>, <span class="st">&quot;L1 + L2&quot;</span>),</span>
+<span id="cb11-21"><a href="#cb11-21" tabindex="-1"></a>                  <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">&quot;None&quot;</span>, <span class="st">&quot;L1 only&quot;</span>, <span class="st">&quot;L1 + L2&quot;</span>)),</span>
+<span id="cb11-22"><a href="#cb11-22" tabindex="-1"></a>  <span class="at">sparsity =</span> <span class="fu">c</span>(</span>
+<span id="cb11-23"><a href="#cb11-23" tabindex="-1"></a>    <span class="fu">mean</span>(sp_none<span class="sc">$</span>sparsity[sp_none<span class="sc">$</span>model <span class="sc">==</span> <span class="st">&quot;w&quot;</span>]),</span>
+<span id="cb11-24"><a href="#cb11-24" tabindex="-1"></a>    <span class="fu">mean</span>(sp_l1<span class="sc">$</span>sparsity[sp_l1<span class="sc">$</span>model <span class="sc">==</span> <span class="st">&quot;w&quot;</span>]),</span>
+<span id="cb11-25"><a href="#cb11-25" tabindex="-1"></a>    <span class="fu">mean</span>(sp_comb<span class="sc">$</span>sparsity[sp_comb<span class="sc">$</span>model <span class="sc">==</span> <span class="st">&quot;w&quot;</span>])</span>
+<span id="cb11-26"><a href="#cb11-26" tabindex="-1"></a>  )</span>
+<span id="cb11-27"><a href="#cb11-27" tabindex="-1"></a>)</span>
+<span id="cb11-28"><a href="#cb11-28" tabindex="-1"></a></span>
+<span id="cb11-29"><a href="#cb11-29" tabindex="-1"></a>df_comb <span class="ot">&lt;-</span> <span class="fu">merge</span>(mse_vals, sp_vals, <span class="at">by =</span> <span class="st">&quot;config&quot;</span>)</span>
+<span id="cb11-30"><a href="#cb11-30" tabindex="-1"></a>df_comb_long <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb11-31"><a href="#cb11-31" tabindex="-1"></a>  <span class="at">config =</span> <span class="fu">rep</span>(df_comb<span class="sc">$</span>config, <span class="dv">2</span>),</span>
+<span id="cb11-32"><a href="#cb11-32" tabindex="-1"></a>  <span class="at">metric =</span> <span class="fu">rep</span>(<span class="fu">c</span>(<span class="st">&quot;Reconstruction MSE&quot;</span>, <span class="st">&quot;W Sparsity&quot;</span>), <span class="at">each =</span> <span class="fu">nrow</span>(df_comb)),</span>
+<span id="cb11-33"><a href="#cb11-33" tabindex="-1"></a>  <span class="at">value =</span> <span class="fu">c</span>(df_comb<span class="sc">$</span>MSE <span class="sc">/</span> <span class="fu">max</span>(df_comb<span class="sc">$</span>MSE), df_comb<span class="sc">$</span>sparsity)</span>
+<span id="cb11-34"><a href="#cb11-34" tabindex="-1"></a>)</span>
+<span id="cb11-35"><a href="#cb11-35" tabindex="-1"></a></span>
+<span id="cb11-36"><a href="#cb11-36" tabindex="-1"></a><span class="fu">ggplot</span>(df_comb_long, <span class="fu">aes</span>(<span class="at">x =</span> config, <span class="at">y =</span> value, <span class="at">fill =</span> metric)) <span class="sc">+</span></span>
+<span id="cb11-37"><a href="#cb11-37" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="at">position =</span> <span class="st">&quot;dodge&quot;</span>, <span class="at">width =</span> <span class="fl">0.6</span>) <span class="sc">+</span></span>
+<span id="cb11-38"><a href="#cb11-38" tabindex="-1"></a>  <span class="fu">scale_fill_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">&quot;Reconstruction MSE&quot;</span> <span class="ot">=</span> <span class="st">&quot;coral&quot;</span>, <span class="st">&quot;W Sparsity&quot;</span> <span class="ot">=</span> <span class="st">&quot;steelblue&quot;</span>)) <span class="sc">+</span></span>
+<span id="cb11-39"><a href="#cb11-39" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">&quot;Combining Regularizations: MSE vs. Sparsity&quot;</span>,</span>
+<span id="cb11-40"><a href="#cb11-40" tabindex="-1"></a>       <span class="at">subtitle =</span> <span class="st">&quot;Regularized models trade reconstruction accuracy for structure&quot;</span>,</span>
+<span id="cb11-41"><a href="#cb11-41" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">&quot;&quot;</span>, <span class="at">y =</span> <span class="st">&quot;Normalized Value&quot;</span>, <span class="at">fill =</span> <span class="st">&quot;&quot;</span>) <span class="sc">+</span></span>
+<span id="cb11-42"><a href="#cb11-42" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div>
+<p>The regularized models have higher reconstruction error but sparser,
+more interpretable factors. The algorithm converges to a solution that
+minimizes the <em>total</em> objective (reconstruction loss + penalty
+terms), not the reconstruction error alone.</p>
+</div>
+</div>
+<div id="masking-handling-missing-and-special-data" class="section level2">
+<h2>4. Masking: Handling Missing and Special Data</h2>
+<p>NMF can handle incomplete matrices via masking — ignoring certain
+entries during optimization.</p>
+<div id="na-masking" class="section level3">
+<h3>NA Masking</h3>
+<p>If your data contains <code>NA</code> entries (genuinely missing
+observations), set <code>mask = &quot;NA&quot;</code>:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="co"># Introduce NAs into the data</span></span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a>A5 <span class="ot">&lt;-</span> sim<span class="sc">$</span>A</span>
+<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a>A_na <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(A5)</span>
+<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a>na_frac <span class="ot">&lt;-</span> <span class="fl">0.15</span></span>
+<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a>na_idx <span class="ot">&lt;-</span> <span class="fu">sample</span>(<span class="fu">length</span>(A_na), <span class="fu">floor</span>(<span class="fu">length</span>(A_na) <span class="sc">*</span> na_frac))</span>
+<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a>A_na[na_idx] <span class="ot">&lt;-</span> <span class="cn">NA</span></span>
+<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a></span>
+<span id="cb12-8"><a href="#cb12-8" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;Matrix has %.1f%% NAs (%d entries)</span><span class="sc">\n</span><span class="st">&quot;</span>, na_frac <span class="sc">*</span> <span class="dv">100</span>, <span class="fu">length</span>(na_idx)))</span>
+<span id="cb12-9"><a href="#cb12-9" tabindex="-1"></a></span>
+<span id="cb12-10"><a href="#cb12-10" tabindex="-1"></a><span class="co"># Fit with NA masking</span></span>
+<span id="cb12-11"><a href="#cb12-11" tabindex="-1"></a>m_na <span class="ot">&lt;-</span> <span class="fu">nmf</span>(A_na, <span class="at">k =</span> <span class="dv">5</span>, <span class="at">mask =</span> <span class="st">&quot;NA&quot;</span>, <span class="at">tol =</span> <span class="fl">1e-5</span>, <span class="at">maxit =</span> <span class="dv">200</span>, <span class="at">seed =</span> <span class="dv">1</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb12-12"><a href="#cb12-12" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;Converged in %d iterations</span><span class="sc">\n</span><span class="st">&quot;</span>, m_na<span class="sc">$</span>iter))</span>
+<span id="cb12-13"><a href="#cb12-13" tabindex="-1"></a></span>
+<span id="cb12-14"><a href="#cb12-14" tabindex="-1"></a><span class="co"># Check that the model recovers the structure</span></span>
+<span id="cb12-15"><a href="#cb12-15" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;Factor recovery: %.4f</span><span class="sc">\n</span><span class="st">&quot;</span>, <span class="fu">recover_quality</span>(m_na, sim<span class="sc">$</span>w)))</span></code></pre></div>
+<p>Masked entries do not contribute to the loss or gradients. The model
+learns from the observed entries and implicitly imputes the missing
+values in the reconstruction <span class="math inline">\(W \cdot
+\text{diag}(d) \cdot H\)</span>.</p>
+</div>
+<div id="zero-masking-mask_zeros-true" class="section level3">
+<h3>Zero Masking (<code>mask_zeros = TRUE</code>)</h3>
+<p>For data where zeros represent <strong>missing observations</strong>
+rather than true zero values — as in recommendation systems where a zero
+rating means “not rated” rather than “rated zero stars” — set
+<code>mask_zeros = TRUE</code>:</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a><span class="co"># MovieLens: zeros are &quot;not rated&quot;, not &quot;zero stars&quot;</span></span>
+<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a><span class="fu">data</span>(movielens)</span>
+<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;MovieLens: &quot;</span>, <span class="fu">nrow</span>(movielens), <span class="st">&quot;movies x&quot;</span>, <span class="fu">ncol</span>(movielens), <span class="st">&quot;users</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;Sparsity:&quot;</span>, <span class="fu">round</span>(<span class="dv">1</span> <span class="sc">-</span> <span class="fu">nnzero</span>(movielens) <span class="sc">/</span> <span class="fu">prod</span>(<span class="fu">dim</span>(movielens)), <span class="dv">4</span>), <span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;(Zeros represent unobserved ratings)</span><span class="sc">\n\n</span><span class="st">&quot;</span>)</span>
+<span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a></span>
+<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a><span class="co"># Compare with and without zero masking</span></span>
+<span id="cb13-8"><a href="#cb13-8" tabindex="-1"></a>m_dense  <span class="ot">&lt;-</span> <span class="fu">nmf</span>(movielens, <span class="at">k =</span> <span class="dv">8</span>, <span class="at">mask_zeros =</span> <span class="cn">FALSE</span>, <span class="at">tol =</span> <span class="fl">1e-5</span>, <span class="at">maxit =</span> <span class="dv">100</span>,</span>
+<span id="cb13-9"><a href="#cb13-9" tabindex="-1"></a>                <span class="at">seed =</span> <span class="dv">42</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb13-10"><a href="#cb13-10" tabindex="-1"></a>m_sparse <span class="ot">&lt;-</span> <span class="fu">nmf</span>(movielens, <span class="at">k =</span> <span class="dv">8</span>, <span class="at">mask_zeros =</span> <span class="cn">TRUE</span>, <span class="at">tol =</span> <span class="fl">1e-5</span>, <span class="at">maxit =</span> <span class="dv">100</span>,</span>
+<span id="cb13-11"><a href="#cb13-11" tabindex="-1"></a>                <span class="at">seed =</span> <span class="dv">42</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb13-12"><a href="#cb13-12" tabindex="-1"></a></span>
+<span id="cb13-13"><a href="#cb13-13" tabindex="-1"></a><span class="co"># Compute RMSE on observed entries</span></span>
+<span id="cb13-14"><a href="#cb13-14" tabindex="-1"></a>A_dense_mat <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(movielens)</span>
+<span id="cb13-15"><a href="#cb13-15" tabindex="-1"></a>obs_mask <span class="ot">&lt;-</span> A_dense_mat <span class="sc">!=</span> <span class="dv">0</span></span>
+<span id="cb13-16"><a href="#cb13-16" tabindex="-1"></a></span>
+<span id="cb13-17"><a href="#cb13-17" tabindex="-1"></a>recon_d <span class="ot">&lt;-</span> <span class="fu">prod</span>(m_dense)</span>
+<span id="cb13-18"><a href="#cb13-18" tabindex="-1"></a>recon_s <span class="ot">&lt;-</span> <span class="fu">prod</span>(m_sparse)</span>
+<span id="cb13-19"><a href="#cb13-19" tabindex="-1"></a></span>
+<span id="cb13-20"><a href="#cb13-20" tabindex="-1"></a>rmse_d <span class="ot">&lt;-</span> <span class="fu">sqrt</span>(<span class="fu">mean</span>((A_dense_mat[obs_mask] <span class="sc">-</span> recon_d[obs_mask])<span class="sc">^</span><span class="dv">2</span>))</span>
+<span id="cb13-21"><a href="#cb13-21" tabindex="-1"></a>rmse_s <span class="ot">&lt;-</span> <span class="fu">sqrt</span>(<span class="fu">mean</span>((A_dense_mat[obs_mask] <span class="sc">-</span> recon_s[obs_mask])<span class="sc">^</span><span class="dv">2</span>))</span>
+<span id="cb13-22"><a href="#cb13-22" tabindex="-1"></a></span>
+<span id="cb13-23"><a href="#cb13-23" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;RMSE on observed ratings:</span><span class="sc">\n</span><span class="st">&quot;</span>))</span>
+<span id="cb13-24"><a href="#cb13-24" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;  mask_zeros=FALSE: %.3f</span><span class="sc">\n</span><span class="st">&quot;</span>, rmse_d))</span>
+<span id="cb13-25"><a href="#cb13-25" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;  mask_zeros=TRUE:  %.3f</span><span class="sc">\n</span><span class="st">&quot;</span>, rmse_s))</span></code></pre></div>
+<p>With <code>mask_zeros = TRUE</code>, the model focuses exclusively on
+reconstructing the observed entries, typically yielding better
+predictions for recommendation tasks.</p>
+</div>
+<div id="custom-masking" class="section level3">
+<h3>Custom Masking</h3>
+<p>For more complex missing-data patterns, pass an explicit mask matrix.
+The mask should be the same dimensions as the data, with non-zero
+entries marking values to exclude:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a><span class="co"># Mask the top 5% of values (e.g., suspected measurement artifacts)</span></span>
+<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a>A_dense <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(A5)</span>
+<span id="cb14-3"><a href="#cb14-3" tabindex="-1"></a>threshold <span class="ot">&lt;-</span> <span class="fu">quantile</span>(A_dense[A_dense <span class="sc">&gt;</span> <span class="dv">0</span>], <span class="fl">0.95</span>)</span>
+<span id="cb14-4"><a href="#cb14-4" tabindex="-1"></a>mask_mat <span class="ot">&lt;-</span> <span class="fu">Matrix</span>(<span class="dv">1</span> <span class="sc">*</span> (A_dense <span class="sc">&gt;</span> threshold), <span class="at">sparse =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb14-5"><a href="#cb14-5" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;Custom mask: %d entries (%.1f%% of non-zeros)</span><span class="sc">\n</span><span class="st">&quot;</span>,</span>
+<span id="cb14-6"><a href="#cb14-6" tabindex="-1"></a>            <span class="fu">nnzero</span>(mask_mat), <span class="dv">100</span> <span class="sc">*</span> <span class="fu">nnzero</span>(mask_mat) <span class="sc">/</span> <span class="fu">sum</span>(A_dense <span class="sc">&gt;</span> <span class="dv">0</span>)))</span>
+<span id="cb14-7"><a href="#cb14-7" tabindex="-1"></a></span>
+<span id="cb14-8"><a href="#cb14-8" tabindex="-1"></a>m_masked <span class="ot">&lt;-</span> <span class="fu">nmf</span>(A5, <span class="at">k =</span> <span class="dv">5</span>, <span class="at">mask =</span> mask_mat, <span class="at">tol =</span> <span class="fl">1e-5</span>, <span class="at">maxit =</span> <span class="dv">200</span>,</span>
+<span id="cb14-9"><a href="#cb14-9" tabindex="-1"></a>                <span class="at">seed =</span> <span class="dv">1</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb14-10"><a href="#cb14-10" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;Factor recovery with masking: %.4f</span><span class="sc">\n</span><span class="st">&quot;</span>, <span class="fu">recover_quality</span>(m_masked, sim<span class="sc">$</span>w)))</span></code></pre></div>
+</div>
+</div>
+<div id="semi-nmf-relaxing-the-non-negativity-constraint" class="section level2">
+<h2>5. Semi-NMF: Relaxing the Non-Negativity Constraint</h2>
+<p>Standard NMF requires <span class="math inline">\(W \geq 0\)</span>
+and <span class="math inline">\(H \geq 0\)</span>.
+<strong>Semi-NMF</strong> relaxes one or both constraints, enabling
+factorization of data with both positive and negative values:</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a><span class="co"># Center the data (introduces negative values)</span></span>
+<span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a>A_centered <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(A5) <span class="sc">-</span> <span class="fu">rowMeans</span>(<span class="fu">as.matrix</span>(A5))</span>
+<span id="cb15-3"><a href="#cb15-3" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;Centered data range:&quot;</span>, <span class="fu">round</span>(<span class="fu">range</span>(A_centered), <span class="dv">3</span>), <span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb15-4"><a href="#cb15-4" tabindex="-1"></a></span>
+<span id="cb15-5"><a href="#cb15-5" tabindex="-1"></a><span class="co"># Standard NMF would clip negatives. Semi-NMF handles them directly.</span></span>
+<span id="cb15-6"><a href="#cb15-6" tabindex="-1"></a>m_semi <span class="ot">&lt;-</span> <span class="fu">nmf</span>(A_centered, <span class="at">k =</span> <span class="dv">5</span>, <span class="at">nonneg =</span> <span class="fu">c</span>(<span class="cn">FALSE</span>, <span class="cn">TRUE</span>), <span class="at">tol =</span> <span class="fl">1e-5</span>,</span>
+<span id="cb15-7"><a href="#cb15-7" tabindex="-1"></a>              <span class="at">maxit =</span> <span class="dv">200</span>, <span class="at">seed =</span> <span class="dv">1</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb15-8"><a href="#cb15-8" tabindex="-1"></a></span>
+<span id="cb15-9"><a href="#cb15-9" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;W range:&quot;</span>, <span class="fu">round</span>(<span class="fu">range</span>(m_semi<span class="sc">@</span>w), <span class="dv">3</span>), <span class="st">&quot; (unconstrained)</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb15-10"><a href="#cb15-10" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;H range:&quot;</span>, <span class="fu">round</span>(<span class="fu">range</span>(m_semi<span class="sc">@</span>h), <span class="dv">3</span>), <span class="st">&quot; (non-negative)</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb15-11"><a href="#cb15-11" tabindex="-1"></a></span>
+<span id="cb15-12"><a href="#cb15-12" tabindex="-1"></a><span class="co"># With nonneg = c(FALSE, TRUE):</span></span>
+<span id="cb15-13"><a href="#cb15-13" tabindex="-1"></a><span class="co">#   W can have negative values -&gt; captures &quot;anti-features&quot;</span></span>
+<span id="cb15-14"><a href="#cb15-14" tabindex="-1"></a><span class="co">#   H remains non-negative -&gt; each sample is a non-negative mixture of basis elements</span></span></code></pre></div>
+<p>Semi-NMF is useful for centered data, log-fold-change matrices, and
+any setting where features can be both positively and negatively
+associated with a factor.</p>
+</div>
+<div id="cross-validation-for-rank-selection" class="section level2">
+<h2>6. Cross-Validation for Rank Selection</h2>
+<p>The most important hyperparameter in NMF is the rank <span class="math inline">\(k\)</span>. Cross-validation provides a
+principled, data-driven way to select it.</p>
+<div id="the-speckled-holdout-approach" class="section level3">
+<h3>The Speckled Holdout Approach</h3>
+<p>RcppML uses <strong>speckled masking</strong>: a random subset of
+individual matrix entries is held out (set to zero during training).
+After fitting, the model’s ability to predict these unseen entries is
+measured. Unlike row/column holdout, speckled holdout:</p>
+<ul>
+<li>Preserves the global structure of the matrix</li>
+<li>Tests prediction across all features and samples simultaneously</li>
+<li>Avoids the “cold start” problem of holding out entire samples</li>
+</ul>
+</div>
+<div id="convergence-and-stopping-criteria" class="section level3">
+<h3>Convergence and Stopping Criteria</h3>
+<p>Two parameters control when training stops for each rank:</p>
+<ul>
+<li><strong><code>maxit</code></strong>: The maximum number of
+iterations. Should be set high enough to allow full convergence.</li>
+<li><strong><code>patience</code></strong>: Early stopping for
+cross-validation. If test loss does not improve for
+<code>patience</code> consecutive iterations, training stops — this
+prevents wasting computation on iterations that overfit the training
+data but degrade test performance.</li>
+</ul>
+<p>Setting <code>patience</code> too aggressively (small values) can
+terminate training prematurely before the model has found a good
+factorization. More generous patience values allow the model to explore
+longer, making overfitting patterns more visible in the test loss
+curves.</p>
+</div>
+<div id="rank-sweep" class="section level3">
+<h3>Rank Sweep</h3>
+<p>We demonstrate with the Hawaiian birds dataset — a sparse ecological
+matrix where the target rank (number of bird communities) has an
+ecological interpretation:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a><span class="co"># Cross-validate across ranks 2-25 with 3 replicates</span></span>
+<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a><span class="co"># Higher-rank models test whether overfitting emerges</span></span>
+<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a>cv <span class="ot">&lt;-</span> <span class="fu">nmf</span>(hawaiibirds, <span class="at">k =</span> <span class="dv">2</span><span class="sc">:</span><span class="dv">25</span>, <span class="at">test_fraction =</span> <span class="fl">0.2</span>, <span class="at">cv_seed =</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">3</span>,</span>
+<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a>          <span class="at">tol =</span> <span class="fl">1e-6</span>, <span class="at">maxit =</span> <span class="dv">200</span>, <span class="at">patience =</span> <span class="dv">20</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a><span class="fu">plot</span>(cv) <span class="sc">+</span> <span class="fu">ggtitle</span>(<span class="st">&quot;Hawaiian Birds: Cross-Validation for Optimal Rank&quot;</span>)</span></code></pre></div>
+<p>The plot shows test MSE vs. rank. Multiple replicates (different
+<code>cv_seed</code> values) provide confidence intervals. With
+sufficient <code>patience</code> and a wide rank range (up to 25),
+higher-rank models may show test loss increasing after an initial
+decrease — a clear signature of overfitting that identifies the ideal
+rank.</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a>mean_test <span class="ot">&lt;-</span> <span class="fu">tapply</span>(cv<span class="sc">$</span>test_mse, cv<span class="sc">$</span>k, mean)</span>
+<span id="cb17-2"><a href="#cb17-2" tabindex="-1"></a>optimal_k <span class="ot">&lt;-</span> <span class="fu">as.integer</span>(<span class="fu">names</span>(<span class="fu">which.min</span>(mean_test)))</span>
+<span id="cb17-3"><a href="#cb17-3" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;Optimal rank:&quot;</span>, optimal_k, <span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb17-4"><a href="#cb17-4" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;Test MSE at optimal k:&quot;</span>, <span class="fu">round</span>(<span class="fu">min</span>(mean_test), <span class="dv">5</span>), <span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span>)</span></code></pre></div>
+</div>
+<div id="test-fraction-selection" class="section level3">
+<h3>Test Fraction Selection</h3>
+<p>The <code>test_fraction</code> parameter controls how much data is
+held out. Larger fractions give more stable estimates but remove more
+training signal:</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" tabindex="-1"></a><span class="co"># Compare different holdout fractions — including a large one to test stability</span></span>
+<span id="cb18-2"><a href="#cb18-2" tabindex="-1"></a>fracs <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="fl">0.05</span>, <span class="fl">0.20</span>, <span class="fl">0.50</span>)</span>
+<span id="cb18-3"><a href="#cb18-3" tabindex="-1"></a>cv_results <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb18-4"><a href="#cb18-4" tabindex="-1"></a><span class="cf">for</span> (frac <span class="cf">in</span> fracs) {</span>
+<span id="cb18-5"><a href="#cb18-5" tabindex="-1"></a>  cv_f <span class="ot">&lt;-</span> <span class="fu">nmf</span>(hawaiibirds, <span class="at">k =</span> <span class="dv">2</span><span class="sc">:</span><span class="dv">20</span>, <span class="at">test_fraction =</span> frac, <span class="at">cv_seed =</span> <span class="dv">42</span>,</span>
+<span id="cb18-6"><a href="#cb18-6" tabindex="-1"></a>              <span class="at">tol =</span> <span class="fl">1e-6</span>, <span class="at">maxit =</span> <span class="dv">200</span>, <span class="at">patience =</span> <span class="dv">20</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb18-7"><a href="#cb18-7" tabindex="-1"></a>  cv_f<span class="sc">$</span>fraction <span class="ot">&lt;-</span> frac</span>
+<span id="cb18-8"><a href="#cb18-8" tabindex="-1"></a>  cv_results[[<span class="fu">as.character</span>(frac)]] <span class="ot">&lt;-</span> cv_f</span>
+<span id="cb18-9"><a href="#cb18-9" tabindex="-1"></a>}</span>
+<span id="cb18-10"><a href="#cb18-10" tabindex="-1"></a></span>
+<span id="cb18-11"><a href="#cb18-11" tabindex="-1"></a>cv_all <span class="ot">&lt;-</span> <span class="fu">do.call</span>(rbind, cv_results)</span>
+<span id="cb18-12"><a href="#cb18-12" tabindex="-1"></a></span>
+<span id="cb18-13"><a href="#cb18-13" tabindex="-1"></a><span class="fu">ggplot</span>(cv_all, <span class="fu">aes</span>(<span class="at">x =</span> k, <span class="at">y =</span> test_mse, <span class="at">color =</span> <span class="fu">factor</span>(fraction))) <span class="sc">+</span></span>
+<span id="cb18-14"><a href="#cb18-14" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">linewidth =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
+<span id="cb18-15"><a href="#cb18-15" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="dv">2</span>) <span class="sc">+</span></span>
+<span id="cb18-16"><a href="#cb18-16" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">&quot;0.05&quot;</span> <span class="ot">=</span> <span class="st">&quot;steelblue&quot;</span>, <span class="st">&quot;0.2&quot;</span> <span class="ot">=</span> <span class="st">&quot;coral&quot;</span>, <span class="st">&quot;0.5&quot;</span> <span class="ot">=</span> <span class="st">&quot;forestgreen&quot;</span>)) <span class="sc">+</span></span>
+<span id="cb18-17"><a href="#cb18-17" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">&quot;Effect of Test Fraction on Cross-Validation Curves&quot;</span>,</span>
+<span id="cb18-18"><a href="#cb18-18" tabindex="-1"></a>       <span class="at">subtitle =</span> <span class="st">&quot;Hawaiian Birds — larger holdout fractions are more stable but noisier&quot;</span>,</span>
+<span id="cb18-19"><a href="#cb18-19" tabindex="-1"></a>       <span class="at">color =</span> <span class="st">&quot;Test Fraction&quot;</span>, <span class="at">x =</span> <span class="st">&quot;Rank (k)&quot;</span>, <span class="at">y =</span> <span class="st">&quot;Test MSE&quot;</span>) <span class="sc">+</span></span>
+<span id="cb18-20"><a href="#cb18-20" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div>
+<p>At <code>test_fraction = 0.5</code>, half the data is held out — this
+severely limits training signal and can make the CV curve noisy, but if
+the optimal rank is robust to this stress test, you can be confident in
+the result. For most datasets, 10–20% is the practical sweet spot.</p>
+</div>
+<div id="sparse-vs.-dense-test-sets" class="section level3">
+<h3>Sparse vs. Dense Test Sets</h3>
+<p>The <code>mask_zeros</code> parameter in cross-validation controls
+whether zero entries are included in the test set:</p>
+<ul>
+<li><p><code>mask_zeros = FALSE</code> (default): The test set includes
+both zero and non-zero entries. The model is evaluated on full matrix
+reconstruction. Appropriate for dense data where zeros are
+informative.</p></li>
+<li><p><code>mask_zeros = TRUE</code>: The test set contains only
+non-zero entries. The model is evaluated on predicting observed values.
+Appropriate for recommendation data where zeros mean
+“unobserved.”</p></li>
+</ul>
+<div class="sourceCode" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" tabindex="-1"></a><span class="co"># MovieLens: compare sparse vs dense test set semantics</span></span>
+<span id="cb19-2"><a href="#cb19-2" tabindex="-1"></a>cv_dense  <span class="ot">&lt;-</span> <span class="fu">nmf</span>(movielens, <span class="at">k =</span> <span class="dv">2</span><span class="sc">:</span><span class="dv">15</span>, <span class="at">test_fraction =</span> <span class="fl">0.2</span>, <span class="at">mask_zeros =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb19-3"><a href="#cb19-3" tabindex="-1"></a>                 <span class="at">cv_seed =</span> <span class="dv">42</span>, <span class="at">tol =</span> <span class="fl">1e-5</span>, <span class="at">maxit =</span> <span class="dv">80</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb19-4"><a href="#cb19-4" tabindex="-1"></a>cv_sparse <span class="ot">&lt;-</span> <span class="fu">nmf</span>(movielens, <span class="at">k =</span> <span class="dv">2</span><span class="sc">:</span><span class="dv">15</span>, <span class="at">test_fraction =</span> <span class="fl">0.2</span>, <span class="at">mask_zeros =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb19-5"><a href="#cb19-5" tabindex="-1"></a>                 <span class="at">cv_seed =</span> <span class="dv">42</span>, <span class="at">tol =</span> <span class="fl">1e-5</span>, <span class="at">maxit =</span> <span class="dv">80</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb19-6"><a href="#cb19-6" tabindex="-1"></a></span>
+<span id="cb19-7"><a href="#cb19-7" tabindex="-1"></a><span class="co"># Faceted comparison</span></span>
+<span id="cb19-8"><a href="#cb19-8" tabindex="-1"></a>cv_dense<span class="sc">$</span>mode <span class="ot">&lt;-</span> <span class="st">&quot;Dense (all entries)&quot;</span></span>
+<span id="cb19-9"><a href="#cb19-9" tabindex="-1"></a>cv_sparse<span class="sc">$</span>mode <span class="ot">&lt;-</span> <span class="st">&quot;Sparse (non-zeros only)&quot;</span></span>
+<span id="cb19-10"><a href="#cb19-10" tabindex="-1"></a>cv_both <span class="ot">&lt;-</span> <span class="fu">rbind</span>(cv_dense, cv_sparse)</span>
+<span id="cb19-11"><a href="#cb19-11" tabindex="-1"></a></span>
+<span id="cb19-12"><a href="#cb19-12" tabindex="-1"></a><span class="fu">ggplot</span>(cv_both, <span class="fu">aes</span>(<span class="at">x =</span> k, <span class="at">y =</span> test_mse)) <span class="sc">+</span></span>
+<span id="cb19-13"><a href="#cb19-13" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">color =</span> <span class="st">&quot;steelblue&quot;</span>, <span class="at">linewidth =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
+<span id="cb19-14"><a href="#cb19-14" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">color =</span> <span class="st">&quot;steelblue&quot;</span>, <span class="at">size =</span> <span class="dv">2</span>) <span class="sc">+</span></span>
+<span id="cb19-15"><a href="#cb19-15" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> mode, <span class="at">scales =</span> <span class="st">&quot;free_y&quot;</span>) <span class="sc">+</span></span>
+<span id="cb19-16"><a href="#cb19-16" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">&quot;Cross-Validation: Dense vs. Sparse Test Sets (MovieLens)&quot;</span>,</span>
+<span id="cb19-17"><a href="#cb19-17" tabindex="-1"></a>       <span class="at">subtitle =</span> <span class="st">&quot;Different test set definitions produce different curve shapes and scales&quot;</span>,</span>
+<span id="cb19-18"><a href="#cb19-18" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">&quot;Rank (k)&quot;</span>, <span class="at">y =</span> <span class="st">&quot;Test MSE&quot;</span>) <span class="sc">+</span></span>
+<span id="cb19-19"><a href="#cb19-19" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div>
+<p>The absolute MSE values differ substantially between the two modes
+because they have different test sets and denominators. The
+<em>shape</em> of the curve may also differ, reflecting different
+definitions of “good fit.” For recommendation data,
+<code>mask_zeros = TRUE</code> is the correct choice since it evaluates
+the model on the task it actually performs — predicting observed
+ratings.</p>
+</div>
+<div id="automatic-rank-selection" class="section level3">
+<h3>Automatic Rank Selection</h3>
+<p>For convenience, RcppML can search for the optimal rank
+automatically:</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" tabindex="-1"></a><span class="co"># Binary search over [2, 30]</span></span>
+<span id="cb20-2"><a href="#cb20-2" tabindex="-1"></a>auto_model <span class="ot">&lt;-</span> <span class="fu">nmf</span>(hawaiibirds, <span class="at">k =</span> <span class="st">&quot;auto&quot;</span>, <span class="at">cv_k_range =</span> <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">30</span>),</span>
+<span id="cb20-3"><a href="#cb20-3" tabindex="-1"></a>                  <span class="at">test_fraction =</span> <span class="fl">0.2</span>, <span class="at">cv_seed =</span> <span class="dv">42</span>, <span class="at">verbose =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb20-4"><a href="#cb20-4" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;Selected rank:&quot;</span>, auto_model<span class="sc">$</span>rank_search<span class="sc">$</span>k_optimal, <span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span>)</span></code></pre></div>
+<p>The auto search uses a bisection strategy to efficiently narrow the
+rank range without evaluating every integer.</p>
+</div>
+</div>
+<div id="graph-regularization-incorporating-prior-knowledge" class="section level2">
+<h2>7. Graph Regularization: Incorporating Prior Knowledge</h2>
+<p>When features or samples have known relationships (spatial proximity,
+gene networks, taxonomic trees), graph Laplacian regularization
+encourages connected nodes to have similar factor loadings:</p>
+<p><span class="math display">\[\mathcal{R}_{\text{graph}} = \lambda
+\cdot \text{tr}(H \cdot L_H \cdot H^T)\]</span></p>
+<p>where <span class="math inline">\(L_H\)</span> is the graph Laplacian
+of the sample adjacency matrix.</p>
+<div id="building-a-spatial-graph" class="section level3">
+<h3>Building a Spatial Graph</h3>
+<p>The Hawaiian birds dataset includes geographic coordinates for each
+survey site. We construct a within-island adjacency graph connecting
+nearby sites:</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" tabindex="-1"></a><span class="co"># Build spatial adjacency graph for Hawaiian bird survey sites</span></span>
+<span id="cb21-2"><a href="#cb21-2" tabindex="-1"></a>coords <span class="ot">&lt;-</span> <span class="fu">cbind</span>(meta_h<span class="sc">$</span>lng, meta_h<span class="sc">$</span>lat)</span>
+<span id="cb21-3"><a href="#cb21-3" tabindex="-1"></a>n_sites <span class="ot">&lt;-</span> <span class="fu">nrow</span>(coords)</span>
+<span id="cb21-4"><a href="#cb21-4" tabindex="-1"></a>threshold <span class="ot">&lt;-</span> <span class="fl">0.1</span>  <span class="co"># ~11 km</span></span>
+<span id="cb21-5"><a href="#cb21-5" tabindex="-1"></a></span>
+<span id="cb21-6"><a href="#cb21-6" tabindex="-1"></a>i_vec <span class="ot">&lt;-</span> <span class="fu">integer</span>(<span class="dv">0</span>)</span>
+<span id="cb21-7"><a href="#cb21-7" tabindex="-1"></a>j_vec <span class="ot">&lt;-</span> <span class="fu">integer</span>(<span class="dv">0</span>)</span>
+<span id="cb21-8"><a href="#cb21-8" tabindex="-1"></a><span class="cf">for</span> (isl <span class="cf">in</span> <span class="fu">levels</span>(meta_h<span class="sc">$</span>island)) {</span>
+<span id="cb21-9"><a href="#cb21-9" tabindex="-1"></a>  idx <span class="ot">&lt;-</span> <span class="fu">which</span>(meta_h<span class="sc">$</span>island <span class="sc">==</span> isl)</span>
+<span id="cb21-10"><a href="#cb21-10" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">length</span>(idx) <span class="sc">&lt;</span> <span class="dv">2</span>) <span class="cf">next</span></span>
+<span id="cb21-11"><a href="#cb21-11" tabindex="-1"></a>  d <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(<span class="fu">dist</span>(coords[idx, ]))</span>
+<span id="cb21-12"><a href="#cb21-12" tabindex="-1"></a>  pairs <span class="ot">&lt;-</span> <span class="fu">which</span>(d <span class="sc">&gt;</span> <span class="dv">0</span> <span class="sc">&amp;</span> d <span class="sc">&lt;</span> threshold, <span class="at">arr.ind =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb21-13"><a href="#cb21-13" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">nrow</span>(pairs) <span class="sc">&gt;</span> <span class="dv">0</span>) {</span>
+<span id="cb21-14"><a href="#cb21-14" tabindex="-1"></a>    i_vec <span class="ot">&lt;-</span> <span class="fu">c</span>(i_vec, idx[pairs[, <span class="dv">1</span>]])</span>
+<span id="cb21-15"><a href="#cb21-15" tabindex="-1"></a>    j_vec <span class="ot">&lt;-</span> <span class="fu">c</span>(j_vec, idx[pairs[, <span class="dv">2</span>]])</span>
+<span id="cb21-16"><a href="#cb21-16" tabindex="-1"></a>  }</span>
+<span id="cb21-17"><a href="#cb21-17" tabindex="-1"></a>}</span>
+<span id="cb21-18"><a href="#cb21-18" tabindex="-1"></a></span>
+<span id="cb21-19"><a href="#cb21-19" tabindex="-1"></a>graph_H <span class="ot">&lt;-</span> <span class="fu">sparseMatrix</span>(<span class="at">i =</span> i_vec, <span class="at">j =</span> j_vec, <span class="at">x =</span> <span class="dv">1</span>,</span>
+<span id="cb21-20"><a href="#cb21-20" tabindex="-1"></a>                        <span class="at">dims =</span> <span class="fu">c</span>(n_sites, n_sites))</span>
+<span id="cb21-21"><a href="#cb21-21" tabindex="-1"></a>graph_H <span class="ot">&lt;-</span> <span class="fu">as</span>((graph_H <span class="sc">+</span> <span class="fu">t</span>(graph_H)) <span class="sc">/</span> <span class="dv">2</span>, <span class="st">&quot;dgCMatrix&quot;</span>)</span>
+<span id="cb21-22"><a href="#cb21-22" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;Spatial graph:&quot;</span>, n_sites, <span class="st">&quot;nodes,&quot;</span>, <span class="fu">nnzero</span>(graph_H) <span class="sc">/</span> <span class="dv">2</span>, <span class="st">&quot;edges</span><span class="sc">\n</span><span class="st">&quot;</span>)</span></code></pre></div>
+</div>
+<div id="comparing-standard-vs.-graph-regularized-nmf" class="section level3">
+<h3>Comparing Standard vs. Graph-Regularized NMF</h3>
+<p>We test multiple graph regularization strengths, including strong
+values (<span class="math inline">\(\lambda = 2.0\)</span>) to make the
+effect clearly visible:</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" tabindex="-1"></a>graph_lambdas <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="fl">0.1</span>, <span class="fl">0.5</span>, <span class="fl">2.0</span>)</span>
+<span id="cb22-2"><a href="#cb22-2" tabindex="-1"></a>graph_models <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb22-3"><a href="#cb22-3" tabindex="-1"></a>graph_results <span class="ot">&lt;-</span> <span class="fu">data.frame</span>()</span>
+<span id="cb22-4"><a href="#cb22-4" tabindex="-1"></a></span>
+<span id="cb22-5"><a href="#cb22-5" tabindex="-1"></a><span class="cf">for</span> (lam <span class="cf">in</span> graph_lambdas) {</span>
+<span id="cb22-6"><a href="#cb22-6" tabindex="-1"></a>  m <span class="ot">&lt;-</span> <span class="fu">nmf</span>(hawaiibirds, <span class="at">k =</span> K, <span class="at">L1 =</span> <span class="fu">c</span>(<span class="fl">0.1</span>, <span class="dv">0</span>),</span>
+<span id="cb22-7"><a href="#cb22-7" tabindex="-1"></a>           <span class="at">graph_H =</span> <span class="cf">if</span> (lam <span class="sc">&gt;</span> <span class="dv">0</span>) graph_H <span class="cf">else</span> <span class="cn">NULL</span>,</span>
+<span id="cb22-8"><a href="#cb22-8" tabindex="-1"></a>           <span class="at">graph_lambda =</span> <span class="fu">c</span>(<span class="dv">0</span>, lam),</span>
+<span id="cb22-9"><a href="#cb22-9" tabindex="-1"></a>           <span class="at">tol =</span> <span class="fl">1e-5</span>, <span class="at">maxit =</span> <span class="dv">200</span>, <span class="at">seed =</span> <span class="dv">42</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb22-10"><a href="#cb22-10" tabindex="-1"></a>  graph_models[[<span class="fu">as.character</span>(lam)]] <span class="ot">&lt;-</span> m</span>
+<span id="cb22-11"><a href="#cb22-11" tabindex="-1"></a>  </span>
+<span id="cb22-12"><a href="#cb22-12" tabindex="-1"></a>  <span class="co"># Measure spatial smoothness: mean squared difference between connected nodes</span></span>
+<span id="cb22-13"><a href="#cb22-13" tabindex="-1"></a>  h_mat <span class="ot">&lt;-</span> m<span class="sc">@</span>h</span>
+<span id="cb22-14"><a href="#cb22-14" tabindex="-1"></a>  edges <span class="ot">&lt;-</span> <span class="fu">which</span>(graph_H <span class="sc">!=</span> <span class="dv">0</span>, <span class="at">arr.ind =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb22-15"><a href="#cb22-15" tabindex="-1"></a>  edges <span class="ot">&lt;-</span> edges[edges[,<span class="dv">1</span>] <span class="sc">&lt;</span> edges[,<span class="dv">2</span>], , drop <span class="ot">=</span> <span class="cn">FALSE</span>]  <span class="co"># unique edges</span></span>
+<span id="cb22-16"><a href="#cb22-16" tabindex="-1"></a>  </span>
+<span id="cb22-17"><a href="#cb22-17" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">nrow</span>(edges) <span class="sc">&gt;</span> <span class="dv">0</span>) {</span>
+<span id="cb22-18"><a href="#cb22-18" tabindex="-1"></a>    sq_diff <span class="ot">&lt;-</span> <span class="fu">rowMeans</span>(<span class="fu">sapply</span>(<span class="fu">seq_len</span>(K), <span class="cf">function</span>(f) {</span>
+<span id="cb22-19"><a href="#cb22-19" tabindex="-1"></a>      (h_mat[f, edges[,<span class="dv">1</span>]] <span class="sc">-</span> h_mat[f, edges[,<span class="dv">2</span>]])<span class="sc">^</span><span class="dv">2</span></span>
+<span id="cb22-20"><a href="#cb22-20" tabindex="-1"></a>    }))</span>
+<span id="cb22-21"><a href="#cb22-21" tabindex="-1"></a>    smoothness <span class="ot">&lt;-</span> <span class="fu">mean</span>(sq_diff)</span>
+<span id="cb22-22"><a href="#cb22-22" tabindex="-1"></a>  } <span class="cf">else</span> {</span>
+<span id="cb22-23"><a href="#cb22-23" tabindex="-1"></a>    smoothness <span class="ot">&lt;-</span> <span class="cn">NA</span></span>
+<span id="cb22-24"><a href="#cb22-24" tabindex="-1"></a>  }</span>
+<span id="cb22-25"><a href="#cb22-25" tabindex="-1"></a>  </span>
+<span id="cb22-26"><a href="#cb22-26" tabindex="-1"></a>  graph_results <span class="ot">&lt;-</span> <span class="fu">rbind</span>(graph_results, <span class="fu">data.frame</span>(</span>
+<span id="cb22-27"><a href="#cb22-27" tabindex="-1"></a>    <span class="at">lambda =</span> lam,</span>
+<span id="cb22-28"><a href="#cb22-28" tabindex="-1"></a>    <span class="at">MSE =</span> <span class="fu">evaluate</span>(m, hawaiibirds),</span>
+<span id="cb22-29"><a href="#cb22-29" tabindex="-1"></a>    <span class="at">smoothness =</span> smoothness</span>
+<span id="cb22-30"><a href="#cb22-30" tabindex="-1"></a>  ))</span>
+<span id="cb22-31"><a href="#cb22-31" tabindex="-1"></a>}</span>
+<span id="cb22-32"><a href="#cb22-32" tabindex="-1"></a></span>
+<span id="cb22-33"><a href="#cb22-33" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;Graph regularization: MSE vs. spatial smoothness</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb22-34"><a href="#cb22-34" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;(Lower smoothness = more spatially coherent factors)</span><span class="sc">\n\n</span><span class="st">&quot;</span>)</span>
+<span id="cb22-35"><a href="#cb22-35" tabindex="-1"></a><span class="fu">print</span>(graph_results, <span class="at">row.names =</span> <span class="cn">FALSE</span>, <span class="at">digits =</span> <span class="dv">5</span>)</span>
+<span id="cb22-36"><a href="#cb22-36" tabindex="-1"></a></span>
+<span id="cb22-37"><a href="#cb22-37" tabindex="-1"></a><span class="co"># Plot tradeoff</span></span>
+<span id="cb22-38"><a href="#cb22-38" tabindex="-1"></a>df_graph <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb22-39"><a href="#cb22-39" tabindex="-1"></a>  <span class="at">lambda =</span> <span class="fu">rep</span>(graph_results<span class="sc">$</span>lambda, <span class="dv">2</span>),</span>
+<span id="cb22-40"><a href="#cb22-40" tabindex="-1"></a>  <span class="at">value =</span> <span class="fu">c</span>(graph_results<span class="sc">$</span>MSE <span class="sc">/</span> <span class="fu">max</span>(graph_results<span class="sc">$</span>MSE),</span>
+<span id="cb22-41"><a href="#cb22-41" tabindex="-1"></a>            graph_results<span class="sc">$</span>smoothness <span class="sc">/</span> <span class="fu">max</span>(graph_results<span class="sc">$</span>smoothness, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)),</span>
+<span id="cb22-42"><a href="#cb22-42" tabindex="-1"></a>  <span class="at">metric =</span> <span class="fu">rep</span>(<span class="fu">c</span>(<span class="st">&quot;Reconstruction MSE (normalized)&quot;</span>, <span class="st">&quot;Spatial Roughness (normalized)&quot;</span>),</span>
+<span id="cb22-43"><a href="#cb22-43" tabindex="-1"></a>               <span class="at">each =</span> <span class="fu">nrow</span>(graph_results))</span>
+<span id="cb22-44"><a href="#cb22-44" tabindex="-1"></a>)</span>
+<span id="cb22-45"><a href="#cb22-45" tabindex="-1"></a></span>
+<span id="cb22-46"><a href="#cb22-46" tabindex="-1"></a><span class="fu">ggplot</span>(df_graph, <span class="fu">aes</span>(<span class="at">x =</span> <span class="fu">factor</span>(lambda), <span class="at">y =</span> value, <span class="at">fill =</span> metric)) <span class="sc">+</span></span>
+<span id="cb22-47"><a href="#cb22-47" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="at">position =</span> <span class="st">&quot;dodge&quot;</span>, <span class="at">width =</span> <span class="fl">0.6</span>) <span class="sc">+</span></span>
+<span id="cb22-48"><a href="#cb22-48" tabindex="-1"></a>  <span class="fu">scale_fill_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">&quot;Reconstruction MSE (normalized)&quot;</span> <span class="ot">=</span> <span class="st">&quot;coral&quot;</span>,</span>
+<span id="cb22-49"><a href="#cb22-49" tabindex="-1"></a>                                <span class="st">&quot;Spatial Roughness (normalized)&quot;</span> <span class="ot">=</span> <span class="st">&quot;steelblue&quot;</span>)) <span class="sc">+</span></span>
+<span id="cb22-50"><a href="#cb22-50" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">&quot;Graph Regularization: Reconstruction vs. Smoothness Tradeoff&quot;</span>,</span>
+<span id="cb22-51"><a href="#cb22-51" tabindex="-1"></a>       <span class="at">subtitle =</span> <span class="st">&quot;Higher lambda produces smoother factors at the cost of reconstruction accuracy&quot;</span>,</span>
+<span id="cb22-52"><a href="#cb22-52" tabindex="-1"></a>       <span class="at">x =</span> <span class="fu">expression</span>(<span class="st">&quot;Graph&quot;</span><span class="sc">~</span>lambda), <span class="at">y =</span> <span class="st">&quot;Normalized Value&quot;</span>, <span class="at">fill =</span> <span class="st">&quot;&quot;</span>) <span class="sc">+</span></span>
+<span id="cb22-53"><a href="#cb22-53" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div>
+</div>
+<div id="spatial-maps" class="section level3">
+<h3>Spatial Maps</h3>
+<div class="sourceCode" id="cb23"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" tabindex="-1"></a><span class="co"># Spatial visualization: compare standard vs. strong graph regularization</span></span>
+<span id="cb23-2"><a href="#cb23-2" tabindex="-1"></a>m_std <span class="ot">&lt;-</span> graph_models[[<span class="st">&quot;0&quot;</span>]]</span>
+<span id="cb23-3"><a href="#cb23-3" tabindex="-1"></a>m_graph <span class="ot">&lt;-</span> graph_models[[<span class="st">&quot;2&quot;</span>]]</span>
+<span id="cb23-4"><a href="#cb23-4" tabindex="-1"></a></span>
+<span id="cb23-5"><a href="#cb23-5" tabindex="-1"></a><span class="co"># Find the two factors with the most spatial variation</span></span>
+<span id="cb23-6"><a href="#cb23-6" tabindex="-1"></a>h_var_std <span class="ot">&lt;-</span> <span class="fu">apply</span>(m_std<span class="sc">@</span>h, <span class="dv">1</span>, var)</span>
+<span id="cb23-7"><a href="#cb23-7" tabindex="-1"></a>show_factors <span class="ot">&lt;-</span> <span class="fu">order</span>(h_var_std, <span class="at">decreasing =</span> <span class="cn">TRUE</span>)[<span class="dv">1</span><span class="sc">:</span><span class="dv">2</span>]</span>
+<span id="cb23-8"><a href="#cb23-8" tabindex="-1"></a></span>
+<span id="cb23-9"><a href="#cb23-9" tabindex="-1"></a>map_list <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb23-10"><a href="#cb23-10" tabindex="-1"></a><span class="cf">for</span> (j <span class="cf">in</span> show_factors) {</span>
+<span id="cb23-11"><a href="#cb23-11" tabindex="-1"></a>  <span class="cf">for</span> (info <span class="cf">in</span> <span class="fu">list</span>(<span class="fu">list</span>(m_std, <span class="st">&quot;Standard NMF&quot;</span>), <span class="fu">list</span>(m_graph, <span class="st">&quot;Graph NMF (lambda = 2)&quot;</span>))) {</span>
+<span id="cb23-12"><a href="#cb23-12" tabindex="-1"></a>    model <span class="ot">&lt;-</span> info[[<span class="dv">1</span>]]</span>
+<span id="cb23-13"><a href="#cb23-13" tabindex="-1"></a>    label_text <span class="ot">&lt;-</span> info[[<span class="dv">2</span>]]</span>
+<span id="cb23-14"><a href="#cb23-14" tabindex="-1"></a>    map_list <span class="ot">&lt;-</span> <span class="fu">c</span>(map_list, <span class="fu">list</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb23-15"><a href="#cb23-15" tabindex="-1"></a>      <span class="at">lng =</span> meta_h<span class="sc">$</span>lng,</span>
+<span id="cb23-16"><a href="#cb23-16" tabindex="-1"></a>      <span class="at">lat =</span> meta_h<span class="sc">$</span>lat,</span>
+<span id="cb23-17"><a href="#cb23-17" tabindex="-1"></a>      <span class="at">loading =</span> model<span class="sc">@</span>h[j, ],</span>
+<span id="cb23-18"><a href="#cb23-18" tabindex="-1"></a>      <span class="at">model =</span> label_text,</span>
+<span id="cb23-19"><a href="#cb23-19" tabindex="-1"></a>      <span class="at">factor_label =</span> <span class="fu">paste0</span>(<span class="st">&quot;Factor &quot;</span>, j)</span>
+<span id="cb23-20"><a href="#cb23-20" tabindex="-1"></a>    )))</span>
+<span id="cb23-21"><a href="#cb23-21" tabindex="-1"></a>  }</span>
+<span id="cb23-22"><a href="#cb23-22" tabindex="-1"></a>}</span>
+<span id="cb23-23"><a href="#cb23-23" tabindex="-1"></a>df_map <span class="ot">&lt;-</span> <span class="fu">do.call</span>(rbind, map_list)</span>
+<span id="cb23-24"><a href="#cb23-24" tabindex="-1"></a></span>
+<span id="cb23-25"><a href="#cb23-25" tabindex="-1"></a><span class="fu">ggplot</span>(df_map, <span class="fu">aes</span>(<span class="at">x =</span> lng, <span class="at">y =</span> lat, <span class="at">color =</span> loading)) <span class="sc">+</span></span>
+<span id="cb23-26"><a href="#cb23-26" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="fl">0.6</span>) <span class="sc">+</span></span>
+<span id="cb23-27"><a href="#cb23-27" tabindex="-1"></a>  <span class="fu">facet_grid</span>(factor_label <span class="sc">~</span> model) <span class="sc">+</span></span>
+<span id="cb23-28"><a href="#cb23-28" tabindex="-1"></a>  <span class="fu">scale_color_viridis_c</span>(<span class="at">option =</span> <span class="st">&quot;B&quot;</span>, <span class="at">name =</span> <span class="st">&quot;Loading&quot;</span>) <span class="sc">+</span></span>
+<span id="cb23-29"><a href="#cb23-29" tabindex="-1"></a>  <span class="fu">coord_fixed</span>() <span class="sc">+</span></span>
+<span id="cb23-30"><a href="#cb23-30" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">&quot;Spatial Factor Loadings: Standard vs. Graph-Regularized NMF&quot;</span>,</span>
+<span id="cb23-31"><a href="#cb23-31" tabindex="-1"></a>       <span class="at">subtitle =</span> <span class="st">&quot;Graph regularization produces smoother, more spatially contiguous patterns&quot;</span>,</span>
+<span id="cb23-32"><a href="#cb23-32" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">&quot;Longitude&quot;</span>, <span class="at">y =</span> <span class="st">&quot;Latitude&quot;</span>) <span class="sc">+</span></span>
+<span id="cb23-33"><a href="#cb23-33" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
+<span id="cb23-34"><a href="#cb23-34" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">panel.grid =</span> <span class="fu">element_blank</span>())</span></code></pre></div>
+<p>The spatial maps show how graph regularization produces smoother,
+more spatially contiguous factor loadings. Without it, nearby sites can
+have very different factor values; with it, communities transition
+gradually across geographic space. The <strong>smoothness</strong>
+metric quantifies this: it measures the mean squared difference in
+factor loadings between connected sites — lower values indicate more
+spatially coherent patterns. The tradeoff bar chart shows that stronger
+graph regularization increases reconstruction MSE while decreasing
+spatial roughness.</p>
+</div>
+</div>
+<div id="practical-guidelines" class="section level2">
+<h2>8. Practical Guidelines</h2>
+<div id="choosing-regularization" class="section level3">
+<h3>Choosing Regularization</h3>
+<table>
+<thead>
+<tr class="header">
+<th align="left">Goal</th>
+<th align="left">Regularization</th>
+<th align="left">Typical Values</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Sparse, interpretable factors</td>
+<td align="left">L1</td>
+<td align="left">0.01 – 0.3</td>
+</tr>
+<tr class="even">
+<td align="left">Numerical stability</td>
+<td align="left">L2</td>
+<td align="left">0.001 – 0.1</td>
+</tr>
+<tr class="odd">
+<td align="left">Soft factor importance shrinkage</td>
+<td align="left">L21</td>
+<td align="left">0.5 – 5.0</td>
+</tr>
+<tr class="even">
+<td align="left">Diverse, non-redundant factors</td>
+<td align="left">Angular</td>
+<td align="left">0.1 – 1.0</td>
+</tr>
+<tr class="odd">
+<td align="left">Bounded factor values</td>
+<td align="left">Upper bound</td>
+<td align="left">Problem-specific</td>
+</tr>
+<tr class="even">
+<td align="left">Spatially smooth factors</td>
+<td align="left">Graph</td>
+<td align="left">0.01 – 2.0</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="choosing-a-loss-function" class="section level3">
+<h3>Choosing a Loss Function</h3>
+<table>
+<thead>
+<tr class="header">
+<th align="left">Data Type</th>
+<th align="left">Recommended Loss</th>
+<th align="left">Reason</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Clean data, no outliers</td>
+<td align="left">MSE</td>
+<td align="left">Fastest, optimal for Gaussian noise</td>
+</tr>
+<tr class="even">
+<td align="left">Data with outliers</td>
+<td align="left">MAE or Huber</td>
+<td align="left">Robust to extreme values</td>
+</tr>
+<tr class="odd">
+<td align="left">Count data (scRNA-seq)</td>
+<td align="left">KL</td>
+<td align="left">Matches Poisson generative model</td>
+</tr>
+<tr class="even">
+<td align="left">Mixed / uncertain</td>
+<td align="left">Huber</td>
+<td align="left">Good default for robustness</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="choosing-test-set-semantics" class="section level3">
+<h3>Choosing Test Set Semantics</h3>
+<table>
+<colgroup>
+<col width="30%" />
+<col width="47%" />
+<col width="22%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Data Type</th>
+<th align="left"><code>sparse</code> Setting</th>
+<th align="left">Reason</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Dense matrices (images, expression)</td>
+<td align="left"><code>FALSE</code></td>
+<td align="left">Zeros are real values</td>
+</tr>
+<tr class="even">
+<td align="left">Ratings / interactions</td>
+<td align="left"><code>TRUE</code></td>
+<td align="left">Zeros mean “unobserved”</td>
+</tr>
+<tr class="odd">
+<td align="left">Sparse counts (scRNA-seq)</td>
+<td align="left">Either</td>
+<td align="left"><code>FALSE</code> for reconstruction,
+<code>TRUE</code> for imputation</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="general-workflow" class="section level3">
+<h3>General Workflow</h3>
+<ol style="list-style-type: decimal">
+<li><strong>Start simple</strong>: Fit with no regularization to
+establish a baseline.</li>
+<li><strong>Select rank</strong> via cross-validation
+(<code>k = 2:K_max, test_fraction = 0.1-0.2</code>).</li>
+<li><strong>Add L1</strong> if you need interpretable, sparse
+factors.</li>
+<li><strong>Add L2</strong> if you encounter numerical instability or
+ill-conditioned problems.</li>
+<li><strong>Try L21</strong> as a soft penalty on factor
+importance.</li>
+<li><strong>Use angular</strong> if factors appear redundant (high
+cosine similarity).</li>
+<li><strong>Validate</strong> with <code>evaluate()</code>,
+<code>sparsity()</code>, and <code>summary(group_by = ...)</code>.</li>
+</ol>
+</div>
+</div>
+<div id="further-reading" class="section level2">
+<h2>Further Reading</h2>
+<ul>
+<li><a href="getting-started.html">Getting started with RcppML</a> —
+Quick-start guide and basic API</li>
+<li><a href="cross-validation.html">Cross-validation for rank
+selection</a> — Detailed CV methodology</li>
+<li><a href="image-decomposition.html">Image decomposition</a> —
+Parts-based visual feature extraction</li>
+<li><a href="ecological-biodiversity.html">Ecological biodiversity</a> —
+Graph regularization for spatial data</li>
+<li><a href="recommendation-systems.html">Building a recommendation
+engine</a> — Sparse masking for ratings</li>
+<li><a href="cancer-subtype-discovery.html">Cancer subtype discovery</a>
+— Consensus NMF for robust clustering</li>
+<li><a href="single-cell-genomics.html">Discovering cell types from
+scRNA-seq</a> — NMF for genomics</li>
+<li><a href="gpu-acceleration.html">GPU acceleration</a> — Using CUDA
+for large-scale NMF</li>
+</ul>
+</div>
+<div id="references" class="section level2">
+<h2>References</h2>
+<ul>
+<li>Lee, D.D. &amp; Seung, H.S. (1999). Learning the parts of objects by
+non-negative matrix factorization. <em>Nature</em>, 401(6755),
+788-791.</li>
+<li>Lee, D.D. &amp; Seung, H.S. (2001). Algorithms for non-negative
+matrix factorization. <em>Advances in Neural Information Processing
+Systems</em>, 13.</li>
+<li>Kim, H. &amp; Park, H. (2007). Sparse non-negative matrix
+factorizations via alternating non-negativity-constrained least squares
+for microarray data analysis. <em>Bioinformatics</em>, 23(12),
+1495-1502.</li>
+<li>Cai, D., He, X., Han, J., &amp; Huang, T.S. (2011). Graph
+regularized nonnegative matrix factorization for data representation.
+<em>IEEE Transactions on Pattern Analysis and Machine Intelligence</em>,
+33(8), 1548-1560.</li>
+<li>DeBruine, Z.J., Melcher, K., &amp; Triche, T.J. (2021).
+High-performance non-negative matrix factorization for large single-cell
+data. <em>BioRXiv</em>.</li>
+</ul>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,10 @@
+# Benchmark results are large and machine-specific — not version-controlled
+*.rds
+*.csv
+*.yaml
+*.json
+
+# Keep baseline directory structure
+!baseline/.gitkeep
+!current/.gitkeep
+!gpu_baseline/.gitkeep

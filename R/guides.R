@@ -20,6 +20,11 @@
 #' @param side Which factor to guide: "H" (default, sample embeddings) or
 #'   "W" (feature loadings).
 #' @return An \code{nmf_guide} object to pass to \code{nmf(guides = ...)}.
+#' @examples
+#' # Create a classifier guide for 3 classes
+#' labels <- rep(0:2, each = 10)
+#' g <- guide_classifier(labels, lambda = 0.5)
+#' g
 #' @seealso \code{\link{guide_external}}, \code{\link{guide_callback}}, \code{\link{nmf}}
 #' @export
 guide_classifier <- function(labels, lambda = 1.0, side = c("H", "W")) {
@@ -45,6 +50,11 @@ guide_classifier <- function(labels, lambda = 1.0, side = c("H", "W")) {
 #' @param lambda Guide strength. Positive attracts; negative repels. Default 1.0.
 #' @param side Which factor to guide: "H" (default) or "W".
 #' @return An \code{nmf_guide} object to pass to \code{nmf(guides = ...)}.
+#' @examples
+#' # Create an external target guide
+#' target <- matrix(runif(30), nrow = 5, ncol = 6)
+#' g <- guide_external(target, lambda = 2.0)
+#' g
 #' @seealso \code{\link{guide_classifier}}, \code{\link{guide_callback}}, \code{\link{nmf}}
 #' @export
 guide_external <- function(target, lambda = 1.0, side = c("H", "W")) {
@@ -94,6 +104,12 @@ print.nmf_guide <- function(x, ...) {
 #' @param lambda Guide strength. Positive attracts; negative repels. Default 1.0.
 #' @param side Which factor to guide: "H" (default) or "W".
 #' @return An \code{nmf_guide} object.
+#' @examples
+#' # Guide that steers factors toward a decaying target
+#' g <- guide_callback(
+#'   fn = function(factor, iter) factor * exp(-0.01 * iter),
+#'   lambda = 1.0
+#' )
 #' @seealso \code{\link{guide_classifier}}, \code{\link{guide_external}}, \code{\link{nmf}}
 #' @export
 guide_callback <- function(fn, lambda = 1.0, side = c("H", "W")) {
@@ -117,6 +133,10 @@ guide_callback <- function(fn, lambda = 1.0, side = c("H", "W")) {
 #' @param lambda Guide strength. Positive attracts; negative repels. Default 1.0.
 #' @param side Which factor to guide: "H" (default) or "W".
 #' @return An \code{nmf_guide} object.
+#' @examples
+#' # Reference guide coupling to another layer
+#' g <- guide_reference("L1", lambda = 0.5, side = "H")
+#' g
 #' @seealso \code{\link{guide_classifier}}, \code{\link{guide_external}}, \code{\link{nmf}}
 #' @export
 guide_reference <- function(layer_name, lambda = 1.0, side = c("H", "W")) {

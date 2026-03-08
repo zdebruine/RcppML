@@ -192,6 +192,15 @@ summary.fn_classifier_eval <- function(object, ...) {
 #'
 #' @inheritParams classify_embedding
 #' @return An \code{fn_classifier_eval} object (same structure as KNN variant).
+#' @examples
+#' \donttest{
+#' # Logistic regression on random embeddings
+#' set.seed(42)
+#' embed <- matrix(rnorm(200), nrow = 40, ncol = 5)
+#' labels <- factor(rep(1:4, each = 10))
+#' eval <- classify_logistic(embed, labels, seed = 1)
+#' eval$accuracy
+#' }
 #' @seealso \code{\link{classify_embedding}}, \code{\link{classify_rf}}
 #' @export
 classify_logistic <- function(embedding, labels,
@@ -277,6 +286,17 @@ classify_logistic <- function(embedding, labels,
 #' @inheritParams classify_embedding
 #' @param ntree Number of trees (default 500).
 #' @return An \code{fn_classifier_eval} object (same structure as KNN variant).
+#' @examples
+#' \donttest{
+#' # Random forest on random embeddings (requires randomForest package)
+#' if (requireNamespace("randomForest", quietly = TRUE)) {
+#'   set.seed(42)
+#'   embed <- matrix(rnorm(200), nrow = 40, ncol = 5)
+#'   labels <- factor(rep(1:4, each = 10))
+#'   eval <- classify_rf(embed, labels, ntree = 100, seed = 1)
+#'   eval$accuracy
+#' }
+#' }
 #' @seealso \code{\link{classify_embedding}}, \code{\link{classify_logistic}}
 #' @export
 classify_rf <- function(embedding, labels,

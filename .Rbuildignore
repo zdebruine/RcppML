@@ -63,9 +63,11 @@
 ^build_.*\.sbatch$
 ^test_.*\.sbatch$
 ^src/do_build\.sh$
-^vignettes/sparsepress\.Rmd$
-^vignettes/nmf-deep-dive\.Rmd$
-^vignettes$
+# Vignettes re-included March 2026 — both use eval=NOT_CRAN for CRAN safety
+# ^vignettes/sparsepress\.Rmd$
+# ^vignettes/nmf-deep-dive\.Rmd$
+# Vignettes directory included — individual HTML/files still excluded
+# ^vignettes$
 ^-\.o$
 ^GPMF_PROPOSAL\.md$
 ^experiments$
@@ -76,5 +78,6 @@
 ^inst/include/.*\.md$
 ^.*\.sbatch$
 ^docs/dev$
+^WORKQUEUE.*\.md$
 ^WORKSTREAMS\.md$
 ^\.vscode$

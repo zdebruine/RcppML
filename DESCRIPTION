@@ -37,11 +37,14 @@ Suggests:
     ggplot2,
     hdf5r,
     jsonlite,
+    knitr,
     randomForest,
+    rmarkdown,
     patchwork,
     plotly,
     scales,
-    testthat (>= 3.0.0) 
+    testthat (>= 3.0.0)
+VignetteBuilder: knitr
 Config/testthat/edition: 3
 LazyData: true
 LazyDataCompression: xz

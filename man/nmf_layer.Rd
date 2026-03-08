@@ -52,6 +52,12 @@ When used with \code{|>}, the input node is the first argument:
 Layer-level regularization parameters (L1, L2, etc.) apply to both
 W and H unless overridden by \code{W()} or \code{H()}.
 }
+\examples{
+data(aml)
+inp <- factor_input(aml)
+layer <- nmf_layer(inp, k = 5)
+layer
+}
 \seealso{
 \code{\link{svd_layer}}, \code{\link{factor_net}}, \code{\link{factor_input}}
 }

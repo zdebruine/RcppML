@@ -21,6 +21,13 @@ A \code{factor_net} object.
 Validates the graph topology, resolves config inheritance, and
 returns a compiled network ready for \code{fit()}.
 }
+\examples{
+data(aml)
+inp <- factor_input(aml, "aml")
+out <- nmf_layer(inp, k = 5)
+net <- factor_net(inp, out, config = factor_config(maxit = 10))
+net
+}
 \seealso{
 \code{\link{fit}}, \code{\link{factor_config}}, \code{\link{nmf_layer}},
   \code{\link{svd_layer}}, \code{\link{cross_validate_graph}}
