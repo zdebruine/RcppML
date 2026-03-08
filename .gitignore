@@ -1,8 +1,57 @@
+# R project files
 .Rproj.user
 .Rhistory
 .RData
 .Ruserdata
+
+# Compiled files
 src/*.o
 src/*.so
 src/*.dll
-docs
+inst/lib/*.so
+
+# pkgdown site (auto-generated)
+docs/site/
+inst/doc
+
+# GPU profiling
+dcgm-gpu-stats-*.out
+*.nsys-rep
+*.ncu-rep
+
+# SLURM output
+*.err
+*.out
+*.log
+
+# Background processes
+nohup.out
+
+# Binary dataset snapshots
+benchmarks/**/*.bin
+
+# R CMD check output
+RcppML.Rcheck/
+*.tar.gz
+
+# Test artifacts
+test_output.txt
+
+# Python virtual environment
+.venv/
+__pycache__/
+*.pyc
+
+# LaTeX artifacts
+manuscript/**/*.aux
+manuscript/**/*.log
+manuscript/**/*.bbl
+manuscript/**/*.blg
+manuscript/**/*.out
+
+# Benchmark data (large, regenerable)
+benchmarks/**/*.rds
+benchmarks/**/*.csv
+benchmarks/**/*.spz
+benchmarks/**/cellcensus_*_binary/
+benchmarks/results/overfitting_log.txt
