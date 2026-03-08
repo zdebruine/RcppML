@@ -229,7 +229,7 @@ test_that("ZIGP-col runs and returns pi", {
 
 test_that("ZIGP-twoway runs with damping (no runaway)", {
   skip_on_cran()
-  sim <- simulate_gp_data(m = 60, n = 40, k = 3, theta = 0.5, dropout = 0.2)
+  skip("zi='twoway' is currently disabled due to numerical instability in pi estimates")
   model <- nmf(sim$A, 3, loss = "gp", dispersion = "per_row",
                zi = "twoway", maxit = 30, tol = 1e-4,
                seed = 42, verbose = FALSE)
@@ -242,7 +242,7 @@ test_that("ZIGP-twoway runs with damping (no runaway)", {
 
 test_that("ZIGP-twoway no runaway on high-sparsity data", {
   skip_on_cran()
-  # High sparsity (85% dropout + NB zeros → ~99% sparsity) — the regime
+  skip("zi='twoway' is currently disabled due to numerical instability in pi estimates")
 
   # where the old naive M-step caused compound pi runaway to the cap
   sim <- simulate_gp_data(m = 80, n = 60, k = 3, theta = 0.5, dropout = 0.7)

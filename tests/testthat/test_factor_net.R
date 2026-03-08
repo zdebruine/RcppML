@@ -116,7 +116,7 @@ test_that("config hierarchy: layer L1 < factor H override", {
 
 test_that("multi-modal shared-H matches concatenated nmf()", {
   # GPU factor_net uses different normalization than CPU nmf(), d values differ
-  skip_if(isTRUE(getOption("RcppML.gpu")), "GPU factor_net normalization differs from CPU nmf()")
+  skip_if(!identical(getOption("RcppML.gpu", FALSE), FALSE), "GPU factor_net normalization differs from CPU nmf()")
   m1 <- 25; m2 <- 25
   X1 <- X[1:m1, ]
   X2 <- X[(m1 + 1):(m1 + m2), ]
@@ -532,7 +532,7 @@ test_that("print methods execute without error", {
 
 test_that("TEST-GRAPH-SINGLE-DENSE: single-layer factor_net works with dense input", {
   # GPU factor_net normalization differs from CPU nmf(), d values not equal
-  skip_if(isTRUE(getOption("RcppML.gpu")), "GPU factor_net normalization differs from CPU nmf()")
+  skip_if(!identical(getOption("RcppML.gpu", FALSE), FALSE), "GPU factor_net normalization differs from CPU nmf()")
   inp <- factor_input(X, "X_dense")
   L1 <- inp |> nmf_layer(k = 5)
   net <- factor_net(inputs = inp, output = L1,

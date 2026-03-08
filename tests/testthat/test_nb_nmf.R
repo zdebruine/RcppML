@@ -108,7 +108,7 @@ test_that("NB NMF runs without error on dense data", {
 test_that("NB loss decreases overall", {
   skip_on_cran()
   # GPU NMF path does not support IRLS-based NB loss with loss history tracking
-  skip_if(isTRUE(getOption("RcppML.gpu")), "GPU NMF does not track NB loss history")
+  skip_if(!identical(getOption("RcppML.gpu", FALSE), FALSE), "GPU NMF does not track NB loss history")
   sim <- simulate_nb_data(m = 40, n = 30, k = 2, size = 5)
   model <- nmf(sim$A, 2, loss = "nb", dispersion = "per_row",
                maxit = 30, tol = 1e-10, seed = 123, verbose = FALSE)
@@ -189,7 +189,7 @@ test_that("ZINB column mode runs", {
 test_that("ZINB works in CV mode", {
   skip_on_cran()
   # GPU NMF path does not return ZINB zero-inflation parameters in misc
-  skip_if(isTRUE(getOption("RcppML.gpu")), "GPU NMF does not return pi_row for ZINB")
+  skip_if(!identical(getOption("RcppML.gpu", FALSE), FALSE), "GPU NMF does not return pi_row for ZINB")
   sim <- simulate_nb_data(m = 60, n = 40, k = 2, size = 5, dropout = 0.2)
   result <- nmf(sim$A, 2, loss = "nb", zi = "row", dispersion = "per_row",
                 test_fraction = 0.1, maxit = 20, tol = 1e-4,
