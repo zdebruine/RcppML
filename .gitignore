@@ -4,6 +4,12 @@
 .RData
 .Ruserdata
 
+# IDE
+.vscode/
+
+# Superseded plans
+HARDENING_PLAN.md
+
 # Compiled files
 src/*.o
 src/*.so
