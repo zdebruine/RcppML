@@ -537,6 +537,11 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
   dispersion <- match.arg(dispersion)
   dispersion_mode <- switch(dispersion, none = 0L, global = 1L, per_row = 2L, per_col = 3L)
   zi <- match.arg(zi)
+  if (zi == "twoway") {
+    stop("zi='twoway' is currently disabled due to numerical instability ",
+         "on high-sparsity data (runaway pi estimates). ",
+         "Use zi='row' or zi='col' instead.", call. = FALSE)
+  }
   zi_mode <- switch(zi, none = 0L, row = 1L, col = 2L, twoway = 3L)
 
   # Parse robust parameter: FALSE=0, TRUE=1.345, "mae"=1e-4, numeric=value

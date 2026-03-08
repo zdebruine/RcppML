@@ -360,6 +360,10 @@ struct NMFConfig {
 
         // Zero-inflation only with GP or NB
         if (zi_mode != ZIMode::ZI_NONE) {
+            if (zi_mode == ZIMode::ZI_TWOWAY)
+                throw InvalidArgument(
+                    "zi_mode=TWOWAY is disabled due to numerical instability "
+                    "on high-sparsity data. Use ZI_ROW or ZI_COL instead.");
             if (loss.type != LossType::GP && loss.type != LossType::NB)
                 throw InvalidArgument(
                     "Zero-inflation (zi_mode != NONE) requires GP or NB loss. "

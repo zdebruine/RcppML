@@ -341,7 +341,7 @@ diagnose_zero_inflation <- function(data, model, threshold = 0.05) {
     row_structured <- row_var > 0.001
     col_structured <- col_var > 0.001
     if (row_structured && col_structured) {
-      zi_mode <- "twoway"
+      zi_mode <- "col"  # twoway is disabled; use col as best available fallback
     } else if (col_structured) {
       zi_mode <- "col"
     } else {
