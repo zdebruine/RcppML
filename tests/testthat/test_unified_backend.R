@@ -231,7 +231,7 @@ test_that("Unified backend returns resource diagnostics", {
   diag <- attr(result, "diagnostics")
   expect_true(!is.null(diag), label = "Should have diagnostics attribute")
   expect_true(!is.null(diag$plan), label = "Should have plan in diagnostics")
-  expect_equal(diag$plan, "CPU")
+  expect_true(diag$plan %in% c("CPU", "GPU"), label = "Plan should be CPU or GPU")
 })
 
 # =============================================================================

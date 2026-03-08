@@ -11,9 +11,17 @@ test_that("GUARD-MSE-ZI: MSE + zero-inflation is rejected", {
     nmf(aml, k = 2, loss = "mse", zi = "col"),
     "not supported with distribution='mse'"
   )
+})
+
+test_that("GUARD-ZI-TWOWAY: twoway zero-inflation is disabled", {
+  data(aml, package = "RcppML")
   expect_error(
-    nmf(aml, k = 2, loss = "mse", zi = "twoway"),
-    "not supported with distribution='mse'"
+    nmf(aml, k = 2, loss = "gp", zi = "twoway"),
+    "disabled"
+  )
+  expect_error(
+    nmf(aml, k = 2, loss = "nb", zi = "twoway"),
+    "disabled"
   )
 })
 

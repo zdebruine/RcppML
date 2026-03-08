@@ -5,7 +5,7 @@
 // compiled into multiple TUs without inline/template qualification.
 
 #include <RcppEigen.h>
-#include "../inst/include/RcppML.h"
+#include "../inst/include/FactorNet.h"
 #include <RcppHungarian.h>
 #include <numeric>  // for std::iota
 

@@ -588,13 +588,16 @@ test_that("svd(robust + CV) works together", {
 # ===========================================================================
 # Ground-truth tests: RcppML SVD vs base::svd() (P0)
 # ===========================================================================
-# Small matrix where base::svd() is exact. Verify:
+# Matrix where base::svd() is exact. Verify:
 # 1. ||U*diag(d)*V' - A||/||A|| < 1e-6  (reconstruction)
 # 2. singular values match base::svd()$d[1:k] within 1e-4
 
 # Shared ground-truth data: low-rank matrices with well-separated singular values
+# NOTE: Must be large enough (gt_m >= 100, gt_n >= 80) for Krylov/Lanczos to
+# converge reliably on all CPU architectures (Intel Xeon with AVX-512 needs
+# more Lanczos steps than AMD EPYC for the bottom singular vectors).
 set.seed(123)
-gt_m <- 30; gt_n <- 20; gt_k <- 5
+gt_m <- 100; gt_n <- 80; gt_k <- 5
 # Create rank-5 dense matrix with prescribed well-separated singular values
 # Using QR of random matrices for orthogonal bases
 U_raw <- qr.Q(qr(matrix(rnorm(gt_m * gt_k), gt_m, gt_k)))
