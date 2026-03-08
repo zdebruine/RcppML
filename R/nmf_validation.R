@@ -325,9 +325,9 @@ validate_simple_params <- function(sort_model, sparse, nonneg) {
   }
 
   data <- switch(ext,
-    # --- SparsePress ---
+    # --- StreamPress ---
     "spz" = {
-      sp_read(path)
+      st_read(path)
     },
 
     # --- R serialised ---

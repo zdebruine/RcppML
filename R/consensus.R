@@ -53,10 +53,10 @@
 #' A <- rsparsematrix(100, 50, 0.3)
 #' 
 #' # Traditional hard clustering consensus
-#' cons_hard <- consensus_nmf(A, k = 5, reps = 10, method = "hard", seed = 123)
+#' cons_hard <- consensus_nmf(A, k = 5, reps = 30, method = "hard", seed = 123)
 #' 
 #' # KNN Jaccard consensus (more robust)
-#' cons_knn <- consensus_nmf(A, k = 5, reps = 10, method = "knn_jaccard", knn = 15, seed = 123)
+#' cons_knn <- consensus_nmf(A, k = 5, reps = 30, method = "knn_jaccard", knn = 15, seed = 123)
 #' 
 #' # Plot consensus heatmap
 #' plot(cons_hard)
@@ -80,7 +80,7 @@ consensus_nmf <- function(data, k, reps = 50, method = c("hard", "knn_jaccard"),
   
   # Get n_samples: handle file paths (streaming) or in-memory data
   if (is.character(data) && length(data) == 1 && file.exists(data)) {
-    info <- sp_info(data)
+    info <- st_info(data)
     n_samples <- info$rows
   } else {
     n_samples <- nrow(data)

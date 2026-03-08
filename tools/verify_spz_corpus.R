@@ -21,7 +21,7 @@ n_fail <- 0L
 for (f in sample_files) {
   tryCatch({
     info <- st_info(f)
-    stopifnot(info$version == 2L, info$m > 0, info$n > 0, info$nnz > 0)
+    stopifnot(info$version == 2L, info$rows > 0, info$cols > 0, info$nnz > 0)
     n_ok <- n_ok + 1L
   }, error = function(e) {
     cat(sprintf("FAIL: %s — %s\n", f, conditionMessage(e)))
