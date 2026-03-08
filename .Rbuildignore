@@ -75,4 +75,6 @@
 ^tests/cpp$
 ^inst/include/.*\.md$
 ^.*\.sbatch$
-^docs/dev$\n^WORKSTREAMS\\.md$\n^\\.vscode$
+^docs/dev$
+^WORKSTREAMS\.md$
+^\.vscode$

@@ -129,7 +129,7 @@ and M-step (default 1). More iterations give more accurate pi estimates per NMF 
 \item{gamma_phi_min}{minimum allowed Gamma/IG dispersion (default 1e-6).}
 
 \item{tweedie_power}{variance power parameter for Tweedie distribution (default 1.5).
-V(μ) = μ^p. Special cases: p=0 Gaussian, p=1 Poisson, p=2 Gamma, p=3 Inverse Gaussian.
+V(mu) = mu^p. Special cases: p=0 Gaussian, p=1 Poisson, p=2 Gamma, p=3 Inverse Gaussian.
 Can also be set via \code{distribution_config$tweedie_power}.}
 
 \item{graph_W}{sparse graph Laplacian or weighted adjacency matrix (dgCMatrix, m x m) for
@@ -205,7 +205,7 @@ CD for k <= 32 on GPU, Cholesky otherwise.
 \item{init}{initialization method: \code{"random"} (default, uniform random),
 \code{"lanczos"} (Lanczos SVD seed with \eqn{W = |U| \sqrt{\Sigma}}, \eqn{H = |V| \sqrt{\Sigma}};
 typically reduces iteration count by 30-50\\% with better initial loss), or \code{"irlba"}
-(Implicitly Restarted Lanczos Bidiagonalization; alternative to Lanczos for high ranks k ≥ 32).
+(Implicitly Restarted Lanczos Bidiagonalization; alternative to Lanczos for high ranks k >= 32).
 SVD-based methods (lanczos/irlba) provide better initialization quality but add overhead;
 use when initialization quality is more important than speed.}
 
@@ -223,7 +223,7 @@ score test on a quick baseline fit), \code{"gaussian"} (MSE),
 \code{"poisson"} (GP with dispersion=none), \code{"gp"} (Generalized Poisson),
 \code{"nb"} (Negative Binomial), \code{"gamma"} (Gamma),
 \code{"inverse_gaussian"} (Inverse Gaussian), or \code{"tweedie"} (Tweedie with
-continuous variance power V(μ) = μ^p; set p via \code{tweedie_power} or
+continuous variance power V(mu) = mu^p; set p via \code{tweedie_power} or
 \code{distribution_config$tweedie_power}). When specified, takes precedence
 over the \code{loss} parameter. Use \code{distribution_config} to set distribution-specific
 tuning parameters.}
@@ -249,6 +249,9 @@ Receives iteration number and current loss. Return \code{FALSE} to stop early.}
 \item{h_init}{optional initial H matrix (k x n) for custom initialization.
 When provided alongside a custom W via \code{seed}, both factors are
 initialized from user-supplied values. Default \code{NULL} (auto-init).}
+
+\item{profile}{if \code{TRUE}, enable per-iteration timing profiling.
+Results stored in \code{misc$profile} of the returned object. Default \code{FALSE}.}
 
 \item{...}{additional development parameters}
 }
