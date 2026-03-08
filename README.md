@@ -13,8 +13,10 @@
 - **Composable graphs**: `factor_net` API for multi-modal, deep NMF, and cross-validation pipelines
 - **Diagonal scaling**: Factorization in the form A ≈ W·diag(d)·H for consistent, interpretable factors
 - **Cross-validation**: Speckled holdout for principled rank selection with `k = 2:10` or `k = "auto"`
-- **Multiple loss functions**: MSE, MAE, Huber, and KL divergence via IRLS
+- **Statistical distributions**: MSE, Generalized Poisson, Negative Binomial, Gamma, Inverse Gaussian, Tweedie via IRLS
 - **Regularization**: L1 (LASSO), L2 (Ridge), L21 (group sparsity), angular, and graph Laplacian
+- **Zero-inflation**: Row or column zero-inflation models for GP and NB distributions
+- **Streaming NMF**: Out-of-core factorization of SparsePress files for datasets larger than memory
 - **GPU acceleration**: Optional CUDA backend (cuBLAS/cuSPARSE) for 10-20× speedup
 - **SparsePress I/O**: Custom binary format for fast sparse matrix serialization
 - **Divisive clustering**: `bipartition()` and `dclust()` for spectral clustering
@@ -57,8 +59,8 @@ H_new <- predict(model, A[, 1:100])
 # L1 regularization for sparse factors
 model <- nmf(A, k = 10, L1 = c(0.1, 0.1))
 
-# Robust NMF with Huber loss
-model <- nmf(A, k = 10, loss = "huber", huber_delta = 1.0)
+# Robust NMF with Huber-type weights
+model <- nmf(A, k = 10, robust = TRUE)
 
 # Semi-NMF (allow negative W)
 model <- nmf(A, k = 10, nonneg = c(FALSE, TRUE))
