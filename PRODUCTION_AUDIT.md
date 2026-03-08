@@ -145,7 +145,9 @@ separate data package.
 
 ### 2.2 Significant (Fix Before Release, OK to Defer for CRAN)
 
-#### 2.2.1 NB Dispersion Not Updated in Streaming Path
+#### 2.2.1 NB Dispersion Not Updated in Streaming Path ✅
+
+> **Status**: Fixed (R-level warning). `R/nmf_thin.R` warns when `loss="nb"` in streaming mode without pre-estimated `nb_size`. Full C++ dispersion re-estimation deferred.
 
 **File**: `inst/include/FactorNet/nmf/fit_chunked.hpp`  
 **Line**: ~205–215 (nb_size_vec initialization)
@@ -167,7 +169,9 @@ existing two passes' accumulated statistics).
 **Workaround**: Document that streaming NB requires `nb_size` to be pre-specified.
 Add a warning when `loss="nb"` and `nb_size` is not provided in streaming mode.
 
-#### 2.2.2 `mask_zeros=FALSE` CV Is O(m·n) in Streaming Path
+#### 2.2.2 `mask_zeros=FALSE` CV Is O(m·n) in Streaming Path ✅
+
+> **Status**: Fixed. Added `holdout_zero_rows()` and `holdout_zero_cols()` to `speckled_cv.hpp` using SplitMix64 hash sampling. Added Gram-trick zero-entry branch in `fit_chunked.hpp`. No longer O(m) per column.
 
 **File**: `inst/include/FactorNet/nmf/fit_chunked.hpp`  
 **Lines**: ~332–346, ~384–396 (per-column loop, zero-entry loop)
@@ -196,7 +200,9 @@ uniformly with the same hash function, without iterating dense. The
 `LazySpeckledMask` already uses a hash — extend it to enumerate holdout zero
 entries within a column range without scanning all rows.
 
-#### 2.2.3 SVD Init Decompresses Full Matrix During Streaming
+#### 2.2.3 SVD Init Decompresses Full Matrix During Streaming ✅
+
+> **Status**: Fixed. Added RAM check (70% threshold) in `fit_streaming_spz.hpp`. Falls back to random init with warning. `platform.hpp` provides `get_available_ram_bytes()` utility.
 
 **File**: `inst/include/FactorNet/nmf/fit_streaming_spz.hpp`  
 **Lines**: ~115–168
@@ -234,7 +240,9 @@ wire it into the streaming NMF init path.
 (heuristic based on `loader.nnz()` and available RAM), warn and fall back to
 random init.
 
-#### 2.2.4 `std::async` Per Chunk Creates Thread Per I/O Operation
+#### 2.2.4 `std::async` Per Chunk Creates Thread Per I/O Operation ✅
+
+> **Status**: Fixed. Replaced with `PingPongPrefetcher` (persistent background thread + 2-slot ping-pong buffer) in `io/ping_pong_prefetch.hpp`. All 3 async sites in `fit_chunked.hpp` replaced. Race condition in shared `write_idx_` found and fixed (separate `read_idx_` and `write_target`).
 
 **File**: `inst/include/FactorNet/nmf/fit_chunked.hpp`  
 **Lines**: ~289, ~462, ~493 (all `std::async(std::launch::async, ...)`)
@@ -264,7 +272,9 @@ for small chunk sizes or fast storage (NVMe where I/O is μs-scale).
 thread using `std::thread` + a 2-slot ping-pong buffer with `std::condition_variable`
 synchronization. See: `profiling/stream_timer.hpp` for an example threading pattern.
 
-#### 2.2.5 `goto` Statement in Forward Pass
+#### 2.2.5 `goto` Statement in Forward Pass ✅
+
+> **Status**: Fixed. Replaced `goto forward_done` with `if (has_first)` conditional block wrapping the forward pass loop.
 
 **File**: `inst/include/FactorNet/nmf/fit_chunked.hpp`  
 **Line**: ~248 (`goto forward_done;`)  
@@ -294,7 +304,9 @@ auto run_forward_pass = [&]() { /* ... */ };
 if (!is_symmetric) run_forward_pass();
 ```
 
-#### 2.2.6 Loss History Reports MSE for IRLS Losses
+#### 2.2.6 Loss History Reports MSE for IRLS Losses ✅
+
+> **Status**: Fixed. Added `compute_loss()` from `math/loss.hpp` for nonzero entries and IRLS-derived zero-entry loss branch in streaming per-column loop. Loss history now reports correct IRLS objective.
 
 **File**: `inst/include/FactorNet/nmf/fit_chunked.hpp`  
 **Lines**: ~440–463 (Gram-trick loss) and ~430–437 (per-column loss)
@@ -369,10 +381,8 @@ Recently added functions that likely lack complete documentation:
 
 Covered in `HARDENING_PLAN.md §7–8`. In priority order:
 
-1. **Adaptive CD↔Cholesky crossover** — `solver="auto"` not yet implemented
-   based on empirical crossover; instead falls back to fixed rules
-2. **Streaming double-buffer** — current `std::async` approach works but is
-   suboptimal (see §2.2.4 above)
+1. ~~**Adaptive CD↔Cholesky crossover**~~ ✅ — `solver="auto"` implemented in `R/nmf_thin.R`: Cholesky for k<32 + MSE + no L1, else CD.
+2. ~~**Streaming double-buffer**~~ ✅ — Replaced with PingPongPrefetcher (see §2.2.4).
 3. **Benchmark harness** — `benchmarks/harness/` structure in
    `HARDENING_PLAN.md §7.2` not yet built
 
