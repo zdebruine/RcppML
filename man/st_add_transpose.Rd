@@ -2,30 +2,18 @@
 % Please edit documentation in R/streampress.R
 \name{st_add_transpose}
 \alias{st_add_transpose}
-\title{Add Transpose Section to an Existing .spz File}
+\title{Add Transpose Section to an Existing StreamPress File}
 \usage{
 st_add_transpose(path, verbose = TRUE)
 }
 \arguments{
-\item{path}{Path to an existing \code{.spz} v2 file.}
+\item{path}{Path to a \code{.spz} file.}
 
-\item{verbose}{Logical; print progress messages. Default \code{TRUE}.}
+\item{verbose}{Logical; print progress. Default TRUE.}
 }
 \value{
 Invisibly returns the path.
 }
 \description{
-Reads an existing v2 \code{.spz} file without a transpose section,
-builds CSC(A^T), and rewrites the file with the transpose section included.
-If the file already has a transpose section, this is a no-op.
-}
-\examples{
-\dontrun{
-# Requires a v2 .spz file
-st_add_transpose("data.spz")
-}
-
-}
-\seealso{
-\code{\link{st_write}}, \code{\link{st_read}}
+Add Transpose Section to an Existing StreamPress File
 }

@@ -522,8 +522,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // Rcpp_sp_write
-List Rcpp_sp_write(const S4& A, const std::string& path, bool use_delta, bool use_value_pred, bool verbose, const std::string& precision, bool row_sort, bool include_transpose, int chunk_cols);
-RcppExport SEXP _RcppML_Rcpp_sp_write(SEXP ASEXP, SEXP pathSEXP, SEXP use_deltaSEXP, SEXP use_value_predSEXP, SEXP verboseSEXP, SEXP precisionSEXP, SEXP row_sortSEXP, SEXP include_transposeSEXP, SEXP chunk_colsSEXP) {
+List Rcpp_sp_write(const S4& A, const std::string& path, bool use_delta, bool use_value_pred, bool verbose, const std::string& precision, bool row_sort, bool include_transpose, int chunk_cols, Nullable<RawVector> obs_raw, Nullable<RawVector> var_raw);
+RcppExport SEXP _RcppML_Rcpp_sp_write(SEXP ASEXP, SEXP pathSEXP, SEXP use_deltaSEXP, SEXP use_value_predSEXP, SEXP verboseSEXP, SEXP precisionSEXP, SEXP row_sortSEXP, SEXP include_transposeSEXP, SEXP chunk_colsSEXP, SEXP obs_rawSEXP, SEXP var_rawSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -536,7 +536,9 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type row_sort(row_sortSEXP);
     Rcpp::traits::input_parameter< bool >::type include_transpose(include_transposeSEXP);
     Rcpp::traits::input_parameter< int >::type chunk_cols(chunk_colsSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_sp_write(A, path, use_delta, use_value_pred, verbose, precision, row_sort, include_transpose, chunk_cols));
+    Rcpp::traits::input_parameter< Nullable<RawVector> >::type obs_raw(obs_rawSEXP);
+    Rcpp::traits::input_parameter< Nullable<RawVector> >::type var_raw(var_rawSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_sp_write(A, path, use_delta, use_value_pred, verbose, precision, row_sort, include_transpose, chunk_cols, obs_raw, var_raw));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -717,7 +719,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_RcppML_c_rsparsematrix", (DL_FUNC) &_RcppML_c_rsparsematrix, 5},
     {"_RcppML_Rcpp_bipartite_match", (DL_FUNC) &_RcppML_Rcpp_bipartite_match, 1},
     {"_RcppML_c_knn_jaccard", (DL_FUNC) &_RcppML_c_knn_jaccard, 2},
-    {"_RcppML_Rcpp_sp_write", (DL_FUNC) &_RcppML_Rcpp_sp_write, 9},
+    {"_RcppML_Rcpp_sp_write", (DL_FUNC) &_RcppML_Rcpp_sp_write, 11},
     {"_RcppML_Rcpp_sp_read", (DL_FUNC) &_RcppML_Rcpp_sp_read, 3},
     {"_RcppML_Rcpp_sp_read_transpose", (DL_FUNC) &_RcppML_Rcpp_sp_read_transpose, 1},
     {"_RcppML_Rcpp_sp_metadata", (DL_FUNC) &_RcppML_Rcpp_sp_metadata, 1},

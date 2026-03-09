@@ -448,7 +448,9 @@ st_read_var <- function(path) {
 #' @export
 st_slice_cols <- function(path, cols, threads = 0L) {
   path <- normalizePath(path, mustWork = TRUE)
-  Rcpp_sp_read(path, cols = as.integer(cols), reorder = TRUE)
+  cols <- as.integer(cols)
+  A <- Rcpp_sp_read(path, reorder = TRUE)
+  A[, cols, drop = FALSE]
 }
 
 #' Slice Rows from a StreamPress File

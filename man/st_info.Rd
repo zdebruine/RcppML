@@ -12,10 +12,11 @@ st_info(path)
 \value{
 A list with fields including \code{rows}, \code{cols}, \code{nnz},
   \code{density_pct}, \code{file_bytes}, \code{raw_bytes}, \code{ratio},
-  \code{version}.
+  \code{version}, \code{has_obs}, \code{has_var}, \code{has_transpose},
+  \code{transp_chunk_cols}.
 }
 \description{
-Reads only the header — no decompression is performed.
+Reads only the header -- no decompression is performed.
 }
 \examples{
 \donttest{

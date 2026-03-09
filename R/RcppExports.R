@@ -104,8 +104,8 @@ c_knn_jaccard <- function(sim_matrix, knn) {
 #' @param include_transpose Also store CSC(A^T) in file
 #' @return A list with compression statistics
 #' @keywords internal
-Rcpp_sp_write <- function(A, path, use_delta = TRUE, use_value_pred = FALSE, verbose = FALSE, precision = "auto", row_sort = FALSE, include_transpose = FALSE, chunk_cols = 2048L) {
-    .Call(`_RcppML_Rcpp_sp_write`, A, path, use_delta, use_value_pred, verbose, precision, row_sort, include_transpose, chunk_cols)
+Rcpp_sp_write <- function(A, path, use_delta = TRUE, use_value_pred = FALSE, verbose = FALSE, precision = "auto", row_sort = FALSE, include_transpose = FALSE, chunk_cols = 2048L, obs_raw = NULL, var_raw = NULL) {
+    .Call(`_RcppML_Rcpp_sp_write`, A, path, use_delta, use_value_pred, verbose, precision, row_sort, include_transpose, chunk_cols, obs_raw, var_raw)
 }
 
 #' @title Read a SparsePress (.spz) file into a dgCMatrix

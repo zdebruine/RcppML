@@ -7,19 +7,31 @@
 st_write(
   x,
   path,
+  obs = NULL,
+  var = NULL,
   delta = TRUE,
   value_pred = FALSE,
   verbose = FALSE,
   precision = "auto",
   row_sort = FALSE,
-  include_transpose = FALSE,
-  chunk_cols = 2048L
+  include_transpose = TRUE,
+  chunk_cols = NULL,
+  chunk_bytes = 6.4e+07,
+  transp_chunk_cols = NULL,
+  transp_chunk_bytes = NULL,
+  threads = 0L
 )
 }
 \arguments{
 \item{x}{A sparse matrix (\code{dgCMatrix}) or object coercible to one.}
 
 \item{path}{Output file path. Extension \code{.spz} is recommended.}
+
+\item{obs}{Optional data.frame of observation (row/cell) metadata.
+Must have \code{nrow(obs) == nrow(x)}.}
+
+\item{var}{Optional data.frame of variable (column/gene) metadata.
+Must have \code{nrow(var) == ncol(x)}.}
 
 \item{delta}{Logical; use density-based delta prediction for structure.
 Default \code{TRUE}.}
@@ -34,9 +46,19 @@ Default \code{FALSE}.}
 
 \item{row_sort}{Logical; sort rows by nnz for better compression.}
 
-\item{include_transpose}{Logical; store CSC(A^T) in the file.}
+\item{include_transpose}{Logical; store CSC(A^T) in the file. Default \code{TRUE}.}
 
-\item{chunk_cols}{Integer; columns per chunk. Default 2048.}
+\item{chunk_cols}{Integer or NULL; columns per chunk. If NULL, computed from
+\code{chunk_bytes}.}
+
+\item{chunk_bytes}{Numeric; target bytes per chunk when \code{chunk_cols}
+is NULL. Default 64 MB.}
+
+\item{transp_chunk_cols}{Integer or NULL; columns per transpose chunk.}
+
+\item{transp_chunk_bytes}{Numeric or NULL; target bytes per transpose chunk.}
+
+\item{threads}{Integer; number of threads (0 = all available). Default 0.}
 }
 \value{
 Invisibly returns a list with compression statistics.

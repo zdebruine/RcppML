@@ -149,7 +149,9 @@ List Rcpp_sp_write(const S4& A, const std::string& path,
                    const std::string& precision = "auto",
                    bool row_sort = false,
                    bool include_transpose = false,
-                   int chunk_cols = 2048) {
+                   int chunk_cols = 2048,
+                   Nullable<RawVector> obs_raw = R_NilValue,
+                   Nullable<RawVector> var_raw = R_NilValue) {
     sparsepress::CSCMatrix mat = dgc_to_csc(A);
 
     // Extract dimnames for metadata
@@ -167,6 +169,16 @@ List Rcpp_sp_write(const S4& A, const std::string& path,
         cfg2.verbose = verbose ? 2 : 0;
         cfg2.chunk_cols = static_cast<uint32_t>(chunk_cols);
 
+        // Populate obs/var buffers from R raw vectors
+        if (obs_raw.isNotNull()) {
+            RawVector obs_rv(obs_raw.get());
+            cfg2.obs_buf.assign(obs_rv.begin(), obs_rv.end());
+        }
+        if (var_raw.isNotNull()) {
+            RawVector var_rv(var_raw.get());
+            cfg2.var_buf.assign(var_rv.begin(), var_rv.end());
+        }
+
         sparsepress::v2::CompressStats_v2 stats2;
         std::vector<uint8_t> compressed = sparsepress::v2::compress_v2(mat, cfg2, &stats2);
         sparsepress::v2::write_v2(path, compressed);
@@ -180,7 +192,9 @@ List Rcpp_sp_write(const S4& A, const std::string& path,
             Named("version") = 2,
             Named("has_rownames") = !rownames.empty(),
             Named("has_colnames") = !colnames.empty(),
-            Named("has_transpose") = include_transpose
+            Named("has_transpose") = include_transpose,
+            Named("has_obs") = obs_raw.isNotNull(),
+            Named("has_var") = var_raw.isNotNull()
         );
     }
 
@@ -370,7 +384,12 @@ List Rcpp_sp_metadata(const std::string& path) {
             Named("num_chunks") = static_cast<int>(hdr.num_chunks),
             Named("row_sorted") = static_cast<bool>(hdr.row_sorted),
             Named("has_transpose") = (hdr.transpose_offset != 0),
-            Named("has_metadata") = (hdr.metadata_offset != 0)
+            Named("has_metadata") = (hdr.metadata_offset != 0),
+            Named("has_obs") = (hdr.obs_table_offset() != 0),
+            Named("has_var") = (hdr.var_table_offset() != 0),
+            Named("transp_chunk_cols") = static_cast<int>(
+                hdr.transp_chunk_cols() > 0 ? hdr.transp_chunk_cols() : hdr.chunk_cols),
+            Named("transpose_offset") = static_cast<double>(hdr.transpose_offset)
         );
     }
 
@@ -845,7 +864,7 @@ static DataFrame read_table_at_offset(const std::string& path, uint64_t table_of
     }
 
     size_t hdr_plus_desc = 16 + desc_bytes;
-    size_t total_bytes = hdr_plus_desc + static_cast<size_t>(max_end);
+    size_t total_bytes = std::max(hdr_plus_desc, static_cast<size_t>(max_end));
     std::vector<uint8_t> full_buf(total_bytes);
     fseek(f, static_cast<long>(table_off), SEEK_SET);
     if (fread(full_buf.data(), 1, total_bytes, f) != total_bytes) {

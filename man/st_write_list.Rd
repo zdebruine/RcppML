@@ -18,7 +18,8 @@ st_write_list(
 )
 }
 \arguments{
-\item{x}{A list of \code{dgCMatrix} objects (or coercible).}
+\item{x}{A list of \code{dgCMatrix} objects (or coercible).
+All must have identical \code{nrow}.}
 
 \item{path}{Output \code{.spz} path.}
 

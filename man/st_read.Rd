@@ -4,7 +4,7 @@
 \alias{st_read}
 \title{Read a StreamPress file into a dgCMatrix}
 \usage{
-st_read(path, cols = NULL, reorder = TRUE)
+st_read(path, cols = NULL, reorder = TRUE, threads = 0L)
 }
 \arguments{
 \item{path}{Path to a \code{.spz} file.}
@@ -12,9 +12,11 @@ st_read(path, cols = NULL, reorder = TRUE)
 \item{cols}{Optional integer vector of column indices to read (1-indexed).}
 
 \item{reorder}{Logical; if \code{TRUE} (default), undo any row permutation.}
+
+\item{threads}{Integer; number of threads (0 = all available). Default 0.}
 }
 \value{
-A \code{dgCMatrix} sparse matrix.
+A \code{dgCMatrix} sparse matrix with dimnames if available.
 }
 \description{
 Read a StreamPress file into a dgCMatrix

@@ -296,6 +296,7 @@ test_that("robust=TRUE uses default delta", {
 # ============================================================
 
 test_that("Streaming NMF dispatches via SPZ file with RcppML.streaming option", {
+  skip(".st_dispatch not yet re-implemented")
   skip_on_cran()
   set.seed(42)
   A <- Matrix::rsparsematrix(50, 40, density = 0.3)

@@ -13,7 +13,9 @@ Rcpp_sp_write(
   precision = "auto",
   row_sort = FALSE,
   include_transpose = FALSE,
-  chunk_cols = 2048L
+  chunk_cols = 2048L,
+  obs_raw = NULL,
+  var_raw = NULL
 )
 }
 \arguments{

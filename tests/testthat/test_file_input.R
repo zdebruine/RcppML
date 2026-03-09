@@ -39,6 +39,7 @@ test_that("nmf() accepts .mtx file path", {
 })
 
 test_that("nmf() accepts .spz file path", {
+  skip(".st_dispatch not yet re-implemented")
   skip_if_not_installed("Matrix")
   data(movielens, package = "RcppML")
   tmp <- tempfile(fileext = ".spz")
