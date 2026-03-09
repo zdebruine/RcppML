@@ -43,6 +43,7 @@
 ^tests/logs$
 ^vignettes/.*\.html$
 ^vignettes/.*_files$
+^vignettes/specs$
 ^inst/extdata$
 ^inst/lib$
 ^data/hcabm40k_mat\.rda$
@@ -73,7 +74,6 @@
 ^experiments$
 ^HARDENING_PLAN\.md$
 ^test_init_fix_.*\.out$
-^data/pbmc3k\.rda$
 ^tests/cpp$
 ^inst/include/.*\.md$
 ^.*\.sbatch$

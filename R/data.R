@@ -2,10 +2,48 @@
 # Dataset Documentation
 # ============================================================================
 
-# pbmc3k dataset: excluded from CRAN package (2.6MB, too large).
-# Data file is in data/pbmc3k.rda but excluded via .Rbuildignore.
-# Available for local development and benchmarking only.
-# Documentation removed to avoid code/documentation mismatch WARNING in R CMD check.
+#' PBMC 3k Single-Cell RNA-seq Dataset (StreamPress Compressed)
+#'
+#' Single-cell RNA-seq gene expression data from ~2,700 peripheral blood
+#' mononuclear cells (PBMCs). Shipped as StreamPress-compressed raw bytes
+#' to meet CRAN tarball size limits.
+#'
+#' @format A \code{raw} vector containing StreamPress (.spz) compressed bytes.
+#'   To obtain the sparse matrix, write the bytes to a temporary file and read
+#'   with \code{\link{st_read}}:
+#'   \preformatted{
+#'   data(pbmc3k)
+#'   tmp <- tempfile(fileext = ".spz")
+#'   writeBin(pbmc3k, tmp)
+#'   counts <- st_read(tmp)
+#'   # counts is a dgCMatrix: 13,714 genes x 2,700 cells
+#'   }
+#'
+#' @details
+#' The underlying matrix is a \code{dgCMatrix} with 13,714 rows (genes) and
+#' 2,700 columns (cells), containing 2,282,976 non-zero entries (integer UMI counts).
+#' The data was compressed with StreamPress at fp32 precision, which is lossless
+#' for integer count data.
+#'
+#' This dataset is commonly used for benchmarking single-cell analysis workflows.
+#'
+#' @source
+#' 10x Genomics PBMC 3k dataset, filtered and processed.
+#'
+#' @examples
+#' \donttest{
+#' # Load the compressed bytes
+#' data(pbmc3k)
+#'
+#' # Decompress to sparse matrix
+#' tmp <- tempfile(fileext = ".spz")
+#' writeBin(pbmc3k, tmp)
+#' counts <- st_read(tmp)
+#' dim(counts)  # 13714 x 2700
+#' }
+#'
+#' @keywords datasets
+"pbmc3k"
 
 #' Acute Myelogenous Leukemia (AML) Dataset
 #'
