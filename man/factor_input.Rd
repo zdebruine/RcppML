@@ -24,3 +24,6 @@ data(aml)
 inp <- factor_input(aml, name = "aml")
 inp
 }
+\seealso{
+\code{\link{nmf_layer}}, \code{\link{svd_layer}}, \code{\link{factor_net}}
+}

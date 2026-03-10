@@ -1,62 +1,3 @@
-#' @title Solve a linear system with coordinate descent
-#'
-#' @description Solves the equation \code{a \%*\% x = b} for \code{x}, optionally subject to \eqn{x >= 0}.
-#'
-#' @details
-#' This is a very fast implementation of sequential coordinate descent least squares, suitable for very small or very large systems.
-#' The algorithm begins with a zero-filled initialization of \code{x}.
-#'
-#' Least squares by **sequential coordinate descent** is used to ensure the solution returned is exact. This algorithm was
-#' introduced by Franc et al. (2005), and our implementation is a vectorized and optimized rendition of that found in the NNLM R package by Xihui Lin (2020).
-#'
-#' When \code{nonneg = TRUE}, this solves the Non-Negative Least Squares (NNLS) problem.
-#' When \code{nonneg = FALSE}, this solves unconstrained least squares.
-#'
-#' @param a symmetric positive definite matrix giving coefficients of the linear system
-#' @param b matrix giving the right-hand side(s) of the linear system
-#' @param L1 L1/LASSO penalty to be subtracted from \code{b}
-#' @param L2 Ridge penalty to be added to the diagonal of \code{a}
-#' @param cd_maxit maximum number of coordinate descent iterations
-#' @param cd_tol stopping criteria, difference in \eqn{x} across consecutive solutions over the sum of \eqn{x}
-#' @param upper_bound maximum value permitted in solution, set to \code{0} to impose no upper bound
-#' @param nonneg if TRUE (default), impose non-negativity constraint on solution
-#' @return vector or matrix giving solution for \code{x}
-#' @keywords internal
-#' @note This function is deprecated. Use \code{\link{nnls}} instead.
-#' \code{solve()} previously masked \code{base::solve()}.
-#' @author Zach DeBruine
-#' @seealso \code{\link{nmf}}, \code{\link{nnls}}
-#' @md
-#'
-#' @references
-#'
-#' DeBruine, ZJ, Melcher, K, and Triche, TJ. (2021). "High-performance non-negative matrix factorization for large single-cell data." BioRXiv.
-#'
-#' Franc, VC, Hlavac, VC, and Navara, M. (2005). "Sequential Coordinate-Wise Algorithm for the Non-negative Least Squares Problem. Proc. Int'l Conf. Computer Analysis of Images and Patterns."
-#'
-#' Lin, X, and Boutros, PC (2020). "Optimization and expansion of non-negative matrix factorization." BMC Bioinformatics.
-#'
-#' @examples
-#' \dontrun{
-#' # compare solution to base::solve for a random system
-#' X <- matrix(runif(100), 10, 10)
-#' a <- crossprod(X)
-#' b <- crossprod(X, runif(10))
-#' 
-#' # unconstrained solution (same as base::solve)
-#' unconstrained_soln <- solve(a, b, nonneg = FALSE)
-#' 
-#' # non-negative constrained solution
-#' nonneg_soln <- solve(a, b, nonneg = TRUE)
-#' }
-solve <- function(a, b, cd_maxit = 100L, cd_tol = 1e-8, L1 = 0, L2 = 0, upper_bound = 0, nonneg = TRUE) {
-  .Deprecated("nnls", msg = "solve() is deprecated. Use nnls() instead.")
-  if (!is.matrix(a)) a <- as.matrix(a)
-  if (!is.matrix(b)) b <- as.matrix(b)
-  c_solve(a, b, as.integer(cd_maxit), cd_tol, L1, L2, upper_bound, nonneg)
-}
-
-
 #' @title Non-negative Least Squares Projection
 #'
 #' @description Project a factor matrix onto new data to solve for the complementary matrix.
@@ -104,6 +45,13 @@ solve <- function(a, b, cd_maxit = 100L, cd_tol = 1e-8, L1 = 0, L2 = 0, upper_bo
 #'   (k x n_samples for H, n_features x k for W). Can accelerate convergence.
 #' @param L1 L1/LASSO penalty, length 1 or 2 for c(w_penalty, h_penalty). Range [0, 1).
 #' @param L2 Ridge penalty, length 1 or 2 for c(w_penalty, h_penalty). Range [0, Inf).
+#' @param L21 L21 group sparsity penalty, length 1 or 2 for c(w_penalty, h_penalty). Range [0, Inf).
+#'   Drives entire rows/columns toward zero for automatic factor selection.
+#' @param angular angular decorrelation penalty, length 1 or 2 for c(w_penalty, h_penalty). Range [0, Inf).
+#'   Encourages orthogonality between factors.
+#' @param loss loss function: \code{"mse"} (default), \code{"gp"}, \code{"nb"}, \code{"gamma"},
+#'   \code{"inverse_gaussian"}, or \code{"tweedie"}. Non-MSE losses use a single IRLS iteration
+#'   via the NMF machinery.
 #' @param cd_maxit maximum number of coordinate descent iterations (default 100)
 #' @param cd_tol stopping tolerance for coordinate descent (default 1e-8)
 #' @param upper_bound maximum value in solution, length 1 or 2 for c(w_bound, h_bound). 0 = no bound.
@@ -118,7 +66,7 @@ solve <- function(a, b, cd_maxit = 100L, cd_tol = 1e-8, L1 = 0, L2 = 0, upper_bo
 #' (statistical modeling convention).
 #' @export
 #' @author Zach DeBruine
-#' @seealso \code{\link{nmf}}, \code{\link{solve}}
+#' @seealso \code{\link{nmf}}
 #' @md
 #'
 #' @references
@@ -160,7 +108,9 @@ solve <- function(a, b, cd_maxit = 100L, cd_tol = 1e-8, L1 = 0, L2 = 0, upper_bo
 #' }
 nnls <- function(w = NULL, h = NULL, A, 
                  warm_start = NULL,
-                 L1 = c(0, 0), L2 = c(0, 0), 
+                 L1 = c(0, 0), L2 = c(0, 0),
+                 L21 = c(0, 0), angular = c(0, 0),
+                 loss = "mse",
                  cd_maxit = 100L, cd_tol = 1e-8, 
                  upper_bound = c(0, 0), nonneg = c(TRUE, TRUE),
                  threads = 0, verbose = FALSE) {
@@ -191,14 +141,42 @@ nnls <- function(w = NULL, h = NULL, A,
   solve_for_h <- !is.null(w)
   factor_matrix <- if (solve_for_h) w else h
   
+  # Recycle penalty parameters to length 2 early (needed for NMF dispatch)
+  if (length(L1) == 1) L1 <- c(L1, L1)
+  if (length(L2) == 1) L2 <- c(L2, L2)
+  if (length(L21) == 1) L21 <- c(L21, L21)
+  if (length(angular) == 1) angular <- c(angular, angular)
+  if (length(upper_bound) == 1) upper_bound <- c(upper_bound, upper_bound)
+  if (length(nonneg) == 1) nonneg <- c(nonneg, nonneg)
+  
+  # === NON-MSE LOSS DISPATCH ===
+  # For non-MSE distributions (IRLS), delegate to a single NMF iteration
+  if (loss != "mse" || any(L21 != 0) || any(angular != 0)) {
+    if (!is.matrix(factor_matrix)) factor_matrix <- as.matrix(factor_matrix)
+    if (is.character(A)) {
+      data_info <- validate_data(A)
+      A <- data_info$data
+    }
+    
+    if (solve_for_h) {
+      model <- nmf(A, k = ncol(factor_matrix), seed = factor_matrix, maxit = 1,
+                   loss = loss, L1 = L1, L2 = L2, L21 = L21, angular = angular,
+                   upper_bound = upper_bound, nonneg = nonneg,
+                   threads = threads, verbose = verbose)
+      return(model@h)
+    } else {
+      model <- nmf(A, k = nrow(factor_matrix), seed = t(A) %*% t(t(factor_matrix)), maxit = 1,
+                   loss = loss, L1 = L1, L2 = L2, L21 = L21, angular = angular,
+                   upper_bound = upper_bound, nonneg = nonneg,
+                   threads = threads, verbose = verbose)
+      return(model@w)
+    }
+  }
+  
   # === STREAMING DISPATCH (SPZ file path) ===
   # If A is a file path to .spz, use streaming NNLS (avoids loading full A)
   if (is.character(A) && length(A) == 1 && grepl("\\.spz$", A) && solve_for_h) {
     if (!is.matrix(factor_matrix)) factor_matrix <- as.matrix(factor_matrix)
-    if (length(L1) == 1) L1 <- c(L1, L1)
-    if (length(L2) == 1) L2 <- c(L2, L2)
-    if (length(upper_bound) == 1) upper_bound <- c(upper_bound, upper_bound)
-    if (length(nonneg) == 1) nonneg <- c(nonneg, nonneg)
     
     h <- c_nnls_streaming(normalizePath(A), factor_matrix,
                           as.integer(cd_maxit), cd_tol,
@@ -217,12 +195,6 @@ nnls <- function(w = NULL, h = NULL, A,
   data_info <- validate_data(A)
   A <- data_info$data
 
-  # Recycle penalty parameters to length 2
-  if (length(L1) == 1) L1 <- c(L1, L1)
-  if (length(L2) == 1) L2 <- c(L2, L2)
-  if (length(upper_bound) == 1) upper_bound <- c(upper_bound, upper_bound)
-  if (length(nonneg) == 1) nonneg <- c(nonneg, nonneg)
-  
   # Validate penalty ranges
   if (any(L1 < 0) || any(L1 >= 1)) stop("L1 penalty must be in range [0, 1)")
   if (any(L2 < 0)) stop("L2 penalty must be >= 0")

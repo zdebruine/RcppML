@@ -56,11 +56,16 @@ Each penalty modifies the NNLS subproblem: L1 subtracts from the RHS (soft thres
 NMF solves $A \approx W \cdot \text{diag}(d) \cdot H$ by alternating NNLS updates. Each penalty extends the per-column subproblem:
 $$\min_{h \geq 0} \|Gh - b\|^2 + \lambda_1 \|h\|_1 + \lambda_2 \|h\|^2_2$$
 
-- **L1 (LASSO)**: Produces element-wise sparsity. Ideal when each factor should activate only a subset of features.
-- **L2 (Ridge)**: Shrinks coefficients smoothly. Prevents individual loadings from dominating.
-- **L21 (Group LASSO)**: Zeros entire groups — useful for feature selection across factors.
-- **Angular**: Penalizes $\cos(w_i, w_j)$ between factor pairs, pushing them toward orthogonality.
-- **Graph Laplacian**: Adds $\lambda \, \text{tr}(H L H^\top)$ where $L = D - A$ is the graph Laplacian. Connected nodes receive similar factor values.
+The full penalized NMF objective is:
+$$\mathcal{L} = \|A - WDH\|_F^2 + \lambda_{L1} \sum_{ij} |W_{ij}| + \lambda_{L2} \sum_{ij} W_{ij}^2 + \lambda_{\text{ang}} \sum_{i < j} \cos(w_i, w_j) + \lambda_G \, \text{tr}(H L H^\top)$$
+
+Each penalty modifies the NNLS subproblem:
+
+- **L1 (LASSO)**: $\lambda_1 \|h\|_1$ — soft-thresholds the RHS, driving small coefficients to exactly zero. Ideal for sparse factors.
+- **L2 (Ridge)**: $\lambda_2 \|h\|_2^2$ — adds $\lambda_2 I$ to the Gram diagonal (Tikhonov regularization). Shrinks coefficients smoothly.
+- **L21 (Group LASSO)**: $\lambda_{21} \sum_g \|h_g\|_2$ — zeros entire groups (rows/columns). Useful for feature selection.
+- **Angular**: $\lambda_a \sum_{i<j} \frac{w_i^\top w_j}{\|w_i\|\|w_j\|}$ — adds off-diagonal terms to the Gram, penalizing cosine similarity between factor pairs.
+- **Graph Laplacian**: $\lambda_G \, \text{tr}(H L H^\top)$ where $L = D - A$ — adds the Laplacian to the Gram, encouraging connected nodes to share similar values.
 
 | Goal | Penalty | Typical Range |
 |------|---------|---------------|
@@ -136,7 +141,7 @@ data(olivetti)
 A_faces <- t(olivetti[1:100, ])  # 4096 pixels x 100 images
 
 baseline <- nmf(A_faces, k = 10, seed = 42, maxit = 50)
-decorr <- nmf(A_faces, k = 10, angular = c(0.5, 0), seed = 42, maxit = 50)
+decorr <- nmf(A_faces, k = 10, angular = c(0.2, 0), seed = 42, maxit = 50)
 
 # Compute factor correlation matrices
 cor_base <- cor(baseline@w)
@@ -147,7 +152,7 @@ mean_cor_base <- mean(abs(cor_base[upper.tri(cor_base)]))
 mean_cor_decorr <- mean(abs(cor_decorr[upper.tri(cor_decorr)]))
 
 cor_table <- data.frame(
-  Method = c("Baseline (no penalty)", "Angular (0.5)"),
+  Method = c("Baseline (no penalty)", "Angular (0.2)"),
   `Mean |correlation|` = c(mean_cor_base, mean_cor_decorr),
   `Max |correlation|` = c(max(abs(cor_base[upper.tri(cor_base)])),
                           max(abs(cor_decorr[upper.tri(cor_decorr)]))),
@@ -171,7 +176,7 @@ make_cor_df <- function(cor_mat, label) {
 
 heatmap_data <- rbind(
   make_cor_df(cor_base, "Baseline"),
-  make_cor_df(cor_decorr, "Angular (0.5)")
+  make_cor_df(cor_decorr, "Angular (0.2)")
 )
 
 ggplot(heatmap_data, aes(x = Factor1, y = Factor2, fill = correlation)) +
@@ -244,7 +249,29 @@ knitr::kable(smooth_table, digits = 5,
              caption = "Graph-regularized NMF produces spatially smoother factors")
 ```
 
-Graph-regularized NMF produces spatially coherent community patterns — nearby grid cells load similarly on each factor, reflecting the geographic structure of bird communities. The smoothness metric decreases substantially with only a modest increase in reconstruction error.
+```{r graph-spatial-plot, fig.width = 7, fig.height = 5}
+# Spatial visualization: dominant factor at each grid cell
+assign_base <- apply(baseline_g@h, 2, which.max)
+assign_smooth <- apply(smooth_g@h, 2, which.max)
+
+spatial_df <- rbind(
+  data.frame(lng = meta$lng, lat = meta$lat, Factor = factor(assign_base),
+             Method = "Baseline (no graph)"),
+  data.frame(lng = meta$lng, lat = meta$lat, Factor = factor(assign_smooth),
+             Method = "Graph Laplacian (λ = 0.5)")
+)
+
+ggplot(spatial_df, aes(x = lng, y = lat, color = Factor)) +
+  geom_point(size = 1.5) +
+  scale_color_brewer(palette = "Set2") +
+  facet_wrap(~ Method) +
+  coord_fixed() +
+  labs(title = "Dominant Factor by Grid Cell: Baseline vs. Graph-Regularized",
+       x = "Longitude", y = "Latitude") +
+  theme_minimal()
+```
+
+Graph-regularized NMF produces spatially coherent community patterns — nearby grid cells load similarly on each factor, reflecting the geographic structure of bird communities. The spatial plot shows that graph regularization produces smoother factor assignments across the Hawaiian landscape, with the smoothness metric confirming the quantitative improvement.
 
 ## What's Next
 

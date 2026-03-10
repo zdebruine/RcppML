@@ -81,7 +81,7 @@ test_that("streaming NMF with .spz file-path input", {
   data(movielens, package = "RcppML")
   tmp <- tempfile(fileext = ".spz")
   on.exit(unlink(tmp), add = TRUE)
-  sp_write(movielens, tmp, include_transpose = TRUE)
+  st_write(movielens, tmp, include_transpose = TRUE)
   
   result <- nmf(tmp, k = 3, tol = 1e-2, maxit = 10, streaming = TRUE, 
                 seed = 42, verbose = FALSE)
@@ -96,7 +96,7 @@ test_that("streaming NMF with .spz transpose (chunked gather)", {
   data(movielens, package = "RcppML")
   tmp <- tempfile(fileext = ".spz")
   on.exit(unlink(tmp), add = TRUE)
-  sp_write(movielens, tmp, include_transpose = TRUE)
+  st_write(movielens, tmp, include_transpose = TRUE)
 
   result <- nmf(tmp, k = 3, tol = 1e-2, maxit = 10, streaming = TRUE, 
                 seed = 42, verbose = FALSE)
@@ -106,7 +106,7 @@ test_that("streaming NMF with .spz transpose (chunked gather)", {
   # Streaming requires a pre-stored transpose; without it, the error is clear
   tmp2 <- tempfile(fileext = ".spz")
   on.exit(unlink(tmp2), add = TRUE)
-  sp_write(movielens, tmp2, include_transpose = FALSE)
+  st_write(movielens, tmp2, include_transpose = FALSE)
   expect_error(
     nmf(tmp2, k = 3, tol = 1e-2, maxit = 10, streaming = TRUE, seed = 42, verbose = FALSE),
     regexp = "transpose"
@@ -259,7 +259,7 @@ test_that("TEST-SPZ-AUTO-CHUNK-CPU: SPZ auto-chunking produces same result as in
 
   tmp <- tempfile(fileext = ".spz")
   on.exit(unlink(tmp), add = TRUE)
-  sp_write(X, tmp, include_transpose = TRUE)
+  st_write(X, tmp, include_transpose = TRUE)
 
   # In-memory
   s_mem <- nmf(X, k = k, seed = 42, maxit = 100, tol = 1e-10)

@@ -12,15 +12,6 @@ test_that("st_write/st_read round-trip: sparse matrix", {
   expect_equal(as.matrix(A), as.matrix(B), tolerance = 1e-6)
 })
 
-test_that("deprecated sp_write still works (but warns)", {
-  A <- Matrix::rsparsematrix(50, 50, density = 0.1, repr = "C")
-  f <- tempfile(fileext = ".spz")
-  on.exit(unlink(f))
-  expect_warning(sp_write(A, f), "deprecated")
-  expect_warning(B <- sp_read(f), "deprecated")
-  expect_equal(as.matrix(A), as.matrix(B), tolerance = 1e-6)
-})
-
 test_that("st_info returns correct dimensions for v2 file", {
   A <- Matrix::rsparsematrix(300, 150, density = 0.03, repr = "C")
   f <- tempfile(fileext = ".spz")

@@ -193,6 +193,21 @@ knitr::kable(cv[, c("k", "train_mse", "test_mse")], digits = 3,
              caption = "Cross-validation: prediction error on held-out ratings")
 ```
 
+```{r cv-rank-plot, fig.height = 3.5}
+cv_plot_df <- data.frame(
+  k = rep(cv$k, 2),
+  MSE = c(cv$train_mse, cv$test_mse),
+  Set = rep(c("Train", "Test"), each = nrow(cv))
+)
+ggplot(cv_plot_df, aes(x = k, y = MSE, color = Set)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2) +
+  scale_color_manual(values = c("Train" = "steelblue", "Test" = "tomato")) +
+  labs(title = "Rank Selection: Train vs. Test MSE on MovieLens",
+       x = "Rank (k)", y = "MSE") +
+  theme_minimal()
+```
+
 Test MSE decreases as rank increases, showing that additional factors capture
 real preference structure. The gap between train and test error indicates
 generalization capacity — a widening gap signals overfitting.
@@ -216,6 +231,24 @@ compare_df <- data.frame(
 
 knitr::kable(compare_df, align = "r",
              caption = "Cross-validation test error: masking zeros vs. not")
+```
+
+```{r mask-compare-plot, fig.height = 3.5}
+mask_plot_df <- data.frame(
+  k = rep(cv$k, 2),
+  `Test MSE` = c(cv$test_mse, cv_no_mask$test_mse),
+  Mode = rep(c("mask_zeros = TRUE", "mask_zeros = FALSE"), each = nrow(cv)),
+  check.names = FALSE
+)
+ggplot(mask_plot_df, aes(x = k, y = `Test MSE`, color = Mode)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2) +
+  scale_color_brewer(palette = "Set1") +
+  facet_wrap(~ Mode, scales = "free_y") +
+  labs(title = "Test MSE: mask_zeros = TRUE vs FALSE",
+       x = "Rank (k)", y = "Test MSE") +
+  theme_minimal() +
+  theme(legend.position = "none")
 ```
 
 The results reveal two fundamentally different optimization targets:

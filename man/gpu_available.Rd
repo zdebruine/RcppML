@@ -18,3 +18,6 @@ Detects CUDA GPUs at runtime. Result is cached for the session.
 \examples{
 gpu_available()
 }
+\seealso{
+\code{\link{gpu_info}}, \code{\link{nmf}}
+}

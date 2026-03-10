@@ -17,3 +17,6 @@ Invisibly returns the path.
 \description{
 Add Transpose Section to an Existing StreamPress File
 }
+\seealso{
+\code{\link{st_write}}, \code{\link{st_read}}
+}

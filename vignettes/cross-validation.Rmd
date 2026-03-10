@@ -1,0 +1,279 @@
+---
+title: "Cross-Validation for NMF Rank Selection"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Cross-Validation for NMF Rank Selection}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4.5,
+  message = FALSE,
+  warning = FALSE
+)
+library(RcppML)
+library(ggplot2)
+```
+
+## Motivation
+
+How many factors does your data really have? Training loss always decreases as $k$ increases — adding more factors can only improve the fit on the training data, even when the extra factors are fitting noise. This makes train loss useless for selecting the optimal rank.
+
+RcppML solves this with **speckled holdout cross-validation**: randomly mask a fraction of individual matrix entries, fit the NMF model on the remaining entries, and evaluate reconstruction error on the held-out entries. Unlike row or column holdout, speckled masking preserves the full structure of every sample and every feature. The optimal rank $k$ is where the test loss curve forms an "elbow" — decreasing sharply up to the true rank and flattening or increasing thereafter.
+
+Cross-validation is also one of the most computationally intensive operations in NMF, since it requires fitting multiple ranks across multiple replicates. GPU acceleration can provide substantial speedups (10–50×) for large-scale CV sweeps — see the [GPU Acceleration](gpu-acceleration.html) vignette.
+
+## API Reference
+
+### Cross-Validation via `nmf()`
+
+Cross-validation is triggered by passing a **vector** to `k`:
+
+```r
+nmf(data, k = c(2, 4, 6, 8, 10),
+    test_fraction = 0.1, cv_seed = 1:3,
+    mask_zeros = FALSE, patience = 5, ...)
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `k` | — | Vector of ranks to evaluate |
+| `test_fraction` | 0 | Fraction of entries held out (set > 0 for CV) |
+| `cv_seed` | NULL | Seed(s) for holdout mask. Vector length = number of replicates. |
+| `mask_zeros` | FALSE | If TRUE, only nonzero entries are candidates for holdout |
+| `patience` | 5 | Early stopping: stop if test loss hasn't improved in this many iterations |
+| `seed` | NULL | Seed for NMF initialization (separate from CV mask) |
+
+**Return value**: A `data.frame` of class `nmfCrossValidate` with columns:
+
+| Column | Description |
+|--------|-------------|
+| `k` | Rank tested |
+| `rep` | Replicate index (factor) |
+| `train_mse` | Training set loss (named `train_mse` regardless of the loss function used) |
+| `test_mse` | Held-out test set loss (named `test_mse` regardless of the loss function used) |
+| `best_iter` | Iteration with best test loss |
+
+> **Note on column names**: The columns are named `train_mse` and `test_mse` for historical compatibility. When a non-MSE loss function is specified (e.g., `loss = "gp"`), these columns still contain the loss value — it's simply computed with the chosen loss function rather than MSE.
+
+Use `plot(cv_result)` for a built-in test-loss-vs-rank curve.
+
+### `mask_zeros` Semantics
+
+- `mask_zeros = FALSE` (default): All entries (including zeros) can be held out. Tests full-matrix reconstruction. Appropriate for dense data or applications where zero is a real measurement.
+- `mask_zeros = TRUE`: Only nonzero entries can be held out. Zeros are treated as "unobserved," not "zero-valued." Essential for recommendation data (unrated items) and any domain where zero means "not measured."
+
+> **Important**: When fitting a model with `mask_zeros = TRUE`, use `mask_zeros = TRUE` in cross-validation as well. The CV evaluation should match the model's treatment of zeros.
+
+## Theory
+
+### Speckled Holdout
+
+For each entry $(i, j)$, include it in the test set with probability `test_fraction`. All other entries form the training set. This preserves matrix structure — every row and column retains most of its entries for training.
+
+### Choosing $k$
+
+Plot test loss against rank and look for the **elbow**: the point where test loss transitions from steep decrease (capturing real structure) to a plateau or increase (overfitting noise). Below the elbow, the model is underfitting. Above, it's fitting noise.
+
+### Overfitting Dynamics
+
+At the optimal rank, the model captures all real structure without fitting noise. Overfitting manifests as the test loss increasing while training loss continues to decrease. Higher ranks are more prone to overfitting because the model has more capacity to memorize noise in the training data.
+
+### Multiple Replicates
+
+Different `cv_seed` values produce different holdout masks and different NMF initializations. Averaging test loss across replicates smooths out variability from both sources. Use 2–3 replicates for stable results.
+
+## Worked Examples
+
+### Example 1: Recovering True Rank from Synthetic Data
+
+We generate a matrix with exactly 5 true factors and moderate noise, then ask cross-validation to find the elbow.
+
+```{r synthetic-cv}
+sim <- simulateNMF(500, 200, k = 5, noise = 0.1, seed = 42)
+cv <- nmf(sim$A, k = 2:10, test_fraction = 0.05, cv_seed = 1:3,
+          tol = 1e-5, maxit = 200)
+```
+
+```{r synthetic-cv-table}
+agg <- aggregate(test_mse ~ k, data = cv, FUN = mean)
+agg$se <- aggregate(test_mse ~ k, data = cv, FUN = function(x) sd(x) / sqrt(length(x)))$test_mse
+optimal_k <- agg$k[which.min(agg$test_mse)]
+
+knitr::kable(
+  data.frame(
+    k = agg$k,
+    `Mean Test Loss` = round(agg$test_mse, 6),
+    `SE` = round(agg$se, 6),
+    check.names = FALSE
+  ),
+  caption = paste0("Mean test loss per rank (3 replicates). Optimal k = ", optimal_k, ".")
+)
+```
+
+Cross-validation identifies the optimal rank — test loss drops sharply from k=2 to k=5 (the true rank), then flattens or increases beyond k=5, indicating no additional real structure.
+
+```{r synthetic-cv-plot, fig.height = 3.5}
+plot(cv) +
+  labs(title = "Cross-Validation: Test Loss vs. Rank (Synthetic Data, True k = 5)") +
+  theme_minimal()
+```
+
+The clear elbow at k=5 confirms that speckled holdout CV recovers the planted rank. The individual replicate points cluster tightly, showing that 3 replicates suffice for stable estimates at this matrix size.
+
+### Example 2: Overfitting Dynamics
+
+Cross-validation works because overfitting worsens at higher ranks: more factors mean more capacity to memorize the training data. We can visualize this by running NMF at different ranks with varying iteration budgets and tracking how test loss evolves.
+
+```{r overfitting-dynamics}
+# Run CV at several ranks with different iteration limits to show overfitting trajectory
+ranks_to_show <- c(3, 5, 7, 9)
+maxit_values <- c(10, 25, 50, 100, 200)
+
+overfitting_data <- do.call(rbind, lapply(ranks_to_show, function(k_val) {
+  do.call(rbind, lapply(maxit_values, function(mi) {
+    fit <- nmf(sim$A, k = k_val, test_fraction = 0.05, cv_seed = 1,
+               tol = 1e-10, maxit = mi)
+    data.frame(k = factor(k_val), maxit = mi,
+               test_loss = fit@misc$test_loss, train_loss = fit@misc$train_loss)
+  }))
+}))
+```
+
+```{r overfitting-plot, fig.height = 4.5}
+ggplot(overfitting_data, aes(x = maxit, y = test_loss, color = k)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2.5) +
+  scale_color_brewer(palette = "Set2") +
+  scale_x_continuous(breaks = maxit_values) +
+  labs(
+    title = "Overfitting Dynamics: Test Loss vs. Iterations by Rank",
+    subtitle = "Higher ranks overfit faster — test loss rises with more iterations",
+    x = "Maximum Iterations", y = "Test Loss", color = "Rank (k)"
+  ) +
+  theme_minimal()
+```
+
+At the true rank (k=5), test loss decreases and stabilizes — the model converges to the real structure. At higher ranks (k=7, k=9), test loss initially decreases but then increases as the extra factors begin fitting noise in the training data. This is the core mechanism that makes cross-validation work: the optimal rank is the one where the test loss curve reaches its minimum.
+
+### Example 3: Recommendation Data with `mask_zeros`
+
+The `movielens` dataset (3,867 movies × 610 users) contains star ratings from 1–5. Most entries are zero — meaning the user has not rated that movie, *not* that they gave it zero stars. The `mask_zeros = TRUE` setting is essential here: it restricts the holdout set to actual ratings and treats zeros as unobserved.
+
+```{r movielens-cv}
+data(movielens)
+
+cat("MovieLens dimensions:", nrow(movielens), "×", ncol(movielens), "\n")
+cat("Sparsity:", round(1 - Matrix::nnzero(movielens) / prod(dim(movielens)), 4) * 100, "%\n")
+
+ranks <- c(3, 5, 8, 12, 16, 20)
+cv_movielens <- nmf(movielens, k = ranks, test_fraction = 0.1,
+                    mask_zeros = TRUE, cv_seed = 1:3, tol = 1e-3, maxit = 50)
+```
+
+```{r movielens-cv-plot, fig.height = 4}
+agg_ml <- aggregate(test_mse ~ k, data = cv_movielens, FUN = mean)
+
+plot(cv_movielens) +
+  labs(
+    title = "Cross-Validation on MovieLens (mask_zeros = TRUE)",
+    subtitle = "Test loss evaluated only on actual ratings — zeros are unobserved"
+  ) +
+  theme_minimal()
+```
+
+```{r movielens-cv-table}
+agg_ml$se <- aggregate(test_mse ~ k, data = cv_movielens, FUN = function(x) sd(x) / sqrt(length(x)))$test_mse
+opt_ml <- agg_ml$k[which.min(agg_ml$test_mse)]
+
+knitr::kable(
+  data.frame(
+    k = agg_ml$k,
+    `Mean Test Loss` = round(agg_ml$test_mse, 4),
+    `SE` = round(agg_ml$se, 4),
+    check.names = FALSE
+  ),
+  caption = paste0("MovieLens CV results (mask_zeros = TRUE). Optimal k = ", opt_ml, ".")
+)
+```
+
+With `mask_zeros = TRUE`, cross-validation evaluates only the prediction of actual ratings — exactly the task a recommendation system performs. For more on building recommendation systems with NMF, see the [Recommendation Systems](recommendation-systems.html) vignette.
+
+### Example 4: Ecological Survey Data
+
+The `hawaiibirds` dataset records 183 bird species across 1,183 grid cells. In ecological surveys, zeros typically mean "species not detected" rather than "measured abundance is zero." We use `mask_zeros = FALSE` here because we want to evaluate the model's ability to reconstruct the full abundance matrix, including correctly predicting that many species are absent from many sites.
+
+```{r hawaiibirds-cv}
+data(hawaiibirds)
+
+ranks <- c(3, 5, 8, 12, 16)
+cv_birds <- nmf(hawaiibirds, k = ranks, test_fraction = 0.1,
+                mask_zeros = FALSE, cv_seed = 1:3, tol = 1e-3, maxit = 50)
+```
+
+```{r hawaiibirds-cv-plot, fig.height = 3.5}
+plot(cv_birds) +
+  labs(title = "Cross-Validation on Hawaiian Birds (mask_zeros = FALSE)") +
+  theme_minimal()
+```
+
+### Example 5: Effect of `test_fraction`
+
+We compare different holdout fractions to show how they affect rank selection stability. The true planted rank is 5.
+
+```{r test-fraction}
+fractions <- c(0.01, 0.05, 0.1, 0.15, 0.2, 0.3)
+fraction_results <- do.call(rbind, lapply(fractions, function(frac) {
+  cv_res <- nmf(sim$A, k = 2:10, test_fraction = frac, cv_seed = 1:3,
+                tol = 1e-4, maxit = 100)
+  agg <- aggregate(test_mse ~ k, data = cv_res, FUN = mean)
+  se_vals <- aggregate(test_mse ~ k, data = cv_res, FUN = function(x) sd(x) / sqrt(length(x)))$test_mse
+  data.frame(
+    test_fraction = frac,
+    optimal_k = agg$k[which.min(agg$test_mse)],
+    min_test_loss = min(agg$test_mse),
+    mean_se = mean(se_vals)
+  )
+}))
+```
+
+```{r test-fraction-table}
+knitr::kable(
+  data.frame(
+    `Test Fraction` = fraction_results$test_fraction,
+    `Selected k` = fraction_results$optimal_k,
+    `Min Test Loss` = round(fraction_results$min_test_loss, 6),
+    `Mean SE` = round(fraction_results$mean_se, 6),
+    check.names = FALSE
+  ),
+  caption = "Effect of test_fraction on rank selection (synthetic data, true k = 5).",
+  row.names = FALSE
+)
+```
+
+```{r test-fraction-plot, fig.height = 3.5}
+ggplot(fraction_results, aes(x = test_fraction, y = min_test_loss)) +
+  geom_line(linewidth = 1, color = "steelblue") +
+  geom_point(size = 3, color = "steelblue") +
+  geom_text(aes(label = paste0("k=", optimal_k)),
+            vjust = -1, size = 3.5) +
+  labs(
+    title = "Test Loss vs. Holdout Fraction (True k = 5)",
+    x = "Test Fraction", y = "Minimum Test Loss"
+  ) +
+  theme_minimal()
+```
+
+Rank selection is robust across a wide range of holdout fractions. Very small fractions (1%) have higher variance due to the small test set, while very large fractions (30%) leave less data for training. A test fraction of 5–10% strikes a good balance for most matrices.
+
+## Next Steps
+
+- **Distribution-aware CV**: Use non-MSE loss functions for count data. See the [Distributions](distributions.html) vignette.
+- **Recommendation systems**: Full MovieLens walkthrough with `mask_zeros = TRUE`. See [Recommendation Systems](recommendation-systems.html).
+- **Robust factorization**: Combine CV-selected rank with `consensus_nmf()` for stable factors across multiple runs. See [Clustering](clustering.html).
+- **GPU acceleration**: Speed up large CV sweeps by 10–50× on GPUs. See [GPU Acceleration](gpu-acceleration.html).

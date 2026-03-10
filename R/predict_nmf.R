@@ -45,10 +45,14 @@
 #' h <- nnls(w = w, A = A)
 #' w <- nnls(h = h, A = A)
 #' }
-setMethod("predict", signature = "nmf", function(object, data, L1 = 0, L2 = 0, mask = NULL, upper_bound = NULL, threads = 0, verbose = FALSE, ...) {
+setMethod("predict", signature = "nmf", function(object, data, L1 = NULL, L2 = NULL, mask = NULL, upper_bound = NULL, threads = 0, verbose = FALSE, ...) {
   validObject(object)
 
-  if (is.null(upper_bound)) upper_bound <- 0
+  # Use config from model when not explicitly provided
+  if (is.null(L1)) L1 <- if (!is.null(object@misc$L1)) object@misc$L1[2] else 0
+  if (is.null(L2)) L2 <- if (!is.null(object@misc$L2)) object@misc$L2[2] else 0
+  if (is.null(upper_bound)) upper_bound <- if (!is.null(object@misc$upper_bound)) object@misc$upper_bound[2] else 0
+
   if (length(L1) != 1) stop("'L1' must be a single value giving the penalty on 'h'")
   if (L1 >= 1 || L1 < 0) stop("L1 penalty must be strictly in the range [0,1)")
   if (length(L2) != 1) stop("'L2' must be a single value giving the penalty on 'h'")

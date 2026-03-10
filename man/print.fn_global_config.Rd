@@ -17,3 +17,6 @@ Invisibly returns \code{x}.
 \description{
 Print an fn_global_config
 }
+\seealso{
+\code{\link{factor_config}}, \code{\link{factor_net}}
+}

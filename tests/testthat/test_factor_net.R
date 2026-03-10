@@ -439,7 +439,7 @@ test_that("factor_net with real .spz file streams correctly", {
   data(movielens, package = "RcppML")
   tmp <- tempfile(fileext = ".spz")
   on.exit(unlink(tmp), add = TRUE)
-  sp_write(movielens, tmp, include_transpose = TRUE)
+  st_write(movielens, tmp, include_transpose = TRUE)
 
   inp <- factor_input(tmp, "movies")
   L1 <- inp |> nmf_layer(k = 3)
@@ -645,7 +645,7 @@ test_that("TEST-GRAPH-SINGLE-STREAMING: factor_net with .spz input", {
   skip_on_cran()
   tmp <- tempfile(fileext = ".spz")
   on.exit(unlink(tmp), add = TRUE)
-  sp_write(X_sparse, tmp, include_transpose = TRUE)
+  st_write(X_sparse, tmp, include_transpose = TRUE)
 
   inp <- factor_input(tmp, "X_spz")
   L1 <- inp |> nmf_layer(k = 5)
@@ -670,7 +670,7 @@ test_that("TEST-GRAPH-SINGLE-GPU-STREAMING: factor_net with .spz on GPU", {
   )
   tmp <- tempfile(fileext = ".spz")
   on.exit(unlink(tmp), add = TRUE)
-  sp_write(X_sparse, tmp, include_transpose = TRUE)
+  st_write(X_sparse, tmp, include_transpose = TRUE)
 
   inp <- factor_input(tmp, "X_spz_gpu")
   L1 <- inp |> nmf_layer(k = 5)

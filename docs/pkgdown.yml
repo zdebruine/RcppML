@@ -1,0 +1,20 @@
+pandoc: 3.1.11
+pkgdown: 2.2.0
+pkgdown_sha: ~
+articles:
+  clustering: clustering.html
+  cross-validation: cross-validation.html
+  distributions: distributions.html
+  factor-graphs: factor-graphs.html
+  getting-started: getting-started.html
+  gpu-acceleration: gpu-acceleration.html
+  image-decomposition: image-decomposition.html
+  nmf-fundamentals: nmf-fundamentals.html
+  recommendation-systems: recommendation-systems.html
+  regularization: regularization.html
+  streampress: streampress.html
+  svd-pca: svd-pca.html
+last_built: 2026-03-09T17:43Z
+urls:
+  reference: https://zdebruine.github.io/RcppML/reference
+  article: https://zdebruine.github.io/RcppML/articles

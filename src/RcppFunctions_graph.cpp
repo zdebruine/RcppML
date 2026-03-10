@@ -231,8 +231,13 @@ Rcpp::List Rcpp_factor_net_fit(Rcpp::List descriptor) {
     // -------------------------------------------------------------------
     // 5. Parse guides (if any)
     // -------------------------------------------------------------------
-    // Guides are attached to layer factor configs
-    std::vector<std::unique_ptr<guides::Guide<float>>> guide_storage;
+    // Guides are attached to layer factor configs after graph build
+    struct GuideInfo {
+        std::unique_ptr<guides::Guide<float>> guide;
+        int layer_idx;   // 0-based index into layer list
+        std::string side; // "W" or "H"
+    };
+    std::vector<GuideInfo> guide_storage;
 
     if (descriptor.containsElementNamed("guides") &&
         !Rf_isNull(descriptor["guides"])) {
@@ -250,18 +255,13 @@ Rcpp::List Rcpp_factor_net_fit(Rcpp::List descriptor) {
             if (gtype == "classifier") {
                 auto labels = Rcpp::as<std::vector<int>>(g["labels"]);
                 auto guide = std::make_unique<guides::ClassifierGuide<float>>(labels, glambda);
-                // Will be attached after graph is built
-                guide_storage.push_back(std::move(guide));
+                guide_storage.push_back({std::move(guide), layer_idx, gside});
             } else if (gtype == "external") {
                 Eigen::MatrixXd target_d = Rcpp::as<Eigen::MatrixXd>(g["target"]);
                 Eigen::MatrixXf target_f = target_d.cast<float>();
                 auto guide = std::make_unique<guides::ExternalGuide<float>>(target_f, glambda);
-                guide_storage.push_back(std::move(guide));
+                guide_storage.push_back({std::move(guide), layer_idx, gside});
             }
-            // Note: guides are still managed at the R layer level for deep
-            // networks with reference/callback guides (they require R callbacks
-            // that can't easily cross the Rcpp boundary). The C++ graph handles
-            // classifier and external guides natively.
         }
     }
 
@@ -283,9 +283,30 @@ Rcpp::List Rcpp_factor_net_fit(Rcpp::List descriptor) {
     auto instance = GraphInstance<float>::build(gdesc);
     auto& graph = instance.graph();
 
-    // Attach guides to the built graph's layer configs
-    // (guides require node pointers that only exist after build)
-    // For now, guides are attached via the NMFConfig during fit
+    // Attach parsed guides to the built graph's layer FactorConfig vectors.
+    // graph.layers() is ordered by topological index matching the descriptor.
+    {
+        const auto& layer_nodes = graph.layers();
+        for (auto& gi : guide_storage) {
+            if (gi.layer_idx < 0 ||
+                gi.layer_idx >= static_cast<int>(layer_nodes.size()))
+                continue;
+            Node<float>* node = layer_nodes[gi.layer_idx];
+            if (node->type == NodeType::NMF_LAYER) {
+                auto* ln = static_cast<NMFLayerNode<float>*>(node);
+                if (gi.side == "W")
+                    ln->W_config.guides.push_back(gi.guide.get());
+                else
+                    ln->H_config.guides.push_back(gi.guide.get());
+            } else if (node->type == NodeType::SVD_LAYER) {
+                auto* ln = static_cast<SVDLayerNode<float>*>(node);
+                if (gi.side == "W")
+                    ln->W_config.guides.push_back(gi.guide.get());
+                else
+                    ln->H_config.guides.push_back(gi.guide.get());
+            }
+        }
+    }
 
     GraphResult<float> result;
 

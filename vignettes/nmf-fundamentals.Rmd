@@ -1,0 +1,333 @@
+---
+title: "NMF Fundamentals"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{NMF Fundamentals}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4.5,
+  message = FALSE,
+  warning = FALSE
+)
+library(RcppML)
+library(ggplot2)
+library(gridExtra)
+```
+
+## Motivation
+
+How can we decompose a nonnegative matrix into interpretable parts? Non-negative Matrix Factorization (NMF) answers this by finding additive, parts-based representations: each factor captures a distinct pattern, and all weights are nonneg, so factors combine constructively. Unlike PCA, where components can cancel each other out, NMF factors are always additive — making them directly interpretable as "parts" of the data.
+
+NMF is widely used in topic modeling, image decomposition, gene expression analysis, and recommendation systems. RcppML provides a high-performance implementation with a distinctive $A \approx W \cdot \text{diag}(d) \cdot H$ factorization, where the diagonal scaling $d$ makes factors comparable and ordered by importance.
+
+## API Reference
+
+### The `nmf()` Function
+
+```r
+nmf(data, k, tol = 1e-4, maxit = 100, seed = NULL,
+    init = c("random", "lanczos", "irlba"),
+    norm = c("L1", "L2", "none"),
+    L1 = c(0, 0), L2 = c(0, 0),
+    sort_model = TRUE, nonneg = c(TRUE, TRUE),
+    loss = "mse", threads = 0, verbose = FALSE,
+    on_iteration = NULL, ...)
+```
+
+Key parameters:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `data` | matrix/dgCMatrix | — | Nonneg input matrix (features × samples) |
+| `k` | integer | — | Factorization rank (number of factors) |
+| `tol` | numeric | 1e-4 | Convergence tolerance (correlation-distance) |
+| `maxit` | integer | 100 | Maximum iterations |
+| `seed` | integer | NULL | Random seed for reproducibility |
+| `init` | character | "random" | Initialization method |
+| `norm` | character | "L1" | Factor normalization method |
+| `sort_model` | logical | TRUE | Sort factors by decreasing $d$ |
+| `nonneg` | logical(2) | c(TRUE, TRUE) | Non-negativity constraints on W and H |
+| `on_iteration` | function | NULL | Callback receiving (iter, train_loss, test_loss) |
+
+Initialization options:
+
+| Method | Description |
+|--------|-------------|
+| `"random"` | Random nonneg initialization (default). May need more iterations to converge. |
+| `"lanczos"` | SVD-based warm start via Lanczos iteration. Often converges faster. |
+| `"irlba"` | SVD-based warm start via IRLBA. Similar to Lanczos with different convergence properties. |
+
+Normalization options:
+
+| Method | Description |
+|--------|-------------|
+| `"L1"` | Columns of W and rows of H sum to 1 (default). Scales stored in $d$. |
+| `"L2"` | Unit L2 norm for columns of W and rows of H. |
+| `"none"` | No normalization; $d$ is all ones. |
+
+### Factor Extraction and Inspection
+
+The `nmf()` function returns an S4 object of class `nmf` with slots accessed via `$`:
+
+- `model@w` or `model$w` — $m \times k$ feature loading matrix (W)
+- `model@h` or `model$h` — $k \times n$ sample embedding matrix (H)
+- `model@d` or `model$d` — length-$k$ diagonal scaling vector
+- `model@misc` — metadata list (iterations, runtime, loss, etc.)
+- `dim(model)` — returns `c(m, n, k)`
+- `head(model, n)` — first $n$ factors
+- `model[i]` — subset to specific factor indices
+
+The canonical S4 accessor is `@` (e.g., `model@w`). The `$` shorthand also works due to method dispatch.
+
+### Reconstruction and Loss
+
+- `prod(model)` — reconstructs $W \cdot \text{diag}(d) \cdot H$ (dense matrix)
+- `evaluate(model, data)` — reconstruction loss (**defaults to MSE** regardless of what loss was used for fitting; specify explicitly: `evaluate(model, data, loss = "gp")` to match model loss)
+- `mse(model$w, model$d, model$h, data)` — standalone MSE computation
+
+### Model Comparison
+
+- `align(model, ref)` — reorder factors to match a reference model (Hungarian algorithm)
+- `sparsity(model)` — fraction of near-zero entries in W and H
+- `cosine(x, y)` — column-wise cosine similarity between matrices
+- `bipartiteMatch(cost_matrix)` — Hungarian algorithm for optimal factor pairing (returns 0-indexed `$assignment`)
+
+### Convergence Control
+
+- `tol` controls the convergence threshold. The model converges when the maximum change in any factor (measured by correlation distance) falls below `tol`.
+- `maxit` provides a hard iteration cap.
+- `on_iteration` accepts a callback `function(iter, train_loss, test_loss)` called after each iteration.
+
+## Theory and Algorithms
+
+### Objective
+
+NMF solves the constrained optimization problem:
+
+$$\min_{W \geq 0,\, H \geq 0} \|A - W \cdot \text{diag}(d) \cdot H\|_F^2$$
+
+where $A$ is an $m \times n$ nonneg matrix, $W$ is $m \times k$, $H$ is $k \times n$, and $d$ is a length-$k$ scaling vector.
+
+### Alternating NNLS
+
+RcppML uses alternating non-negative least squares: fix H, solve for W; fix W, solve for H. After each full iteration, columns of W and rows of H are normalized and the scales absorbed into $d$. This diagonal scaling makes factors directly comparable and ordered by importance when `sort_model = TRUE`.
+
+### Initialization
+
+Random initialization gives a noisy starting point that may require more iterations. SVD-based methods (Lanczos, IRLBA) compute a truncated SVD as a warm start, typically converging faster — especially for well-conditioned data.
+
+### Non-uniqueness
+
+NMF solutions are not unique: different seeds lead to different local optima. Always set `seed` for reproducibility. For robust factorizations across multiple random starts, use `consensus_nmf()` (see the [Clustering](clustering.html) vignette).
+
+## Worked Examples
+
+### Example 1: Recovering Known Factors from Synthetic Data
+
+We generate a synthetic matrix with 5 true factors and test whether NMF can recover them.
+
+```{r synthetic-setup}
+sim <- simulateNMF(300, 150, k = 5, noise = 0.3, seed = 42)
+model <- nmf(sim$A, k = 5, seed = 1, tol = 1e-5, maxit = 100)
+```
+
+To compare learned factors with ground truth, we compute cosine similarity between each pair of W columns. The `bipartiteMatch()` function finds the optimal one-to-one assignment (note: it returns 0-indexed assignments):
+
+```{r synthetic-match}
+sim_cos <- cosine(model$w, sim$w)
+match_result <- bipartiteMatch(1 - sim_cos + 1e-10)
+assignment <- match_result$assignment + 1L  # convert to 1-indexed
+
+per_factor_cos <- sapply(seq_len(5), function(i) {
+  sim_cos[i, assignment[i]]
+})
+
+knitr::kable(
+  data.frame(
+    Factor = 1:5,
+    `Cosine Similarity` = round(per_factor_cos, 4),
+    check.names = FALSE
+  ),
+  caption = "Per-factor cosine similarity between learned and true W columns."
+)
+```
+
+NMF recovers the 5 planted factors with high cosine similarity despite 30% Gaussian noise.
+
+```{r synthetic-heatmap, fig.height = 5}
+# Prepare data for side-by-side comparison
+true_w <- sim$w[, assignment]
+learned_w <- model$w
+
+# Build long-format data for ggplot
+make_heatmap_df <- function(mat, label) {
+  df <- expand.grid(Feature = seq_len(nrow(mat)), Factor = seq_len(ncol(mat)))
+  df$Value <- as.vector(mat)
+  df$Source <- label
+  df
+}
+hm_df <- rbind(
+  make_heatmap_df(true_w, "True W"),
+  make_heatmap_df(learned_w, "Learned W")
+)
+hm_df$Source <- factor(hm_df$Source, levels = c("True W", "Learned W"))
+
+ggplot(hm_df, aes(x = Factor, y = Feature, fill = Value)) +
+  geom_raster() +
+  facet_wrap(~Source) +
+  scale_fill_viridis_c(option = "inferno") +
+  labs(title = "True vs. Learned Feature Loadings (W)", x = "Factor", y = "Feature") +
+  theme_minimal() +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+```
+
+The learned W matrix closely mirrors the true factor structure: each factor activates a distinct subset of features, and the pattern correspondence is clear despite noise.
+
+### Example 2: Gene Expression Factor Interpretation (AML Data)
+
+The `aml` dataset contains 824 genomic regions × 135 samples from Acute Myeloid Leukemia ATAC-seq data. Sample subtypes are stored in `attr(aml, "metadata_h")$category`.
+
+```{r aml-setup}
+data(aml)
+meta <- attr(aml, "metadata_h")
+model_aml <- nmf(aml, k = 6, seed = 42, tol = 1e-5)
+```
+
+We identify the top features per factor — the genomic regions with the highest loadings:
+
+```{r aml-top-features}
+top_n <- 5
+top_features <- do.call(rbind, lapply(1:6, function(f) {
+  w_col <- model_aml$w[, f]
+  idx <- order(w_col, decreasing = TRUE)[1:top_n]
+  data.frame(
+    Factor = f,
+    Rank = 1:top_n,
+    Feature = idx,
+    Loading = round(w_col[idx], 4)
+  )
+}))
+
+knitr::kable(
+  top_features,
+  caption = "Top 5 features (highest W loadings) per factor.",
+  row.names = FALSE
+)
+```
+
+Now we visualize the H matrix (sample embeddings) with hclust-reordered rows and columns, plus a subtype annotation bar:
+
+```{r aml-heatmap, fig.height = 6}
+H <- model_aml$h
+subtypes <- meta$category
+
+# Hierarchical clustering on both axes
+col_hc <- hclust(dist(t(H)))
+row_hc <- hclust(dist(H))
+col_order <- col_hc$order
+row_order <- row_hc$order
+
+h_ordered <- H[row_order, col_order]
+subtypes_ordered <- subtypes[col_order]
+
+# Build heatmap data
+h_df <- expand.grid(Factor = seq_len(nrow(h_ordered)), Sample = seq_len(ncol(h_ordered)))
+h_df$Weight <- as.vector(h_ordered)
+h_df$Factor <- factor(row_order[h_df$Factor], levels = row_order)
+
+# Subtype color bar data
+bar_df <- data.frame(Sample = seq_along(subtypes_ordered), Subtype = subtypes_ordered)
+
+# Combine heatmap + annotation bar
+p_heat <- ggplot(h_df, aes(x = Sample, y = Factor, fill = Weight)) +
+  geom_raster() +
+  scale_fill_viridis_c(option = "magma") +
+  labs(x = NULL, y = "Factor") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+        plot.margin = margin(5, 5, 0, 5))
+
+p_bar <- ggplot(bar_df, aes(x = Sample, y = 1, fill = Subtype)) +
+  geom_raster() +
+  scale_fill_brewer(palette = "Set2") +
+  labs(x = "Samples (hclust ordered)", y = NULL) +
+  theme_minimal() +
+  theme(axis.text = element_blank(), axis.ticks = element_blank(),
+        legend.position = "bottom",
+        plot.margin = margin(0, 5, 5, 5))
+
+gridExtra::grid.arrange(p_heat, p_bar, ncol = 1, heights = c(5, 1),
+                        top = "NMF Sample Embeddings (H) — AML Subtypes")
+```
+
+The H heatmap reveals clear subtype structure: certain factors activate preferentially within specific AML subtypes, indicating that NMF captures biologically meaningful programs from the chromatin accessibility data. Hierarchical clustering on both axes groups similar samples and factors together, making block structure more apparent.
+
+### Example 3: Convergence and Initialization Comparison
+
+We compare random vs. Lanczos initialization by tracking loss per iteration using the `on_iteration` callback:
+
+```{r convergence-comparison}
+# Track loss over iterations via callback
+track_loss <- function() {
+  losses <- numeric(0)
+  callback <- function(iter, train_loss, test_loss) {
+    losses[iter] <<- train_loss
+  }
+  list(callback = callback, get = function() losses)
+}
+
+tracker_random <- track_loss()
+model_random <- nmf(aml, k = 6, seed = 42, init = "random", tol = 1e-6,
+                    maxit = 80, on_iteration = tracker_random$callback)
+
+tracker_lanczos <- track_loss()
+model_lanczos <- nmf(aml, k = 6, seed = 42, init = "lanczos", tol = 1e-6,
+                     maxit = 80, on_iteration = tracker_lanczos$callback)
+
+loss_random <- tracker_random$get()
+loss_lanczos <- tracker_lanczos$get()
+
+convergence_df <- rbind(
+  data.frame(Iteration = seq_along(loss_random), Loss = loss_random, Init = "Random"),
+  data.frame(Iteration = seq_along(loss_lanczos), Loss = loss_lanczos, Init = "Lanczos")
+)
+```
+
+```{r convergence-table}
+knitr::kable(
+  data.frame(
+    Initialization = c("Random", "Lanczos"),
+    Iterations = c(length(loss_random), length(loss_lanczos)),
+    `Final Loss` = round(c(tail(loss_random, 1), tail(loss_lanczos, 1)), 4),
+    check.names = FALSE
+  ),
+  caption = "Convergence comparison: random vs. Lanczos initialization on AML data."
+)
+```
+
+```{r convergence-plot, fig.height = 3.5}
+ggplot(convergence_df, aes(x = Iteration, y = Loss, color = Init)) +
+  geom_line(linewidth = 0.8) +
+  scale_y_log10() +
+  scale_color_brewer(palette = "Set1") +
+  labs(
+    title = "Convergence: Random vs. Lanczos Initialization",
+    x = "Iteration", y = "Reconstruction Loss (log scale)", color = "Initialization"
+  ) +
+  theme_minimal()
+```
+
+Lanczos initialization starts from a better initial point (SVD-based warm start) and typically reaches a low loss in fewer iterations, while random initialization requires more iterations to reach a comparable solution.
+
+## Next Steps
+
+- **Rank selection**: How many factors should you use? See the [Cross-Validation](cross-validation.html) vignette.
+- **Non-Gaussian data**: Count data, ratings, and overdispersed data need distribution-aware NMF. See the [Distributions](distributions.html) vignette.
+- **Factor structure**: Control sparsity, smoothness, and other factor properties. See the Regularization vignette.

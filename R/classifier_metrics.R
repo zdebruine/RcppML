@@ -138,9 +138,16 @@ classify_embedding <- function(embedding, labels,
 }
 
 #' Print a classifier evaluation result
-#' @param x An \code{fn_classifier_eval} object.
+#'
+#' Displays a human-readable summary of classification metrics including
+#' accuracy, macro/weighted F1, AUC, and per-class precision/recall.
+#'
+#' @param x An \code{fn_classifier_eval} object returned by
+#'   \code{\link{classify_embedding}}, \code{\link{classify_logistic}},
+#'   or \code{\link{classify_rf}}.
 #' @param ... Additional arguments (unused).
 #' @return Invisibly returns \code{x}.
+#' @seealso \code{\link{summary.fn_classifier_eval}}, \code{\link{classify_embedding}}
 #' @method print fn_classifier_eval
 #' @export
 print.fn_classifier_eval <- function(x, ...) {
@@ -169,9 +176,15 @@ print.fn_classifier_eval <- function(x, ...) {
 }
 
 #' Summarize a classifier evaluation result
-#' @param object An \code{fn_classifier_eval} object.
+#'
+#' Returns a tidy data frame of aggregate classification metrics.
+#'
+#' @param object An \code{fn_classifier_eval} object returned by
+#'   \code{\link{classify_embedding}}, \code{\link{classify_logistic}},
+#'   or \code{\link{classify_rf}}.
 #' @param ... Additional arguments (unused).
-#' @return A data frame of metric names and values.
+#' @return A data frame with columns \code{metric} and \code{value}.
+#' @seealso \code{\link{print.fn_classifier_eval}}, \code{\link{classify_embedding}}
 #' @method summary fn_classifier_eval
 #' @export
 summary.fn_classifier_eval <- function(object, ...) {

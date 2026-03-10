@@ -11,6 +11,9 @@ nnls(
   warm_start = NULL,
   L1 = c(0, 0),
   L2 = c(0, 0),
+  L21 = c(0, 0),
+  angular = c(0, 0),
+  loss = "mse",
   cd_maxit = 100L,
   cd_tol = 1e-08,
   upper_bound = c(0, 0),
@@ -33,6 +36,16 @@ Can be dense (matrix) or sparse (dgCMatrix from Matrix package).}
 \item{L1}{L1/LASSO penalty, length 1 or 2 for c(w_penalty, h_penalty). Range [0, 1).}
 
 \item{L2}{Ridge penalty, length 1 or 2 for c(w_penalty, h_penalty). Range [0, Inf).}
+
+\item{L21}{L21 group sparsity penalty, length 1 or 2 for c(w_penalty, h_penalty). Range [0, Inf).
+Drives entire rows/columns toward zero for automatic factor selection.}
+
+\item{angular}{angular decorrelation penalty, length 1 or 2 for c(w_penalty, h_penalty). Range [0, Inf).
+Encourages orthogonality between factors.}
+
+\item{loss}{loss function: \code{"mse"} (default), \code{"gp"}, \code{"nb"}, \code{"gamma"},
+\code{"inverse_gaussian"}, or \code{"tweedie"}. Non-MSE losses use a single IRLS iteration
+via the NMF machinery.}
 
 \item{cd_maxit}{maximum number of coordinate descent iterations (default 100)}
 
@@ -139,7 +152,7 @@ DeBruine, ZJ, Melcher, K, and Triche, TJ. (2021). "High-performance non-negative
 Franc, VC, Hlavac, VC, and Navara, M. (2005). "Sequential Coordinate-Wise Algorithm for the Non-negative Least Squares Problem."
 }
 \seealso{
-\code{\link{nmf}}, \code{\link{solve}}
+\code{\link{nmf}}
 }
 \author{
 Zach DeBruine

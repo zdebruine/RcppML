@@ -44,7 +44,7 @@ test_that("nmf() accepts .spz file path", {
   data(movielens, package = "RcppML")
   tmp <- tempfile(fileext = ".spz")
   on.exit(unlink(tmp), add = TRUE)
-  sp_write(movielens, tmp, include_transpose = TRUE)
+  st_write(movielens, tmp, include_transpose = TRUE)
   
   result <- nmf(tmp, k = 3, tol = 1e-2, maxit = 10, seed = 42, verbose = FALSE)
   expect_s4_class(result, "nmf")

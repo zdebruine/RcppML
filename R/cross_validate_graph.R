@@ -234,6 +234,7 @@ cross_validate_graph <- function(inputs, layer_fn, params,
 #' @param x A \code{factor_net_cv} object.
 #' @param ... Additional arguments (unused).
 #' @return Invisibly returns \code{x}.
+#' @seealso \code{\link{cross_validate_graph}}, \code{\link{factor_net}}
 #' @method print factor_net_cv
 #' @export
 print.factor_net_cv <- function(x, ...) {

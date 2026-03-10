@@ -106,16 +106,7 @@ testthat::test_file("tests/testthat/test_nmf.R")    # Single file
 - Ground truth recovery tests should use multi-restart for robustness
 
 ### GPU Tests
-GPU tests require a CUDA-capable GPU and the compiled GPU library. On the HPC cluster:
-```bash
-sbatch tests/run_tests_gpu.sbatch
-```
-
-### HPC Compute Environment
-**Do not run tests or benchmarks on the login node.** Use:
-```bash
-salloc --partition=cpu --cpus-per-task=8 --mem=32G --time=02:00:00
-```
+GPU tests require a CUDA-capable GPU and the compiled GPU library.
 
 ## Submitting Changes
 

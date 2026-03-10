@@ -60,7 +60,7 @@ test_that("Rcpp_nmf_full with CV produces cross-validation results", {
 test_that("Rcpp_svd_pca produces valid SVD result (dense)", {
   s <- RcppML::svd(A_iris, k = 3, method = "deflation", seed = 1, maxit = 100,
                    test_fraction = 0)
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   expect_equal(ncol(s@u), 3)
   expect_equal(length(s@d), 3)
   expect_equal(ncol(s@v), 3)
@@ -70,7 +70,7 @@ test_that("Rcpp_svd_pca produces valid SVD result (dense)", {
 test_that("Rcpp_svd_pca produces valid SVD result (sparse)", {
   s <- RcppML::svd(A_sparse, k = 3, method = "deflation", seed = 1, maxit = 100,
                    test_fraction = 0)
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   expect_equal(ncol(s@u), 3)
   expect_true(all(s@d > 0))
 })
@@ -135,22 +135,22 @@ test_that("Rcpp_bipartition_dense produces valid split", {
 })
 
 # ===========================================================================
-# SparsePress bridge functions
+# StreamPress bridge functions
 # ===========================================================================
 
-test_that("Rcpp_sp_write + Rcpp_sp_read round-trip", {
+test_that("st_write + st_read round-trip", {
   path <- tempfile(fileext = ".spz")
   on.exit(unlink(path))
-  sp_write(A_sparse, path)
-  B <- sp_read(path)
+  st_write(A_sparse, path)
+  B <- st_read(path)
   expect_equal(as.matrix(A_sparse), as.matrix(B), tolerance = 1e-6)
 })
 
-test_that("Rcpp_sp_metadata reads correct dimensions", {
+test_that("st_info reads correct dimensions", {
   path <- tempfile(fileext = ".spz")
   on.exit(unlink(path))
-  sp_write(A_sparse, path)
-  info <- sp_info(path)
+  st_write(A_sparse, path)
+  info <- st_info(path)
   expect_equal(info$rows, m)
   expect_equal(info$cols, n)
 })

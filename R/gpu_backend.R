@@ -61,6 +61,7 @@ NULL
 #'
 #' @param force_recheck Re-probe GPUs even if already cached
 #' @return logical TRUE if GPU is available
+#' @seealso \code{\link{gpu_info}}, \code{\link{nmf}}
 #' @export
 #' @examples
 #' gpu_available()
@@ -126,6 +127,7 @@ gpu_available <- function(force_recheck = FALSE) {
 #' Get GPU device information
 #'
 #' @return data.frame with GPU device details, or NULL if no GPU
+#' @seealso \code{\link{gpu_available}}, \code{\link{nmf}}
 #' @export
 #' @examples
 #' gpu_info()
@@ -290,7 +292,7 @@ gpu_info <- function() {
                          nonneg_u, nonneg_v, upper_bound_u, upper_bound_v,
                          L21_u = 0, L21_v = 0, angular_u = 0, angular_v = 0,
                          test_fraction, cv_seed, patience, mask_zeros,
-                         method = "deflation", precision = "double",
+                         method = "deflation", precision = "float",
                          graph_U = NULL, graph_V = NULL,
                          graph_lambda = c(0, 0),
                          obs_mask = NULL,
@@ -457,7 +459,7 @@ gpu_info <- function() {
   gV <- .extract_sparse_csc(graph_V, lambda = graph_lambda[2])
   om <- .extract_sparse_csc_rect(obs_mask)
 
-  result <- .gpu_call("rcppml_gpu_svd_pca_dense_double",
+  result <- .gpu_call("rcppml_gpu_svd_pca_dense_float",
     A_data      = as.double(A),   # column-major flat vector
     m           = as.integer(m),
     n           = as.integer(n),

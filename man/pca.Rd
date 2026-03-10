@@ -16,7 +16,7 @@ via cross-validation. Default: 10.}
 \item{...}{Additional arguments passed to \code{\link{svd}}.}
 }
 \value{
-An S4 object of class \code{svd_pca} (see \code{\link{svd}}).
+An S4 object of class \code{svd} (see \code{\link{svd}}).
 }
 \description{
 Convenience wrapper around \code{\link{svd}} with \code{center = TRUE}.
@@ -30,5 +30,5 @@ result
 }
 }
 \seealso{
-\code{\link{svd}}, \code{\link{sparse_pca}}, \code{\link{nn_pca}}
+\code{\link{svd}}
 }

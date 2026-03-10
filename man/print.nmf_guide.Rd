@@ -17,3 +17,6 @@ Invisibly returns \code{x}.
 \description{
 Print an nmf_guide
 }
+\seealso{
+\code{\link{guide_classifier}}, \code{\link{guide_external}}, \code{\link{nmf}}
+}

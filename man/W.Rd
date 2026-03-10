@@ -61,3 +61,6 @@ and guides. Parameters not set inherit from the layer defaults.
 w_cfg <- W(L1 = 0.1, nonneg = TRUE)
 h_cfg <- H(L2 = 0.01)
 }
+\seealso{
+\code{\link{factor_config}}, \code{\link{nmf_layer}}, \code{\link{factor_net}}
+}

@@ -1,0 +1,193 @@
+---
+title: "Getting Started with RcppML"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting Started with RcppML}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4.5,
+  message = FALSE,
+  warning = FALSE
+)
+library(RcppML)
+library(ggplot2)
+```
+
+## What Is RcppML?
+
+**RcppML** decomposes a nonnegative matrix $A$ into low-rank factors
+$A \approx W \cdot \text{diag}(d) \cdot H$, where $W$ captures features,
+$H$ captures sample loadings, and $d$ gives per-factor scale.
+
+Built on Rcpp and Eigen with OpenMP parallelism and optional CUDA GPU support,
+RcppML is designed for large sparse matrices common in genomics, recommender
+systems, and image analysis. Key capabilities include:
+ 
+- **NMF** with coordinate-descent and Cholesky NNLS solvers
+- **SVD / PCA** with optional non-negativity and L1 constraints
+- **Cross-validation** via speckled holdout for automatic rank selection
+- **Distribution-aware losses**: Gaussian, Poisson, Generalized Poisson, Negative Binomial, Gamma, Inverse Gaussian, Tweedie — plus zero-inflation
+- **Regularization**: L1, L2, L21, angular, graph Laplacian, upper bounds
+- **Consensus clustering** and divisive clustering (`dclust`)
+- **Composable factorization graphs** via `factor_net()`
+- **StreamPress** `.spz` format for out-of-core computation
+- **GPU acceleration** via CUDA
+
+## Installation
+
+Install from CRAN:
+
+```r
+install.packages("RcppML")
+```
+
+Or install the development version:
+
+```r
+remotes::install_github("zdebruine/RcppML")
+```
+
+For GPU support, see the [GPU Acceleration](gpu-acceleration.html) vignette.
+
+## Quick NMF Demo
+
+Generate a synthetic nonnegative matrix and recover its factors:
+
+```{r nmf-demo}
+sim <- simulateNMF(200, 100, k = 5, noise = 0.3, seed = 42)
+model <- nmf(sim$A, k = 5, seed = 1)
+```
+
+```{r nmf-summary, echo = FALSE}
+knitr::kable(data.frame(
+  Rows = nrow(sim$A),
+  Columns = ncol(sim$A),
+  Rank = 5,
+  `Reconstruction MSE` = round(evaluate(model, sim$A), 4),
+  Iterations = model@misc$iter,
+  `Runtime (sec)` = round(as.numeric(model@misc$runtime, units = "secs"), 2),
+  check.names = FALSE
+), caption = "NMF model summary")
+```
+
+With a low-noise signal and the correct rank, NMF recovers the generating factors and achieves near-zero reconstruction error.
+
+```{r nmf-convergence, echo = FALSE, fig.height = 3.5}
+# Show convergence of a quick NMF run
+track_loss <- function() {
+  losses <- numeric(0)
+  list(
+    callback = function(iter, train_loss, test_loss) { losses[iter] <<- train_loss },
+    get = function() losses
+  )
+}
+tracker <- track_loss()
+invisible(nmf(sim$A, k = 5, seed = 1, tol = 1e-6, maxit = 50, on_iteration = tracker$callback))
+loss_df <- data.frame(Iteration = seq_along(tracker$get()), Loss = tracker$get())
+ggplot(loss_df, aes(x = Iteration, y = Loss)) +
+  geom_line(color = "steelblue", linewidth = 0.8) +
+  scale_y_log10() +
+  labs(title = "NMF Convergence", x = "Iteration", y = "Reconstruction Loss (log)") +
+  theme_minimal()
+```
+
+## Quick SVD Demo
+
+Compute a rank-5 truncated SVD of the AML chromatin-accessibility dataset:
+
+```{r svd-demo}
+data(aml)
+sv <- svd(aml, k = 5)
+```
+
+```{r svd-table, echo = FALSE}
+ve <- variance_explained(sv)
+knitr::kable(data.frame(
+  Component = 1:5,
+  `Variance Explained` = paste0(round(ve * 100, 1), "%"),
+  `Cumulative` = paste0(round(cumsum(ve) * 100, 1), "%"),
+  check.names = FALSE
+), caption = "Variance explained by the first 5 components")
+```
+
+```{r svd-scree, echo = FALSE, fig.height = 3}
+ve_df <- data.frame(Component = 1:5, VE = ve * 100)
+ggplot(ve_df, aes(x = Component, y = VE)) +
+  geom_col(fill = "steelblue", width = 0.6) +
+  labs(title = "Scree Plot: AML Chromatin Accessibility", x = "Component", y = "% Variance Explained") +
+  theme_minimal()
+```
+
+## Quick Cross-Validation Demo
+
+Use speckled holdout cross-validation to find the best rank for the AML data:
+
+```{r cv-demo}
+cv <- nmf(aml, k = c(2, 4, 6, 8, 10), test_fraction = 0.2, seed = 42, maxit = 50)
+```
+
+```{r cv-plot, echo = FALSE, fig.height = 3.5}
+plot(cv)
+```
+
+The test loss curve reveals the rank at which the model begins to overfit. The
+minimum identifies the optimal number of factors for this dataset.
+
+## Built-in Datasets
+
+RcppML ships seven datasets spanning diverse domains:
+
+```{r dataset-table, echo = FALSE}
+ds <- data.frame(
+  Dataset = c("`aml`", "`golub`", "`hawaiibirds`", "`movielens`",
+              "`olivetti`", "`digits`", "`pbmc3k`"),
+  Dimensions = c("824 × 135", "38 × 5,000", "183 × 1,183",
+                  "3,867 × 610", "400 × 4,096", "1,797 × 64",
+                  "8,000 × 500"),
+  Type = c("Dense matrix", "Sparse (dgCMatrix)", "Sparse (dgCMatrix)",
+           "Sparse (dgCMatrix)", "Sparse (dgCMatrix)", "Sparse (dgCMatrix)",
+           "SPZ raw bytes"),
+  Domain = c("Chromatin accessibility (AML)", "Gene expression (leukemia)",
+             "Bird species counts", "Movie ratings",
+             "Face images (Olivetti)", "Handwritten digit images",
+             "Single-cell RNA-seq (PBMCs)"),
+  check.names = FALSE
+)
+knitr::kable(ds, caption = "Shipped datasets")
+```
+
+The `pbmc3k` dataset is stored as StreamPress-compressed raw bytes (a variance-selected
+subset of the full 13,714 × 2,700 10x Genomics PBMC 3k dataset). Decompress
+it with `st_read()` — see the [StreamPress](streampress.html) vignette.
+
+## Where to Go Next
+
+### Core Techniques
+
+- [NMF Fundamentals](nmf-fundamentals.html) — Solvers, diagonal scaling, convergence, and basic workflow
+- [SVD and PCA](svd-pca.html) — Truncated SVD, PCA, non-negative and sparse variants
+- [Cross-Validation](cross-validation.html) — Speckled holdout for automatic rank selection
+- [Statistical Distributions](distributions.html) — Distribution-aware losses and zero-inflation handling
+- [Regularization and Constraints](regularization.html) — L1, L2, L21, angular penalties, and upper bounds
+
+### Advanced Methods
+
+- [Clustering, Consensus, and Classification](clustering.html) — Divisive clustering, consensus NMF, and sample classification
+- [Factorization Graphs](factor-graphs.html) — Multi-modal and guided factorization via `factor_net()`
+
+### Applications
+
+- [Image Decomposition](image-decomposition.html) — Learning visual parts from face and digit images
+- [Recommendation Systems](recommendation-systems.html) — Building a movie recommender with sparse NMF
+
+### Infrastructure
+
+- [StreamPress](streampress.html) — High-performance sparse matrix compression and out-of-core NMF
+- [GPU Acceleration](gpu-acceleration.html) — CUDA-based GPU support for large-scale factorization

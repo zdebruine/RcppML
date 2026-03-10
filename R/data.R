@@ -4,9 +4,9 @@
 
 #' PBMC 3k Single-Cell RNA-seq Dataset (StreamPress Compressed)
 #'
-#' Single-cell RNA-seq gene expression data from ~2,700 peripheral blood
-#' mononuclear cells (PBMCs). Shipped as StreamPress-compressed raw bytes
-#' to meet CRAN tarball size limits.
+#' A representative subset of the 10x Genomics PBMC 3k single-cell RNA-seq
+#' dataset, shipped as StreamPress-compressed raw bytes to meet CRAN tarball
+#' size limits. Contains the 8,000 most variable genes across 500 cells.
 #'
 #' @format A \code{raw} vector containing StreamPress (.spz) compressed bytes.
 #'   To obtain the sparse matrix, write the bytes to a temporary file and read
@@ -16,19 +16,20 @@
 #'   tmp <- tempfile(fileext = ".spz")
 #'   writeBin(pbmc3k, tmp)
 #'   counts <- st_read(tmp)
-#'   # counts is a dgCMatrix: 13,714 genes x 2,700 cells
+#'   # counts is a dgCMatrix: 8,000 genes x 500 cells
 #'   }
 #'
 #' @details
-#' The underlying matrix is a \code{dgCMatrix} with 13,714 rows (genes) and
-#' 2,700 columns (cells), containing 2,282,976 non-zero entries (integer UMI counts).
-#' The data was compressed with StreamPress at fp32 precision, which is lossless
-#' for integer count data.
+#' The underlying matrix is a \code{dgCMatrix} with 8,000 rows (genes) and
+#' 500 columns (cells), containing 412,180 non-zero entries (integer UMI counts).
+#' Genes were selected by variance from the full 13,714-gene panel. The data was
+#' compressed with StreamPress, which is lossless for integer count data.
 #'
-#' This dataset is commonly used for benchmarking single-cell analysis workflows.
+#' This dataset is commonly used for demonstrating single-cell analysis workflows
+#' including distribution-aware NMF and zero-inflation diagnostics.
 #'
 #' @source
-#' 10x Genomics PBMC 3k dataset, filtered and processed.
+#' 10x Genomics PBMC 3k dataset, filtered, processed, and subsetted for size.
 #'
 #' @examples
 #' \donttest{
@@ -39,7 +40,7 @@
 #' tmp <- tempfile(fileext = ".spz")
 #' writeBin(pbmc3k, tmp)
 #' counts <- st_read(tmp)
-#' dim(counts)  # 13714 x 2700
+#' dim(counts)  # 8000 x 500
 #' }
 #'
 #' @keywords datasets
@@ -326,16 +327,16 @@
 #' @keywords datasets
 "golub"
 
-#' MNIST Full Digits Dataset
+#' MNIST Digits Dataset
 #'
-#' Full MNIST handwritten digit dataset containing 70,000 grayscale images
+#' MNIST handwritten digit dataset containing grayscale images
 #' of digits 0-9. Each image is 28x28 pixels flattened to 784 features.
 #'
 #' @format A \code{matrix} (dense) with pixel intensities.
 #'   Rows are samples, columns are features.
 #'
 #' @details
-#' This is the complete MNIST dataset, commonly used for benchmarking machine
+#' This is the MNIST dataset, commonly used for benchmarking machine
 #' learning algorithms. The data is stored as a dense matrix (not sparse) since
 #' handwritten digit images have substantial non-zero content.
 #'
@@ -355,10 +356,10 @@
 #'
 #' @examples
 #' \donttest{
-#' data(digits_full)
-#' dim(digits_full)
-#' model <- nmf(digits_full, k = 10, maxit = 50)
+#' data(digits)
+#' dim(digits)
+#' model <- nmf(digits, k = 10, maxit = 50)
 #' }
 #'
 #' @keywords datasets
-"digits_full"
+"digits"

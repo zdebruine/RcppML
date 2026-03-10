@@ -75,8 +75,8 @@ test_that("GPU CPU fallback produces valid results", {
   skip_if_no_gpu()
 
   # Standard test matrix — force GPU, capture backend info
-  data(pbmc3k)
-  A <- pbmc3k[1:500, 1:200]
+  m <- load_pbmc3k_matrix()
+  A <- m[1:500, 1:200]
   A <- as(A, "dgCMatrix")
 
   options(RcppML.gpu = TRUE)
@@ -140,8 +140,8 @@ test_that("GPU handles medium-scale matrix correctly", {
 test_that("GPU NMF with large k succeeds or falls back gracefully", {
   skip_if_no_gpu()
 
-  data(pbmc3k)
-  A <- pbmc3k[1:500, 1:200]
+  m <- load_pbmc3k_matrix()
+  A <- m[1:500, 1:200]
   A <- as(A, "dgCMatrix")
 
   # Large k relative to matrix dimensions — stresses GPU memory
@@ -158,8 +158,8 @@ test_that("GPU NMF with large k succeeds or falls back gracefully", {
 test_that("GPU ZI NMF memory guard passes on normal-sized input", {
   skip_if_no_gpu()
 
-  data(pbmc3k)
-  A <- pbmc3k[1:500, 1:200]
+  m <- load_pbmc3k_matrix()
+  A <- m[1:500, 1:200]
   A <- as(A, "dgCMatrix")
 
   # ZI NMF allocates dense imputed matrices — memory guard checks free VRAM

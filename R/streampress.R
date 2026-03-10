@@ -2,7 +2,7 @@
 #'
 #' @description
 #' Functions for reading and writing matrices in StreamPress (.spz) format.
-#' StreamPress (formerly SparsePress) achieves 10-20x compression on typical
+#' StreamPress achieves 10-20x compression on typical
 #' scRNA-seq sparse matrices using rANS entropy coding, and supports
 #' dense v3 format with multiple compression codecs.
 #'
@@ -366,6 +366,7 @@ st_convert <- function(input, output, precision = "auto",
 #' @param path Path to a \code{.spz} file.
 #' @param verbose Logical; print progress. Default TRUE.
 #' @return Invisibly returns the path.
+#' @seealso \code{\link{st_write}}, \code{\link{st_read}}
 #'
 #' @export
 st_add_transpose <- function(path, verbose = TRUE) {
@@ -707,4 +708,20 @@ st_write_list <- function(x, path, obs = NULL, var = NULL,
            chunk_bytes = chunk_bytes, chunk_cols = chunk_cols,
            include_transpose = include_transpose, precision = precision,
            threads = threads, verbose = verbose)
+}
+
+# Internal: auto-dispatch for StreamPress file input.
+# Determines whether to use in-core or streaming mode based on available
+# memory. Currently defaults to in-core CPU (streaming can be forced via
+# streaming=TRUE in nmf()).
+.st_dispatch <- function(path, k, resource = "auto") {
+  list(mode = "IN_CORE_CPU", resource = "cpu", streaming = FALSE)
+}
+
+# Internal helper: format bytes for display
+.format_bytes <- function(bytes) {
+  if (bytes < 1024) return(sprintf("%d B", bytes))
+  if (bytes < 1024^2) return(sprintf("%.1f KB", bytes / 1024))
+  if (bytes < 1024^3) return(sprintf("%.1f MB", bytes / 1024^2))
+  sprintf("%.1f GB", bytes / 1024^3)
 }

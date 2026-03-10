@@ -33,9 +33,6 @@
 #' @section Convenience Aliases:
 #' \itemize{
 #'   \item \code{pca(A, k, ...)}: PCA (same as \code{svd(A, k, center = TRUE, ...)})
-#'   \item \code{sparse_pca(A, k, L1, ...)}: PCA with L1 sparsity on v
-#'   \item \code{nn_pca(A, k, ...)}: Non-negative PCA (centered, non-negative u and v)
-#'   \item \code{svd_pca(...)}: Deprecated alias for \code{svd()}
 #' }
 #'
 #' @section Unsupported Combinations:
@@ -120,7 +117,7 @@
 #'   \code{"cpu"}, or \code{"gpu"}.
 #' @param ... Additional arguments passed to \code{\link{svd}} (used by convenience wrappers).
 #'
-#' @return An S4 object of class \code{svd_pca} with slots:
+#' @return An S4 object of class \code{svd} with slots:
 #' \describe{
 #'   \item{\code{u}}{Left singular vectors (scores), m x k matrix}
 #'   \item{\code{d}}{Singular values, length-k numeric vector}
@@ -613,7 +610,7 @@ svd <- function(A, k = 10, tol = 1e-5, maxit = 200,
   if (!is.null(rownames(A))) rownames(u_mat) <- rownames(A)
   if (!is.null(colnames(A))) rownames(v_mat) <- colnames(A)
 
-  new("svd_pca",
+  new("svd",
       u = u_mat,
       d = as.numeric(result$d),
       v = v_mat,
@@ -627,8 +624,8 @@ svd <- function(A, k = 10, tol = 1e-5, maxit = 200,
 #'
 #' @inheritParams svd
 #' @param ... Additional arguments passed to \code{\link{svd}}.
-#' @return An S4 object of class \code{svd_pca} (see \code{\link{svd}}).
-#' @seealso \code{\link{svd}}, \code{\link{sparse_pca}}, \code{\link{nn_pca}}
+#' @return An S4 object of class \code{svd} (see \code{\link{svd}}).
+#' @seealso \code{\link{svd}}
 #' @examples
 #' \donttest{
 #' library(Matrix)
@@ -639,31 +636,4 @@ svd <- function(A, k = 10, tol = 1e-5, maxit = 200,
 #' @export
 pca <- function(A, k = 10, ...) {
   svd(A, k = k, center = TRUE, ...)
-}
-
-#' @rdname svd
-#' @section Deprecated:
-#' \code{sparse_pca()} is deprecated. Use \code{svd(center=TRUE, L1=c(0, L1))} instead.
-#' @export
-sparse_pca <- function(A, k = 10, L1 = 0.5, ...) {
-  .Deprecated("svd", msg = "sparse_pca() is deprecated. Use svd(center=TRUE, L1=c(0, L1)) instead.")
-  svd(A, k = k, center = TRUE, L1 = c(0, L1), ...)
-}
-
-#' @rdname svd
-#' @section Deprecated:
-#' \code{nn_pca()} is deprecated. Use \code{svd(center=TRUE, nonneg=TRUE)} instead.
-#' @export
-nn_pca <- function(A, k = 10, ...) {
-  .Deprecated("svd", msg = "nn_pca() is deprecated. Use svd(center=TRUE, nonneg=TRUE) instead.")
-  svd(A, k = k, center = TRUE, nonneg = TRUE, ...)
-}
-
-#' @rdname svd
-#' @section Deprecated:
-#' \code{svd_pca()} is deprecated. Use \code{svd()} instead.
-#' @export
-svd_pca <- function(...) {
-  .Deprecated("svd")
-  svd(...)
 }

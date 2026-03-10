@@ -35,14 +35,14 @@ S3 methods for the \code{gpu_sparse_matrix} class returned by
 }
 \examples{
 \dontrun{
-gpu_mat <- sp_read_gpu("data.spz")
+gpu_mat <- st_read_gpu("data.spz")
 print(gpu_mat)
 dim(gpu_mat)
 nrow(gpu_mat)
 ncol(gpu_mat)
-sp_free_gpu(gpu_mat)
+st_free_gpu(gpu_mat)
 }
 }
 \seealso{
-\code{\link{sp_read_gpu}}, \code{\link{sp_free_gpu}}
+\code{\link{st_read_gpu}}, \code{\link{st_free_gpu}}
 }

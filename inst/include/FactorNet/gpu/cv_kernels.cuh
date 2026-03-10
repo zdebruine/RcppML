@@ -1225,7 +1225,7 @@ CVNMFResult nmf_cv_fit_gpu(
     DenseMatrixGPU<Scalar> H_out(k, n);
     DenseMatrixGPU<Scalar> W_out(k, m);
 
-    DeviceMemory<Scalar> scratch(8);
+    DeviceMemory<double> scratch(8);
 
     // Host buffers removed — W-update deltas now computed on GPU
 

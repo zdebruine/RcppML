@@ -541,7 +541,7 @@ void compute_cv_loss_dense_gpu(
     int64_t n_test,
     double A_train_sq,
     double A_test_sq,
-    DeviceMemory<Scalar>& scratch,        // ≥ 4 scalars
+    DeviceMemory<double>& scratch,        // ≥ 4 doubles (double for float overflow safety)
     double& train_mse,
     double& test_mse)
 {
@@ -552,16 +552,16 @@ void compute_cv_loss_dense_gpu(
     double total_recon = compute_recon_term_gpu(ctx, G, H, scratch);
 
     // 2. Total cross = Σⱼ bⱼ'hⱼ  (from pre-computed B = W'A)
-    CUDA_CHECK(cudaMemsetAsync(scratch.get(), 0, sizeof(Scalar), ctx.stream));
+    CUDA_CHECK(cudaMemsetAsync(scratch.get(), 0, sizeof(double), ctx.stream));
     int threads = 256;
     int blocks = min((n + threads - 1) / threads, 1024);
     cross_term_kernel<Scalar><<<blocks, threads, 0, ctx.stream>>>(
         B.data.get(), H.data.get(), k, n, scratch.get());
-    Scalar total_cross_val;
-    CUDA_CHECK(cudaMemcpyAsync(&total_cross_val, scratch.get(), sizeof(Scalar),
+    double total_cross_val;
+    CUDA_CHECK(cudaMemcpyAsync(&total_cross_val, scratch.get(), sizeof(double),
                                 cudaMemcpyDeviceToHost, ctx.stream));
     cudaStreamSynchronize(ctx.stream);
-    double total_cross = static_cast<double>(total_cross_val);
+    double total_cross = total_cross_val;
 
 // 3. Run sparse CV kernel to get train/test SSE at non-zeros AND total nnz pred²
     DeviceMemory<double> d_cv_out(5);

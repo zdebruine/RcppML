@@ -6,8 +6,8 @@
 test_that("GPU graph NMF runs without error", {
   skip_if_no_gpu()
 
-  data(pbmc3k)
-  A <- pbmc3k[1:200, 1:100]
+  m <- load_pbmc3k_matrix()
+  A <- m[1:200, 1:100]
   A <- as(A, "dgCMatrix")
 
   # Build a simple random adjacency graph (symmetric, no self-loops)
@@ -36,8 +36,8 @@ test_that("GPU graph NMF runs without error", {
 test_that("GPU graph NMF loss decreases from initial", {
   skip_if_no_gpu()
 
-  data(pbmc3k)
-  A <- pbmc3k[1:200, 1:100]
+  m <- load_pbmc3k_matrix()
+  A <- m[1:200, 1:100]
   A <- as(A, "dgCMatrix")
 
   set.seed(1)
@@ -65,8 +65,8 @@ test_that("GPU graph NMF loss decreases from initial", {
 test_that("GPU deep graph NMF runs with both graph_W and graph_H", {
   skip_if_no_gpu()
 
-  data(pbmc3k)
-  A <- pbmc3k[1:200, 1:100]
+  m <- load_pbmc3k_matrix()
+  A <- m[1:200, 1:100]
   A <- as(A, "dgCMatrix")
 
   # Row graph (200 x 200)

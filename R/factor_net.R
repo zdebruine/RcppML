@@ -31,6 +31,7 @@
 #' @param graph Sparse graph Laplacian matrix (or NULL).
 #' @param graph_lambda Graph regularization strength. Default 0.
 #' @return An \code{fn_factor_config} object.
+#' @seealso \code{\link{factor_config}}, \code{\link{nmf_layer}}, \code{\link{factor_net}}
 #' @examples
 #' # Per-factor config for W with L1 sparsity
 #' w_cfg <- W(L1 = 0.1, nonneg = TRUE)
@@ -170,6 +171,7 @@ factor_config <- function(maxit = 100, tol = 1e-4,
 #'   string path to a .spz file for out-of-core streaming NMF.
 #' @param name Optional name for the input (used in multi-modal results).
 #' @return An \code{fn_node} object of type "input".
+#' @seealso \code{\link{nmf_layer}}, \code{\link{svd_layer}}, \code{\link{factor_net}}
 #' @examples
 #' data(aml)
 #' inp <- factor_input(aml, name = "aml")
@@ -248,6 +250,7 @@ nmf_layer <- function(input, k, L1 = 0, L2 = 0, L21 = 0, angular = 0,
 #'
 #' @inheritParams nmf_layer
 #' @return An \code{fn_node} of type "svd_layer".
+#' @seealso \code{\link{nmf_layer}}, \code{\link{factor_input}}, \code{\link{factor_net}}
 #' @examples
 #' data(aml)
 #' inp <- factor_input(aml)
@@ -285,6 +288,7 @@ svd_layer <- function(input, k, L1 = 0, L2 = 0, L21 = 0, angular = 0,
 #'
 #' @param ... Two or more \code{fn_node} objects (inputs or layers).
 #' @return An \code{fn_node} of type "shared".
+#' @seealso \code{\link{factor_concat}}, \code{\link{factor_add}}, \code{\link{factor_net}}
 #' @examples
 #' data(aml)
 #' # Split into two views
@@ -317,6 +321,7 @@ factor_shared <- function(...) {
 #'
 #' @param ... Two or more \code{fn_node} objects (layer outputs).
 #' @return An \code{fn_node} of type "concat".
+#' @seealso \code{\link{factor_shared}}, \code{\link{factor_add}}, \code{\link{factor_net}}
 #' @examples
 #' data(aml)
 #' inp <- factor_input(aml)
@@ -343,6 +348,7 @@ factor_concat <- function(...) {
 #'
 #' @param ... Two or more \code{fn_node} objects with matching ranks.
 #' @return An \code{fn_node} of type "add".
+#' @seealso \code{\link{factor_concat}}, \code{\link{factor_shared}}, \code{\link{factor_net}}
 #' @examples
 #' data(aml)
 #' inp <- factor_input(aml)
@@ -380,6 +386,7 @@ factor_add <- function(...) {
 #' @param Z Conditioning matrix (n x p) or (p x n). Will be oriented
 #'   to match H dimensions.
 #' @return An \code{fn_node} of type "condition".
+#' @seealso \code{\link{nmf_layer}}, \code{\link{factor_net}}
 #' @examples
 #' data(aml)
 #' inp <- factor_input(aml)
@@ -504,6 +511,7 @@ factor_net <- function(inputs, output, config = factor_config()) {
 #' @param x An \code{fn_node} object.
 #' @param ... Additional arguments (unused).
 #' @return Invisibly returns \code{x}.
+#' @seealso \code{\link{factor_input}}, \code{\link{nmf_layer}}, \code{\link{factor_net}}
 #' @method print fn_node
 #' @export
 print.fn_node <- function(x, ...) {
@@ -518,6 +526,7 @@ print.fn_node <- function(x, ...) {
 #' @param x An \code{fn_factor_config} object.
 #' @param ... Additional arguments (unused).
 #' @return Invisibly returns \code{x}.
+#' @seealso \code{\link{W}}, \code{\link{H}}, \code{\link{factor_config}}
 #' @method print fn_factor_config
 #' @export
 print.fn_factor_config <- function(x, ...) {
@@ -535,6 +544,7 @@ print.fn_factor_config <- function(x, ...) {
 #' @param x An \code{fn_global_config} object.
 #' @param ... Additional arguments (unused).
 #' @return Invisibly returns \code{x}.
+#' @seealso \code{\link{factor_config}}, \code{\link{factor_net}}
 #' @method print fn_global_config
 #' @export
 print.fn_global_config <- function(x, ...) {
@@ -547,6 +557,7 @@ print.fn_global_config <- function(x, ...) {
 #' @param x A \code{factor_net} object.
 #' @param ... Additional arguments (unused).
 #' @return Invisibly returns \code{x}.
+#' @seealso \code{\link{factor_net}}, \code{\link{fit}}
 #' @method print factor_net
 #' @export
 print.factor_net <- function(x, ...) {

@@ -7,13 +7,20 @@
 \method{as.data.frame}{training_logger}(x, ...)
 }
 \arguments{
-\item{x}{A \code{training_logger} object.}
+\item{x}{A \code{training_logger} object (from \code{nmf(..., log = TRUE)}).}
 
 \item{...}{Ignored.}
 }
 \value{
-A data.frame with one row per logged iteration.
+A data.frame with columns \code{iteration}, \code{wall_sec},
+  and optionally \code{total_loss}, per-layer loss columns, and
+  norm-tracking columns.
 }
 \description{
-Convert training log to data.frame
+Converts the internal training log from an NMF run into a tidy
+data frame with one row per logged iteration, suitable for plotting
+convergence curves.
+}
+\seealso{
+\code{\link{nmf}}, \code{\link{plot.training_logger}}
 }

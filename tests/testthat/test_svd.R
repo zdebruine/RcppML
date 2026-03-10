@@ -35,7 +35,7 @@ A_iris <- as.matrix(iris[, 1:4])
 test_that("svd() returns valid rank-5 factorization (dense)", {
   s <- RcppML::svd(A_dense, k = k_true, method = "deflation",
                    maxit = 200, tol = 1e-5, seed = 1, test_fraction = 0)
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   expect_equal(ncol(s@u), k_true)
   expect_equal(length(s@d), k_true)
   expect_equal(ncol(s@v), k_true)
@@ -49,7 +49,7 @@ test_that("svd() returns valid rank-5 factorization (dense)", {
 test_that("svd() returns valid rank-5 factorization (sparse)", {
   s <- RcppML::svd(A_sparse, k = k_true, method = "deflation",
                    maxit = 200, tol = 1e-5, seed = 1, test_fraction = 0)
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   expect_equal(ncol(s@u), k_true)
   expect_equal(length(s@d), k_true)
   expect_equal(ncol(s@v), k_true)
@@ -83,7 +83,7 @@ test_that("svd() with center=TRUE produces meaningful PCA", {
   # RcppML centers by row means, not column means like prcomp.
   # Instead of comparing to prcomp, verify SVD properties.
   s <- RcppML::svd(A_iris, k = k, center = TRUE, method = "lanczos", seed = 1)
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   expect_equal(length(s@d), k)
   expect_true(all(s@d > 0))
   expect_true(all(diff(s@d) <= 0))  # decreasing
@@ -111,7 +111,7 @@ test_that("svd(method='deflation') returns orthogonal U,V", {
 
 test_that("svd(method='irlba') converges for sparse input", {
   s <- RcppML::svd(A_sparse, k = k_true, method = "irlba", seed = 1)
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   expect_equal(ncol(s@u), k_true)
   expect_true(all(s@d > 0))
 })
@@ -134,7 +134,7 @@ test_that("svd(method='lanczos') agrees with deflation on singular values", {
 
 test_that("svd(method='randomized') has bounded residual", {
   s <- RcppML::svd(A_dense, k = k_true, method = "randomized", seed = 1)
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   expect_equal(ncol(s@u), k_true)
   A_hat <- reconstruct(s)
   residual_frac <- sum((A_dense - A_hat)^2) / sum(A_dense^2)
@@ -148,7 +148,7 @@ test_that("svd(method='randomized') has bounded residual", {
 test_that("pca() is an alias for svd() with center=TRUE", {
   s <- pca(A_iris, k = 3, method = "deflation", seed = 1, maxit = 200,
            tol = 1e-6, test_fraction = 0)
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   expect_true(s@misc$centered)
 })
 
@@ -158,7 +158,7 @@ test_that("sparse_pca() applies L1 penalty to V", {
   A_sp <- matrix(abs(rnorm(100 * 50)), 100, 50)
   sp <- sparse_pca(A_sp, k = 3, L1 = 1.0, method = "deflation",
                    seed = 1, maxit = 200, tol = 1e-6, test_fraction = 0)
-  expect_s4_class(sp, "svd_pca")
+  expect_s4_class(sp, "svd")
   expect_equal(ncol(sp@v), 3L)
 })
 
@@ -169,21 +169,12 @@ test_that("nn_pca() applies non-negativity constraint", {
   A_nn <- matrix(abs(rnorm(80 * 40)), 80, 40)
   nn <- nn_pca(A_nn, k = 3, method = "deflation",
                seed = 1, maxit = 200, tol = 1e-6, test_fraction = 0)
-  expect_s4_class(nn, "svd_pca")
+  expect_s4_class(nn, "svd")
   # The constraint should at least keep most values non-negative
   frac_neg_v <- mean(nn@v < 0)
   frac_neg_u <- mean(nn@u < 0)
   expect_lt(frac_neg_v, 0.5)
   expect_lt(frac_neg_u, 0.5)
-})
-
-test_that("svd_pca() is a deprecated alias", {
-  expect_warning(
-    s <- svd_pca(A_iris, k = 2, method = "deflation", seed = 1, maxit = 50,
-                 test_fraction = 0),
-    "deprecated"
-  )
-  expect_s4_class(s, "svd_pca")
 })
 
 # ===========================================================================
@@ -214,26 +205,26 @@ test_that("variance_explained() returns decreasing proportions", {
   expect_lt(abs(sum(ve) - 1), 1)       # sum should be <= 1 (truncated)
 })
 
-test_that("dim() works on svd_pca", {
+test_that("dim() works on svd", {
   s <- RcppML::svd(A_dense, k = 3, method = "deflation", seed = 1, maxit = 50,
                    test_fraction = 0)
   # dim() returns c(nrow(u), ncol(v), length(d)) = c(m, k, k)
   expect_equal(dim(s), c(m, 3, 3))
 })
 
-test_that("show() works on svd_pca", {
+test_that("show() works on svd", {
   s <- RcppML::svd(A_dense, k = 3, method = "deflation", seed = 1, maxit = 50,
                    test_fraction = 0)
-  expect_output(show(s), "svd_pca")
+  expect_output(show(s), "svd")
 })
 
-test_that("head() works on svd_pca", {
+test_that("head() works on svd", {
   s <- RcppML::svd(A_dense, k = 3, method = "deflation", seed = 1, maxit = 50,
                    test_fraction = 0)
-  expect_output(head(s), "svd_pca")
+  expect_output(head(s), "svd")
 })
 
-test_that("subsetting [i] works on svd_pca", {
+test_that("subsetting [i] works on svd", {
   s <- RcppML::svd(A_dense, k = 5, method = "deflation", seed = 1, maxit = 50,
                    test_fraction = 0)
   s2 <- s[1:3]
@@ -266,7 +257,7 @@ test_that("svd() preserves dimnames for sparse input", {
 
 test_that("svd() works with default NULL seed", {
   s <- RcppML::svd(A_dense, k = 3, method = "deflation", maxit = 50)
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   expect_equal(length(s@d), 3)
 })
 
@@ -325,7 +316,7 @@ test_that("svd() works with k = 1", {
 test_that("svd(scale=TRUE) returns correct metadata fields", {
   s <- RcppML::svd(A_dense, k = 3, center = TRUE, scale = TRUE,
                    method = "lanczos", seed = 1)
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   expect_true(s@misc$centered)
   expect_true(s@misc$scaled)
   expect_false(is.null(s@misc$row_means))
@@ -367,7 +358,7 @@ test_that("svd(scale=TRUE) works on sparse matrices", {
   k <- 3
   s_sp <- RcppML::svd(A_sparse, k = k, center = TRUE, scale = TRUE,
                       method = "lanczos", seed = 42)
-  expect_s4_class(s_sp, "svd_pca")
+  expect_s4_class(s_sp, "svd")
   expect_true(s_sp@misc$scaled)
   expect_equal(length(s_sp@misc$row_sds), nrow(A_sparse))
   expect_true(all(s_sp@d > 0))
@@ -415,7 +406,7 @@ test_that("svd(scale=TRUE) works across multiple methods", {
     s <- RcppML::svd(A_dense, k = k, center = TRUE, scale = TRUE,
                      method = meth, seed = 1, maxit = 200, tol = 1e-5,
                      test_fraction = 0)
-    expect_s4_class(s, "svd_pca")
+    expect_s4_class(s, "svd")
     expect_true(s@misc$scaled, info = paste("scaled flag, method =", meth))
     expect_equal(length(s@d), k, info = paste("k factors, method =", meth))
     expect_true(all(s@d > 0), info = paste("positive d, method =", meth))
@@ -441,7 +432,7 @@ test_that("svd(test_fraction>0, deflation) produces test_loss (sparse)", {
   s <- RcppML::svd(A_sparse, k = 3, method = "deflation",
                    maxit = 100, tol = 1e-5, seed = 1,
                    test_fraction = 0.1, cv_seed = 42)
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   expect_true(!is.null(s@misc$test_loss))
   expect_true(length(s@misc$test_loss) >= 1)
   expect_true(all(is.finite(s@misc$test_loss)))
@@ -452,7 +443,7 @@ test_that("svd(test_fraction>0, deflation) produces test_loss (dense)", {
   s <- RcppML::svd(A_dense, k = 3, method = "deflation",
                    maxit = 100, tol = 1e-5, seed = 1,
                    test_fraction = 0.1, cv_seed = 42)
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   expect_true(!is.null(s@misc$test_loss))
   expect_true(length(s@misc$test_loss) >= 1)
   expect_true(all(is.finite(s@misc$test_loss)))
@@ -461,7 +452,7 @@ test_that("svd(test_fraction>0, deflation) produces test_loss (dense)", {
 test_that("svd(test_fraction>0, krylov) produces test_loss (sparse)", {
   s <- RcppML::svd(A_sparse, k = 3, method = "krylov",
                    seed = 1, test_fraction = 0.1, cv_seed = 42)
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   expect_true(!is.null(s@misc$test_loss))
   expect_true(length(s@misc$test_loss) >= 1)
   expect_true(all(is.finite(s@misc$test_loss)))
@@ -470,7 +461,7 @@ test_that("svd(test_fraction>0, krylov) produces test_loss (sparse)", {
 test_that("svd(test_fraction>0, krylov) produces test_loss (dense)", {
   s <- RcppML::svd(A_dense, k = 3, method = "krylov",
                    seed = 1, test_fraction = 0.1, cv_seed = 42)
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   expect_true(!is.null(s@misc$test_loss))
   expect_true(length(s@misc$test_loss) >= 1)
   expect_true(all(is.finite(s@misc$test_loss)))
@@ -504,7 +495,7 @@ test_that("auto-rank (k='auto') selects reasonable rank", {
   s <- RcppML::svd(A_rank3, k = "auto", method = "deflation",
                    maxit = 100, tol = 1e-5, seed = 1,
                    k_max = 10, patience = 2)
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   # Should select a small rank (not the full k_max)
   expect_lte(ncol(s@u), 10)
   # test_loss trajectory should exist
@@ -520,7 +511,7 @@ test_that("svd(robust=TRUE) succeeds on dense input", {
   s <- RcppML::svd(A_dense, k = 3, method = "deflation",
                    maxit = 50, tol = 1e-4, seed = 1,
                    test_fraction = 0, robust = TRUE)
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   expect_equal(ncol(s@u), 3)
   expect_true(all(s@d > 0))
 })
@@ -529,7 +520,7 @@ test_that("svd(robust=TRUE) succeeds on sparse input", {
   s <- RcppML::svd(A_sparse, k = 3, method = "deflation",
                    maxit = 50, tol = 1e-4, seed = 1,
                    test_fraction = 0, robust = TRUE)
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   expect_equal(ncol(s@u), 3)
   expect_true(all(s@d > 0))
 })
@@ -538,7 +529,7 @@ test_that("svd(robust='mae') succeeds", {
   s <- RcppML::svd(A_dense, k = 3, method = "deflation",
                    maxit = 50, tol = 1e-4, seed = 1,
                    test_fraction = 0, robust = "mae")
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   expect_equal(ncol(s@u), 3)
   expect_true(all(s@d > 0))
 })
@@ -547,7 +538,7 @@ test_that("svd(robust=numeric) uses custom Huber delta", {
   s <- RcppML::svd(A_dense, k = 3, method = "deflation",
                    maxit = 50, tol = 1e-4, seed = 1,
                    test_fraction = 0, robust = 2.0)
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   expect_equal(ncol(s@u), 3)
   expect_true(all(s@d > 0))
 })
@@ -580,7 +571,7 @@ test_that("svd(robust + CV) works together", {
   s <- RcppML::svd(A_sparse, k = 3, method = "deflation",
                    maxit = 50, tol = 1e-4, seed = 1,
                    test_fraction = 0.1, cv_seed = 42, robust = TRUE)
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   expect_true(!is.null(s@misc$test_loss))
   expect_true(all(is.finite(s@misc$test_loss)))
 })

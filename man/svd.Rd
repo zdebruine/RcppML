@@ -2,9 +2,6 @@
 % Please edit documentation in R/svd.R
 \name{svd}
 \alias{svd}
-\alias{sparse_pca}
-\alias{nn_pca}
-\alias{svd_pca}
 \title{Truncated SVD / PCA with constraints and regularization}
 \usage{
 svd(
@@ -37,12 +34,6 @@ svd(
   resource = "auto",
   method = "auto"
 )
-
-sparse_pca(A, k = 10, L1 = 0.5, ...)
-
-nn_pca(A, k = 10, ...)
-
-svd_pca(...)
 }
 \arguments{
 \item{A}{Input matrix. May be dense (\code{matrix}), sparse (\code{dgCMatrix}),
@@ -139,7 +130,7 @@ Randomized 32<=k<64, IRLBA k>=64; CPU: Lanczos k<64, IRLBA k>=64).}
 \item{...}{Additional arguments passed to \code{\link{svd}} (used by convenience wrappers).}
 }
 \value{
-An S4 object of class \code{svd_pca} with slots:
+An S4 object of class \code{svd} with slots:
 \describe{
   \item{\code{u}}{Left singular vectors (scores), m x k matrix}
   \item{\code{d}}{Singular values, length-k numeric vector}
@@ -190,9 +181,6 @@ truncated to the best rank.
 
 \itemize{
   \item \code{pca(A, k, ...)}: PCA (same as \code{svd(A, k, center = TRUE, ...)})
-  \item \code{sparse_pca(A, k, L1, ...)}: PCA with L1 sparsity on v
-  \item \code{nn_pca(A, k, ...)}: Non-negative PCA (centered, non-negative u and v)
-  \item \code{svd_pca(...)}: Deprecated alias for \code{svd()}
 }
 }
 
@@ -234,17 +222,6 @@ Several parameters in \code{svd()} differ intentionally from \code{\link{nmf}()}
     (per-factor convergence); \code{nmf()} defaults to \code{tol = 1e-4}
     (global convergence across all factors simultaneously).}
 }
-}
-
-\section{Deprecated}{
-
-\code{sparse_pca()} is deprecated. Use \code{svd(center=TRUE, L1=c(0, L1))} instead.
-
-
-\code{nn_pca()} is deprecated. Use \code{svd(center=TRUE, nonneg=TRUE)} instead.
-
-
-\code{svd_pca()} is deprecated. Use \code{svd()} instead.
 }
 
 \examples{

@@ -20,8 +20,9 @@ knitr::opts_chunk$set(
 
 ## Motivation
 
-NMF's core computation is iterative matrix multiplication — the dominant cost each
-iteration is computing Gram matrices ($H H^T$, $W^T W$) and right-hand-side
+RcppML's core computations — NMF, SVD/PCA, cross-validation, bipartition, and
+divisive clustering — all involve iterative matrix multiplication. The dominant
+cost each iteration is computing Gram matrices ($H H^T$, $W^T W$) and right-hand-side
 products ($A H^T$, $W^T A$). These dense linear algebra operations map directly
 onto GPU hardware, where thousands of cores perform matrix multiplies in parallel.
 
@@ -91,21 +92,21 @@ Sys.setenv(RCPPML_RESOURCE = "cpu")
 options(RcppML.gpu = FALSE)
 ```
 
-### GPU Memory Management for StreamPress
+### GPU-Direct StreamPress Reading
 
-For large datasets stored as `.spz` files, `sp_read_gpu()` reads the file
+For large datasets stored as `.spz` files, `st_read_gpu()` reads the file
 directly into GPU memory, bypassing CPU entirely:
 
 ```{r eval = FALSE}
 # Read .spz directly into GPU device memory (zero CPU allocation)
-gpu_handle <- sp_read_gpu("large_dataset.spz")
+gpu_handle <- st_read_gpu("large_dataset.spz")
 #> GPU sparse matrix: 30000 x 20000, nnz = 12000000, device 0
 
 # Run NMF on GPU-resident data
 model <- nmf(gpu_handle, k = 30, seed = 42)
 
 # Free GPU memory when done (optional — GC handles this automatically)
-sp_free_gpu(gpu_handle)
+st_free_gpu(gpu_handle)
 ```
 
 The `gpu_sparse_matrix` handle stores opaque device pointers to the CSC arrays
@@ -127,7 +128,7 @@ when using a regular `dgCMatrix`.
 | Upper bound constraints | Yes |
 | Bipartition | Yes |
 | Divisive clustering (dclust) | Yes |
-| StreamPress streaming NMF | CPU only |
+| StreamPress streaming NMF | Yes (CPU decompression, GPU compute) |
 
 When a GPU-unsupported feature is requested, RcppML falls back to CPU
 automatically with no error.
@@ -223,7 +224,7 @@ For datasets too large for CPU memory, load `.spz` directly onto the GPU:
 
 ```{r eval = FALSE}
 # Read .spz directly into GPU memory — zero CPU-side matrix allocation
-gpu_handle <- sp_read_gpu("path/to/large_scRNAseq.spz")
+gpu_handle <- st_read_gpu("path/to/large_scRNAseq.spz")
 
 # Run NMF entirely on GPU
 model <- nmf(gpu_handle, k = 30, loss = "gp", resource = "gpu",
@@ -234,7 +235,7 @@ head(model@w[, 1])
 #> [1] 0.00342 0.01205 0.00000 0.00891 0.00054 0.01133
 
 # Free GPU memory when done
-sp_free_gpu(gpu_handle)
+st_free_gpu(gpu_handle)
 ```
 
 ### Example 3: CPU vs. GPU Timing Pattern
@@ -357,7 +358,7 @@ library(RcppML)
 cat("GPU available:", gpu_available(), "\n")
 print(gpu_info())
 
-data(pbmc3k)
+data(pbmc3k, package = "RcppML")
 tmp <- tempfile(fileext = ".spz")
 writeBin(pbmc3k, tmp)
 counts <- st_read(tmp)
@@ -384,9 +385,11 @@ Common causes:
 
 ### Precision
 
-GPU computation uses double precision (FP64). Single precision support is planned
-for a future release to enable faster performance on consumer GPUs, which have
-fewer FP64 units than data-center GPUs.
+GPU computation uses single precision (FP32) for all core operations, providing
+optimal throughput on both consumer and data-center GPUs. Double precision (FP64)
+is used selectively for numerically sensitive accumulations where precision loss
+would affect convergence. Results are numerically equivalent to CPU (FP64) within
+floating-point tolerance for all tested workloads.
 
 ## Key Takeaways
 
@@ -400,5 +403,5 @@ fewer FP64 units than data-center GPUs.
    RcppML falls back silently — no code changes needed.
 
 *See the [StreamPress](streampress.html) vignette for `.spz` file format details,
-and the [NMF Deep Dive](nmf-deep-dive.html) vignette for comprehensive NMF
+and the [NMF Fundamentals](nmf-fundamentals.html) vignette for comprehensive NMF
 parameter documentation.*

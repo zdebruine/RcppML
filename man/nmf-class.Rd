@@ -23,3 +23,6 @@ test_fraction (CV holdout fraction), train_loss (CV training loss),
 test_loss (CV test loss), and best_iter (CV best iteration)}
 }}
 
+\seealso{
+\code{\link{nmf}}, \code{\link{evaluate}}, \code{\link{align}}, \code{\link{predict,nmf-method}}
+}

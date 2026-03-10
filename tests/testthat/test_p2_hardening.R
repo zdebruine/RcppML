@@ -304,7 +304,7 @@ test_that("Streaming NMF dispatches via SPZ file with RcppML.streaming option", 
 
   f <- tempfile(fileext = ".spz")
   on.exit(unlink(f), add = TRUE)
-  sp_write(A, f, include_transpose = TRUE)
+  st_write(A, f, include_transpose = TRUE)
 
   options(RcppML.streaming = TRUE)
   on.exit(options(RcppML.streaming = FALSE), add = TRUE)

@@ -7,21 +7,29 @@ articles:
     navbar: ~
     contents:
       - getting-started
+
+  - title: "Core Techniques"
+    contents:
+      - nmf-fundamentals
+      - svd-pca
+      - cross-validation
+      - distributions
+      - regularization
+
+  - title: "Advanced Methods"
+    contents:
+      - clustering
+      - factor-graphs
+
   - title: "Applications"
     contents:
-      - single-cell-genomics
-      - recommendation-systems
       - image-decomposition
-      - ecological-biodiversity
-      - cancer-subtype-discovery
-  - title: "Advanced Topics"
+      - recommendation-systems
+
+  - title: "Infrastructure"
     contents:
-      - nmf-deep-dive
-      - cross-validation
-      - distribution-api
-      - factor-net-graphs
+      - streampress
       - gpu-acceleration
-      - sparsepress
 
 reference:
   - title: "Non-negative Matrix Factorization"
@@ -33,8 +41,6 @@ reference:
       - "`summary,nmf-method`"
       - "`biplot,nmf-method`"
       - nnls
-      - solve
-      - project
       - reconstruct
 
   - title: "Singular Value Decomposition"
@@ -42,9 +48,6 @@ reference:
     contents:
       - svd
       - pca
-      - nn_pca
-      - svd_pca
-      - sparse_pca
       - variance_explained
 
   - title: "Model Evaluation & Diagnostics"
@@ -130,16 +133,11 @@ reference:
       - simulateNMF
       - simulateSwimmer
 
-  - title: "Random Number Generation"
-    desc: "Fast RNG utilities"
+  - title: "StreamPress I/O"
+    desc: "Streaming sparse matrix format (.spz)"
     contents:
-      - starts_with("r_")
-
-  - title: "SparsePress I/O"
-    desc: "High-performance sparse matrix compression format"
-    contents:
-      - starts_with("sp_")
-      - sparsepress
+      - starts_with("st_")
+      - streampress
 
   - title: "GPU Support"
     desc: "GPU acceleration functions"
@@ -153,8 +151,9 @@ reference:
     desc: "Built-in datasets for examples and benchmarks"
     contents:
       - aml
-      - digits_full
+      - digits
       - golub
       - hawaiibirds
       - movielens
       - olivetti
+      - pbmc3k

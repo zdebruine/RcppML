@@ -17,3 +17,6 @@ Invisibly returns \code{x}.
 \description{
 Print a factor_net_result
 }
+\seealso{
+\code{\link{factor_net}}, \code{\link{fit}}, \code{\link{summary.factor_net_result}}
+}

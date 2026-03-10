@@ -1,0 +1,612 @@
+---
+title: "Factor Net Applications: Real-World NMF with Composable Graphs"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Factor Net Applications: Real-World NMF with Composable Graphs}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4.5,
+  message = FALSE,
+  warning = FALSE,
+  out.width = "100%"
+)
+library(RcppML)
+library(ggplot2)
+library(Matrix)
+theme_set(theme_minimal(base_size = 12))
+```
+
+This vignette demonstrates `factor_net()` on six real-world problems, each
+with domain-specific metrics, cross-validation, and publication-quality
+plots.  For API reference and theory, see `vignette("factor-graphs")`.
+
+## 1. Part-Based Decomposition: Handwritten Digits
+
+NMF discovers additive "parts" — strokes and loops that combine to form
+each digit.  We factorize the 8 × 8 pixel digits dataset (scikit-learn
+digits, 1 797 images, 10 classes) and visualize both the basis images and
+convergence.
+
+```{r digits-nmf}
+data("digits", package = "RcppML")
+A_digits <- as(t(digits), "dgCMatrix")  # 64 pixels × 1797 images
+cat(nrow(A_digits), "pixels ×", ncol(A_digits), "images\n")
+
+# Direct nmf() for loss_history (convergence tracking)
+res_digits <- nmf(A_digits, k = 10, maxit = 100, tol = 1e-10, seed = 42)
+```
+
+### Convergence
+
+```{r digits-convergence, fig.height = 3.5}
+loss_df <- data.frame(
+  iteration = seq_along(res_digits@misc$loss_history),
+  loss = res_digits@misc$loss_history
+)
+ggplot(loss_df, aes(iteration, loss)) +
+  geom_line(linewidth = 0.8, color = "#2166AC") +
+  geom_point(size = 1, color = "#2166AC") +
+  scale_y_log10(labels = scales::comma) +
+  labs(x = "Iteration", y = "MSE (log scale)",
+       title = "NMF convergence on handwritten digits (k = 10)")
+```
+
+### Basis Images (Learned Parts)
+
+Each column of W is a 64-element vector that reshapes into an 8 × 8
+"basis image."  These parts correspond to recognizable stroke patterns.
+
+```{r digits-basis, fig.width = 9, fig.height = 2.5}
+W <- res_digits@w  # 64 × 10
+
+# Build data frame for faceted heatmap
+basis_df <- do.call(rbind, lapply(1:10, function(f) {
+  img <- matrix(W[, f], 8, 8, byrow = FALSE)
+  expand.grid(row = 1:8, col = 1:8) |>
+    transform(value = as.vector(img), factor = paste("Part", f))
+}))
+basis_df$factor <- factor(basis_df$factor, levels = paste("Part", 1:10))
+
+ggplot(basis_df, aes(col, row, fill = value)) +
+  geom_tile() +
+  scale_fill_viridis_c(option = "inferno") +
+  scale_y_reverse() +
+  facet_wrap(~ factor, nrow = 2) +
+  coord_equal() +
+  theme_void() +
+  theme(strip.text = element_text(size = 9, margin = margin(b = 2)),
+        legend.position = "none") +
+  labs(title = "NMF basis images: learned stroke parts")
+```
+
+### Cross-Validation: Optimal Rank
+
+```{r digits-cv}
+inp_d <- factor_input(A_digits, "digits")
+cv_digits <- cross_validate_graph(
+  inputs = inp_d,
+  layer_fn = function(p) inp_d |> nmf_layer(k = p$k, L1 = p$L1),
+  params = list(k = c(5L, 10L, 15L, 20L, 30L), L1 = c(0, 0.01, 0.1)),
+  config = factor_config(maxit = 80, tol = 1e-5, seed = 42,
+                         test_fraction = 0.15),
+  reps = 3, seed = 42, verbose = FALSE
+)
+
+cv_df <- cv_digits$summary[!is.na(cv_digits$summary$mean_test_loss), ]
+cv_df$L1_label <- factor(paste("L1 =", cv_df$L1))
+
+ggplot(cv_df, aes(k, mean_test_loss, color = L1_label)) +
+  geom_line(linewidth = 0.8) +
+  geom_pointrange(aes(ymin = mean_test_loss - se_test_loss,
+                      ymax = mean_test_loss + se_test_loss), size = 0.4) +
+  scale_color_brewer(palette = "Set2") +
+  labs(x = "Rank (k)", y = "Mean test loss ± SE",
+       color = "L1 regularization",
+       title = "CV rank selection for digits NMF") +
+  theme(legend.position = c(0.7, 0.8))
+```
+
+**Result**: Rank 10 with light L1 regularization gives optimal
+generalization — matching the 10 digit classes.
+
+
+---
+
+## 2. Recommendation System: MovieLens Collaborative Filtering
+
+For recommendation, only *observed* ratings matter — predicting zeros
+is meaningless.  `mask_zeros = TRUE` evaluates on held-out *observed*
+ratings only, while `mask_zeros = FALSE` evaluates reconstruction of the
+full matrix (including the 97% zeros).
+
+```{r movielens-setup}
+data("movielens", package = "RcppML")
+A_ml <- movielens  # 3867 movies × 610 users
+cat(nrow(A_ml), "movies ×", ncol(A_ml), "users\n")
+cat("Sparsity:", round(1 - length(A_ml@x) / prod(dim(A_ml)), 3), "\n")
+cat("Ratings:", range(A_ml@x), "\n")
+```
+
+### Standard vs. Recommendation Mode
+
+```{r movielens-modes}
+modes <- expand.grid(k = c(5, 10, 20, 30), mask_zeros = c(FALSE, TRUE))
+mode_results <- do.call(rbind, lapply(seq_len(nrow(modes)), function(i) {
+  inp <- factor_input(A_ml, "movies")
+  L1 <- inp |> nmf_layer(k = modes$k[i], name = "layer")
+  net <- factor_net(inp, L1, config = factor_config(
+    maxit = 100, tol = 1e-5, seed = 42,
+    test_fraction = 0.1, mask_zeros = modes$mask_zeros[i]))
+  res <- fit(net)
+  lr <- res$layers[["layer"]]
+  data.frame(k = modes$k[i],
+             mode = ifelse(modes$mask_zeros[i], "Recommendation\n(observed only)",
+                           "Standard\n(all entries)"),
+             test_loss = lr$test_loss)
+}))
+
+ggplot(mode_results, aes(k, test_loss, color = mode)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2.5) +
+  scale_color_manual(values = c("#D95F02", "#1B9E77")) +
+  labs(x = "Rank (k)", y = "Test loss (MSE)",
+       color = NULL,
+       title = "MovieLens: standard NMF vs. recommendation mode") +
+  theme(legend.position = c(0.25, 0.85))
+```
+
+In standard mode, test loss rises with rank (overfitting to zeros).  In
+recommendation mode (`mask_zeros = TRUE`), optimal rank is around 10 —
+fitting observed ratings without hallucinating structure in unrated entries.
+
+### Cross-Validation with Regularization
+
+```{r movielens-cv}
+inp_cv <- factor_input(A_ml, "movies")
+cv_ml <- cross_validate_graph(
+  inputs = inp_cv,
+  layer_fn = function(p) inp_cv |> nmf_layer(k = p$k, L1 = p$L1),
+  params = list(k = c(5L, 10L, 20L, 30L), L1 = c(0, 0.01, 0.1)),
+  config = factor_config(maxit = 100, tol = 1e-5, seed = 42,
+                         test_fraction = 0.1, mask_zeros = TRUE),
+  reps = 3, seed = 42, verbose = FALSE
+)
+
+cv_ml_df <- cv_ml$summary[!is.na(cv_ml$summary$mean_test_loss), ]
+best <- cv_ml_df[1, ]
+knitr::kable(head(cv_ml_df, 6), digits = 3,
+             caption = paste0("Top CV results. Best: k = ", best$k,
+                              ", L1 = ", best$L1,
+                              " (test loss = ", round(best$mean_test_loss, 2), ")"))
+```
+
+**Result**: `cross_validate_graph()` identifies k = `r best$k` with
+L1 = `r best$L1` as optimal for rating prediction.
+
+---
+
+## 3. Semi-Supervised Leukemia Classification (Golub)
+
+The Golub dataset (38 patients × 5 000 genes) is a classic cancer
+classification benchmark.  NMF naturally separates ALL from AML — we
+use guides to demonstrate semi-supervised learning with partial labels.
+
+```{r golub-setup}
+data("golub", package = "RcppML")
+A_gol <- as(t(golub), "dgCMatrix")  # 5000 genes × 38 patients
+labels_text <- sub("_.*", "", colnames(A_gol))
+label_fac <- factor(labels_text)
+label_int <- as.integer(label_fac) - 1L
+cat(nrow(A_gol), "genes ×", ncol(A_gol), "patients\n")
+cat("Labels:", paste(levels(label_fac), table(label_fac), sep = " = ", collapse = ", "), "\n")
+```
+
+### Unsupervised Separation
+
+Even at rank 2, NMF embeds ALL and AML into separable clusters:
+
+```{r golub-unsupervised, fig.height = 3.5}
+res_gol <- nmf(A_gol, k = 2, seed = 42, maxit = 100)
+emb_df <- data.frame(
+  F1 = res_gol@h[1, ],
+  F2 = res_gol@h[2, ],
+  Cancer = label_fac
+)
+
+ggplot(emb_df, aes(F1, F2, color = Cancer, shape = Cancer)) +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("ALL" = "#2166AC", "AML" = "#B2182B")) +
+  labs(x = "NMF Factor 1", y = "NMF Factor 2",
+       title = "Unsupervised NMF perfectly separates ALL from AML (k = 2)")
+```
+
+### Guide Effect Across Lambda
+
+```{r golub-lambda-sweep}
+lambdas <- c(0, 0.1, 0.5, 1, 5, 10)
+set.seed(42)
+test_idx <- sort(sample(38, 11))
+
+sweep_gol <- do.call(rbind, lapply(lambdas, function(lam) {
+  if (lam == 0) {
+    m <- nmf(A_gol, k = 3, seed = 42, maxit = 200)
+  } else {
+    m <- nmf(A_gol, k = 3, seed = 42, maxit = 200,
+             guides = guide_classifier(label_int, lambda = lam))
+  }
+  ev <- classify_embedding(t(m@h), label_int, test_idx = test_idx, k = 3)
+  mse <- evaluate(m, A_gol)
+  data.frame(lambda = lam, accuracy = ev$accuracy, mse = mse)
+}))
+
+knitr::kable(sweep_gol, digits = c(1, 3, 0),
+             col.names = c("Lambda", "Accuracy", "Reconstruction MSE"),
+             caption = "Guide strength trade-off: accuracy vs. reconstruction")
+```
+
+With this clean dataset, accuracy is already 1.0 across lambda values.
+The reconstruction cost increases with stronger guidance — the
+reconstruction–classification trade-off is visible in the MSE column.
+On noisier, higher-dimensional datasets (like CITE-seq below), the
+guide's benefit is more pronounced.
+
+### Cross-Validation: Optimal Rank
+
+```{r golub-cv}
+inp_gol <- factor_input(A_gol, "golub")
+cv_gol <- cross_validate_graph(
+  inputs = inp_gol,
+  layer_fn = function(p) inp_gol |> nmf_layer(k = p$k),
+  params = list(k = c(2L, 3L, 5L, 8L, 10L)),
+  config = factor_config(maxit = 200, tol = 1e-6, seed = 42,
+                         test_fraction = 0.2),
+  reps = 3, seed = 42, verbose = FALSE
+)
+best_gol <- cv_gol$summary[1, ]
+knitr::kable(cv_gol$summary, digits = c(0, 0, 0, 0),
+             caption = paste("CV selects k =", best_gol$k, "as optimal"))
+```
+
+**Result**: CV selects k = `r best_gol$k` — matching the two biological
+classes (ALL / AML), plus potential subtype structure.
+
+---
+
+## 4. Semi-Supervised Cell Typing: CITE-seq with Guide Classifier
+
+CITE-seq measures both RNA and protein in the same cells, with expert
+annotations available for 27 fine-grained cell types (L2 labels).  We set
+k = 27 — one factor per cell type — so the guide classifier can align each
+factor with a biological class.
+
+```{r citeseq-check, echo = FALSE}
+has_seuratdata <- requireNamespace("SeuratData", quietly = TRUE) &&
+                  requireNamespace("Seurat", quietly = TRUE)
+```
+
+```{r citeseq-setup, eval = has_seuratdata}
+library(SeuratData)
+library(Seurat)
+
+data("bmcite")
+bmcite <- UpdateSeuratObject(bmcite)
+rna <- bmcite[["RNA"]]$counts
+ct <- bmcite$celltype.l2
+cat(nrow(rna), "genes ×", ncol(rna), "cells\n")
+cat(length(unique(ct)), "cell types (L2)\n")
+
+# Geometric sketch: random 3000 cells, top 2000 variable genes
+set.seed(42)
+idx <- sample(ncol(rna), 3000)
+A_cite <- rna[, idx]
+ct_sub <- ct[idx]
+# Select top variable genes
+rs <- Matrix::rowSums(A_cite)
+rs2 <- Matrix::rowSums(A_cite^2)
+n <- ncol(A_cite)
+gene_var <- (rs2 / n) - (rs / n)^2
+top_genes <- order(gene_var, decreasing = TRUE)[1:2000]
+A_cite <- as(A_cite[top_genes, ], "dgCMatrix")
+cat("Subsampled:", nrow(A_cite), "genes ×", ncol(A_cite), "cells\n")
+
+ct_fac <- factor(ct_sub)
+ct_int <- as.integer(ct_fac) - 1L
+```
+
+### Unsupervised vs. Guided NMF
+
+```{r citeseq-compare, eval = has_seuratdata}
+# Unsupervised
+inp_cite <- factor_input(A_cite, "rna")
+L_unsup <- inp_cite |> nmf_layer(k = 27, name = "layer")
+net_unsup <- factor_net(inp_cite, L_unsup,
+                        config = factor_config(maxit = 100, tol = 1e-5, seed = 42))
+res_unsup <- fit(net_unsup)
+H_unsup <- res_unsup$layers[["layer"]]$H
+
+eval_unsup <- classify_embedding(t(H_unsup), ct_int, test_fraction = 0.2, k = 5, seed = 42)
+
+# Guided (lambda = 0.1)
+guide_cite <- guide_classifier(ct_int, lambda = 0.1, side = "H")
+L_guided <- inp_cite |> nmf_layer(k = 27, name = "layer", H = H(guide = guide_cite))
+net_guided <- factor_net(inp_cite, L_guided,
+                         config = factor_config(maxit = 100, tol = 1e-5, seed = 42))
+res_guided <- fit(net_guided)
+H_guided <- res_guided$layers[["layer"]]$H
+
+eval_guided <- classify_embedding(t(H_guided), ct_int, test_fraction = 0.2, k = 5, seed = 42)
+
+cite_table <- data.frame(
+  Model = c("Unsupervised NMF", "Guided NMF (λ = 0.1)"),
+  Accuracy = c(eval_unsup$accuracy, eval_guided$accuracy),
+  `Macro F1` = c(eval_unsup$macro_f1, eval_guided$macro_f1),
+  check.names = FALSE
+)
+knitr::kable(cite_table, digits = 3,
+             caption = "CITE-seq cell type classification (27 L2 types, k = 27)")
+```
+
+The guide improves kNN accuracy by ~2 percentage points.  This
+supervised upper bound uses all labels; we next examine how accuracy
+degrades as labels are removed.
+
+### Semi-Supervised: Varying Label Fraction
+
+```{r citeseq-semi, eval = has_seuratdata, fig.height = 3.5}
+fracs <- c(0.05, 0.1, 0.2, 0.5, 1.0)
+semi_results <- do.call(rbind, lapply(fracs, function(frac) {
+  set.seed(42)
+  ss_labels <- ct_int
+  if (frac < 1.0) {
+    mask <- sample(c(TRUE, FALSE), length(ct_int), replace = TRUE,
+                   prob = c(1 - frac, frac))
+    ss_labels[mask] <- -1L
+  }
+
+  inp <- factor_input(A_cite, "rna")
+  guide <- guide_classifier(ss_labels, lambda = 0.1, side = "H")
+  L1 <- inp |> nmf_layer(k = 27, name = "layer", H = H(guide = guide))
+  net <- factor_net(inp, L1, config = factor_config(maxit = 100, tol = 1e-5, seed = 42))
+  res <- fit(net)
+  ev <- classify_embedding(t(res$layers[["layer"]]$H), ct_int,
+                           test_fraction = 0.2, k = 5, seed = 42)
+  data.frame(fraction_labeled = frac, accuracy = ev$accuracy,
+             n_labeled = sum(ss_labels >= 0))
+}))
+
+ggplot(semi_results, aes(fraction_labeled, accuracy)) +
+  geom_line(linewidth = 0.8, color = "#D95F02") +
+  geom_point(size = 2.5, color = "#D95F02") +
+  geom_hline(yintercept = eval_unsup$accuracy, linetype = "dashed",
+             color = "grey50") +
+  annotate("text", x = 0.7, y = eval_unsup$accuracy + 0.005,
+           label = "Unsupervised baseline", color = "grey50", size = 3.5) +
+  scale_x_continuous(labels = scales::percent) +
+  labs(x = "Fraction of cells labeled", y = "kNN accuracy (27 cell types)",
+       title = "Semi-supervised NMF: accuracy vs. label budget")
+```
+
+**Result**: Even 5–10% labeled cells improve cell type classification
+over the unsupervised baseline, demonstrating effective label propagation
+through the NMF embedding.  Setting k equal to the number of classes
+ensures each factor can specialize for one cell type.
+
+---
+
+## 5. Multi-Modal Integration: RNA + Protein
+
+CITE-seq provides two complementary views of the same cells: RNA (broad
+transcriptomic coverage) and ADT (targeted protein markers).  We use
+`factor_shared()` to discover a joint latent space, then compare
+classification accuracy across modalities.
+
+```{r multimodal-setup, eval = has_seuratdata}
+# ADT (protein) modality from bmcite
+adt <- bmcite[["ADT"]]$counts[, idx]
+adt <- as(as.matrix(adt), "dgCMatrix")  # 25 proteins × 3000 cells
+cat("RNA:", nrow(A_cite), "× ", ncol(A_cite), "\n")
+cat("ADT:", nrow(adt), "×", ncol(adt), "\n")
+```
+
+### Shared Factorization
+
+`factor_shared()` forces RNA and ADT to share the same H matrix — a
+common embedding for all 3 000 cells that explains both gene expression
+and protein levels.
+
+```{r multimodal-fit, eval = has_seuratdata}
+inp_rna <- factor_input(A_cite, "rna")
+inp_adt <- factor_input(adt, "adt")
+shared <- factor_shared(inp_rna, inp_adt)
+L_shared <- shared |> nmf_layer(k = 27, name = "shared")
+net_mm <- factor_net(list(inp_rna, inp_adt), L_shared,
+                     config = factor_config(maxit = 100, tol = 1e-5, seed = 42))
+res_mm <- fit(net_mm)
+H_mm <- res_mm$layers[["shared"]]$H
+eval_mm <- classify_embedding(t(H_mm), ct_int, test_fraction = 0.2, k = 5, seed = 42)
+
+cat("RNA-only accuracy:", round(eval_unsup$accuracy, 3), "\n")
+cat("Multi-modal accuracy:", round(eval_mm$accuracy, 3), "\n")
+```
+
+### Modality Comparison
+
+```{r multimodal-table, eval = has_seuratdata}
+# ADT-only NMF for comparison
+inp_adt_only <- factor_input(adt, "adt")
+L_adt <- inp_adt_only |> nmf_layer(k = 27, name = "layer")
+net_adt <- factor_net(inp_adt_only, L_adt,
+                      config = factor_config(maxit = 100, tol = 1e-5, seed = 42))
+res_adt <- fit(net_adt)
+eval_adt <- classify_embedding(t(res_adt$layers[["layer"]]$H), ct_int,
+                               test_fraction = 0.2, k = 5, seed = 42)
+
+mm_compare <- data.frame(
+  Modality = c("RNA only (2000 genes)", "ADT only (25 proteins)",
+               "Multi-modal (RNA + ADT)"),
+  Accuracy = c(eval_unsup$accuracy, eval_adt$accuracy, eval_mm$accuracy),
+  check.names = FALSE
+)
+knitr::kable(mm_compare, digits = 3,
+             caption = "Cell type classification accuracy by modality (L2 labels, k = 27)")
+```
+
+### Embedding Visualization
+
+```{r multimodal-umap, eval = has_seuratdata, fig.height = 4}
+# Simple 2D projection using top 2 factors
+top2 <- order(apply(H_mm, 1, var), decreasing = TRUE)[1:2]
+proj_df <- data.frame(
+  F1 = H_mm[top2[1], ],
+  F2 = H_mm[top2[2], ],
+  CellType = ct_fac
+)
+
+# Simplify to L1-like groups for cleaner plot
+ct_l1 <- as.character(ct_fac)
+ct_l1[grepl("^CD4", ct_l1)] <- "CD4 T"
+ct_l1[grepl("^CD8", ct_l1)] <- "CD8 T"
+ct_l1[grepl("^CD14|^CD16", ct_l1)] <- "Mono"
+ct_l1[grepl("^B |^Plasmablast", ct_l1)] <- "B"
+ct_l1[grepl("^NK", ct_l1)] <- "NK"
+ct_l1[grepl("^DC|^pDC", ct_l1)] <- "DC"
+ct_l1[!ct_l1 %in% c("CD4 T", "CD8 T", "Mono", "B", "NK", "DC")] <- "Other"
+proj_df$Group <- factor(ct_l1)
+
+ggplot(proj_df, aes(F1, F2, color = Group)) +
+  geom_point(alpha = 0.5, size = 0.8) +
+  scale_color_brewer(palette = "Set2") +
+  labs(x = "NMF Factor 1 (highest variance)",
+       y = "NMF Factor 2",
+       title = "Multi-modal NMF embedding (RNA + ADT, k = 27)") +
+  theme(legend.position = "right")
+```
+
+**Result**: Shared factorization boosts RNA-only classification from
+~0.64 to ~0.67 by integrating protein information.  ADT alone achieves
+the highest accuracy (~0.86) — these 25 surface-marker proteins are
+curated specifically for cell-type discrimination.  The multi-modal
+embedding discovers a joint latent space that balances transcriptome-wide
+coverage with protein-level precision.
+
+
+---
+
+## 6. Spatial Transcriptomics: Brain Tissue Mapping
+
+```{r spatial-check, echo = FALSE}
+has_spatial <- requireNamespace("SeuratData", quietly = TRUE) &&
+               requireNamespace("Seurat", quietly = TRUE) &&
+               requireNamespace("stxBrain.SeuratData", quietly = TRUE)
+```
+
+```{r spatial-setup, eval = has_spatial}
+library(stxBrain.SeuratData)
+data("anterior1")
+brain <- UpdateSeuratObject(anterior1)
+
+rna_brain <- brain[["Spatial"]]$counts
+xy <- GetTissueCoordinates(brain)
+cat(nrow(rna_brain), "genes ×", ncol(rna_brain), "spots\n")
+
+# Select top 2000 variable genes
+rs <- Matrix::rowSums(rna_brain)
+rs2 <- Matrix::rowSums(rna_brain^2)
+n_spots <- ncol(rna_brain)
+gv <- (rs2 / n_spots) - (rs / n_spots)^2
+A_brain <- as(rna_brain[order(gv, decreasing = TRUE)[1:2000], ], "dgCMatrix")
+cat("Filtered:", nrow(A_brain), "genes ×", ncol(A_brain), "spots\n")
+```
+
+### Cross-Validation: Choosing Rank
+
+```{r spatial-cv, eval = has_spatial}
+inp_br <- factor_input(A_brain, "brain")
+cv_brain <- cross_validate_graph(
+  inputs = inp_br,
+  layer_fn = function(p) inp_br |> nmf_layer(k = p$k, L1 = p$L1),
+  params = list(k = c(5L, 10L, 15L, 20L), L1 = c(0, 0.01)),
+  config = factor_config(maxit = 80, tol = 1e-5, seed = 42,
+                         test_fraction = 0.15),
+  reps = 3, seed = 42, verbose = FALSE
+)
+best_br <- cv_brain$summary[1, ]
+knitr::kable(head(cv_brain$summary, 6), digits = 2,
+             caption = paste("CV selects k =", best_br$k))
+```
+
+### NMF at Optimal Rank
+
+```{r spatial-fit, eval = has_spatial}
+L_brain <- inp_br |> nmf_layer(k = as.integer(best_br$k), name = "layer")
+net_brain <- factor_net(inp_br, L_brain,
+                        config = factor_config(maxit = 100, tol = 1e-5, seed = 42))
+res_brain <- fit(net_brain)
+H_brain <- res_brain$layers[["layer"]]$H  # k × n_spots
+```
+
+### Spatial Factor Maps
+
+Each factor captures a distinct spatial pattern.  Overlaying NMF
+coefficients onto tissue coordinates reveals anatomical structure.
+
+```{r spatial-maps, eval = has_spatial, fig.width = 9, fig.height = 7}
+k_opt <- nrow(H_brain)
+n_show <- min(k_opt, 8)
+
+spatial_df <- do.call(rbind, lapply(seq_len(n_show), function(f) {
+  data.frame(
+    x = xy[, 1], y = xy[, 2],
+    weight = H_brain[f, ],
+    factor = paste("Factor", f)
+  )
+}))
+spatial_df$factor <- factor(spatial_df$factor,
+                            levels = paste("Factor", seq_len(n_show)))
+
+ggplot(spatial_df, aes(x, y, color = weight)) +
+  geom_point(size = 0.6) +
+  scale_color_viridis_c(option = "magma") +
+  scale_y_reverse() +
+  facet_wrap(~ factor, nrow = 2) +
+  coord_equal() +
+  theme_void() +
+  theme(strip.text = element_text(size = 10, margin = margin(b = 3)),
+        legend.position = "right") +
+  labs(color = "Weight",
+       title = "NMF spatial factors on mouse brain anterior section")
+```
+
+**Result**: Each factor highlights a distinct anatomical region.  Unlike
+clustering, NMF provides continuous weights that reflect mixed tissue
+composition at each spot.
+
+
+---
+
+## Summary
+
+| Example | Dataset | Key Feature | Metric |
+|---------|---------|-------------|--------|
+| 1. Digits | 64 × 1797 | Part-based decomposition | CV loss, basis images |
+| 2. MovieLens | 3867 × 610 | `mask_zeros`, CV | Test MSE on ratings |
+| 3. Golub | 5000 × 38 | `guide_classifier`, CV | Accuracy (ALL/AML) |
+| 4. CITE-seq | 2000 × 3000 | Semi-supervised | Accuracy (27 cell types) |
+| 5. Multi-modal | RNA + ADT shared | `factor_shared` | Accuracy by modality |
+| 6. Spatial | 2000 × 2696 | Tissue mapping | Spatial factor maps |
+
+The `factor_net()` composable API handles diverse data types and analysis
+goals through a unified graph framework.  Cross-validation, guides, and
+multi-modal integration are all orthogonal building blocks that combine
+fluently.
+
+```{r session-info}
+sessionInfo()
+```

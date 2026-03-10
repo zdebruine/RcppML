@@ -51,6 +51,7 @@ using nmf_unified_double_fn_t = void(*)(
     int*, double*,                            // loss_type, huber_delta
     int*, double*,                            // irls_max_iter, irls_tol
     int*,                                     // norm_type
+    int*, int*,                               // projective, symmetric
     int*,                                     // solver_mode
     const int*, const int*, const double*,    // graph_W CSC
     int*, int*, double*,                      // graph_W_dim, graph_W_nnz, graph_W_lambda
@@ -180,10 +181,10 @@ NMFResult<Scalar> bridge_nmf_sparse(
     const DenseMatrix<Scalar>* W_init,
     const DenseMatrix<Scalar>* H_init)
 {
-    auto fn = resolve<nmf_unified_double_fn_t>("rcppml_gpu_nmf_unified_double");
+    auto fn = resolve<nmf_unified_double_fn_t>("rcppml_gpu_nmf_unified_float");
     if (!fn) {
         throw std::runtime_error(
-            "GPU bridge function 'rcppml_gpu_nmf_unified_double' not found. "
+            "GPU bridge function 'rcppml_gpu_nmf_unified_float' not found. "
             "Ensure RcppML_gpu.so is loaded (gpu_available() == TRUE).");
     }
 
@@ -250,6 +251,8 @@ NMFResult<Scalar> bridge_nmf_sparse(
     int irls_max_iter = config.irls_max_iter;
     double irls_tol = static_cast<double>(config.irls_tol);
     int norm_type = static_cast<int>(config.norm_type);
+    int projective = config.projective ? 1 : 0;
+    int symmetric = config.symmetric ? 1 : 0;
     int solver_mode = config.solver_mode;
 
     // --- Pack dispersion config ---
@@ -297,6 +300,7 @@ NMFResult<Scalar> bridge_nmf_sparse(
         &loss_type, &huber_delta,
         &irls_max_iter, &irls_tol,
         &norm_type,
+        &projective, &symmetric,
         &solver_mode,
         gW.p.data(), gW.i.data(), gW.x.data(),
         &gW.dim, &gW.nnz, &gW.lambda,
@@ -376,10 +380,10 @@ NMFResult<Scalar> bridge_nmf_cv_sparse(
     const DenseMatrix<Scalar>* H_init)
 {
     auto fn = resolve<nmf_cv_unified_double_fn_t>(
-        "rcppml_gpu_nmf_cv_unified_double");
+        "rcppml_gpu_nmf_cv_unified_float");
     if (!fn) {
         throw std::runtime_error(
-            "GPU bridge function 'rcppml_gpu_nmf_cv_unified_double' not found.");
+            "GPU bridge function 'rcppml_gpu_nmf_cv_unified_float' not found.");
     }
 
     const int m = static_cast<int>(A.rows());
@@ -514,10 +518,10 @@ NMFResult<Scalar> bridge_nmf_dense(
     const DenseMatrix<Scalar>* H_init)
 {
     auto fn = resolve<nmf_dense_unified_double_fn_t>(
-        "rcppml_gpu_nmf_dense_unified_double");
+        "rcppml_gpu_nmf_dense_unified_float");
     if (!fn) {
         throw std::runtime_error(
-            "GPU bridge function 'rcppml_gpu_nmf_dense_unified_double' not found.");
+            "GPU bridge function 'rcppml_gpu_nmf_dense_unified_float' not found.");
     }
 
     const int m = static_cast<int>(A.rows());

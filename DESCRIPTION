@@ -1,8 +1,8 @@
 Package: RcppML
 Type: Package
 Title: Fast Non-Negative Matrix Factorization and Divisive Clustering
-Version: 1.0.1
-Date: 2026-02-27
+Version: 1.0.0
+Date: 2026-03-10
 Authors@R: person("Zachary", "DeBruine", 
     email = "zacharydebruine@gmail.com", 
     role = c("aut", "cre"), 
@@ -17,7 +17,7 @@ Description: High-performance non-negative matrix factorization (NMF),
     reweighted least squares, regularization (L1, L2, L21, angular, graph
     Laplacian), and optional GPU acceleration via CUDA. Includes divisive
     clustering via recursive rank-2 factorization, consensus clustering,
-    and the SparsePress compressed sparse matrix format. Methods are
+    and the StreamPress compressed sparse matrix format. Methods are
     described in DeBruine, Melcher, and Triche (2021)
     <doi:10.1101/2021.09.01.458620>.
 Depends:

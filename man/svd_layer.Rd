@@ -50,3 +50,6 @@ data(aml)
 inp <- factor_input(aml)
 layer <- svd_layer(inp, k = 5)
 }
+\seealso{
+\code{\link{nmf_layer}}, \code{\link{factor_input}}, \code{\link{factor_net}}
+}

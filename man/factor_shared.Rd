@@ -28,3 +28,6 @@ inp1 <- factor_input(aml[1:400, ], name = "view1")
 inp2 <- factor_input(aml[401:824, ], name = "view2")
 shared <- factor_shared(inp1, inp2)
 }
+\seealso{
+\code{\link{factor_concat}}, \code{\link{factor_add}}, \code{\link{factor_net}}
+}

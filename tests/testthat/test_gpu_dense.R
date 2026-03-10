@@ -175,8 +175,8 @@ test_that("GPU dense NMF loss within 5% of CPU dense NMF", {
 test_that("GPU dense CD solver loss within 5% of CPU", {
   skip_if_no_gpu()
 
-  data(pbmc3k)
-  A <- as.matrix(pbmc3k[1:300, 1:150])
+  m <- load_pbmc3k_matrix()
+  A <- as.matrix(m[1:300, 1:150])
   k <- 5
 
   cpu <- nmf(A, k = k, solver = "cd", maxit = 50, tol = 1e-10,
@@ -192,8 +192,8 @@ test_that("GPU dense CD solver loss within 5% of CPU", {
 test_that("GPU dense CD solver produces valid non-negative factors", {
   skip_if_no_gpu()
 
-  data(pbmc3k)
-  A <- as.matrix(pbmc3k[1:300, 1:150])
+  m <- load_pbmc3k_matrix()
+  A <- as.matrix(m[1:300, 1:150])
 
   gpu <- nmf(A, k = 5, solver = "cd", maxit = 50, tol = 1e-10,
              seed = 42, resource = "gpu", verbose = FALSE)

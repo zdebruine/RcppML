@@ -5,7 +5,7 @@
 \title{StreamPress I/O: Read, Write, and Inspect Compressed Matrices}
 \description{
 Functions for reading and writing matrices in StreamPress (.spz) format.
-StreamPress (formerly SparsePress) achieves 10-20x compression on typical
+StreamPress achieves 10-20x compression on typical
 scRNA-seq sparse matrices using rANS entropy coding, and supports
 dense v3 format with multiple compression codecs.
 }

@@ -161,9 +161,16 @@ training_logger <- function(log_loss = TRUE,
 
 #' Convert training log to data.frame
 #'
-#' @param x A \code{training_logger} object.
+#' Converts the internal training log from an NMF run into a tidy
+#' data frame with one row per logged iteration, suitable for plotting
+#' convergence curves.
+#'
+#' @param x A \code{training_logger} object (from \code{nmf(..., log = TRUE)}).
 #' @param ... Ignored.
-#' @return A data.frame with one row per logged iteration.
+#' @return A data.frame with columns \code{iteration}, \code{wall_sec},
+#'   and optionally \code{total_loss}, per-layer loss columns, and
+#'   norm-tracking columns.
+#' @seealso \code{\link{nmf}}, \code{\link{plot.training_logger}}
 #' @method as.data.frame training_logger
 #' @export
 as.data.frame.training_logger <- function(x, ...) {

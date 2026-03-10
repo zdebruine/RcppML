@@ -13,7 +13,7 @@ test_that("streaming SPZ NMF runs with GP loss", {
 
   tmp <- tempfile(fileext = ".spz")
   on.exit(unlink(tmp), add = TRUE)
-  sp_write(movielens, tmp, include_transpose = TRUE)
+  st_write(movielens, tmp, include_transpose = TRUE)
 
   old_opt <- getOption("RcppML.streaming")
   options(RcppML.streaming = TRUE)
@@ -37,7 +37,7 @@ test_that("streaming SPZ NMF runs with NB loss", {
 
   tmp <- tempfile(fileext = ".spz")
   on.exit(unlink(tmp), add = TRUE)
-  sp_write(movielens, tmp, include_transpose = TRUE)
+  st_write(movielens, tmp, include_transpose = TRUE)
 
   old_opt <- getOption("RcppML.streaming")
   options(RcppML.streaming = TRUE)
@@ -59,7 +59,7 @@ test_that("streaming SPZ NMF runs with robust MSE", {
 
   tmp <- tempfile(fileext = ".spz")
   on.exit(unlink(tmp), add = TRUE)
-  sp_write(movielens, tmp, include_transpose = TRUE)
+  st_write(movielens, tmp, include_transpose = TRUE)
 
   old_opt <- getOption("RcppML.streaming")
   options(RcppML.streaming = TRUE)
@@ -81,7 +81,7 @@ test_that("streaming SPZ NMF with MSE loss still works", {
 
   tmp <- tempfile(fileext = ".spz")
   on.exit(unlink(tmp), add = TRUE)
-  sp_write(movielens, tmp, include_transpose = TRUE)
+  st_write(movielens, tmp, include_transpose = TRUE)
 
   old_opt <- getOption("RcppML.streaming")
   options(RcppML.streaming = TRUE)

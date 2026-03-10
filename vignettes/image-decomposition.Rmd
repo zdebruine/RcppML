@@ -66,6 +66,28 @@ A <- t(sim$A)  # 1024 pixels x 256 images
 model_swim <- nmf(A, k = 16, seed = 42, maxit = 100, L1 = c(0.1, 0))
 ```
 
+```{r swimmer-source, fig.width = 7, fig.height = 2}
+# Show a few raw swimmer images
+source_data <- do.call(rbind, lapply(c(1, 50, 100, 200), function(img_idx) {
+  vals <- A[, img_idx]
+  grid <- expand.grid(x = 1:32, y = 1:32)
+  grid$value <- vals
+  grid$image <- paste("Image", img_idx)
+  grid
+}))
+
+ggplot(source_data, aes(x = x, y = y, fill = value)) +
+  geom_raster() +
+  scale_fill_gradient(low = "white", high = "black") +
+  scale_y_reverse() +
+  facet_wrap(~ image, ncol = 4) +
+  coord_fixed() +
+  theme_minimal() +
+  theme(axis.text = element_blank(), axis.ticks = element_blank(),
+        axis.title = element_blank(), legend.position = "none") +
+  ggtitle("Sample swimmer images (32 × 32)")
+```
+
 ```{r swimmer-match}
 # Match learned factors to ground truth
 # sim$h is 16 x 1024 (true factor images as rows)
@@ -114,6 +136,7 @@ ggplot(plot_data, aes(x = x, y = y, fill = value)) +
   scale_fill_gradient(low = "white", high = "black") +
   scale_y_reverse() +
   facet_wrap(~ factor, ncol = 4) +
+  coord_fixed() +
   theme_minimal() +
   theme(axis.text = element_blank(), axis.ticks = element_blank(),
         axis.title = element_blank(), legend.position = "none",
@@ -152,6 +175,7 @@ ggplot(face_data, aes(x = x, y = y, fill = value)) +
   scale_fill_gradient(low = "white", high = "black") +
   scale_y_reverse() +
   facet_wrap(~ factor, ncol = 5) +
+  coord_fixed() +
   theme_minimal() +
   theme(axis.text = element_blank(), axis.ticks = element_blank(),
         axis.title = element_blank(), legend.position = "none",

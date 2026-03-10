@@ -73,6 +73,7 @@ guide_external <- function(target, lambda = 1.0, side = c("H", "W")) {
 #' @param x An \code{nmf_guide} object.
 #' @param ... Additional arguments (unused).
 #' @return Invisibly returns \code{x}.
+#' @seealso \code{\link{guide_classifier}}, \code{\link{guide_external}}, \code{\link{nmf}}
 #' @method print nmf_guide
 #' @export
 print.nmf_guide <- function(x, ...) {

@@ -13,13 +13,13 @@ library(Matrix)
 # Round-trip for multiple precisions
 # ===========================================================================
 
-test_that("sp_write + sp_read round-trips for float32 (default)", {
+test_that("st_write + st_read round-trips for float32 (default)", {
   set.seed(42)
   A <- abs(rsparsematrix(100, 60, density = 0.1))
   path <- tempfile(fileext = ".spz")
   on.exit(unlink(path))
-  sp_write(A, path, precision = "float")
-  B <- sp_read(path)
+  st_write(A, path, precision = "float")
+  B <- st_read(path)
   # float32 precision: tolerance ~1e-6
 
   expect_equal(as.matrix(A), as.matrix(B), tolerance = 1e-5)
@@ -27,24 +27,24 @@ test_that("sp_write + sp_read round-trips for float32 (default)", {
   expect_equal(ncol(B), ncol(A))
 })
 
-test_that("sp_write + sp_read round-trips for float64", {
+test_that("st_write + st_read round-trips for float64", {
   set.seed(42)
   A <- abs(rsparsematrix(100, 60, density = 0.1))
   path <- tempfile(fileext = ".spz")
   on.exit(unlink(path))
-  sp_write(A, path, precision = "double")
-  B <- sp_read(path)
+  st_write(A, path, precision = "double")
+  B <- st_read(path)
   # NOTE: precision="double" currently stores at ~float32 precision internally
   expect_equal(as.matrix(A), as.matrix(B), tolerance = 1e-6)
 })
 
-test_that("sp_write + sp_read round-trips for float16", {
+test_that("st_write + st_read round-trips for float16", {
   set.seed(42)
   A <- abs(rsparsematrix(80, 50, density = 0.1))
   path <- tempfile(fileext = ".spz")
   on.exit(unlink(path))
-  sp_write(A, path, precision = "half")
-  B <- sp_read(path)
+  st_write(A, path, precision = "half")
+  B <- st_read(path)
   # float16 has ~3 decimal digits of precision
   expect_equal(nrow(B), nrow(A))
   expect_equal(ncol(B), ncol(A))
@@ -52,13 +52,13 @@ test_that("sp_write + sp_read round-trips for float16", {
   expect_equal(length(B@x), length(A@x))
 })
 
-test_that("sp_write + sp_read round-trips with auto precision", {
+test_that("st_write + st_read round-trips with auto precision", {
   set.seed(42)
   A <- abs(rsparsematrix(80, 50, density = 0.1))
   path <- tempfile(fileext = ".spz")
   on.exit(unlink(path))
-  sp_write(A, path, precision = "auto")
-  B <- sp_read(path)
+  st_write(A, path, precision = "auto")
+  B <- st_read(path)
   expect_equal(nrow(B), nrow(A))
   expect_equal(ncol(B), ncol(A))
 })
@@ -67,44 +67,44 @@ test_that("sp_write + sp_read round-trips with auto precision", {
 # Transpose round-trip (was quarantined as test_sparsepress_extended-27)
 # ===========================================================================
 
-# sp_read_transpose and sp_convert tests removed — functions not yet implemented
+# st_read_transpose and sp_convert tests removed — functions not yet implemented
 
 # ===========================================================================
-# sp_info reads correct metadata
+# st_info reads correct metadata
 # ===========================================================================
 
-test_that("sp_info reads correct metadata without decompression", {
+test_that("st_info reads correct metadata without decompression", {
   set.seed(42)
   A <- abs(rsparsematrix(200, 100, density = 0.05))
   path <- tempfile(fileext = ".spz")
   on.exit(unlink(path))
-  sp_write(A, path)
+  st_write(A, path)
 
-  info <- sp_info(path)
+  info <- st_info(path)
   expect_equal(info$rows, 200L)
   expect_equal(info$cols, 100L)
   expect_true(info$nnz > 0)
 })
 
 # ===========================================================================
-# sp_read with cols= returns correct column subset
+# st_read with cols= returns correct column subset
 # ===========================================================================
 
-test_that("sp_read with cols= returns correct column subset", {
+test_that("st_read with cols= returns correct column subset", {
   # KNOWN BUG: cols= parameter is non-functional in current v2 path.
   # The C++ implementation only supports col_start/col_end range, and
   # even that doesn't filter correctly — it always returns all columns.
-  # Skipping until sp_read column subsetting is fixed.
-  skip("sp_read cols= subsetting is not yet functional (known limitation)")
+  # Skipping until st_read column subsetting is fixed.
+  skip("st_read cols= subsetting is not yet functional (known limitation)")
 
   set.seed(42)
   A <- abs(rsparsematrix(100, 50, density = 0.1))
   path <- tempfile(fileext = ".spz")
   on.exit(unlink(path))
-  sp_write(A, path)
+  st_write(A, path)
 
   cols_to_read <- c(1L, 5L, 10L, 20L)
-  B <- sp_read(path, cols = cols_to_read)
+  B <- st_read(path, cols = cols_to_read)
   expect_equal(ncol(B), length(cols_to_read))
   expect_equal(nrow(B), nrow(A))
 
@@ -114,7 +114,7 @@ test_that("sp_read with cols= returns correct column subset", {
 })
 
 # ===========================================================================
-# sp_convert with row_sort (was quarantined as test_sparsepress_extended-118)
+# st_convert with row_sort (was quarantined as test_sparsepress_extended-118)
 # ===========================================================================
 
-# sp_convert with row_sort test removed — sp_convert not yet implemented
+# st_convert with row_sort test removed — sp_convert not yet implemented

@@ -551,4 +551,180 @@ void rcppml_gpu_svd_pca_dense_double(
     }
 }
 
+/**
+ * @brief Dense-matrix GPU SVD/PCA (float precision).
+ *
+ * Same as rcppml_gpu_svd_pca_dense_double but uses float precision.
+ * Input/output arrays are still double (R's native type) — conversion
+ * happens at the boundary.
+ */
+void rcppml_gpu_svd_pca_dense_float(
+    const double* A_data, int* m, int* n, int* k_max,
+    double* U, double* d, double* V,
+    double* tol, int* max_iter,
+    int* center, int* verbose, int* seed, int* threads,
+    double* L1_u, double* L1_v, double* L2_u, double* L2_v,
+    int* nonneg_u, int* nonneg_v,
+    double* ub_u, double* ub_v,
+    double* L21_u, double* L21_v,
+    double* angular_u, double* angular_v,
+    double* test_fraction, int* cv_seed, int* patience, int* mask_zeros,
+    int* algorithm,
+    // Graph U regularization (CSC arrays; nnz=0 means not provided)
+    const int* graph_u_p, const int* graph_u_i, const double* graph_u_x,
+    int* graph_u_dim, int* graph_u_nnz, double* graph_u_lambda_val,
+    // Graph V regularization (CSC arrays; nnz=0 means not provided)
+    const int* graph_v_p, const int* graph_v_i, const double* graph_v_x,
+    int* graph_v_dim, int* graph_v_nnz, double* graph_v_lambda_val,
+    // Observation mask (CSC arrays; nnz=0 means not provided)
+    const int* obs_mask_p, const int* obs_mask_i, const double* obs_mask_x,
+    int* obs_mask_rows, int* obs_mask_cols, int* obs_mask_nnz,
+    int* out_k_selected, double* out_wall_time_ms,
+    double* out_test_loss, int* out_iters_per_factor,
+    double* out_frobenius_norm_sq, double* out_row_means,
+    double* robust_delta, int* irls_max_iter, double* irls_tol,
+    int* out_status)
+{
+    try {
+        // Convert dense matrix from double to float
+        const size_t mn = static_cast<size_t>(*m) * (*n);
+        std::vector<float> A_f(mn);
+        for (size_t i = 0; i < mn; ++i)
+            A_f[i] = static_cast<float>(A_data[i]);
+
+        FactorNet::SVDConfig<float> config;
+        config.k_max    = *k_max;
+        config.tol      = static_cast<float>(*tol);
+        config.max_iter = *max_iter;
+        config.center   = (*center != 0);
+        config.verbose  = (*verbose != 0);
+        config.seed     = static_cast<uint32_t>(*seed);
+        config.threads  = *threads;
+        config.L1_u     = static_cast<float>(*L1_u);
+        config.L1_v     = static_cast<float>(*L1_v);
+        config.L2_u     = static_cast<float>(*L2_u);
+        config.L2_v     = static_cast<float>(*L2_v);
+        config.nonneg_u = (*nonneg_u != 0);
+        config.nonneg_v = (*nonneg_v != 0);
+        config.upper_bound_u = static_cast<float>(*ub_u);
+        config.upper_bound_v = static_cast<float>(*ub_v);
+        config.L21_u    = L21_u ? static_cast<float>(*L21_u) : 0.0f;
+        config.L21_v    = L21_v ? static_cast<float>(*L21_v) : 0.0f;
+        config.angular_u = angular_u ? static_cast<float>(*angular_u) : 0.0f;
+        config.angular_v = angular_v ? static_cast<float>(*angular_v) : 0.0f;
+        config.robust_delta = robust_delta ? static_cast<float>(*robust_delta) : 0.0f;
+        config.irls_max_iter = irls_max_iter ? *irls_max_iter : 5;
+        config.irls_tol = irls_tol ? static_cast<float>(*irls_tol) : 1e-4f;
+        config.test_fraction = static_cast<float>(*test_fraction);
+        config.cv_seed  = static_cast<uint32_t>(*cv_seed);
+        config.patience = *patience;
+        config.mask_zeros = (*mask_zeros != 0);
+
+        // Graph Laplacians from raw CSC arrays (cast to float)
+        Eigen::SparseMatrix<float> graph_u_mat, graph_v_mat;
+        if (*graph_u_nnz > 0) {
+            graph_u_mat = sparse_from_csc<float>(
+                *graph_u_dim, *graph_u_dim, *graph_u_nnz,
+                graph_u_p, graph_u_i, graph_u_x);
+            config.graph_u = &graph_u_mat;
+            config.graph_u_lambda = static_cast<float>(*graph_u_lambda_val);
+        }
+        if (*graph_v_nnz > 0) {
+            graph_v_mat = sparse_from_csc<float>(
+                *graph_v_dim, *graph_v_dim, *graph_v_nnz,
+                graph_v_p, graph_v_i, graph_v_x);
+            config.graph_v = &graph_v_mat;
+            config.graph_v_lambda = static_cast<float>(*graph_v_lambda_val);
+        }
+
+        // Observation mask from raw CSC arrays (cast to float)
+        Eigen::SparseMatrix<float> obs_mask_mat;
+        if (*obs_mask_nnz > 0) {
+            obs_mask_mat = sparse_from_csc<float>(
+                *obs_mask_rows, *obs_mask_cols, *obs_mask_nnz,
+                obs_mask_p, obs_mask_i, obs_mask_x);
+            config.obs_mask = &obs_mask_mat;
+        }
+
+        int algo = algorithm ? *algorithm : 0;
+
+        FactorNet::SVDResult<float> result;
+
+        if (algo == 0) {
+            // Deflation: use true dense GEMV path
+            result = FactorNet::svd::deflation_svd_gpu_dense<float>(
+                A_f.data(), *m, *n, config);
+        } else {
+            // Other algorithms: convert dense → CSC and use sparse path
+            int mm = *m, nn = *n;
+            int total = mm * nn;
+            std::vector<int> col_ptr(nn + 1);
+            std::vector<int> row_idx(total);
+            std::vector<float> vals(total);
+            int nnz = 0;
+            for (int j = 0; j < nn; ++j) {
+                col_ptr[j] = nnz;
+                for (int i = 0; i < mm; ++i) {
+                    float v = A_f[i + static_cast<size_t>(j) * mm];
+                    if (v != 0.0f) {
+                        row_idx[nnz] = i;
+                        vals[nnz] = v;
+                        ++nnz;
+                    }
+                }
+            }
+            col_ptr[nn] = nnz;
+            int nnz_actual = nnz;
+            switch (algo) {
+                case 1:
+                    result = FactorNet::svd::irlba_svd_gpu<float>(
+                        col_ptr.data(), row_idx.data(), vals.data(), mm, nn, nnz_actual, config);
+                    break;
+                case 2:
+                    result = FactorNet::svd::lanczos_svd_gpu<float>(
+                        col_ptr.data(), row_idx.data(), vals.data(), mm, nn, nnz_actual, config);
+                    break;
+                case 3:
+                    result = FactorNet::svd::randomized_svd_gpu<float>(
+                        col_ptr.data(), row_idx.data(), vals.data(), mm, nn, nnz_actual, config);
+                    break;
+                case 4:
+                    result = FactorNet::svd::krylov_svd_gpu<float>(
+                        col_ptr.data(), row_idx.data(), vals.data(), mm, nn, nnz_actual, config);
+                    break;
+                default:
+                    result = FactorNet::svd::deflation_svd_gpu_dense<float>(
+                        A_f.data(), *m, *n, config);
+                    break;
+            }
+        }
+
+        int ksel = result.k_selected;
+        *out_k_selected   = ksel;
+        *out_wall_time_ms = static_cast<double>(result.wall_time_ms);
+        *out_frobenius_norm_sq = static_cast<double>(result.frobenius_norm_sq);
+
+        for (int j = 0; j < ksel; ++j)
+            for (int i = 0; i < *m; ++i)
+                U[i + static_cast<size_t>(j) * (*m)] = static_cast<double>(result.U(i, j));
+        for (int j = 0; j < ksel; ++j)
+            d[j] = static_cast<double>(result.d(j));
+        for (int j = 0; j < ksel; ++j)
+            for (int i = 0; i < *n; ++i)
+                V[i + static_cast<size_t>(j) * (*n)] = static_cast<double>(result.V(i, j));
+        for (int j = 0; j < (int)result.test_loss_trajectory.size(); ++j)
+            out_test_loss[j] = static_cast<double>(result.test_loss_trajectory[j]);
+        for (int j = 0; j < (int)result.iters_per_factor.size(); ++j)
+            out_iters_per_factor[j] = result.iters_per_factor[j];
+        if (result.centered && result.row_means.size() > 0)
+            for (int i = 0; i < *m; ++i)
+                out_row_means[i] = static_cast<double>(result.row_means(i));
+
+        *out_status = 0;
+    } catch (const std::exception& e) {
+        FACTORNET_GPU_WARN("GPU SVD/PCA (dense, fp32) error: %s\n", e.what());
+        *out_status = -1;
+    }
+}
+
 } // extern "C"

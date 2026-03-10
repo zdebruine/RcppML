@@ -69,7 +69,8 @@
 # ^vignettes/nmf-deep-dive\.Rmd$
 # Vignettes directory included — individual HTML/files still excluded
 # ^vignettes$
-^-\.o$
+^src/.*\.o$
+^src/.*\.so$
 ^GPMF_PROPOSAL\.md$
 ^experiments$
 ^HARDENING_PLAN\.md$
@@ -83,3 +84,8 @@
 ^\.vscode$
 ^test_results\.log$
 ^test_run\.log$
+^data/geo_sketch\.rda$
+^vignettes/geo-sketch-multimodal\.Rmd$
+^FACTOR_NET_VIGNETTE_PLAN\.md$
+^cran-comments\.md$
+^vignettes/figure$

@@ -695,6 +695,7 @@ predict.factor_net_result <- function(object, newdata, ...) {
 #' @param x A \code{factor_net_result} object.
 #' @param name Layer name (e.g. \code{"L1"}).
 #' @return The layer result list, or the named field if not a layer name.
+#' @seealso \code{\link{factor_net}}, \code{\link{fit}}
 #' @export
 `$.factor_net_result` <- function(x, name) {
   # Allow direct access to layer results by name: result$L1
@@ -707,6 +708,7 @@ predict.factor_net_result <- function(object, newdata, ...) {
 #' @param x A \code{factor_net_result} object.
 #' @param ... Additional arguments (unused).
 #' @return Invisibly returns \code{x}.
+#' @seealso \code{\link{factor_net}}, \code{\link{fit}}, \code{\link{summary.factor_net_result}}
 #' @method print factor_net_result
 #' @export
 print.factor_net_result <- function(x, ...) {
@@ -743,6 +745,7 @@ print.factor_net_result <- function(x, ...) {
 #' @param object A \code{factor_net_result} object.
 #' @param ... Additional arguments (unused).
 #' @return Invisibly returns \code{object}.
+#' @seealso \code{\link{factor_net}}, \code{\link{fit}}, \code{\link{print.factor_net_result}}
 #' @method summary factor_net_result
 #' @export
 summary.factor_net_result <- function(object, ...) {

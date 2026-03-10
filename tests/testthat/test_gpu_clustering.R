@@ -6,8 +6,8 @@
 test_that("dclust produces valid clusters on GPU node", {
   skip_if_no_gpu()
 
-  data(pbmc3k)
-  A <- pbmc3k[1:300, 1:150]
+  m <- load_pbmc3k_matrix()
+  A <- m[1:300, 1:150]
   A <- as(A, "dgCMatrix")
 
   # dclust auto-dispatches to GPU via .try_gpu_dclust
@@ -30,8 +30,8 @@ test_that("dclust produces valid clusters on GPU node", {
 test_that("dclust cluster IDs are unique and zero-indexed", {
   skip_if_no_gpu()
 
-  data(pbmc3k)
-  A <- pbmc3k[1:300, 1:150]
+  m <- load_pbmc3k_matrix()
+  A <- m[1:300, 1:150]
   A <- as(A, "dgCMatrix")
 
   dc <- dclust(A, min_samples = 5, seed = 42L, verbose = FALSE)
@@ -46,8 +46,8 @@ test_that("dclust cluster IDs are unique and zero-indexed", {
 test_that("consensus_nmf runs on GPU and returns valid structure", {
   skip_if_no_gpu()
 
-  data(pbmc3k)
-  A <- pbmc3k[1:300, 1:150]
+  m <- load_pbmc3k_matrix()
+  A <- m[1:300, 1:150]
   A <- as(A, "dgCMatrix")
 
   con <- consensus_nmf(A, k = 5, reps = 3, seed = 42L,
@@ -70,8 +70,8 @@ test_that("consensus_nmf runs on GPU and returns valid structure", {
 test_that("GPU consensus_nmf produces similar clusters to CPU", {
   skip_if_no_gpu()
 
-  data(pbmc3k)
-  A <- pbmc3k[1:300, 1:150]
+  m <- load_pbmc3k_matrix()
+  A <- m[1:300, 1:150]
   A <- as(A, "dgCMatrix")
 
   cpu_con <- consensus_nmf(A, k = 5, reps = 3, seed = 42L,

@@ -44,8 +44,8 @@
 \S4method{predict}{nmf}(
   object,
   data,
-  L1 = 0,
-  L2 = 0,
+  L1 = NULL,
+  L2 = NULL,
   mask = NULL,
   upper_bound = NULL,
   threads = 0,

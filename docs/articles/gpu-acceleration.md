@@ -1,0 +1,389 @@
+# GPU-Accelerated Computing
+
+## Motivation
+
+NMF’s core computation is iterative matrix multiplication — the dominant
+cost each iteration is computing Gram matrices ($HH^{T}$, $W^{T}W$) and
+right-hand-side products ($AH^{T}$, $W^{T}A$). These dense linear
+algebra operations map directly onto GPU hardware, where thousands of
+cores perform matrix multiplies in parallel.
+
+RcppML’s GPU backend uses NVIDIA CUDA with cuBLAS (dense operations) and
+cuSPARSE (sparse matrix–dense matrix products) to accelerate NMF by
+5–50× depending on matrix size, density, and GPU hardware. The GPU is
+**optional** — all code falls back to CPU transparently when CUDA is
+unavailable.
+
+## API Reference
+
+### GPU Detection
+
+Two functions check GPU availability at runtime:
+
+``` r
+library(RcppML)
+
+# Check if a CUDA GPU is available and the GPU library is loaded
+gpu_available()
+#> [1] TRUE
+
+# Get device details
+gpu_info()
+#>   device   name total_mb  free_mb
+#> 1      0  GPU 0    32510    31200
+```
+
+[`gpu_available()`](https://zdebruine.github.io/RcppML/reference/gpu_available.md)
+probes for CUDA GPUs on first call and caches the result for the
+session. Use `gpu_available(force_recheck = TRUE)` to re-probe after
+driver updates.
+
+### GPU-Accelerated NMF
+
+The same [`nmf()`](https://zdebruine.github.io/RcppML/reference/nmf.md)
+function dispatches to GPU via the `resource` parameter:
+
+``` r
+library(Matrix)
+A <- rsparsematrix(10000, 5000, density = 0.05)
+
+# Auto-dispatch (uses GPU if available, otherwise CPU)
+model <- nmf(A, k = 20, seed = 42)
+
+# Force CPU even when GPU is available
+model_cpu <- nmf(A, k = 20, resource = "cpu", seed = 42)
+
+# Force GPU (errors if unavailable)
+model_gpu <- nmf(A, k = 20, resource = "gpu", seed = 42)
+```
+
+All other parameters (`loss`, `L1`, `L2`, `mask_zeros`, `test_fraction`,
+etc.) work identically on GPU and CPU. Results are numerically
+equivalent to within floating-point tolerance.
+
+### Resource Override Priority
+
+The compute backend is determined by (highest priority first):
+
+1.  `resource` parameter in
+    [`nmf()`](https://zdebruine.github.io/RcppML/reference/nmf.md) or
+    [`svd()`](https://zdebruine.github.io/RcppML/reference/svd.md)
+2.  `RCPPML_RESOURCE` environment variable
+3.  `options(RcppML.gpu = TRUE/FALSE)`
+4.  Auto-detection (GPU if available, else CPU)
+
+``` r
+# Environment variable (session-wide)
+Sys.setenv(RCPPML_RESOURCE = "cpu")
+
+# R option (session-wide)
+options(RcppML.gpu = FALSE)
+```
+
+### GPU Memory Management for StreamPress
+
+For large datasets stored as `.spz` files,
+[`sp_read_gpu()`](https://zdebruine.github.io/RcppML/reference/sp_read_gpu.md)
+reads the file directly into GPU memory, bypassing CPU entirely:
+
+``` r
+# Read .spz directly into GPU device memory (zero CPU allocation)
+gpu_handle <- sp_read_gpu("large_dataset.spz")
+#> GPU sparse matrix: 30000 x 20000, nnz = 12000000, device 0
+
+# Run NMF on GPU-resident data
+model <- nmf(gpu_handle, k = 30, seed = 42)
+
+# Free GPU memory when done (optional — GC handles this automatically)
+sp_free_gpu(gpu_handle)
+```
+
+The `gpu_sparse_matrix` handle stores opaque device pointers to the CSC
+arrays in GPU HBM. Passing it to
+[`nmf()`](https://zdebruine.github.io/RcppML/reference/nmf.md) avoids
+the CPU-to-GPU transfer that occurs when using a regular `dgCMatrix`.
+
+### GPU-Supported Features
+
+| Feature                      | GPU Support |
+|:-----------------------------|:------------|
+| Sparse NMF                   | Yes         |
+| Dense NMF                    | Yes         |
+| Cross-validation NMF         | Yes         |
+| MSE loss                     | Yes         |
+| MAE / Huber / KL loss        | Yes         |
+| L1, L2 regularization        | Yes         |
+| L21, angular regularization  | Yes         |
+| Graph regularization         | CPU only    |
+| Upper bound constraints      | Yes         |
+| Bipartition                  | Yes         |
+| Divisive clustering (dclust) | Yes         |
+| StreamPress streaming NMF    | CPU only    |
+
+When a GPU-unsupported feature is requested, RcppML falls back to CPU
+automatically with no error.
+
+## Theory: When GPU Wins
+
+GPU acceleration is not universally faster. The benefit depends on
+problem characteristics:
+
+**GPU excels when:**
+
+- **Large matrices** (\> 5,000 rows and columns): GPU kernel launch
+  overhead is amortized over many floating-point operations.
+- **Moderate to high rank** ($k \geq 10$): The Gram matrix and NNLS
+  solves scale as $O\left( k^{2} \right)$, providing more work to
+  saturate GPU cores.
+- **Many iterations**: The one-time cost of transferring data to GPU
+  memory is amortized across iterations.
+
+**CPU may be faster when:**
+
+- **Small matrices** (\< 1,000 elements per dimension): GPU kernel
+  launch latency dominates computation time.
+- **Very low rank** ($k < 5$): Too little work to keep GPU cores busy.
+- **Ultra-sparse data** (\> 99.5% zeros): Sparse operations have higher
+  GPU launch overhead relative to the actual computation.
+
+### Representative Benchmarks
+
+These benchmarks compare a NVIDIA V100S (32 GB HBM2) against dual Intel
+Xeon Gold (48 CPU cores). NMF was run for 100 iterations with `tol = 0`
+to force full iteration count.
+
+| Dataset             | Dimensions | Density |   k | CPU Time | GPU Time | Speedup |
+|:--------------------|:-----------|:-------:|----:|---------:|---------:|--------:|
+| Dense synthetic     | 10K x 5K   |  100%   |  20 |      45s |     2.1s |     21x |
+| Dense synthetic     | 10K x 5K   |  100%   |  50 |     120s |     5.8s |     21x |
+| Sparse (2% density) | 50K x 10K  |   2%    |  20 |      38s |     6.2s |      6x |
+| Single-cell RNA-seq | 30K x 20K  |   5%    |  30 |     185s |      12s |     15x |
+
+Representative NMF benchmarks: CPU vs. GPU (V100S)
+
+Dense matrices benefit most because cuBLAS achieves near-peak FLOPS on
+dense GEMM. Sparse matrices see lower speedups due to cuSPARSE launch
+overhead, but still provide substantial acceleration for large problems.
+
+## Worked Examples
+
+### Example 1: Basic GPU NMF
+
+The simplest path to GPU acceleration — no code changes beyond
+`resource = "gpu"`:
+
+``` r
+library(RcppML)
+
+# Verify GPU is available
+gpu_available()
+#> [1] TRUE
+gpu_info()
+#>   device                      name total_mb free_mb
+#> 1      0  NVIDIA A100-SXM4-80GB     81920   79500
+
+# Create a moderately large sparse matrix
+library(Matrix)
+A <- rsparsematrix(10000, 5000, density = 0.05)
+
+# GPU NMF — same API, add resource="gpu"
+system.time(model_gpu <- nmf(A, k = 20, resource = "gpu", seed = 42))
+#>    user  system elapsed
+#>   0.120   0.045   1.850
+
+# CPU for comparison
+system.time(model_cpu <- nmf(A, k = 20, resource = "cpu", seed = 42))
+#>    user  system elapsed
+#>  18.200   0.350  18.600
+
+# Verify numerical equivalence
+all.equal(model_gpu@d, model_cpu@d, tolerance = 1e-5)
+#> [1] TRUE
+```
+
+### Example 2: Streaming GPU NMF from StreamPress
+
+For datasets too large for CPU memory, load `.spz` directly onto the
+GPU:
+
+``` r
+# Read .spz directly into GPU memory — zero CPU-side matrix allocation
+gpu_handle <- sp_read_gpu("path/to/large_scRNAseq.spz")
+
+# Run NMF entirely on GPU
+model <- nmf(gpu_handle, k = 30, loss = "gp", resource = "gpu",
+             seed = 42, maxit = 200)
+
+# Extract factors (transferred back to CPU automatically)
+head(model@w[, 1])
+#> [1] 0.00342 0.01205 0.00000 0.00891 0.00054 0.01133
+
+# Free GPU memory when done
+sp_free_gpu(gpu_handle)
+```
+
+### Example 3: CPU vs. GPU Timing Pattern
+
+A template for benchmarking GPU speedup on your own data:
+
+``` r
+library(RcppML)
+library(Matrix)
+
+# Load or generate your data
+data <- rsparsematrix(20000, 10000, density = 0.03)
+
+# Warm up: first call may include library loading overhead
+invisible(nmf(data[1:100, 1:100], k = 5, resource = "gpu", maxit = 5))
+
+# Time CPU
+cpu_time <- system.time(
+  model_cpu <- nmf(data, k = 20, resource = "cpu", seed = 42, maxit = 100)
+)
+
+# Time GPU
+gpu_time <- system.time(
+  model_gpu <- nmf(data, k = 20, resource = "gpu", seed = 42, maxit = 100)
+)
+
+cat(sprintf("CPU: %.1f seconds\nGPU: %.1f seconds\nSpeedup: %.1fx\n",
+            cpu_time[3], gpu_time[3], cpu_time[3] / gpu_time[3]))
+```
+
+## Building the GPU Library
+
+The GPU shared library is built separately from the R package using
+`nvcc`.
+
+### Requirements
+
+- **NVIDIA GPU** with compute capability $\geq$ 7.0 (Volta or newer)
+- **CUDA Toolkit** $\geq$ 12.x (cuBLAS and cuSPARSE included)
+
+### Build Steps
+
+``` bash
+# 1. Load CUDA on your system
+module load cuda/12.8.1   # HPC example
+
+# 2. Build the GPU shared library
+cd RcppML/src/
+nvcc -O3 \
+  -gencode arch=compute_80,code=sm_80 \
+  -gencode arch=compute_90,code=sm_90 \
+  -std=c++17 -Xcompiler -fPIC \
+  --shared \
+  -I../inst/include \
+  -o ../inst/lib/RcppML_gpu.so \
+  gpu_bridge.cu \
+  -lcublas -lcusparse -lcuda
+
+# 3. Verify
+Rscript -e 'library(RcppML); cat("GPU:", gpu_available(), "\n")'
+#> GPU: TRUE
+```
+
+Adapt the `-gencode` flags to your GPU architecture:
+
+| GPU Family | Compute Capability |                       Flag |
+|:-----------|:-------------------|---------------------------:|
+| V100       | 7.0                | arch=compute_70,code=sm_70 |
+| A100       | 8.0                | arch=compute_80,code=sm_80 |
+| H100       | 9.0                | arch=compute_90,code=sm_90 |
+| RTX 3090   | 8.6                | arch=compute_86,code=sm_86 |
+| RTX 4090   | 8.9                | arch=compute_89,code=sm_89 |
+
+CUDA architecture flags by GPU family
+
+### Library Search Path
+
+RcppML searches for `RcppML_gpu.so` in these locations (in order):
+
+1.  Working directory: `inst/lib/` (development)
+2.  Working directory: `src/` (build output)
+3.  Package install directory: `lib/`
+4.  Working directory root
+
+### GPU Memory
+
+NMF GPU memory usage is approximately:
+
+$$\text{Memory} \approx \text{nnz} \times 12 + (m + n) \times k \times 8{\mspace{6mu}\text{bytes}}$$
+
+where nnz is the number of non-zeros, $m$ and $n$ are matrix dimensions,
+and $k$ is rank. For a 30,000 × 20,000 matrix with 5% density at
+$k = 30$, this is roughly 3.6 GB — well within a 32 GB GPU.
+
+### HPC / SLURM Usage
+
+Request GPU resources on SLURM-managed clusters:
+
+``` bash
+# Interactive GPU session
+salloc --partition=gpu --gres=gpu:1 --cpus-per-task=8 --mem=32G --time=02:00:00
+
+# Batch job
+#!/bin/bash
+#SBATCH --partition=gpu
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=32G
+#SBATCH --time=04:00:00
+
+module load r/4.5.2 cuda/12.8.1
+
+Rscript -e '
+library(RcppML)
+cat("GPU available:", gpu_available(), "\n")
+print(gpu_info())
+
+data(pbmc3k)
+tmp <- tempfile(fileext = ".spz")
+writeBin(pbmc3k, tmp)
+counts <- st_read(tmp)
+model <- nmf(counts, k = 20, resource = "gpu", seed = 42)
+cat("Loss:", model@misc$loss, "\n")
+'
+```
+
+## Troubleshooting
+
+### GPU Not Detected
+
+``` r
+gpu_available(force_recheck = TRUE)  # Force re-probe
+#> [1] FALSE
+```
+
+Common causes:
+
+- **CUDA drivers not installed or outdated**: Run `nvidia-smi` to check.
+- **GPU compute capability \< 7.0**: Pre-Volta GPUs are not supported.
+- **`RcppML_gpu.so` not found**: Check the library search path above.
+- **Architecture mismatch**: Library compiled for `sm_90` won’t work on
+  a V100 (`sm_70`).
+
+### Precision
+
+GPU computation uses double precision (FP64). Single precision support
+is planned for a future release to enable faster performance on consumer
+GPUs, which have fewer FP64 units than data-center GPUs.
+
+## Key Takeaways
+
+1.  **Same API, different backend**: `resource = "gpu"` is the only
+    change needed. All loss functions, regularization, and
+    cross-validation work identically.
+2.  **5–50× speedups** on large matrices, with highest gains on dense
+    data and high rank.
+3.  **Direct disk-to-GPU** via
+    [`sp_read_gpu()`](https://zdebruine.github.io/RcppML/reference/sp_read_gpu.md)
+    avoids CPU memory bottlenecks for very large datasets.
+4.  **Automatic fallback**: If GPU is unavailable or a feature is
+    CPU-only, RcppML falls back silently — no code changes needed.
+
+*See the
+[StreamPress](https://zdebruine.github.io/RcppML/articles/streampress.md)
+vignette for `.spz` file format details, and the [NMF
+Fundamentals](https://zdebruine.github.io/RcppML/articles/nmf-fundamentals.md)
+vignette for comprehensive NMF parameter documentation.*

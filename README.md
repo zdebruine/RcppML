@@ -23,7 +23,7 @@ Key capabilities:
 - **Six statistical distributions** — Gaussian (MSE), Generalized Poisson, Negative Binomial, Gamma, Inverse Gaussian, Tweedie — fitted via Iteratively Reweighted Least Squares (IRLS)
 - **Cross-validation** with speckled holdout masks for principled rank selection
 - **GPU acceleration** via CUDA (cuBLAS/cuSPARSE) with automatic fallback to CPU
-- **Streaming NMF** from SparsePress (`.spz`) files for datasets that exceed available memory
+- **Streaming NMF** from StreamPress (`.spz`) files for datasets that exceed available memory
 - **FactorNet graph API** for composable multi-modal, deep, and branching NMF pipelines
 - **Truncated SVD** with five methods: deflation, Krylov, Lanczos, IRLBA, randomized
 - **Divisive clustering** via recursive rank-2 factorizations
@@ -259,15 +259,13 @@ The GPU backend supports:
 - Cross-validation NMF
 - MSE loss (GPU-native), all other losses via automatic CPU fallback
 - OpenMP + CUDA hybrid execution
-- Zero-copy NMF with `sp_read_gpu()` for pre-loaded GPU data
+- Zero-copy NMF with `st_read_gpu()` for pre-loaded GPU data
 
 ---
 
-## Streaming Large Data (SparsePress `.spz` Files)
+## Streaming Large Data (StreamPress `.spz` Files)
 
-For datasets that exceed available RAM, RcppML streams data from **SparsePress** (`.spz`) compressed files — a column-oriented binary format with 10–20× compression via rANS entropy coding.
-
-> **Note**: The SparsePress format will be renamed to **StreamPress** in an upcoming release.
+For datasets that exceed available RAM, RcppML streams data from **StreamPress** (`.spz`) compressed files — a column-oriented binary format with 10–20× compression via rANS entropy coding.
 
 ### Writing and Reading SPZ Files
 
@@ -277,10 +275,10 @@ data(pbmc3k)
 
 # Write sparse matrix to .spz file
 spz_path <- tempfile(fileext = ".spz")
-sp_write(pbmc3k, spz_path, include_transpose = TRUE)
+st_write(pbmc3k, spz_path, include_transpose = TRUE)
 
 # Read back into memory
-mat <- sp_read(spz_path)
+mat <- st_read(spz_path)
 identical(dim(mat), dim(pbmc3k))  # TRUE
 
 # File size comparison
@@ -499,7 +497,7 @@ all(model@h >= 0)  # TRUE — H remains non-negative
 | `movielens` | MovieLens 100K ratings | 610 × 9724 |
 | `hawaiibirds` | Hawaii bird survey counts | 40 × 23 |
 | `olivetti` | Olivetti face images | 4096 × 400 |
-| `digits_full` | Handwritten digits (MNIST subset) | 784 × 1000 |
+| `digits` | Handwritten digits (MNIST subset) | 784 × 1000 |
 
 ---
 
@@ -515,7 +513,7 @@ all(model@h >= 0)  # TRUE — H remains non-negative
 
 5. **GPU**: For matrices with > 10K rows and k > 8, GPU acceleration provides significant speedup. Use `resource = "gpu"`.
 
-6. **Streaming**: For datasets larger than available RAM, write to `.spz` format with `sp_write()` and factorize directly from the file path.
+6. **Streaming**: For datasets larger than available RAM, write to `.spz` format with `st_write()` and factorize directly from the file path.
 
 ---
 

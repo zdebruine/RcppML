@@ -17,3 +17,6 @@ The layer result list, or the named field if not a layer name.
 \description{
 Access layer results by name
 }
+\seealso{
+\code{\link{factor_net}}, \code{\link{fit}}
+}

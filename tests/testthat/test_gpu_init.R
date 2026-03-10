@@ -6,8 +6,8 @@
 test_that("GPU lanczos init loss within 5% of CPU", {
   skip_if_no_gpu()
 
-  data(pbmc3k)
-  A <- pbmc3k[1:300, 1:150]
+  m <- load_pbmc3k_matrix()
+  A <- m[1:300, 1:150]
   A <- as(A, "dgCMatrix")
 
   cpu <- nmf(A, k = 5, init = "lanczos", maxit = 20, tol = 1e-10,
@@ -23,8 +23,8 @@ test_that("GPU lanczos init loss within 5% of CPU", {
 test_that("GPU lanczos init produces valid factors", {
   skip_if_no_gpu()
 
-  data(pbmc3k)
-  A <- pbmc3k[1:300, 1:150]
+  m <- load_pbmc3k_matrix()
+  A <- m[1:300, 1:150]
   A <- as(A, "dgCMatrix")
 
   gpu <- nmf(A, k = 5, init = "lanczos", maxit = 20, tol = 1e-10,
@@ -42,8 +42,8 @@ test_that("GPU lanczos init produces valid factors", {
 test_that("GPU random init loss within 5% of CPU", {
   skip_if_no_gpu()
 
-  data(pbmc3k)
-  A <- pbmc3k[1:300, 1:150]
+  m <- load_pbmc3k_matrix()
+  A <- m[1:300, 1:150]
   A <- as(A, "dgCMatrix")
 
   cpu <- nmf(A, k = 5, init = "random", maxit = 20, tol = 1e-10,
@@ -61,8 +61,8 @@ test_that("GPU random init loss within 5% of CPU", {
 test_that("GPU user-supplied init loss within 5% of CPU", {
   skip_if_no_gpu()
 
-  data(pbmc3k)
-  A <- pbmc3k[1:300, 1:150]
+  m <- load_pbmc3k_matrix()
+  A <- m[1:300, 1:150]
   A <- as(A, "dgCMatrix")
 
   set.seed(42)
@@ -81,8 +81,8 @@ test_that("GPU user-supplied init loss within 5% of CPU", {
 test_that("GPU user init produces non-negative factors", {
   skip_if_no_gpu()
 
-  data(pbmc3k)
-  A <- pbmc3k[1:300, 1:150]
+  m <- load_pbmc3k_matrix()
+  A <- m[1:300, 1:150]
   A <- as(A, "dgCMatrix")
 
   set.seed(42)
@@ -102,8 +102,8 @@ test_that("GPU user init produces non-negative factors", {
 test_that("GPU dense random init loss within 5% of CPU", {
   skip_if_no_gpu()
 
-  data(pbmc3k)
-  A <- as.matrix(pbmc3k[1:300, 1:150])
+  m <- load_pbmc3k_matrix()
+  A <- as.matrix(m[1:300, 1:150])
 
   cpu <- nmf(A, k = 5, init = "random", maxit = 50, tol = 1e-10,
              seed = 42, resource = "cpu", verbose = FALSE)
@@ -118,8 +118,8 @@ test_that("GPU dense random init loss within 5% of CPU", {
 test_that("GPU dense lanczos init loss within 5% of CPU", {
   skip_if_no_gpu()
 
-  data(pbmc3k)
-  A <- as.matrix(pbmc3k[1:300, 1:150])
+  m <- load_pbmc3k_matrix()
+  A <- as.matrix(m[1:300, 1:150])
 
   cpu <- nmf(A, k = 5, init = "lanczos", maxit = 50, tol = 1e-10,
              seed = 42, resource = "cpu", verbose = FALSE)
@@ -134,8 +134,8 @@ test_that("GPU dense lanczos init loss within 5% of CPU", {
 test_that("GPU dense user init loss within 5% of CPU", {
   skip_if_no_gpu()
 
-  data(pbmc3k)
-  A <- as.matrix(pbmc3k[1:300, 1:150])
+  m <- load_pbmc3k_matrix()
+  A <- as.matrix(m[1:300, 1:150])
 
   set.seed(42)
   W_init <- matrix(abs(rnorm(300 * 5)), 300, 5)

@@ -43,7 +43,7 @@ test_that("gpu_available with force_recheck", {
   # Note: if a previous test caused a CUDA error (e.g. illegal memory access),
   # force_recheck may return FALSE even on GPU nodes. This is expected behavior.
   if (r1 && !r2) {
-    skip("GPU context was corrupted by a previous test (likely sparsepress illegal memory access)")
+    skip("GPU context was corrupted by a previous test (likely streampress illegal memory access)")
   }
   expect_identical(r1, r2)
 })

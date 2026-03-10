@@ -7,13 +7,18 @@
 \method{summary}{fn_classifier_eval}(object, ...)
 }
 \arguments{
-\item{object}{An \code{fn_classifier_eval} object.}
+\item{object}{An \code{fn_classifier_eval} object returned by
+\code{\link{classify_embedding}}, \code{\link{classify_logistic}},
+or \code{\link{classify_rf}}.}
 
 \item{...}{Additional arguments (unused).}
 }
 \value{
-A data frame of metric names and values.
+A data frame with columns \code{metric} and \code{value}.
 }
 \description{
-Summarize a classifier evaluation result
+Returns a tidy data frame of aggregate classification metrics.
+}
+\seealso{
+\code{\link{print.fn_classifier_eval}}, \code{\link{classify_embedding}}
 }

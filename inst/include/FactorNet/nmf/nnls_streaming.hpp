@@ -51,7 +51,7 @@ namespace nmf {
  * @param threads      Number of threads (0 = auto)
  * @return H matrix (k x n)
  */
-template<typename Scalar = double>
+template<typename Scalar = float>
 Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> nnls_streaming_spz(
     const std::string& path,
     const Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>& W,

@@ -23,9 +23,9 @@ factor_agreement <- function(model1, model2) {
 test_that("GPU produces same results as CPU (standard NMF)", {
   skip_if_not(exists("gpu_available", where = asNamespace("RcppML")) && RcppML:::gpu_available(), "GPU not available")
   
-  data(pbmc3k)
+  m <- load_pbmc3k_matrix()
   # Use a small subset for fast testing
-  A <- pbmc3k[1:500, 1:200]
+  A <- m[1:500, 1:200]
   A <- as(A, "dgCMatrix")
   
   k <- 8
@@ -76,8 +76,8 @@ test_that("GPU produces same results as CPU (standard NMF)", {
 test_that("GPU produces same results for k=2", {
   skip_if_not(exists("gpu_available", where = asNamespace("RcppML")) && RcppML:::gpu_available(), "GPU not available")
   
-  data(pbmc3k)
-  A <- pbmc3k[1:500, 1:200]
+  m <- load_pbmc3k_matrix()
+  A <- m[1:500, 1:200]
   A <- as(A, "dgCMatrix")
   
   k <- 2
@@ -115,8 +115,8 @@ test_that("GPU produces same results for k=2", {
 test_that("GPU fp32 converges to similar solution as fp64", {
   skip_if_not(exists("gpu_available", where = asNamespace("RcppML")) && RcppML:::gpu_available(), "GPU not available")
   
-  data(pbmc3k)
-  A <- pbmc3k[1:500, 1:200]
+  m <- load_pbmc3k_matrix()
+  A <- m[1:500, 1:200]
   A <- as(A, "dgCMatrix")
   
   k <- 8
@@ -155,8 +155,8 @@ test_that("GPU fp32 converges to similar solution as fp64", {
 test_that("GPU auto-dispatch respects RcppML.gpu option", {
   skip_if_not(exists("gpu_available", where = asNamespace("RcppML")) && RcppML:::gpu_available(), "GPU not available")
   
-  data(pbmc3k)
-  A <- pbmc3k[1:500, 1:200]
+  m <- load_pbmc3k_matrix()
+  A <- m[1:500, 1:200]
   A <- as(A, "dgCMatrix")
   
   # Force CPU
@@ -182,8 +182,8 @@ test_that("Multi-GPU produces valid results", {
   info <- gpu_info()
   skip_if(nrow(info) < 2, "Only 1 GPU available, skipping multi-GPU test")
   
-  data(pbmc3k)
-  A <- pbmc3k[1:500, 1:200]
+  m <- load_pbmc3k_matrix()
+  A <- m[1:500, 1:200]
   A <- as(A, "dgCMatrix")
   
   k <- 8
@@ -223,8 +223,8 @@ test_that("GPU sparse NMF tightly matches CPU (loss <10%, factor agreement >0.95
   skip_if_not(exists("gpu_available", where = asNamespace("RcppML")) &&
                 RcppML:::gpu_available(), "GPU not available")
 
-  data(pbmc3k)
-  A <- pbmc3k[1:500, 1:200]
+  m <- load_pbmc3k_matrix()
+  A <- m[1:500, 1:200]
   A <- as(A, "dgCMatrix")
 
   k <- 8; seed <- 42L; maxit <- 100; tol <- 1e-10

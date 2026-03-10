@@ -1,5 +1,6 @@
-# Avoid R CMD check notes for ggplot2 NSE variables
+# Avoid R CMD check notes for ggplot2 NSE variables and internal helpers
 if(getRversion() >= "2.15.1")  utils::globalVariables(c(
+  ".st_dispatch",
   "iteration",
   "train_loss",
   "test_loss",

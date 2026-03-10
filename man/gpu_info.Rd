@@ -15,3 +15,6 @@ Get GPU device information
 \examples{
 gpu_info()
 }
+\seealso{
+\code{\link{gpu_available}}, \code{\link{nmf}}
+}

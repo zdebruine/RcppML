@@ -16,7 +16,7 @@ A list with \code{data}, \code{is_sparse}, and \code{has_na}.
 Accepts a matrix (dense or sparse), or a file path (character string).
 File paths are auto-loaded based on extension:
 \itemize{
-  \item \code{.spz}: SparsePress compressed format
+  \item \code{.spz}: StreamPress compressed format
   \item \code{.rds}: R serialized object (must contain a matrix)
   \item \code{.mtx}, \code{.mtx.gz}: Matrix Market format (requires Matrix package)
   \item \code{.csv}, \code{.csv.gz}, \code{.tsv}, \code{.tsv.gz}: Delimited text

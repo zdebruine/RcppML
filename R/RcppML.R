@@ -1,4 +1,70 @@
-#' @keywords internal
+#' RcppML: Fast Non-Negative Matrix Factorization and Divisive Clustering
+#'
+#' High-performance non-negative matrix factorization (NMF), singular value
+#' decomposition (SVD/PCA), and divisive clustering for large sparse and dense
+#' matrices, powered by Rcpp and Eigen.
+#'
+#' @section NMF (Non-negative Matrix Factorization):
+#' \describe{
+#'   \item{\code{\link{nmf}}}{Fit NMF model (sparse or dense input, optional cross-validation)}
+#'   \item{\code{\link{evaluate}}}{Evaluate reconstruction loss of an NMF model}
+#'   \item{\code{\link{align}}}{Align factors across NMF models}
+#'   \item{\code{\link{predict,nmf-method}}}{Project new data onto a fitted NMF model}
+#'   \item{\code{\link{consensus_nmf}}}{Consensus clustering from multiple NMF runs}
+#'   \item{\code{\link{simulateNMF}}}{Simulate data from a known NMF model}
+#'   \item{\code{\link{auto_nmf_distribution}}}{Select distribution based on data characteristics}
+#' }
+#'
+#' @section SVD / PCA:
+#' \describe{
+#'   \item{\code{\link{svd}}}{Truncated SVD via deflation}
+#'   \item{\code{\link{pca}}}{PCA (centered SVD)}
+#'   \item{\code{\link{reconstruct}}}{Reconstruct matrix from SVD/PCA model}
+#'   \item{\code{\link{variance_explained}}}{Proportion of variance per factor}
+#' }
+#'
+#' @section NNLS (Non-negative Least Squares):
+#' \describe{
+#'   \item{\code{\link{nnls}}}{Solve non-negative least squares problems}
+#' }
+#'
+#' @section Clustering:
+#' \describe{
+#'   \item{\code{\link{dclust}}}{Divisive clustering via recursive rank-2 NMF}
+#'   \item{\code{\link{bipartition}}}{Split samples into two groups via rank-2 NMF}
+#'   \item{\code{\link{bipartiteMatch}}}{Match two sets of cluster labels}
+#' }
+#'
+#' @section Factor Networks (multi-layer / multi-modal):
+#' \describe{
+#'   \item{\code{\link{factor_net}}}{Compile a factorization network}
+#'   \item{\code{\link{fit}}}{Fit a compiled factor network}
+#'   \item{\code{\link{factor_input}}, \code{\link{nmf_layer}}, \code{\link{svd_layer}}}{Node constructors}
+#'   \item{\code{\link{factor_shared}}, \code{\link{factor_concat}}, \code{\link{factor_add}}}{Merge operations}
+#'   \item{\code{\link{factor_config}}, \code{\link{W}}, \code{\link{H}}}{Configuration}
+#'   \item{\code{\link{cross_validate_graph}}}{Cross-validate a factor network}
+#' }
+#'
+#' @section StreamPress I/O:
+#' \describe{
+#'   \item{\code{\link{st_write}}, \code{\link{st_read}}}{Read/write .spz files}
+#'   \item{\code{\link{st_info}}}{Inspect .spz file metadata}
+#'   \item{\code{\link{st_read_obs}}, \code{\link{st_read_var}}}{Read embedded metadata tables}
+#'   \item{\code{\link{st_read_gpu}}, \code{\link{st_free_gpu}}}{GPU-direct .spz reading}
+#' }
+#'
+#' @section GPU:
+#' \describe{
+#'   \item{\code{\link{gpu_available}}}{Check GPU availability}
+#'   \item{\code{\link{gpu_info}}}{Get GPU device details}
+#' }
+#'
+#' @section Utilities:
+#' \describe{
+#'   \item{\code{\link{cosine}}}{Cosine similarity}
+#'   \item{\code{\link{sparsity}}}{Matrix sparsity fraction}
+#' }
+#'
 "_PACKAGE"
 
 ## useDynLib and other imports

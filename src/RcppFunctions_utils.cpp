@@ -378,11 +378,15 @@ Eigen::MatrixXd c_nnls_streaming(const std::string& path,
                                   const double upper_bound = 0,
                                   const bool nonneg = true,
                                   const unsigned int threads = 0) {
-    return FactorNet::nmf::nnls_streaming_spz<double>(
-        path, w,
-        static_cast<int>(cd_maxit), cd_tol,
-        L1, L2, upper_bound, nonneg,
+    // Cast W from double to float for fp32 computation
+    Eigen::MatrixXf w_f = w.cast<float>();
+    Eigen::MatrixXf h_f = FactorNet::nmf::nnls_streaming_spz<float>(
+        path, w_f,
+        static_cast<int>(cd_maxit), static_cast<float>(cd_tol),
+        static_cast<float>(L1), static_cast<float>(L2),
+        static_cast<float>(upper_bound), nonneg,
         /* solver_mode = */ 0, static_cast<int>(threads));
+    return h_f.cast<double>();
 }
 
 // ============================================================================

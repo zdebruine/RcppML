@@ -24,7 +24,7 @@ library(ggplot2)
 
 NMF is inherently a soft clustering method. Each column of H gives a sample's "membership" across k factors, and taking the argmax over rows yields a hard cluster assignment. However, NMF is non-convex — different random initializations produce different solutions and potentially different clusters. **Consensus NMF** addresses this by running many replicates, tracking which samples consistently co-cluster, and building a robust consensus matrix.
 
-Beyond flat clustering, RcppML provides **divisive hierarchical clustering** via recursive rank-2 NMF splits, and **classification from embeddings** that leverages the low-dimensional H representation for supervised tasks.
+Beyond flat clustering, RcppML provides **divisive hierarchical clustering** (`dclust`) via recursive rank-2 NMF splits — each node in the hierarchy is a `bipartition()` that finds the best binary split of the data using rank-2 NMF. Classification from embeddings leverages the low-dimensional H representation for supervised tasks.
 
 ## API Reference
 
@@ -62,7 +62,7 @@ dclust(A, min_samples, min_dist = 0, tol = 1e-5, maxit = 100,
 bipartiteMatch(x)
 ```
 
-Hungarian algorithm for optimal 1:1 factor correspondence given a cost matrix. Returns 0-indexed `$assignment` and total `$cost`.
+Hungarian algorithm for optimal 1:1 factor correspondence given a **cost** (dissimilarity) matrix. Returns 0-indexed `$assignment` and total `$cost`. If using cosine similarity, convert to cost first: `bipartiteMatch(1 - cosine_sim)`.
 
 ### Classification from Embeddings
 
@@ -104,8 +104,8 @@ The consensus heatmap reveals two tightly co-clustered groups. Let's check how w
 
 ```{r golub-confusion}
 # Confusion matrix: consensus clusters vs. true labels
-conf <- table(Cluster = cons$clusters, Cancer = labels)
-knitr::kable(conf, caption = "Consensus clusters vs. true cancer type")
+conf <- table(Cluster = paste0("Cluster ", cons$clusters), Cancer = labels)
+knitr::kable(conf, caption = "Consensus cluster assignments vs. true cancer type (ALL/AML)")
 ```
 
 ```{r golub-metrics}
@@ -122,7 +122,7 @@ Consensus NMF with k = 2 cleanly separates the two leukemia subtypes. The cophen
 
 ## Example 2: Hierarchical Clustering with dclust (AML Chromatin)
 
-The AML dataset contains 824 chromatin accessibility regions across 135 samples with known subtype annotations. Divisive clustering discovers a hierarchy of subtypes.
+The AML dataset contains 824 chromatin accessibility regions (ATAC-seq) across 135 samples with known subtype annotations. Divisive clustering discovers a hierarchy of subtypes by recursively applying rank-2 NMF splits.
 
 ```{r dclust-aml}
 data(aml)

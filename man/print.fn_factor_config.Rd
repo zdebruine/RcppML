@@ -17,3 +17,6 @@ Invisibly returns \code{x}.
 \description{
 Print an fn_factor_config
 }
+\seealso{
+\code{\link{W}}, \code{\link{H}}, \code{\link{factor_config}}
+}

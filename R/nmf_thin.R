@@ -1427,7 +1427,11 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0), L2
     loss_type = loss,
     runtime = difftime(Sys.time(), start_time, units = "secs"),
     w_init = if (!is.null(w_init_mat)) w_init_mat else NULL,
-    solver_mode = solver_mode
+    solver_mode = solver_mode,
+    L1 = L1,
+    L2 = L2,
+    nonneg = nonneg,
+    upper_bound = upper_bound
   )
   
   # CV outputs

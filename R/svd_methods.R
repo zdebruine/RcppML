@@ -1,17 +1,18 @@
 #' @importFrom methods new validObject
-#' @name svd_pca-class
-#' @rdname svd_pca-class
-#' @title svd_pca S4 Class
+#' @name svd-class
+#' @rdname svd-class
+#' @title svd S4 Class
 #' @description S4 class for deflation SVD/PCA results.
 #' @slot u left singular vectors (scores), m x k matrix
 #' @slot d singular values, numeric vector of length k
 #' @slot v right singular vectors (loadings), n x k matrix
 #' @slot misc list containing metadata: centered, row_means, test_loss,
 #'   iters_per_factor, wall_time_ms, auto_rank
-#' @aliases svd_pca-class
-#' @exportClass svd_pca
+#' @aliases svd-class
+#' @seealso \code{\link{svd}}, \code{\link{pca}}, \code{\link{reconstruct}}, \code{\link{variance_explained}}
+#' @exportClass svd
 #'
-setClass("svd_pca",
+setClass("svd",
   representation(u = "matrix", d = "numeric", v = "matrix", misc = "list"),
   prototype(u = matrix(), d = NA_real_, v = matrix(), misc = list()),
   validity = function(object) {
@@ -23,13 +24,13 @@ setClass("svd_pca",
     if (is.null(msg)) TRUE else msg
   })
 
-#' @rdname svd_pca-class
-#' @param x object of class \code{svd_pca}
+#' @rdname svd-class
+#' @param x object of class \code{svd}
 #' @param i indices for subsetting factors
 #' @param ... additional parameters
-#' @return A subsetted \code{svd_pca} object containing only the selected factors.
+#' @return A subsetted \code{svd} object containing only the selected factors.
 #' @export
-setMethod("[", "svd_pca", function(x, i) {
+setMethod("[", "svd", function(x, i) {
   validObject(x)
   x@u <- x@u[, i, drop = FALSE]
   x@v <- x@v[, i, drop = FALSE]
@@ -37,18 +38,18 @@ setMethod("[", "svd_pca", function(x, i) {
   x
 })
 
-#' @rdname svd_pca-class
-#' @param x object of class \code{svd_pca}
+#' @rdname svd-class
+#' @param x object of class \code{svd}
 #' @param n number of rows/columns to show
 #' @param ... additional parameters
-#' @return Invisibly returns the \code{svd_pca} object \code{x}.
+#' @return Invisibly returns the \code{svd} object \code{x}.
 #' @export
-setMethod("head", "svd_pca", function(x, n = getOption("digits"), ...) {
+setMethod("head", "svd", function(x, n = getOption("digits"), ...) {
   validObject(x)
   k <- length(x@d)
   mode <- if (isTRUE(x@misc$centered)) "PCA" else "SVD"
   cat(nrow(x@u), "x", ncol(x@v), " rank-", k, " ", mode,
-      " model of class \"svd_pca\"\n", sep = "")
+      " model of class \"svd\"\n", sep = "")
 
   n_u <- min(nrow(x@u), n)
   n_v <- min(nrow(x@v), n)
@@ -73,14 +74,14 @@ setMethod("head", "svd_pca", function(x, n = getOption("digits"), ...) {
   invisible(x)
 })
 
-#' @rdname svd_pca-class
-#' @return Invisibly returns the \code{svd_pca} object.
+#' @rdname svd-class
+#' @return Invisibly returns the \code{svd} object.
 #' @export
-setMethod("show", signature("svd_pca"), function(object) {
+setMethod("show", signature("svd"), function(object) {
   k <- length(object@d)
   mode <- if (isTRUE(object@misc$centered)) "PCA" else "SVD"
   cat(nrow(object@u), "x", ncol(object@v), " rank-", k, " ", mode,
-      " model of class \"svd_pca\"\n", sep = "")
+      " model of class \"svd\"\n", sep = "")
   cat("  sigma range: [", format(min(object@d), digits = 4), ", ",
       format(max(object@d), digits = 4), "]\n", sep = "")
   if (!is.null(object@misc$wall_time_ms))
@@ -88,17 +89,17 @@ setMethod("show", signature("svd_pca"), function(object) {
   invisible(object)
 })
 
-#' @rdname svd_pca-class
+#' @rdname svd-class
 #' @return Integer vector of length 3: \code{c(m, n, k)} where m is the number of
 #'   rows, n the number of columns, and k the rank.
 #' @export
-setMethod("dim", signature("svd_pca"), function(x) {
+setMethod("dim", signature("svd"), function(x) {
   c(nrow(x@u), ncol(x@v), length(x@d))
 })
 
-#' Reconstruct approximation from svd_pca
+#' Reconstruct approximation from svd
 #'
-#' @param object An \code{svd_pca} object
+#' @param object An \code{svd} object
 #' @return Dense matrix: \eqn{U \cdot diag(d) \cdot V'} (plus row means if centered)
 #' @examples
 #' \donttest{
@@ -108,12 +109,12 @@ setMethod("dim", signature("svd_pca"), function(x) {
 #' dim(Ahat)
 #' }
 #' @export
-#' @rdname svd_pca-class
+#' @rdname svd-class
 setGeneric("reconstruct", function(object, ...) standardGeneric("reconstruct"))
 
-#' @rdname svd_pca-class
+#' @rdname svd-class
 #' @export
-setMethod("reconstruct", signature("svd_pca"), function(object, ...) {
+setMethod("reconstruct", signature("svd"), function(object, ...) {
   approx <- object@u %*% diag(object@d, nrow = length(object@d)) %*% t(object@v)
   if (isTRUE(object@misc$centered) && !is.null(object@misc$row_means)) {
     approx <- approx + object@misc$row_means  # broadcasts: m×1 + m×n
@@ -121,12 +122,12 @@ setMethod("reconstruct", signature("svd_pca"), function(object, ...) {
   approx
 })
 
-#' Project new data onto an svd_pca model
+#' Project new data onto an svd model
 #'
 #' Computes scores for new samples by projecting \code{newdata} onto the right
 #' singular vectors. Equivalent to PCA "out-of-sample prediction".
 #'
-#' @param object An \code{svd_pca} object (the fitted model).
+#' @param object An \code{svd} object (the fitted model).
 #' @param newdata A numeric matrix of new samples (rows = samples,
 #'   columns = features). Must have the same number of features as the
 #'   original data (\code{ncol(newdata) == nrow(object@v)}).
@@ -136,11 +137,11 @@ setMethod("reconstruct", signature("svd_pca"), function(object, ...) {
 #'   Each row is the projection of one new sample onto the singular space.
 #' @importFrom stats predict
 #' @export
-#' @rdname svd_pca-class
-setMethod("predict", signature("svd_pca"), function(object, newdata, ...) {
+#' @rdname svd-class
+setMethod("predict", signature("svd"), function(object, newdata, ...) {
   validObject(object)
   if (missing(newdata))
-    stop("'newdata' is required for predict.svd_pca")
+    stop("'newdata' is required for predict.svd")
 
   if (!is.matrix(newdata) && !inherits(newdata, "dgCMatrix"))
     newdata <- as.matrix(newdata)
@@ -175,7 +176,7 @@ setMethod("predict", signature("svd_pca"), function(object, newdata, ...) {
 
 #' Variance explained by each factor
 #'
-#' @param object An \code{svd_pca} object
+#' @param object An \code{svd} object
 #' @return Numeric vector of proportion of variance explained by each factor
 #' @examples
 #' \donttest{
@@ -184,12 +185,12 @@ setMethod("predict", signature("svd_pca"), function(object, newdata, ...) {
 #' variance_explained(s)
 #' }
 #' @export
-#' @rdname svd_pca-class
+#' @rdname svd-class
 setGeneric("variance_explained", function(object, ...) standardGeneric("variance_explained"))
 
-#' @rdname svd_pca-class
+#' @rdname svd-class
 #' @export
-setMethod("variance_explained", signature("svd_pca"), function(object, ...) {
+setMethod("variance_explained", signature("svd"), function(object, ...) {
   # Use ||A_c||^2_F as denominator when available (correct for truncated SVD)
   total <- object@misc$frobenius_norm_sq
   if (is.null(total) || total == 0) {

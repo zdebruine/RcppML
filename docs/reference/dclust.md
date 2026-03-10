@@ -1,0 +1,176 @@
+# Divisive clustering
+
+Recursive bipartitioning by rank-2 matrix factorization with an
+efficient modularity-approximate stopping criteria
+
+## Usage
+
+``` r
+dclust(
+  A,
+  min_samples,
+  min_dist = 0,
+  tol = 1e-05,
+  maxit = 100,
+  nonneg = TRUE,
+  seed = NULL,
+  threads = 0,
+  verbose = FALSE
+)
+```
+
+## Arguments
+
+- A:
+
+  matrix of features-by-samples in sparse format (preferred class is
+  "Matrix::dgCMatrix")
+
+- min_samples:
+
+  stopping criteria giving the minimum number of samples permitted in a
+  cluster
+
+- min_dist:
+
+  stopping criteria giving the minimum cosine distance of samples within
+  a cluster to the center of their assigned vs. unassigned cluster. If
+  `0`, neither this distance nor cluster centroids will be calculated.
+
+- tol:
+
+  in rank-2 NMF, the correlation distance (\\1 - R^2\\) between \\w\\
+  across consecutive iterations at which to stop factorization
+
+- maxit:
+
+  maximum number of fitting iterations (default 100)
+
+- nonneg:
+
+  in rank-2 NMF, enforce non-negativity
+
+- seed:
+
+  random seed for rank-2 NMF model initialization
+
+- threads:
+
+  number of threads for OpenMP parallelization (default 0 = all
+  available)
+
+- verbose:
+
+  print progress information (default FALSE)
+
+## Value
+
+A list of lists corresponding to individual clusters:
+
+- id : character sequence of "0" and "1" giving position of clusters
+  along splitting hierarchy
+
+- samples : 0-indexed integer indices of samples in the cluster (add 1
+  for R-style indexing)
+
+- center : mean feature expression of all samples in the cluster
+
+- size : number of samples in the cluster
+
+## Details
+
+Divisive clustering is a sensitive and fast method for sample
+classification. Samples are recursively partitioned into two groups
+until a stopping criteria is satisfied and prevents successful
+partitioning.
+
+See [`nmf`](https://zdebruine.github.io/RcppML/reference/nmf.md) and
+[`bipartition`](https://zdebruine.github.io/RcppML/reference/bipartition.md)
+for technical considerations and optimizations relevant to
+bipartitioning.
+
+**Stopping criteria**. Two stopping criteria are used to prevent
+indefinite division of clusters and tune the clustering resolution to a
+desirable range:
+
+- `min_samples`: Minimum number of samples permitted in a cluster
+
+- `min_dist`: Minimum cosine distance of samples to their cluster center
+  relative to their unassigned cluster center (an approximation of
+  Newman-Girvan modularity)
+
+Newman-Girvan modularity (\\Q\\) is an interpretable and widely used
+measure of modularity for a bipartition. However, it requires the
+calculation of distance between all within-cluster and between-cluster
+sample pairs. This is computationally intensive, especially for large
+sample sets.
+
+`dclust` uses a measure which linearly approximates Newman-Girvan
+modularity, and simply requires the calculation of distance between all
+samples in a cluster and both cluster centers (the assigned and
+unassigned center), which is orders of magnitude faster to compute.
+Cosine distance is used instead of Euclidean distance since it handles
+outliers and sparsity well.
+
+A bipartition is rejected if either of the two clusters contains fewer
+than `min_samples` or if the mean relative cosine distance of the
+bipartition is less than `min_dist`.
+
+A bipartition will only be attempted if there are more than
+`2 * min_samples` samples in the cluster, meaning that `dist` may not be
+calculated for some clusters.
+
+**Reproducibility.** Because rank-2 NMF is approximate and requires
+random initialization, results may vary slightly across restarts.
+Therefore, specify a `seed` to guarantee absolute reproducibility.
+
+Other than setting the seed, reproducibility may be improved by setting
+`tol` to a smaller number to increase the exactness of each bipartition.
+
+## Note
+
+`dclust()` uses `A` for the data matrix and scalar `nonneg`/`tol`
+parameters (matching
+[`bipartition()`](https://zdebruine.github.io/RcppML/reference/bipartition.md)).
+The default `tol = 1e-5` is tighter than
+[`nmf()`](https://zdebruine.github.io/RcppML/reference/nmf.md)'s `1e-4`
+because rank-2 subproblems converge faster and benefit from higher
+precision.
+
+## References
+
+Schwartz, G. et al. "TooManyCells identifies and visualizes
+relationships of single-cell clades". Nature Methods (2020).
+
+Newman, MEJ. "Modularity and community structure in networks". PNAS
+(2006)
+
+Kuang, D, Park, H. (2013). "Fast rank-2 nonnegative matrix factorization
+for hierarchical document clustering." Proc. 19th ACM SIGKDD intl. conf.
+on Knowledge discovery and data mining.
+
+## See also
+
+[`bipartition`](https://zdebruine.github.io/RcppML/reference/bipartition.md),
+[`nmf`](https://zdebruine.github.io/RcppML/reference/nmf.md)
+
+## Author
+
+Zach DeBruine
+
+## Examples
+
+``` r
+# \donttest{
+data(USArrests)
+A <- as(as.matrix(t(USArrests)), "dgCMatrix")
+clusters <- dclust(A, min_samples = 2, min_dist = 0.001)
+str(clusters)
+#> List of 1
+#>  $ :List of 4
+#>   ..$ samples: num [1:50] 0 1 2 3 4 5 6 7 8 9 ...
+#>   ..$ center : num [1:4] 7.79 170.76 65.54 21.23
+#>   ..$ id     : num 0
+#>   ..$ size   : num 50
+# }
+```

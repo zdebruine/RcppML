@@ -167,6 +167,16 @@ knitr::kable(size_df, align = "lr",
              caption = "MovieLens storage: R object vs. .rds vs. .spz")
 ```
 
+```{r sparse-size-plot, fig.height = 3}
+size_df$Format <- factor(size_df$Format, levels = rev(size_df$Format))
+ggplot(size_df, aes(x = Format, y = `Size (KB)`, fill = Format)) +
+  geom_col(width = 0.6) +
+  scale_fill_manual(values = c("steelblue", "grey60", "grey80"), guide = "none") +
+  coord_flip() +
+  labs(title = "MovieLens Storage Comparison", x = "", y = "Size (KB)") +
+  theme_minimal()
+```
+
 ```{r verify-sparse}
 # Verify values are identical (dimnames may differ since SPZ doesn't store them)
 cat("Values identical:", identical(movielens@x, ml_back@x), "\n")
@@ -250,12 +260,13 @@ into 256 discrete buckets.
 
 ### Example 4: Real-World Dataset — pbmc3k Single-Cell RNA-seq
 
-The `pbmc3k` dataset ships as StreamPress-compressed raw bytes, demonstrating how
-SPZ enables shipping large datasets within CRAN's tarball size limits.
+The `pbmc3k` dataset ships as StreamPress-compressed raw bytes — a representative
+subset (8,000 genes × 500 cells) of the 10x Genomics PBMC 3k dataset, demonstrating
+how SPZ enables shipping sparse datasets within CRAN's tarball size limits.
 
 ```{r pbmc3k-demo}
 # Load compressed bytes (not a matrix — raw bytes)
-data(pbmc3k)
+data(pbmc3k, package = "RcppML")
 
 # Write to temp file and inspect
 pbmc3k_file <- tempfile(fileext = ".spz")
@@ -326,5 +337,5 @@ This enables NMF on datasets that are 10–100× larger than available RAM.
    available RAM.
 
 *See the [GPU Acceleration](gpu-acceleration.html) vignette for GPU-direct
-reads from `.spz`, and the [NMF Deep Dive](nmf-deep-dive.html) vignette for
+reads from `.spz`, and the [NMF Fundamentals](nmf-fundamentals.html) vignette for
 fitting NMF models on loaded data.*

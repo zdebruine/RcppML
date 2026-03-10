@@ -24,3 +24,6 @@ branch1 <- nmf_layer(inp, k = 3)
 branch2 <- nmf_layer(inp, k = 5)
 combined <- factor_concat(branch1, branch2)
 }
+\seealso{
+\code{\link{factor_shared}}, \code{\link{factor_add}}, \code{\link{factor_net}}
+}

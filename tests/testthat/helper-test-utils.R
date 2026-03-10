@@ -10,6 +10,20 @@ library(Matrix)
 # This prevents auto-dispatch to a stale GPU .so during testing.
 options(RcppML.gpu = FALSE)
 
+#' Load pbmc3k as a sparse matrix from its SPZ raw bytes
+#'
+#' The pbmc3k dataset ships as raw SPZ bytes.  This helper writes them to a
+#' temp file and reads back the dgCMatrix.
+#'
+#' @return A dgCMatrix
+load_pbmc3k_matrix <- function() {
+  data(pbmc3k, envir = environment())
+  tmp <- tempfile(fileext = ".spz")
+  on.exit(unlink(tmp), add = TRUE)
+  writeBin(pbmc3k, tmp)
+  st_read(tmp)
+}
+
 #' Align factors to resolve permutation and scaling ambiguity
 #' 
 #' Uses bipartite matching to find optimal permutation
@@ -261,8 +275,8 @@ skip_if_no_gpu <- function() {
 skip_if_no_sp_gpu <- function() {
   skip_if_no_gpu()
   has_sym <- tryCatch({
-    getNativeSymbolInfo("rcppml_sp_read_gpu", RcppML:::.gpu_env$dll)
+    getNativeSymbolInfo("rcppml_st_read_gpu", RcppML:::.gpu_env$dll)
     TRUE
   }, error = function(e) FALSE)
-  skip_if_not(has_sym, "sp_read_gpu not compiled into GPU .so")
+  skip_if_not(has_sym, "st_read_gpu not compiled into GPU .so")
 }

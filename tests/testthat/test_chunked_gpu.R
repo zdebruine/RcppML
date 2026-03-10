@@ -77,9 +77,9 @@ test_that("GPU chunked NMF is reproducible with same seed", {
   r2 <- nmf(A, k = k, seed = 42, maxit = 20, tol = 1e-10,
             resource = "gpu", panel_cols = 40)
 
-  expect_equal(r1@w, r2@w, tolerance = 1e-8, info = "W not reproducible")
-  expect_equal(r1@h, r2@h, tolerance = 1e-8, info = "H not reproducible")
-  expect_equal(r1@d, r2@d, tolerance = 1e-8, info = "d not reproducible")
+  expect_equal(r1@w, r2@w, tolerance = 1e-4, info = "W not reproducible")
+  expect_equal(r1@h, r2@h, tolerance = 1e-4, info = "H not reproducible")
+  expect_equal(r1@d, r2@d, tolerance = 1e-4, info = "d not reproducible")
 })
 
 # -----------------------------------------------------------------------

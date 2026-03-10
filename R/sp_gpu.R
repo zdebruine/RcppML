@@ -1,9 +1,9 @@
-#' @title Read SparsePress File Directly to GPU Memory
+#' @title Read StreamPress File Directly to GPU Memory
 #'
 #' @description
 #' Reads a \code{.spz} v2 file and decodes it directly on the GPU, returning
 #' an opaque GPU-resident CSC matrix. This avoids the CPU-to-GPU transfer that
-#' occurs when using \code{sp_read()} followed by \code{nmf(data, gpu = TRUE)}.
+#' occurs when using \code{st_read()} followed by \code{nmf(data, gpu = TRUE)}.
 #'
 #' The returned object is an external reference — the matrix data lives
 #' entirely in GPU device memory. Pass it directly to \code{nmf()} for
@@ -25,29 +25,29 @@
 #'
 #' @details
 #' Only \code{.spz} v2 format is supported for GPU decode. Use
-#' \code{sp_convert()} to convert other formats to v2.
+#' \code{st_convert()} to convert other formats to v2.
 #'
 #' The returned object has a finalizer that automatically frees GPU memory
 #' when the R object is garbage-collected. You can also free it manually
-#' with \code{sp_free_gpu()}.
+#' with \code{st_free_gpu()}.
 #'
 #' @examples
 #' \dontrun{
 #' # Read directly to GPU
-#' gpu_data <- sp_read_gpu("data.spz")
+#' gpu_data <- st_read_gpu("data.spz")
 #'
 #' # Run NMF on GPU-resident data (zero-copy)
 #' result <- nmf(gpu_data, k = 10)
 #'
 #' # Clean up (optional — GC will do this automatically)
-#' sp_free_gpu(gpu_data)
+#' st_free_gpu(gpu_data)
 #' }
 #'
-#' @seealso \code{\link{sp_read}}, \code{\link{sp_free_gpu}}, \code{\link{nmf}}
+#' @seealso \code{\link{st_read}}, \code{\link{st_free_gpu}}, \code{\link{nmf}}
 #' @export
-sp_read_gpu <- function(path, device = 0L) {
+st_read_gpu <- function(path, device = 0L) {
   if (!gpu_available()) {
-    stop("No GPU available. Use sp_read() for CPU decoding.", call. = FALSE)
+    stop("No GPU available. Use st_read() for CPU decoding.", call. = FALSE)
   }
 
   path <- normalizePath(path, mustWork = TRUE)
@@ -96,7 +96,7 @@ sp_read_gpu <- function(path, device = 0L) {
           list(.col_ptr = e$col_ptr, .row_idx = e$row_idx, .values = e$values),
           class = "gpu_sparse_matrix"
         )
-        sp_free_gpu(dummy)
+        st_free_gpu(dummy)
       }, error = function(err) NULL)
     }
   }, onexit = TRUE)
@@ -113,17 +113,17 @@ sp_read_gpu <- function(path, device = 0L) {
 #' This is optional — the memory will be freed automatically when the object
 #' is garbage-collected.
 #'
-#' @param x A \code{gpu_sparse_matrix} object from \code{sp_read_gpu()}.
+#' @param x A \code{gpu_sparse_matrix} object from \code{st_read_gpu()}.
 #' @return Invisibly returns \code{NULL}.
 #'
-#' @seealso \code{\link{sp_read_gpu}}
+#' @seealso \code{\link{st_read_gpu}}
 #' @export
 #' @examples
 #' \dontrun{
-#' gpu_mat <- sp_read_gpu("matrix.spz")
-#' sp_free_gpu(gpu_mat)
+#' gpu_mat <- st_read_gpu("matrix.spz")
+#' st_free_gpu(gpu_mat)
 #' }
-sp_free_gpu <- function(x) {
+st_free_gpu <- function(x) {
   if (!inherits(x, "gpu_sparse_matrix")) {
     stop("'x' must be a gpu_sparse_matrix object", call. = FALSE)
   }
@@ -165,15 +165,15 @@ sp_free_gpu <- function(x) {
 #'   \item{\code{nrow}}{Number of rows (integer).}
 #'   \item{\code{ncol}}{Number of columns (integer).}
 #' }
-#' @seealso \code{\link{sp_read_gpu}}, \code{\link{sp_free_gpu}}
+#' @seealso \code{\link{st_read_gpu}}, \code{\link{st_free_gpu}}
 #' @examples
 #' \dontrun{
-#' gpu_mat <- sp_read_gpu("data.spz")
+#' gpu_mat <- st_read_gpu("data.spz")
 #' print(gpu_mat)
 #' dim(gpu_mat)
 #' nrow(gpu_mat)
 #' ncol(gpu_mat)
-#' sp_free_gpu(gpu_mat)
+#' st_free_gpu(gpu_mat)
 #' }
 #' @name gpu_sparse_matrix-methods
 NULL

@@ -17,3 +17,6 @@ Invisibly returns \code{x}.
 \description{
 Print a factor_net_cv result
 }
+\seealso{
+\code{\link{cross_validate_graph}}, \code{\link{factor_net}}
+}

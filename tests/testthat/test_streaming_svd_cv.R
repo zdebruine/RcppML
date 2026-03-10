@@ -22,9 +22,9 @@ spz_path <- tempfile(fileext = ".spz")
 # ---------------------------------------------------------------------------
 # Write .spz (include_transpose = TRUE required for streaming)
 # ---------------------------------------------------------------------------
-test_that("sp_write creates .spz file for streaming SVD", {
+test_that("st_write creates .spz file for streaming SVD", {
   skip_on_cran()
-  RcppML::sp_write(A_sparse, spz_path, include_transpose = TRUE)
+  RcppML::st_write(A_sparse, spz_path, include_transpose = TRUE)
   expect_true(file.exists(spz_path))
 })
 
@@ -37,7 +37,7 @@ test_that("streaming deflation SVD produces test_loss with test_fraction>0", {
   s <- RcppML::svd(spz_path, k = 5, method = "deflation",
                    maxit = 100, tol = 1e-5, seed = 1,
                    test_fraction = 0.1, cv_seed = 42)
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   expect_true(!is.null(s@misc$test_loss))
   expect_true(length(s@misc$test_loss) >= 1)
   expect_true(all(is.finite(s@misc$test_loss)))
@@ -65,7 +65,7 @@ test_that("streaming krylov SVD produces test_loss with test_fraction>0", {
   s <- RcppML::svd(spz_path, k = 5, method = "krylov",
                    maxit = 100, tol = 1e-5, seed = 1,
                    test_fraction = 0.1, cv_seed = 42)
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   expect_true(!is.null(s@misc$test_loss))
   expect_true(length(s@misc$test_loss) >= 1)
   expect_true(all(is.finite(s@misc$test_loss)))
@@ -97,12 +97,12 @@ test_that("streaming SVD auto-rank selects reasonable rank", {
                    "dgCMatrix"), "dgCMatrix")
   rank3_path <- tempfile(fileext = ".spz")
   on.exit(unlink(rank3_path), add = TRUE)
-  RcppML::sp_write(A_rank3, rank3_path, include_transpose = TRUE)
+  RcppML::st_write(A_rank3, rank3_path, include_transpose = TRUE)
 
   s <- RcppML::svd(rank3_path, k = "auto", method = "deflation",
                    maxit = 100, tol = 1e-5, seed = 1,
                    k_max = 10, patience = 2)
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   expect_lte(ncol(s@u), 10)
   expect_true(!is.null(s@misc$test_loss))
   expect_true(length(s@misc$test_loss) >= 1)
@@ -120,7 +120,7 @@ test_that("streaming deflation mask_zeros=TRUE works", {
                    maxit = 100, tol = 1e-5, seed = 1,
                    test_fraction = 0.1, cv_seed = 42,
                    mask_zeros = TRUE)
-  expect_s4_class(s, "svd_pca")
+  expect_s4_class(s, "svd")
   expect_true(!is.null(s@misc$test_loss))
   expect_true(all(is.finite(s@misc$test_loss)))
   expect_true(all(s@d > 0))

@@ -1,0 +1,112 @@
+# Evaluate an NMF model
+
+Calculate loss for an NMF model using the specified loss function,
+accounting for any masking schemes requested during fitting.
+
+## Usage
+
+``` r
+evaluate(x, ...)
+
+# S4 method for class 'nmf'
+evaluate(
+  x,
+  data,
+  mask = NULL,
+  missing_only = FALSE,
+  loss = c("mse", "mae", "huber", "gp"),
+  huber_delta = 1,
+  test_fraction = 0,
+  test_seed = NULL,
+  eval_set = c("all", "test", "train"),
+  threads = 0,
+  verbose = FALSE,
+  ...
+)
+```
+
+## Arguments
+
+- x:
+
+  fitted model, class `nmf`, generally the result of calling `nmf`, with
+  models of equal dimensions as `data`
+
+- ...:
+
+  additional development parameters
+
+- data:
+
+  dense or sparse matrix of features in rows and samples in columns.
+  Prefer `matrix` or `Matrix::dgCMatrix`, respectively. Also accepts a
+  file path (character string) which will be auto-loaded based on
+  extension.
+
+- mask:
+
+  dense or sparse matrix of values in `data` to handle as missing.
+  Alternatively, specify "`zeros`" or "`NA`".
+
+- missing_only:
+
+  calculate loss only for missing values specified as a matrix in `mask`
+
+- loss:
+
+  loss function to use: "mse" (Mean Squared Error, default), "mae" (Mean
+  Absolute Error), "huber" (Huber loss), or "kl" (Kullback-Leibler
+  divergence)
+
+- huber_delta:
+
+  delta parameter for Huber loss (default 1.0), ignored for other loss
+  functions
+
+- test_fraction:
+
+  fraction of entries to hold out as test set (default 0 = disabled).
+  When \> 0, creates a random mask for test/train split.
+
+- test_seed:
+
+  seed for test set generation. If NULL, attempts to use test mask from
+  model's @misc\$test_mask if available.
+
+- eval_set:
+
+  which set to evaluate: "all" (default), "test" (held-out entries
+  only), or "train" (non-held-out entries only). Only used when
+  test_fraction \> 0 or test mask exists in model.
+
+- threads:
+
+  number of threads for OpenMP parallelization (default 0 = all
+  available)
+
+- verbose:
+
+  print progress information (default FALSE)
+
+## Value
+
+A single numeric value: the loss (MSE, MAE, Huber, or KL divergence) of
+the model on the data.
+
+## See also
+
+[`nmf`](https://zdebruine.github.io/RcppML/reference/nmf.md)
+
+## Examples
+
+``` r
+# \donttest{
+library(Matrix)
+A <- rsparsematrix(100, 50, 0.1)
+model <- nmf(A, 3, seed = 1, maxit = 50, tol = 1e-4)
+evaluate(model, A)  # MSE
+#> [1] 0.09021044
+evaluate(model, A, loss = "mae")  # MAE
+#> [1] 0.08829401
+# }
+```

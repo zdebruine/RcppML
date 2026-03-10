@@ -7,7 +7,9 @@
 \method{print}{fn_classifier_eval}(x, ...)
 }
 \arguments{
-\item{x}{An \code{fn_classifier_eval} object.}
+\item{x}{An \code{fn_classifier_eval} object returned by
+\code{\link{classify_embedding}}, \code{\link{classify_logistic}},
+or \code{\link{classify_rf}}.}
 
 \item{...}{Additional arguments (unused).}
 }
@@ -15,5 +17,9 @@
 Invisibly returns \code{x}.
 }
 \description{
-Print a classifier evaluation result
+Displays a human-readable summary of classification metrics including
+accuracy, macro/weighted F1, AUC, and per-class precision/recall.
+}
+\seealso{
+\code{\link{summary.fn_classifier_eval}}, \code{\link{classify_embedding}}
 }

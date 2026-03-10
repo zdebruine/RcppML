@@ -17,3 +17,6 @@ Invisibly returns \code{x}.
 \description{
 Print an fn_node
 }
+\seealso{
+\code{\link{factor_input}}, \code{\link{nmf_layer}}, \code{\link{factor_net}}
+}
