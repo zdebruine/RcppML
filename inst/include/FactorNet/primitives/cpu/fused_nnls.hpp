@@ -95,6 +95,7 @@ inline void fused_rhs_nnls_sparse(
 #else
     int n_threads = 1;  // NOLINT(misc-const-correctness)
     (void)threads;
+    (void)n_threads;
 #endif
 
     const bool has_L1 = (L1 > Scalar(0));
@@ -177,6 +178,7 @@ inline void fused_rhs_cholesky_sparse(
 #else
     int n_threads = 1;
     (void)threads;
+    (void)n_threads;
 #endif
 
     // Pre-factorize G once — O(k³), amortized over n columns
