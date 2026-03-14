@@ -97,3 +97,4 @@
 ^GuidedNMFManuscript$
 ^NEWS\.md\.bak$
 ^README\.md$
+^vignettes/.*\.bak$

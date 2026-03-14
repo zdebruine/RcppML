@@ -78,7 +78,10 @@ test_that("auto-dispatch selects IN_CORE_CPU for small files", {
   expect_false(mode_info$streaming)
 })
 
-test_that("Rcpp_get_available_ram_mb returns positive value", {
+test_that("Rcpp_get_available_ram_mb returns non-negative value", {
   ram <- RcppML:::Rcpp_get_available_ram_mb()
+  # On platforms without /proc/meminfo or Win32 API (e.g. Windows builds
+  # that avoid <windows.h>), RAM detection returns 0 — not an error.
+  if (ram == 0) skip("RAM detection not available on this platform")
   expect_gt(ram, 0)
 })

@@ -358,13 +358,10 @@ template<typename Resource, typename Scalar, typename MatrixType>
     if (config.track_loss_history)
         result.history.reserve(config.max_iter);
 
-    const int n_threads = config.threads > 0 ? config.threads : 1;
 #ifdef _OPENMP
     const int actual_threads = config.threads > 0
         ? config.threads
         : omp_get_max_threads();
-#else
-    (void)n_threads;
 #endif
 
     // ------------------------------------------------------------------

@@ -31,8 +31,8 @@ namespace streampress {
 // The residual (actual_gap - predicted) has lower variance than raw gaps.
 // ============================================================================
 struct DensityModel {
-    uint32_t n_blocks;
-    uint32_t block_size;
+    uint32_t n_blocks = 0;
+    uint32_t block_size = 1;
     std::vector<uint16_t> block_density_q;  // Quantized density × 65535
 
     // Build from row nnz statistics
@@ -114,7 +114,7 @@ struct DensityModel {
 // ============================================================================
 struct ValuePredictor {
     std::vector<uint16_t> row_mean_q;   // Quantized row means × 256
-    double global_col_mean;              // Mean col_nnz
+    double global_col_mean = 1.0;        // Mean col_nnz
 
     void build(const MatrixStats& stats) {
         row_mean_q.resize(stats.m);
