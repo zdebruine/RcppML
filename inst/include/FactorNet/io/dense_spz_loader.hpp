@@ -52,7 +52,7 @@ public:
      */
     explicit DenseSpzLoader(const std::string& path,
                             bool require_transpose = true)
-        : fwd_idx_(0), trans_idx_(0), in_core_(false)
+        : in_core_(false), fwd_idx_(0), trans_idx_(0)
     {
         reader_ = std::make_unique<streampress::FileReader>(path);
         file_size_ = reader_->file_size();

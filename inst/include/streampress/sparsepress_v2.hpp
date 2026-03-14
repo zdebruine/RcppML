@@ -962,8 +962,9 @@ inline CSCMatrix decompress_v2(
         chunk_nnz_offset[c + 1] = chunk_nnz_offset[c] + chunk_descs[first_chunk + c].nnz;
 
     int num_threads = cfg.num_threads;
+    (void)num_threads;
     #ifdef _OPENMP
-    if (num_threads <= 0) num_threads = omp_get_max_threads();
+    num_threads = (num_threads <= 0) ? omp_get_max_threads() : num_threads;
     // Clamp to actual chunk count: idle threads beyond n_decode cause race
     // conditions in repeated calls (e.g., loading many files in a loop).
     num_threads = std::min(num_threads, static_cast<int>(n_decode));
@@ -1490,7 +1491,6 @@ inline CSCMatrix decompress_v2_transpose(
 class TransposeChunkReader {
 public:
     TransposeChunkReader(const uint8_t* data, size_t data_size)
-        : data_(data), data_size_(data_size)
     {
         if (data_size < HEADER_SIZE_V2)
             throw std::runtime_error("Data too small for v2 header");
@@ -1645,8 +1645,6 @@ public:
     }
 
 private:
-    const uint8_t* data_;
-    size_t data_size_;
     FileHeader_v2 hdr_;
     ValueType_v2 vtype_;
     uint32_t num_t_chunks_;

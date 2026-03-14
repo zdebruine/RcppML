@@ -2,6 +2,6 @@ PKG_CPPFLAGS = -I../inst/include/
 PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS) $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
 
 ## Compiler flags for maximum performance
-## -O3: Aggressive optimization including auto-vectorization
 ## -Wa,-mbig-obj: Allow large object files (needed for heavily templated Eigen code on Windows)
-PKG_CXXFLAGS = $(SHLIB_OPENMP_CXXFLAGS) -DEIGEN_INITIALIZE_MATRICES_BY_ZERO -DEIGEN_NO_DEBUG -DSPARSEPRESS_USE_R -DFACTORNET_USE_R -Wa,-mbig-obj
+## -Wno-ignored-attributes: Suppress harmless Eigen SSE/AVX type-attribute warnings
+PKG_CXXFLAGS = $(SHLIB_OPENMP_CXXFLAGS) -DEIGEN_INITIALIZE_MATRICES_BY_ZERO -DEIGEN_NO_DEBUG -DSPARSEPRESS_USE_R -DFACTORNET_USE_R -Wa,-mbig-obj -Wno-ignored-attributes

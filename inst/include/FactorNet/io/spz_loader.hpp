@@ -55,7 +55,7 @@ public:
      * @param require_transpose If true (default), throw if file lacks transpose section
      */
     explicit SpzLoader(const std::string& path, bool require_transpose = true)
-        : fwd_idx_(0), trans_idx_(0), in_core_(false)
+        : in_core_(false), fwd_idx_(0), trans_idx_(0)
     {
         reader_ = std::make_unique<streampress::FileReader>(path);
         file_size_ = reader_->file_size();
@@ -303,7 +303,7 @@ private:
             ? header_.metadata_offset
             : file_size_ - streampress::v2::FOOTER_SIZE;
 
-        uint64_t trans_section_size = trans_end - trans_start;
+        (void)(trans_end - trans_start);  // trans_section_size unused but validates range
 
         // Read the full file from offset 0 to trans_end into a buffer
         // so TransposeChunkReader can parse it (it needs header + transpose data)

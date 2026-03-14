@@ -84,7 +84,7 @@ private:
         h = (h ^ (h >> 30)) * 0xbf58476d1ce4e5b9ULL;
         h = (h ^ (h >> 27)) * 0x94d049bb133111ebULL;
         h ^= h >> 31;
-        uint64_t threshold = static_cast<uint64_t>(col_subsample_frac_ * 0xFFFFFFFFFFFFFFFFULL);
+        uint64_t threshold = static_cast<uint64_t>(col_subsample_frac_ * static_cast<double>(0xFFFFFFFFFFFFFFFFULL));
         return h < threshold;
     }
     
@@ -98,7 +98,7 @@ private:
         h = (h ^ (h >> 30)) * 0xbf58476d1ce4e5b9ULL;
         h = (h ^ (h >> 27)) * 0x94d049bb133111ebULL;
         h ^= h >> 31;
-        uint64_t threshold = static_cast<uint64_t>(row_subsample_frac_ * 0xFFFFFFFFFFFFFFFFULL);
+        uint64_t threshold = static_cast<uint64_t>(row_subsample_frac_ * static_cast<double>(0xFFFFFFFFFFFFFFFFULL));
         return h < threshold;
     }
     

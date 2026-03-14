@@ -364,16 +364,15 @@ template<typename Resource, typename Scalar, typename MatrixType>
         ? config.threads
         : omp_get_max_threads();
 #else
-    const int actual_threads = 1;
-#endif
     (void)n_threads;
+#endif
 
     // ------------------------------------------------------------------
     // 5. Iteration loop
     // ------------------------------------------------------------------
 
     // Timing accumulators (microseconds) for profiling
-    int64_t t_h_update_us = 0, t_w_update_us = 0, t_loss_us = 0, t_conv_us = 0;
+    int64_t t_h_update_us = 0, t_w_update_us = 0, t_loss_us = 0;
     auto tick = []() { return std::chrono::high_resolution_clock::now(); };
     auto elapsed_us = [](auto start, auto end) {
         return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();

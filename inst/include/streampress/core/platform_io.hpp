@@ -12,7 +12,14 @@
 #include <cstddef>
 
 #ifdef _WIN32
+// Workaround for MinGW C++17+: std::byte vs rpcndr.h byte collision
+#define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#define byte win_byte_override
 #include <windows.h>
+#undef byte
 #include <io.h>
 #else
 #include <unistd.h>

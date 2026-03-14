@@ -228,12 +228,12 @@ void extract_svd_from_factors(
 
     DenseMatrix<Scalar> Q_w = qr_w.householderQ() *
         DenseMatrix<Scalar>::Identity(W.rows(), k);
-    DenseMatrix<Scalar> R_w = qr_w.matrixQR().template topRows(k)
+    DenseMatrix<Scalar> R_w = qr_w.matrixQR().topRows(k)
         .template triangularView<Eigen::Upper>();
 
     DenseMatrix<Scalar> Q_h = qr_h.householderQ() *
         DenseMatrix<Scalar>::Identity(H.rows(), k);
-    DenseMatrix<Scalar> R_h = qr_h.matrixQR().template topRows(k)
+    DenseMatrix<Scalar> R_h = qr_h.matrixQR().topRows(k)
         .template triangularView<Eigen::Upper>();
 
     // Small SVD of R_w · R_h'  (k × k)

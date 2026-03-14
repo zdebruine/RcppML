@@ -396,7 +396,6 @@ void spmv_forward_dense(const DenseMatrixType& A,
                         const DenseVector<Scalar>* row_inv_sds = nullptr)
 {
     const int m = static_cast<int>(A.rows());
-    const int n = static_cast<int>(A.cols());
     result.resize(m);
     result.setZero();
 
@@ -404,7 +403,8 @@ void spmv_forward_dense(const DenseMatrixType& A,
     const int nthreads = threads > 0 ? threads : omp_get_max_threads();
     if (nthreads > 1) {
         // Column-scatter pattern (cache-friendly for column-major A)
-        const int nt = std::min(nthreads, n);
+        const int n_cols = static_cast<int>(A.cols());
+        const int nt = std::min(nthreads, n_cols);
         std::vector<DenseVector<Scalar>> locals(nt, DenseVector<Scalar>::Zero(m));
 
         #pragma omp parallel num_threads(nt)
@@ -412,7 +412,7 @@ void spmv_forward_dense(const DenseMatrixType& A,
             const int tid = omp_get_thread_num();
             auto& local = locals[tid];
             #pragma omp for schedule(static)
-            for (int j = 0; j < n; ++j) {
+            for (int j = 0; j < n_cols; ++j) {
                 Scalar vj = v(j);
                 if (vj != static_cast<Scalar>(0))
                     local.noalias() += A.col(j) * vj;
@@ -527,7 +527,6 @@ void spmm_forward_dense(const DenseMatrixType& A,
                         const DenseVector<Scalar>* row_inv_sds = nullptr)
 {
     const int m = static_cast<int>(A.rows());
-    const int n = static_cast<int>(A.cols());
     const int l = static_cast<int>(X.cols());
     Y.resize(m, l);
     Y.setZero();
@@ -535,7 +534,8 @@ void spmm_forward_dense(const DenseMatrixType& A,
 #ifdef _OPENMP
     const int nthreads = threads > 0 ? threads : omp_get_max_threads();
     if (nthreads > 1) {
-        const int nt = std::min(nthreads, n);
+        const int n_cols = static_cast<int>(A.cols());
+        const int nt = std::min(nthreads, n_cols);
         std::vector<DenseMatrix<Scalar>> locals(nt, DenseMatrix<Scalar>::Zero(m, l));
 
         #pragma omp parallel num_threads(nt)
@@ -543,7 +543,7 @@ void spmm_forward_dense(const DenseMatrixType& A,
             const int tid = omp_get_thread_num();
             auto& local = locals[tid];
             #pragma omp for schedule(static)
-            for (int j = 0; j < n; ++j) {
+            for (int j = 0; j < n_cols; ++j) {
                 for (int c = 0; c < l; ++c) {
                     local.col(c).noalias() += A.col(j) * X(j, c);
                 }

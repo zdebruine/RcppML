@@ -619,8 +619,6 @@ SVDResult<Scalar> deflation_svd(const MatrixType& A,
         col_weights.setOnes();
     }
 
-    int k_computed = 0;
-
     for (int k = 0; k < k_max; ++k) {
         SVD_CHECK_INTERRUPT();
 
@@ -865,7 +863,6 @@ SVDResult<Scalar> deflation_svd(const MatrixType& A,
         U_all.col(k) = u;
         d_all(k) = sigma;
         V_all.col(k) = v;
-        k_computed = k + 1;
 
         result.iters_per_factor.push_back(iter);
 

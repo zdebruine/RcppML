@@ -1813,9 +1813,9 @@ template<typename Resource, typename Scalar, typename MatrixType>
         // --- Timer report ---
         _t_end = std::chrono::high_resolution_clock::now();
         if (config.verbose) {
-            auto us = [](auto a, auto b) { return std::chrono::duration_cast<std::chrono::microseconds>(b - a).count(); };
-            Rprintf("[iter %d] gram_h=%ldus rhs_h=%ldus nnls_h=%ldus norm_h=%ldus | "
-                    "gram_w=%ldus rhs_w=%ldus nnls_w=%ldus norm_w=%ldus | loss=%ldus | total=%ldus\n",
+            auto us = [](auto a, auto b) { return static_cast<int>(std::chrono::duration_cast<std::chrono::microseconds>(b - a).count()); };
+            Rprintf("[iter %d] gram_h=%dus rhs_h=%dus nnls_h=%dus norm_h=%dus | "
+                    "gram_w=%dus rhs_w=%dus nnls_w=%dus norm_w=%dus | loss=%dus | total=%dus\n",
                     iter, us(_t_gram_h, _t_rhs_h), us(_t_rhs_h, _t_nnls_h),
                     us(_t_nnls_h, _t_norm_h), us(_t_norm_h, _t_gram_w),
                     us(_t_gram_w, _t_rhs_w), us(_t_rhs_w, _t_nnls_w),

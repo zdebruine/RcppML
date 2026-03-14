@@ -93,7 +93,8 @@ inline void fused_rhs_nnls_sparse(
 #ifdef _OPENMP
     int n_threads = (threads > 0) ? threads : omp_get_max_threads();
 #else
-    int n_threads = 1;
+    int n_threads = 1;  // NOLINT(misc-const-correctness)
+    (void)threads;
 #endif
 
     const bool has_L1 = (L1 > Scalar(0));
@@ -175,6 +176,7 @@ inline void fused_rhs_cholesky_sparse(
     int n_threads = (threads > 0) ? threads : omp_get_max_threads();
 #else
     int n_threads = 1;
+    (void)threads;
 #endif
 
     // Pre-factorize G once — O(k³), amortized over n columns

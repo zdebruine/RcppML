@@ -16,7 +16,16 @@
 #include <string>
 
 #if defined(_WIN32)
+// Workaround for MinGW C++17+: std::byte (from <cstddef>) conflicts
+// with rpcndr.h "typedef unsigned char byte;" inside <windows.h>.
+// Temporarily rename the Windows byte to avoid the ambiguity.
+#define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#define byte win_byte_override
 #include <windows.h>
+#undef byte
 #elif defined(__APPLE__)
 #include <sys/sysctl.h>
 #include <unistd.h>
