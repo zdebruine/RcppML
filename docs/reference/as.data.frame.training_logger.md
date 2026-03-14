@@ -1,6 +1,8 @@
 # Convert training log to data.frame
 
-Convert training log to data.frame
+Converts the internal training log from an NMF run into a tidy data
+frame with one row per logged iteration, suitable for plotting
+convergence curves.
 
 ## Usage
 
@@ -13,7 +15,7 @@ as.data.frame(x, ...)
 
 - x:
 
-  A `training_logger` object.
+  A `training_logger` object (from `nmf(..., log = TRUE)`).
 
 - ...:
 
@@ -21,4 +23,10 @@ as.data.frame(x, ...)
 
 ## Value
 
-A data.frame with one row per logged iteration.
+A data.frame with columns `iteration`, `wall_sec`, and optionally
+`total_loss`, per-layer loss columns, and norm-tracking columns.
+
+## See also
+
+[`nmf`](https://zdebruine.github.io/RcppML/reference/nmf.md),
+[`plot.training_logger`](https://zdebruine.github.io/RcppML/reference/plot.training_logger.md)

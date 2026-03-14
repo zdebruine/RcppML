@@ -4,17 +4,15 @@
 \alias{validate_simple_params}
 \title{Validate simple logical/numeric parameters}
 \usage{
-validate_simple_params(sort_model, sparse, nonneg)
+validate_simple_params(sort_model, nonneg)
 }
 \arguments{
 \item{sort_model}{Logical; whether to sort model factors}
 
-\item{sparse}{Logical; whether to use sparse mode}
-
 \item{nonneg}{Logical length 1 or 2; non-negativity constraints}
 }
 \value{
-List with validated \code{sort_model}, \code{sparse}, and \code{nonneg}
+List with validated \code{sort_model} and \code{nonneg}
 }
 \description{
 Validate simple logical/numeric parameters

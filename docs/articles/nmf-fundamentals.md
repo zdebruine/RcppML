@@ -22,36 +22,42 @@ diagonal scaling $d$ makes factors comparable and ordered by importance.
 
 ``` r
 nmf(data, k, tol = 1e-4, maxit = 100, seed = NULL,
-    init = c("random", "lanczos", "irlba"),
-    norm = c("L1", "L2", "none"),
     L1 = c(0, 0), L2 = c(0, 0),
-    sort_model = TRUE, nonneg = c(TRUE, TRUE),
-    loss = "mse", threads = 0, verbose = FALSE,
-    on_iteration = NULL, ...)
+    mask = NULL, loss = "mse",
+    nonneg = c(TRUE, TRUE),
+    verbose = FALSE, ...)
 ```
 
 Key parameters:
 
-| Parameter      | Type             | Default       | Description                                      |
-|----------------|------------------|---------------|--------------------------------------------------|
-| `data`         | matrix/dgCMatrix | —             | Nonneg input matrix (features × samples)         |
-| `k`            | integer          | —             | Factorization rank (number of factors)           |
-| `tol`          | numeric          | 1e-4          | Convergence tolerance (correlation-distance)     |
-| `maxit`        | integer          | 100           | Maximum iterations                               |
-| `seed`         | integer          | NULL          | Random seed for reproducibility                  |
-| `init`         | character        | “random”      | Initialization method                            |
-| `norm`         | character        | “L1”          | Factor normalization method                      |
-| `sort_model`   | logical          | TRUE          | Sort factors by decreasing $d$                   |
-| `nonneg`       | logical(2)       | c(TRUE, TRUE) | Non-negativity constraints on W and H            |
-| `on_iteration` | function         | NULL          | Callback receiving (iter, train_loss, test_loss) |
+| Parameter | Type                   | Default       | Description                                                                                                    |
+|-----------|------------------------|---------------|----------------------------------------------------------------------------------------------------------------|
+| `data`    | matrix/dgCMatrix       | —             | Nonneg input matrix (features × samples)                                                                       |
+| `k`       | integer                | —             | Factorization rank (number of factors)                                                                         |
+| `tol`     | numeric                | 1e-4          | Convergence tolerance (correlation-distance)                                                                   |
+| `maxit`   | integer                | 100           | Maximum iterations                                                                                             |
+| `seed`    | int/matrix/string      | NULL          | Random seed, init matrix, or method (“lanczos”, “irlba”)                                                       |
+| `mask`    | NULL/“zeros”/dgCMatrix | NULL          | Observation mask for fitting                                                                                   |
+| `loss`    | character              | “mse”         | Loss function: “mse” or distribution-based (see [`?nmf`](https://zdebruine.github.io/RcppML/reference/nmf.md)) |
+| `nonneg`  | logical(2)             | c(TRUE, TRUE) | Non-negativity constraints on W and H                                                                          |
 
-Initialization options:
+Advanced parameters passed via `...`:
 
-| Method      | Description                                                                               |
-|-------------|-------------------------------------------------------------------------------------------|
-| `"random"`  | Random nonneg initialization (default). May need more iterations to converge.             |
-| `"lanczos"` | SVD-based warm start via Lanczos iteration. Often converges faster.                       |
-| `"irlba"`   | SVD-based warm start via IRLBA. Similar to Lanczos with different convergence properties. |
+| Parameter      | Default | Description                                      |
+|----------------|---------|--------------------------------------------------|
+| `norm`         | “L1”    | Factor normalization: “L1”, “L2”, or “none”      |
+| `sort_model`   | TRUE    | Sort factors by decreasing $d$                   |
+| `threads`      | 0       | Number of OpenMP threads (0 = auto)              |
+| `on_iteration` | NULL    | Callback receiving (iter, train_loss, test_loss) |
+
+Initialization options (passed via `seed`):
+
+| Method            | Description                                                                   |
+|-------------------|-------------------------------------------------------------------------------|
+| `NULL` or integer | Random nonneg initialization (default). May need more iterations to converge. |
+| `"lanczos"`       | SVD-based warm start via Lanczos iteration. Often converges faster.           |
+| `"irlba"`         | SVD-based warm start via IRLBA. Memory-efficient for large sparse matrices.   |
+| matrix            | User-supplied W initialization matrix.                                        |
 
 Normalization options:
 
@@ -61,24 +67,39 @@ Normalization options:
 | `"L2"`   | Unit L2 norm for columns of W and rows of H.                         |
 | `"none"` | No normalization; $d$ is all ones.                                   |
 
+> **Normalization and regularization interaction**: L1 regularization is
+> applied *after* normalization at each iteration. With `norm = "L1"`,
+> factor columns are rescaled to sum to 1 before L1 soft-thresholding.
+> This means the effective penalty depends on the normalization mode;
+> the same L1 value produces different sparsity levels under L1 vs. L2
+> normalization. Start with `norm = "L1"` (default) when using L1
+> regularization.
+
 ### Factor Extraction and Inspection
 
 The [`nmf()`](https://zdebruine.github.io/RcppML/reference/nmf.md)
 function returns an S4 object of class `nmf` with slots accessed via
 `$`:
 
-- `model$w` — $m \times k$ feature loading matrix (W)
-- `model$h` — $k \times n$ sample embedding matrix (H)
-- `model$d` — length-$k$ diagonal scaling vector
+- `model@w` or `model$w` — $m \times k$ feature loading matrix (W)
+- `model@h` or `model$h` — $k \times n$ sample embedding matrix (H)
+- `model@d` or `model$d` — length-$k$ diagonal scaling vector
+- `model@misc` — metadata list (iterations, runtime, loss, etc.)
 - `dim(model)` — returns `c(m, n, k)`
 - `head(model, n)` — first $n$ factors
 - `model[i]` — subset to specific factor indices
+
+The canonical S4 accessor is `@` (e.g., `model@w`). The `$` shorthand
+also works due to method dispatch.
 
 ### Reconstruction and Loss
 
 - `prod(model)` — reconstructs $W \cdot \text{diag}(d) \cdot H$ (dense
   matrix)
-- `evaluate(model, data)` — reconstruction loss (MSE by default)
+- `evaluate(model, data)` — reconstruction loss (**defaults to MSE**
+  regardless of what loss was used for fitting; specify
+  `evaluate(model, data, loss = "gp")` to compute loss with the same
+  distribution used for fitting)
 - `mse(model$w, model$d, model$h, data)` — standalone MSE computation
 
 ### Model Comparison
@@ -135,6 +156,81 @@ across multiple random starts, use
 [Clustering](https://zdebruine.github.io/RcppML/articles/clustering.md)
 vignette).
 
+### Projective NMF
+
+In standard NMF, both W and H are solved independently in alternating
+updates. **Projective NMF** adds a structural constraint: instead of
+solving for H, it is computed as a linear projection of the data through
+W:
+
+$$H = \text{diag}(d) \cdot W^{T} \cdot A$$
+
+This means H is entirely determined by W — there are no free parameters
+in H. Enable it with `projective = TRUE`:
+
+``` r
+model <- nmf(data, k = 6, projective = TRUE)
+```
+
+**Why use projective NMF?**
+
+- **More orthogonal features**: The projection constraint forces W
+  columns to be nearly orthogonal, because the only way to minimize
+  reconstruction error when $H = W^{T}A$ is for the columns of W to
+  capture non-overlapping parts of the data.
+- **Fewer degrees of freedom**: Since H is determined by W, the model
+  has roughly half as many free parameters, acting as an implicit
+  regularizer.
+- **Unique H for a given W**: Eliminates one source of non-uniqueness in
+  the factorization.
+
+The tradeoff is higher reconstruction error — the model is more
+constrained, so it cannot fit the data as closely. Projective NMF is
+most useful when you want clearly separable, non-overlapping factors for
+interpretability rather than minimum reconstruction error.
+
+``` r
+data(aml)
+m_std  <- nmf(aml, k = 6, seed = 42, tol = 1e-5)
+m_proj <- nmf(aml, k = 6, seed = 42, tol = 1e-5, projective = TRUE)
+
+# Orthogonality: mean absolute off-diagonal cosine between W columns
+# (lower = more orthogonal)
+ortho_metric <- function(mat) {
+  cs <- cosine(mat, mat)
+  diag(cs) <- 0
+  mean(abs(cs))
+}
+
+knitr::kable(data.frame(
+  Mode = c("Standard", "Projective"),
+  `W orthogonality` = round(c(ortho_metric(m_std@w), ortho_metric(m_proj@w)), 3),
+  `W mean sparsity` = round(c(mean(sparsity(m_std)$sparsity[1:6]),
+                               mean(sparsity(m_proj)$sparsity[1:6])), 3),
+  `Reconstruction MSE` = format(c(evaluate(m_std, aml), evaluate(m_proj, aml)),
+                                 digits = 3, scientific = TRUE),
+  check.names = FALSE
+), caption = "Standard vs. projective NMF on AML data (k = 6). Lower W orthogonality = more independent factors.")
+```
+
+| Mode       | W orthogonality | W mean sparsity | Reconstruction MSE |
+|:-----------|----------------:|----------------:|:-------------------|
+| Standard   |           0.583 |           0.082 | 2.15e-02           |
+| Projective |           0.188 |           0.454 | 4.13e-01           |
+
+Standard vs. projective NMF on AML data (k = 6). Lower W orthogonality =
+more independent factors.
+
+Projective NMF yields W columns that are substantially more orthogonal
+(lower off-diagonal cosine), making each factor correspond to a more
+distinct set of features. This comes at the cost of reconstruction
+fidelity — the projection constraint prevents the model from fitting the
+data as tightly.
+
+> **Note**: `projective = TRUE` and `symmetric = TRUE` cannot be
+> combined. For symmetric matrices ($A = A^{T}$), symmetric NMF enforces
+> $H = W^{T}$ directly.
+
 ## Worked Examples
 
 ### Example 1: Recovering Known Factors from Synthetic Data
@@ -143,7 +239,7 @@ We generate a synthetic matrix with 5 true factors and test whether NMF
 can recover them.
 
 ``` r
-sim <- simulateNMF(300, 150, k = 5, noise = 0.3, seed = 42)
+sim <- simulateNMF(200, 80, k = 5, noise = 3.0, seed = 42)
 model <- nmf(sim$A, k = 5, seed = 1, tol = 1e-5, maxit = 100)
 ```
 
@@ -174,21 +270,42 @@ knitr::kable(
 
 | Factor | Cosine Similarity |
 |-------:|------------------:|
-|      1 |            0.4601 |
-|      2 |            0.6176 |
-|      3 |            0.5977 |
-|      4 |            0.4186 |
-|      5 |            0.4234 |
+|      1 |            0.9040 |
+|      2 |            0.9207 |
+|      3 |            0.9178 |
+|      4 |            0.9327 |
+|      5 |            0.9271 |
 
 Per-factor cosine similarity between learned and true W columns.
 
-NMF recovers the 5 planted factors with high cosine similarity despite
-30% Gaussian noise.
+Factor recovery quality depends on the signal-to-noise ratio, matrix
+size, and the degree of overlap between true factors. Here we use
+`noise = 3.0`, meaning the noise amplitude is three times the signal — a
+challenging setting. Despite this, NMF recovers all five factors with
+high cosine similarity, demonstrating robustness to additive noise.
 
 ``` r
-# Prepare data for side-by-side comparison
-true_w <- sim$w[, assignment]
+# Align learned W to true W using bipartite matching
 learned_w <- model$w
+
+# Compute noisy W: least-squares projection of A onto true H (shows noise corruption)
+noisy_w <- as.matrix(sim$A %*% t(sim$h) %*% solve(sim$h %*% t(sim$h)))
+noisy_w <- noisy_w[, assignment]
+
+# L1-normalize columns so both heatmaps share the same [0, 1] scale
+l1_norm <- function(mat) sweep(mat, 2, colSums(abs(mat)), "/")
+noisy_w   <- l1_norm(noisy_w)
+learned_w <- l1_norm(learned_w)
+
+# Hierarchical clustering on the combined matrix for consistent row/col order
+combined_w <- cbind(noisy_w, learned_w)
+row_hc <- hclust(dist(combined_w))
+row_ord <- row_hc$order
+col_hc <- hclust(dist(t(noisy_w)))
+col_ord <- col_hc$order
+
+noisy_w <- noisy_w[row_ord, col_ord]
+learned_w <- learned_w[row_ord, col_ord]
 
 # Build long-format data for ggplot
 make_heatmap_df <- function(mat, label) {
@@ -198,30 +315,172 @@ make_heatmap_df <- function(mat, label) {
   df
 }
 hm_df <- rbind(
-  make_heatmap_df(true_w, "True W"),
-  make_heatmap_df(learned_w, "Learned W")
+  make_heatmap_df(noisy_w, "W from Noisy Data"),
+  make_heatmap_df(learned_w, "NMF Learned W")
 )
-hm_df$Source <- factor(hm_df$Source, levels = c("True W", "Learned W"))
+hm_df$Source <- factor(hm_df$Source, levels = c("W from Noisy Data", "NMF Learned W"))
 
 ggplot(hm_df, aes(x = Factor, y = Feature, fill = Value)) +
   geom_raster() +
   facet_wrap(~Source) +
   scale_fill_viridis_c(option = "inferno") +
-  labs(title = "True vs. Learned Feature Loadings (W)", x = "Factor", y = "Feature") +
+  labs(title = "Noisy Input vs. NMF Recovery",
+       subtitle = "Columns L1-normalized; NMF denoises the factor loadings",
+       x = "Factor", y = "Feature") +
   theme_minimal() +
-  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+  theme(aspect.ratio = 1,
+        axis.text.y = element_blank(), axis.ticks.y = element_blank())
 ```
 
 ![](nmf-fundamentals_files/figure-html/synthetic-heatmap-1.png)
 
-The learned W matrix closely mirrors the true factor structure: each
-factor activates a distinct subset of features, and the pattern
-correspondence is clear despite noise.
+The left panel shows the factor loadings recovered by projecting the
+noisy data matrix onto the true H — the noise substantially degrades the
+block structure. The right panel shows NMF’s learned W, where
+block-diagonal structure is clearly recovered. NMF acts as a denoiser:
+by jointly optimizing W and H, it separates signal from noise more
+effectively than direct projection.
 
-### Example 2: Gene Expression Factor Interpretation (AML Data)
+``` r
+# Per-factor scatter plots: noisy vs. learned W column values
+scatter_df <- do.call(rbind, lapply(1:5, function(i) {
+  data.frame(
+    Noisy = noisy_w[, i],
+    Learned = learned_w[, i],
+    Factor = paste0("Factor ", i, " (cos=", round(per_factor_cos[i], 2), ")")
+  )
+}))
 
-The `aml` dataset contains 824 genomic regions × 135 samples from Acute
-Myeloid Leukemia ATAC-seq data. Sample subtypes are stored in
+ggplot(scatter_df, aes(x = Noisy, y = Learned)) +
+  geom_point(alpha = 0.3, size = 0.8, color = "steelblue") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  facet_wrap(~ Factor, nrow = 2) +
+  coord_fixed() +
+  labs(title = "Per-Factor Comparison: Noisy Input vs. NMF Learned W",
+       x = "Noisy W loading", y = "NMF W loading") +
+  theme_minimal() +
+  theme(strip.text = element_text(size = 8))
+```
+
+![](nmf-fundamentals_files/figure-html/scatter-per-factor-1.png)
+
+The scatter plots compare noisy input loadings (x-axis) to NMF-recovered
+loadings (y-axis) for each factor. NMF sharpens the loadings — points
+are pulled toward the axes, reflecting the non-negativity constraint’s
+tendency to suppress noise and produce sparser, more interpretable
+factors. The cosine similarity in each panel title measures agreement
+with the true (clean) factors.
+
+### Example 2: Choosing Rank with Cross-Validation
+
+In Example 1, we knew the true rank $k = 5$ because we generated the
+data. In practice, the correct rank is unknown. **Cross-validation**
+provides a principled answer: hold out a random fraction of matrix
+entries, fit NMF on the remainder, and measure prediction error on the
+held-out set. The rank that minimizes test error is the best choice.
+
+``` r
+cv <- nmf(sim$A, k = 2:15, test_fraction = 0.05, cv_seed = 1:3,
+          tol = 1e-5, maxit = 200)
+agg <- aggregate(test_mse ~ k, data = cv, FUN = mean)
+best_k <- agg$k[which.min(agg$test_mse)]
+```
+
+``` r
+plot(cv) +
+  geom_vline(xintercept = best_k, linetype = "dashed", alpha = 0.5) +
+  annotate("text", x = best_k + 0.3, y = max(agg$test_mse) * 0.98,
+           label = paste("optimal k =", best_k), hjust = 0, size = 3.5) +
+  labs(
+    title = "Cross-Validation for Rank Selection",
+    subtitle = "Test MSE identifies the correct rank; training MSE always decreases"
+  ) +
+  theme_minimal()
+```
+
+![](nmf-fundamentals_files/figure-html/cv-rank-plot-1.png)
+
+The plot reveals the classic **bias–variance tradeoff**:
+
+- **Underfitting** ($k < 5$): Both training and test MSE are high. The
+  model lacks capacity to capture all five true factors, so it cannot
+  represent the data’s structure and performs poorly on both seen and
+  unseen entries.
+- **Optimal rank** ($k = 5$): Test MSE reaches its minimum. The model
+  has exactly enough factors to capture the true structure without
+  fitting noise.
+- **Overfitting** ($k > 5$): Training MSE continues to decrease — the
+  model fits the training entries ever more closely — but test MSE
+  *increases*. Extra factors fit noise in the training set that does not
+  generalize to held-out entries.
+
+> **How it works:** `nmf(data, k = 1:15, test_fraction = 0.2)` randomly
+> masks 20% of matrix entries before fitting. At each iteration the
+> model is trained only on the visible 80%; the masked entries are
+> predicted from the current $W \cdot \text{diag}(d) \cdot H$ and scored
+> against their true values. The rank with the lowest test MSE is
+> selected.
+
+#### Per-Iteration Convergence: Underfitting vs. Overfitting
+
+The cross-rank plot above shows *which* $k$ is best. Now we look
+*inside* individual fits to see how training and test loss evolve
+iteration by iteration. This reveals the dynamics of overfitting in real
+time.
+
+``` r
+iter_data <- do.call(rbind, lapply(c(2, 5, 15), function(k) {
+  m <- nmf(sim$A, k = k, seed = 1, tol = 1e-10, maxit = 100, test_fraction = 0.05, resource = "cpu")
+  n <- length(m@misc$loss_history)
+  data.frame(
+    Iteration = rep(1:n, 2),
+    MSE = c(m@misc$loss_history, m@misc$test_loss_history),
+    Set = rep(c("Train", "Test"), each = n),
+    Rank = factor(paste0("k = ", k), levels = paste0("k = ", c(2, 5, 15)))
+  )
+}))
+```
+
+``` r
+ggplot(iter_data, aes(x = Iteration, y = MSE, color = Set)) +
+  geom_line(linewidth = 0.8) +
+  facet_wrap(~ Rank, scales = "free_x") +
+  scale_color_manual(values = c("Train" = "#377EB8", "Test" = "#E41A1C")) +
+  scale_y_continuous(labels = function(x) sprintf("%.1e", x)) +
+  labs(
+    title = "Per-Iteration Loss: Underfitting, Optimal, and Overfitting",
+    x = "Iteration", y = "MSE", color = NULL
+  ) +
+  theme_minimal() +
+  theme(strip.text = element_text(face = "bold"))
+```
+
+![](nmf-fundamentals_files/figure-html/cv-convergence-plot-1.png)
+
+Three distinct behaviors emerge:
+
+- **k = 2 (underfitting):** Both training and test loss decrease
+  smoothly and converge together. However, they plateau at a level well
+  above the optimal test error — the model simply cannot represent all
+  five factors with only two components.
+- **k = 5 (optimal):** Both losses decrease rapidly and converge near
+  the lowest achievable test error. Training and test losses track each
+  other closely, indicating the model generalizes well.
+- **k = 15 (overfitting):** Training loss continues to fall, but test
+  loss reaches a minimum early and then *increases* as the model
+  iterates further. The excess factors memorize training-set noise at
+  the expense of held-out prediction.
+
+The combination of the cross-rank plot (which $k$ to choose) and the
+per-iteration traces (why that choice matters) provides a complete
+picture of rank selection in NMF.
+
+### Example 3: Methylation Factor Interpretation (AML Data)
+
+The `aml` dataset contains 824 differentially methylated regions (DMRs)
+× 135 samples from an Acute Myeloid Leukemia study. Features are genomic
+coordinate ranges (e.g., `chr1:847816-848609`) representing CpG-dense
+regions with methylation beta values. Sample subtypes are stored in
 `attr(aml, "metadata_h")$category`.
 
 ``` r
@@ -230,96 +489,83 @@ meta <- attr(aml, "metadata_h")
 model_aml <- nmf(aml, k = 6, seed = 42, tol = 1e-5)
 ```
 
-We identify the top features per factor — the genomic regions with the
-highest loadings:
+Since AML features are genomic coordinate ranges (e.g.,
+`chr1:847816-848609`) rather than gene names, a table of top loadings
+per factor is not directly interpretable without external annotation
+databases. Instead, we visualize the H matrix (sample embeddings) —
+where the factor structure maps directly to AML subtypes — using
+`pheatmap`, which handles clustering and annotation alignment
+automatically:
 
 ``` r
-top_n <- 5
-top_features <- do.call(rbind, lapply(1:6, function(f) {
-  w_col <- model_aml$w[, f]
-  idx <- order(w_col, decreasing = TRUE)[1:top_n]
-  data.frame(
-    Factor = f,
-    Rank = 1:top_n,
-    Feature = idx,
-    Loading = round(w_col[idx], 4)
-  )
-}))
+library(pheatmap)
 
-knitr::kable(
-  top_features,
-  caption = "Top 5 features (highest W loadings) per factor.",
-  row.names = FALSE
-)
-```
-
-| Factor | Rank | Feature | Loading |
-|-------:|-----:|--------:|--------:|
-|      1 |    1 |     804 |  0.0030 |
-|      1 |    2 |     181 |  0.0029 |
-|      1 |    3 |     689 |  0.0029 |
-|      1 |    4 |     489 |  0.0028 |
-|      1 |    5 |     580 |  0.0028 |
-|      2 |    1 |     606 |  0.0024 |
-|      2 |    2 |     701 |  0.0024 |
-|      2 |    3 |      56 |  0.0024 |
-|      2 |    4 |     627 |  0.0023 |
-|      2 |    5 |     426 |  0.0023 |
-|      3 |    1 |     279 |  0.0032 |
-|      3 |    2 |     644 |  0.0029 |
-|      3 |    3 |     420 |  0.0028 |
-|      3 |    4 |     173 |  0.0028 |
-|      3 |    5 |     211 |  0.0028 |
-|      4 |    1 |     736 |  0.0028 |
-|      4 |    2 |      56 |  0.0026 |
-|      4 |    3 |     498 |  0.0026 |
-|      4 |    4 |     441 |  0.0025 |
-|      4 |    5 |     130 |  0.0024 |
-|      5 |    1 |     713 |  0.0056 |
-|      5 |    2 |     140 |  0.0054 |
-|      5 |    3 |     478 |  0.0053 |
-|      5 |    4 |     176 |  0.0052 |
-|      5 |    5 |     180 |  0.0052 |
-|      6 |    1 |     390 |  0.0057 |
-|      6 |    2 |     568 |  0.0052 |
-|      6 |    3 |     577 |  0.0051 |
-|      6 |    4 |     160 |  0.0048 |
-|      6 |    5 |     763 |  0.0047 |
-
-Top 5 features (highest W loadings) per factor.
-
-Now we visualize the H matrix (sample embeddings) with columns grouped
-by AML subtype:
-
-``` r
+H <- model_aml$h
 subtypes <- meta$category
-col_order <- order(subtypes)
-h_ordered <- model_aml$h[, col_order]
-subtypes_ordered <- subtypes[col_order]
 
-h_df <- expand.grid(Factor = seq_len(nrow(h_ordered)), Sample = seq_len(ncol(h_ordered)))
-h_df$Weight <- as.vector(h_ordered)
-h_df$Subtype <- rep(subtypes_ordered, each = nrow(h_ordered))
+# pheatmap needs unique column identifiers for annotation mapping
+colnames(H) <- paste0("S", seq_len(ncol(H)))
+anno_col <- data.frame(Subtype = subtypes, row.names = colnames(H))
 
-ggplot(h_df, aes(x = Sample, y = factor(Factor), fill = Weight)) +
-  geom_raster() +
-  scale_fill_viridis_c(option = "magma") +
-  labs(
-    title = "NMF Sample Embeddings (H) by AML Subtype",
-    x = "Samples (grouped by subtype)", y = "Factor"
-  ) +
-  theme_minimal() +
-  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+# Define subtype colors
+subtype_levels <- sort(unique(subtypes))
+subtype_colors <- setNames(
+  RColorBrewer::brewer.pal(max(3, length(subtype_levels)), "Set2")[seq_along(subtype_levels)],
+  subtype_levels
+)
+
+pheatmap(H,
+         annotation_col = anno_col,
+         annotation_colors = list(Subtype = subtype_colors),
+         cluster_cols = TRUE,
+         cluster_rows = TRUE,
+         show_colnames = FALSE,
+         color = viridis::viridis(100),
+         main = "NMF Sample Embeddings (H) by AML Subtype",
+         fontsize = 10)
 ```
 
 ![](nmf-fundamentals_files/figure-html/aml-heatmap-1.png)
 
-The H heatmap reveals clear subtype structure: certain factors activate
-preferentially within specific AML subtypes, indicating that NMF
-captures biologically meaningful programs from the chromatin
-accessibility data.
+The H heatmap reveals clear subtype structure: `pheatmap` hierarchically
+clusters both rows (factors) and columns (samples), then aligns the
+subtype annotation bar with the clustered column order automatically.
+Certain factors activate preferentially within specific AML subtypes,
+indicating that NMF captures biologically meaningful methylation
+programs.
 
-### Example 3: Convergence and Initialization Comparison
+``` r
+# Stacked bar chart: mean factor activation by subtype
+H <- model_aml$h
+subtypes <- meta$category
+
+mean_H <- sapply(unique(subtypes), function(s) {
+  rowMeans(H[, subtypes == s, drop = FALSE])
+})
+colnames(mean_H) <- unique(subtypes)
+
+bar_df <- do.call(rbind, lapply(colnames(mean_H), function(s) {
+  data.frame(Subtype = s, Factor = paste0("F", 1:nrow(mean_H)),
+             Activation = mean_H[, s])
+}))
+
+ggplot(bar_df, aes(x = Subtype, y = Activation, fill = Factor)) +
+  geom_col(position = "fill", width = 0.7) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(title = "Factor Composition by AML Subtype",
+       subtitle = "Proportional factor activation reveals subtype-specific methylation programs",
+       y = "Proportion of Total Activation", x = NULL) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+![](nmf-fundamentals_files/figure-html/aml-factor-composition-1.png)
+
+The stacked bar chart provides a complementary view to the heatmap: each
+subtype’s bar shows the relative contribution of each factor, making
+subtype-specific factor dominance immediately visible.
+
+### Example 4: Convergence and Initialization Comparison
 
 We compare random vs. Lanczos initialization by tracking loss per
 iteration using the `on_iteration` callback:
@@ -335,12 +581,13 @@ track_loss <- function() {
 }
 
 tracker_random <- track_loss()
-model_random <- nmf(aml, k = 6, seed = 42, init = "random", tol = 1e-6,
-                    maxit = 80, on_iteration = tracker_random$callback)
+model_random <- nmf(aml, k = 6, seed = 42, tol = 1e-6,
+                    maxit = 80, on_iteration = tracker_random$callback, resource = "cpu")
 
 tracker_lanczos <- track_loss()
-model_lanczos <- nmf(aml, k = 6, seed = 42, init = "lanczos", tol = 1e-6,
-                     maxit = 80, on_iteration = tracker_lanczos$callback)
+set.seed(42)
+model_lanczos <- nmf(aml, k = 6, seed = "lanczos", tol = 1e-6,
+                     maxit = 80, on_iteration = tracker_lanczos$callback, resource = "cpu")
 
 loss_random <- tracker_random$get()
 loss_lanczos <- tracker_lanczos$get()
@@ -366,17 +613,18 @@ knitr::kable(
 | Initialization | Iterations | Final Loss |
 |:---------------|-----------:|-----------:|
 | Random         |         80 |   2386.559 |
-| Lanczos        |         80 |   2449.680 |
+| Lanczos        |         80 |   2449.652 |
 
 Convergence comparison: random vs. Lanczos initialization on AML data.
 
 ``` r
 ggplot(convergence_df, aes(x = Iteration, y = Loss, color = Init)) +
   geom_line(linewidth = 0.8) +
+  scale_y_log10() +
   scale_color_brewer(palette = "Set1") +
   labs(
     title = "Convergence: Random vs. Lanczos Initialization",
-    x = "Iteration", y = "Reconstruction Loss", color = "Initialization"
+    x = "Iteration", y = "Reconstruction Loss (log scale)", color = "Initialization"
   ) +
   theme_minimal()
 ```
@@ -388,11 +636,22 @@ warm start) and typically reaches a low loss in fewer iterations, while
 random initialization requires more iterations to reach a comparable
 solution.
 
+> **A note on local minima:** NMF is a non-convex problem, so every
+> initialization converges to a *local* minimum. SVD-based
+> initializations deterministically find a single good starting point,
+> but that point may sit in a basin that is not globally optimal.
+> Running many random initializations samples a wider landscape and can
+> discover better local minima that the SVD path misses entirely. In
+> practice, a common strategy is to run several random restarts and keep
+> the solution with the lowest loss.
+
 ## Next Steps
 
-- **Rank selection**: How many factors should you use? See the
+- **Deep-dive on cross-validation**: Example 2 introduced rank selection
+  on synthetic data. See the
   [Cross-Validation](https://zdebruine.github.io/RcppML/articles/cross-validation.md)
-  vignette.
+  vignette for real-data workflows, repeated CV, and sparse vs. dense
+  masking strategies.
 - **Non-Gaussian data**: Count data, ratings, and overdispersed data
   need distribution-aware NMF. See the
   [Distributions](https://zdebruine.github.io/RcppML/articles/distributions.md)

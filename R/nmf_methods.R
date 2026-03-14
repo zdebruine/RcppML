@@ -329,9 +329,8 @@ setMethod("summary", signature = "nmf", function(object, group_by, stat = "sum",
 #'
 #' @inheritParams nmf
 #' @param x fitted model, class \code{nmf}, generally the result of calling \code{nmf}, with models of equal dimensions as \code{data}
-#' @param loss loss function to use: "mse" (Mean Squared Error, default), "mae" (Mean Absolute Error), 
-#'   "huber" (Huber loss), or "kl" (Kullback-Leibler divergence)
-#' @param huber_delta delta parameter for Huber loss (default 1.0), ignored for other loss functions
+#' @param loss loss function to use: "mse" (Mean Squared Error, default) or
+#'   "gp" (Generalized Poisson / KL divergence)
 #' @param missing_only calculate loss only for missing values specified as a matrix in \code{mask}
 #' @param test_fraction fraction of entries to hold out as test set (default 0 = disabled). When > 0, creates a random mask for test/train split.
 #' @param test_seed seed for test set generation. If NULL, attempts to use test mask from model's @misc$test_mask if available.
@@ -340,7 +339,7 @@ setMethod("summary", signature = "nmf", function(object, group_by, stat = "sum",
 #' @param threads number of threads for OpenMP parallelization (default 0 = all available)
 #' @param verbose print progress information (default FALSE)
 #' @importFrom methods is
-#' @return A single numeric value: the loss (MSE, MAE, Huber, or KL divergence) of the model on the data.
+#' @return A single numeric value: the loss (MSE or GP/KL divergence) of the model on the data.
 #' @seealso \code{\link{nmf}}
 #' @export
 #' @examples
@@ -349,15 +348,13 @@ setMethod("summary", signature = "nmf", function(object, group_by, stat = "sum",
 #' A <- rsparsematrix(100, 50, 0.1)
 #' model <- nmf(A, 3, seed = 1, maxit = 50, tol = 1e-4)
 #' evaluate(model, A)  # MSE
-#' evaluate(model, A, loss = "mae")  # MAE
 #' }
 setGeneric("evaluate", function(x, ...) standardGeneric("evaluate"))
 
 #' @rdname evaluate
 #' @method evaluate nmf
 setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, missing_only = FALSE, 
-                                                   loss = c("mse", "mae", "huber", "gp"),
-                                                   huber_delta = 1.0,
+                                                   loss = c("mse", "gp"),
                                                    test_fraction = 0,
                                                    test_seed = NULL,
                                                    eval_set = c("all", "test", "train"),
@@ -368,18 +365,10 @@ setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, missing_
 
   if (missing_only && is.null(mask)) stop("a mask matrix must be specified to set 'missing_only = TRUE'")
 
-  # Deprecation shim: "kl" → "gp"
-  if (is.character(loss) && length(loss) == 1 && loss == "kl") {
-    .Deprecated(msg = 'loss="kl" is deprecated in evaluate(). Use loss="gp" instead.')
-    loss <- "gp"
-  }
-
   # Validate and convert loss parameter
   loss <- match.arg(loss)
   loss_type <- switch(loss,
     "mse" = 0L,
-    "mae" = 1L,
-    "huber" = 2L,
     "gp" = 3L  # KL divergence formula (LossType::KL internally)
   )
 
@@ -469,6 +458,7 @@ setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, missing_
 
   # Unified loss evaluation — always use general loss functions
   # (loss_type=0 corresponds to MSE, handled by compute_loss_general)
+  huber_delta <- 0.0  # kept for C++ interface compatibility
   if (missing_only) {
     Rcpp_evaluate_loss_missing(data, mask_matrix, x@w, x@d, x@h, 
                                loss_type, huber_delta, as.integer(threads))
@@ -490,22 +480,12 @@ setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, missing_
 #' @param ... additional arguments
 #' @return A single numeric value: the mean squared error of the factorization.
 #' @examples
-#' \donttest{
+#' \dontrun{
 #' data <- simulateNMF(50, 30, k = 3, seed = 1)
 #' model <- nmf(data$A, 3, seed = 1, maxit = 50)
 #' RcppML:::mse(model$w, model$d, model$h, data$A)
 #' }
 mse <- function(w, d = NULL, h, data, mask = NULL, missing_only = FALSE, ...) {
-  # Backward compat: old API was mse(A, w, d, h) with data first.
-  # Detect if called with old API by checking if d is a matrix (should be a vector).
-  if (!is.null(d) && (is.matrix(d) || is(d, "sparseMatrix"))) {
-    .Deprecated(msg = paste0(
-      "mse(A, w, d, h) argument order is deprecated.\n",
-      "Use mse(w = ..., d = ..., h = ..., data = ...) instead."))
-    # Remap: old(A=w, w=d, d=h, h=data) → new(w=d, d=h, h=data, data=w)
-    old_A <- w; old_w <- d; old_d <- h; old_h <- data
-    w <- old_w; d <- old_d; h <- old_h; data <- old_A
-  }
   if (is.null(d)) d <- rep(1, nrow(h))
   m <- new("nmf", w = w, d = d, h = h)
   evaluate(m, data, mask = mask, missing_only = missing_only, loss = "mse", ...)

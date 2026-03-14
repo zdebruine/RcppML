@@ -80,10 +80,12 @@ dclust <- function(A, min_samples, min_dist = 0, tol = 1e-5, maxit = 100, nonneg
     gpu_result <- .try_gpu_dclust(A, min_samples, min_dist, tol, maxit, nonneg, seed, verbose)
     if (!is.null(gpu_result)) return(gpu_result)
 
-    Rcpp_dclust_sparse(A, min_samples, min_dist, verbose, tol, maxit, nonneg, seed, as.integer(threads))
+    result <- Rcpp_dclust_sparse(A, min_samples, min_dist, verbose, tol, maxit, nonneg, seed, as.integer(threads))
+    structure(result, class = "dclust")
 }
 
 #' Try GPU dispatch for divisive clustering
+#' @return A \code{dclust} object if GPU succeeds, or \code{NULL}.
 #' @keywords internal
 .try_gpu_dclust <- function(A, min_samples, min_dist, tol, maxit, nonneg, seed, verbose) {
   use_gpu <- getOption("RcppML.gpu", "auto")
@@ -126,19 +128,168 @@ dclust <- function(A, min_samples, min_dist = 0, tol = 1e-5, maxit = 100, nonneg
     # Convert to list-of-clusters format matching CPU output
     cluster_ids <- unique(ret$assignments)
     cluster_ids <- cluster_ids[cluster_ids >= 0]  # drop unassigned
-    clusters <- lapply(cluster_ids, function(cid) {
+    clusters <- lapply(seq_along(cluster_ids), function(i) {
+      cid <- cluster_ids[i]
       samples <- which(ret$assignments == cid)
       center <- Matrix::rowMeans(A[, samples, drop = FALSE])
       list(
         samples = as.integer(samples - 1L),
         center = as.numeric(center),
-        id = as.integer(cid),
+        id = as.character(cid),  # GPU path: integer string (no tree info)
         size = length(samples)
       )
     })
-    clusters
+    structure(clusters, class = "dclust")
   }, error = function(e) {
     if (verbose) message("GPU dclust failed: ", conditionMessage(e), "\nFalling back to CPU.")
     NULL
   })
+}
+
+
+#' @title Plot divisive clustering hierarchy
+#'
+#' @description Reconstructs and plots the binary splitting tree from a
+#'   \code{dclust} result. Each cluster's binary path ID encodes its
+#'   position in the hierarchy (e.g., \code{"01"} = root->left->right).
+#'   If \code{labels} are provided, a stacked composition bar is drawn
+#'   below each leaf showing label proportions.
+#'
+#' @param x a \code{dclust} object (list of clusters with binary path IDs)
+#' @param labels optional character or factor vector of class labels, one per
+#'   sample in the original data matrix passed to \code{\link{dclust}}
+#' @param palette optional named character vector mapping label levels to colors.
+#'   If \code{NULL}, generated automatically.
+#' @param main plot title
+#' @param ... additional arguments passed to \code{\link[stats]{plot.dendrogram}}
+#' @return \code{x} (invisibly)
+#' @export
+#' @method plot dclust
+#' @seealso \code{\link{dclust}}
+#' @importFrom grDevices hcl.colors
+#' @importFrom graphics par layout plot.new plot.window segments rect text legend
+plot.dclust <- function(x, labels = NULL, palette = NULL,
+                        main = "Divisive Clustering Hierarchy", ...) {
+  n <- length(x)
+  if (n < 2) {
+    message("Single cluster -- nothing to plot.")
+    return(invisible(x))
+  }
+
+  dendro <- .dclust_to_dendro(x)
+
+  if (is.null(labels)) {
+    plot(dendro, main = main, ylab = "Split depth", ...)
+  } else {
+    opar <- par(no.readonly = TRUE)
+    on.exit(par(opar))
+    layout(matrix(1:2, nrow = 2), heights = c(3, 1.5))
+
+    par(mar = c(0.5, 4, 3, 10))
+    plot(dendro, main = main, leaflab = "none", ylab = "Split depth", ...)
+
+    par(mar = c(5, 4, 0.5, 10))
+    .plot_dclust_composition(x, dendro, labels, palette)
+  }
+
+  invisible(x)
+}
+
+
+#' Convert dclust result to dendrogram
+#' @return A \code{\link{dendrogram}} object.
+#' @keywords internal
+.dclust_to_dendro <- function(clusters) {
+  ids <- vapply(clusters, `[[`, character(1), "id")
+  sizes <- vapply(clusters, function(cl) as.integer(cl$size), integer(1))
+
+  .build <- function(path) {
+    idx <- which(ids == path)
+    if (length(idx) == 1) {
+      lbl <- if (nchar(path) > 0) path else "root"
+      d <- sizes[idx]
+      attr(d, "label") <- paste0(lbl, " (n=", sizes[idx], ")")
+      attr(d, "members") <- 1L
+      attr(d, "height") <- 0
+      attr(d, "leaf") <- TRUE
+      attr(d, "midpoint") <- 0
+      class(d) <- "dendrogram"
+      return(d)
+    }
+
+    left <- .build(paste0(path, "0"))
+    right <- .build(paste0(path, "1"))
+
+    h <- max(attr(left, "height"), attr(right, "height")) + 1
+    d <- list(left, right)
+    attr(d, "members") <- attr(left, "members") + attr(right, "members")
+    attr(d, "height") <- h
+    attr(d, "midpoint") <- (attr(left, "midpoint") +
+                            attr(left, "members") +
+                            attr(right, "midpoint")) / 2
+    class(d) <- "dendrogram"
+    return(d)
+  }
+
+  .build("")
+}
+
+
+#' Plot composition bars aligned with dendrogram leaves
+#' @return Called for its side effect (plotting). Returns \code{NULL} invisibly.
+#' @keywords internal
+.plot_dclust_composition <- function(clusters, dendro, labels, palette) {
+  ids <- vapply(clusters, `[[`, character(1), "id")
+
+  # Get leaf order from dendrogram (left-to-right)
+  leaf_order <- labels(dendro)
+  leaf_paths <- sub(" \\(n=.*", "", leaf_order)
+  leaf_paths[leaf_paths == "root"] <- ""
+  n <- length(leaf_paths)
+
+  ulabels <- sort(unique(labels))
+  if (is.null(palette))
+    palette <- setNames(hcl.colors(length(ulabels), "Set2"), ulabels)
+
+  # Build composition matrix in dendrogram order
+  comp <- matrix(0, nrow = length(ulabels), ncol = n)
+  totals <- integer(n)
+  for (i in seq_len(n)) {
+    idx <- which(ids == leaf_paths[i])
+    if (length(idx) != 1) next
+    sidx <- clusters[[idx]]$samples + 1L
+    tab <- table(factor(labels[sidx], levels = ulabels))
+    comp[, i] <- as.numeric(tab)
+    totals[i] <- sum(tab)
+  }
+
+  # Normalize to proportions
+  props <- sweep(comp, 2, pmax(totals, 1), "/")
+
+  # Match dendrogram x-coordinates (leaves at 1, 2, ..., n)
+  plot.new()
+  plot.window(xlim = c(0.5, n + 0.5), ylim = c(-0.25, 1.05))
+
+  bar_w <- 0.4
+  for (i in seq_len(n)) {
+    cumh <- 0
+    for (j in seq_len(nrow(props))) {
+      if (props[j, i] == 0) next
+      rect(i - bar_w, cumh, i + bar_w, cumh + props[j, i],
+           col = palette[ulabels[j]], border = "white", lwd = 0.5)
+      cumh <- cumh + props[j, i]
+    }
+  }
+
+  # Leaf labels
+  text(seq_len(n), -0.1,
+       labels = paste0(leaf_paths, "\n(n=", totals, ")"),
+       cex = 0.65, adj = c(0.5, 1))
+
+  # Legend (in right margin, offset to avoid overlapping bars)
+  usr <- par("usr")
+  legend_x <- usr[2] + (usr[2] - usr[1]) * 0.02
+  legend(legend_x, usr[4], legend = rev(ulabels),
+         fill = rev(palette[ulabels]),
+         bty = "n", cex = 0.65, ncol = 1, xpd = TRUE)
 }

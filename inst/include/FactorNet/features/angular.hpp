@@ -6,15 +6,20 @@
 
 /**
  * @file features/angular.hpp
- * @brief Angular (orthogonality) penalty — Tier 1 (k×k operation)
+ * @brief Angular (orthogonality) penalty for NMF and SVD
  *
- * Encourages factor columns/rows to be orthogonal by adding a penalty:
- *   G += λ · (factor · factorᵀ)  with diagonal zeroed
+ * Two mechanisms:
  *
- * This drives the off-diagonal entries of factorᵀ·factor toward zero.
+ * 1. **Gram-based** (`apply_angular`): Adds λ · cosine_matrix to the Gram.
+ *    Used in SVD paths where iterative refinement handles the penalty.
  *
- * Cost: O(k² · m) for the factor product, O(k²) for diagonal zeroing.
- * Since k is small (typically ≤ 64), this is negligible.
+ * 2. **Post-NNLS projection** (`apply_angular_posthoc`): After the NNLS
+ *    solve, subtracts correlated components from each factor row. This
+ *    directly decorrelates factor *profiles* (directions), which the
+ *    Gram-based approach cannot do effectively due to re-normalization.
+ *    Used in NMF paths.
+ *
+ * Cost: O(k² · m) for both approaches. Negligible for k ≤ 64.
  *
  * @author Zach DeBruine
  * @date 2026
@@ -28,17 +33,10 @@ namespace FactorNet {
 namespace features {
 
 /**
- * @brief Apply angular (orthogonality) penalty to Gram matrix
+ * @brief Gram-based angular penalty (used by SVD paths)
  *
- * Adds λ · (factor · factorᵀ - I) to G.
- * The diagonal is NOT penalized (only off-diagonal overlap).
- *
- * For H update: factor = H_current (k × n), penalizes column overlap.
- * For W update: factor = W_current (k × m), penalizes row overlap.
- *
- * @param G       Gram matrix (k × k), modified in-place
- * @param factor  Current factor matrix (k × n_cols)
- * @param lambda  Angular penalty strength
+ * Adds λ · cosine_similarity_matrix(factor) to G.
+ * The full cosine matrix (including diagonal) is added to preserve PSD.
  */
 template<typename Scalar>
 inline void apply_angular(DenseMatrix<Scalar>& G,
@@ -55,9 +53,7 @@ inline void apply_angular(DenseMatrix<Scalar>& G,
     overlap.template selfadjointView<Eigen::Lower>().rankUpdate(factor);
     overlap.template triangularView<Eigen::Upper>() = overlap.transpose();
 
-    // Normalize to cosine similarity for scale-invariance.
-    // After NMF diag-normalization, factor rows are typically unit-norm
-    // so this is often a no-op, but handles un-normalized cases correctly.
+    // Normalize to cosine similarity
     DenseVector<Scalar> norms = overlap.diagonal().cwiseSqrt();
     for (int i = 0; i < k; ++i) {
         if (norms(i) > 0) {
@@ -66,13 +62,62 @@ inline void apply_angular(DenseMatrix<Scalar>& G,
         }
     }
 
-    // Add FULL normalized overlap to G (including diagonal).
-    // Since overlap is PSD, G + λ*overlap is guaranteed PSD.
-    // This penalizes solutions aligned with the shared-variance direction
-    // of the factor matrix, encouraging orthogonal factors.
-    // The self-overlap on the diagonal acts as uniform L2 regularization,
-    // while off-diagonal terms add extra penalty for correlated factors.
     G.noalias() += lambda * overlap;
+}
+
+/**
+ * @brief Post-NNLS angular decorrelation (used by NMF paths)
+ *
+ * Directly decorrelates factor row profiles by subtracting correlated
+ * components.  For each row i, subtracts a weighted combination of other
+ * rows where weights = cosine similarity.  This gradient descent step on
+ * L = Σ_{i<j} cos(w_i, w_j) pushes correlated factors apart.
+ *
+ * Applied AFTER the NNLS solve, BEFORE extract_scaling.
+ * Results are clipped to non-negative.
+ *
+ * @param Factor  Factor matrix (k × cols), modified in-place
+ * @param lambda  Angular penalty strength (typical: 0.01–1.0)
+ */
+template<typename Scalar>
+inline void apply_angular_posthoc(DenseMatrix<Scalar>& Factor,
+                                  Scalar lambda)
+{
+    if (lambda <= 0) return;
+
+    const int k = static_cast<int>(Factor.rows());
+
+    // 1. Compute row norms and normalize
+    DenseVector<Scalar> row_norms(k);
+    for (int i = 0; i < k; ++i) {
+        row_norms(i) = Factor.row(i).norm();
+    }
+
+    DenseMatrix<Scalar> F_hat = Factor;
+    for (int i = 0; i < k; ++i) {
+        if (row_norms(i) > Scalar(1e-15)) {
+            F_hat.row(i) /= row_norms(i);
+        }
+    }
+
+    // 2. Cosine similarity matrix (k × k) with diagonal zeroed
+    DenseMatrix<Scalar> cos_mat(k, k);
+    cos_mat.setZero();
+    cos_mat.template selfadjointView<Eigen::Lower>().rankUpdate(F_hat);
+    cos_mat.template triangularView<Eigen::Upper>() = cos_mat.transpose();
+    cos_mat.diagonal().setZero();
+
+    // 3. Gradient: grad_i = ||row_i|| · Σ_{j≠i} cos(i,j) · F_hat.row(j)
+    //    Scale by row_norms so perturbation is proportional to factor magnitude.
+    //    Equivalent to decorrelating on the unit sphere, then re-scaling.
+    DenseMatrix<Scalar> grad = cos_mat * F_hat;
+    for (int i = 0; i < k; ++i) {
+        grad.row(i) *= row_norms(i);
+    }
+
+    // 4. Subtract gradient and clip to non-negative
+    Factor -= lambda * grad;
+    Factor = Factor.cwiseMax(Scalar(0));
 }
 
 }  // namespace features

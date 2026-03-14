@@ -11,7 +11,7 @@
 5. [SVD Layer API](#5-svd-layer-api)
 6. [Per-Factor Configuration](#6-per-factor-configuration)
 7. [Regularization Features](#7-regularization-features)
-8. [Guides (Semi-Supervised Learning)](#8-guides-semi-supervised-learning)
+8. [Target Regularization (Semi-Supervised Learning)](#8-target-regularization-semi-supervised-learning)
 9. [Loss Functions](#9-loss-functions)
 10. [Backends & Primitives](#10-backends--primitives)
 11. [Clustering](#11-clustering)
@@ -592,8 +592,9 @@ struct FactorConfig {
     const SparseMatrix<Scalar>* graph = nullptr;
     Scalar graph_lambda = 0;
 
-    // Semi-supervised guides
-    std::vector<guides::Guide<Scalar>*> guides;
+    // Semi-supervised target regularization
+    const DenseMatrix<Scalar>* target = nullptr;
+    Scalar target_lambda = 0;
 
     // Queries
     bool has_tier2_features() const;
@@ -612,7 +613,7 @@ Used in two places:
 
 All regularization operates on the small k×k Gram matrix G and k×n RHS matrix B, applied between primitive computations and the NNLS solve. Cost: O(k²), negligible versus O(nnz·k) primitives.
 
-**Apply order:** L2 → Angular → Graph → L21 → L1 (inside NNLS) → Guides → NNLS → Bounds
+**Apply order:** L2 → Angular → Graph → L21 → Target → L1 (inside NNLS) → NNLS → Bounds
 
 ### L1 / L2 (Lasso / Ridge)
 
@@ -661,65 +662,58 @@ config.W.nonneg = false;       // signed W (semi-NMF)
 
 ---
 
-## 8. Guides (Semi-Supervised Learning)
+## 8. Target Regularization (Semi-Supervised Learning)
 
-Guides inject prior knowledge by modifying the Gram and RHS to attract (or repel) factors toward targets. Mathematically: add λ·‖h_j − t_j‖² to the per-column NNLS objective.
+Target regularization injects prior knowledge by modifying the Gram matrix and RHS to attract factors toward a target matrix. Mathematically: add λ·‖h_j − t_j‖² to the per-column NNLS objective.
 
-**Header:** `#include <FactorNet/guides/guide.hpp>`
-
-### Guide Base Class
+**Implementation** (in `variant_helpers.hpp`):
 
 ```cpp
-template<typename Scalar>
-struct Guide {
-    Scalar lambda = 1;  // positive = attract, negative = repel
-
-    virtual void apply(DenseMatrix<Scalar>& G, DenseMatrix<Scalar>& B) const = 0;
-    virtual void update(const DenseMatrix<Scalar>& factor, int iteration) {}
-};
+// Applied in apply_features() when fc.has_target():
+G.diagonal().array() += std::abs(fc.target_lambda);
+B.noalias() += fc.target_lambda * (*fc.target);
 ```
 
-### ClassifierGuide
-
-**Header:** `#include <FactorNet/guides/classifier_guide.hpp>`
-
-Steers factors toward per-class centroids (computed each iteration from labeled samples):
+### Usage
 
 ```cpp
-guides::ClassifierGuide<float> guide;
-guide.lambda = 0.5f;
-guide.set_labels(labels, num_classes);
+// Pre-compute target matrix (e.g., class centroids from labels)
+DenseMatrix<float> target_H(k, n);  // k × n, same shape as H
+// ... fill target_H with class centroids, whitened centroids, etc.
 
-config.H.guides.push_back(&guide);
+// Configure target regularization on H
+config.H.target = &target_H;
+config.H.target_lambda = 0.5f;  // positive = attract toward target
 ```
 
-### ExternalGuide
+### How It Works
 
-**Header:** `#include <FactorNet/guides/external_guide.hpp>`
+For each column $h_j$ of $H$ with target column $t_j$, the NNLS subproblem becomes:
 
-Fixed target matrix (transfer learning, prior knowledge, cross-layer coupling):
+$$\min_{h_j \geq 0} \| G h_j - b_j \|^2 + |\lambda| \| h_j - t_j \|^2$$
 
-```cpp
-guides::ExternalGuide<float> guide;
-guide.lambda = 0.3f;
-guide.target_matrix = &T;  // k × n
+Expanding the target penalty and absorbing into the existing Gram/RHS system:
 
-config.H.guides.push_back(&guide);
-```
+$$G' = G + |\lambda| \cdot I, \quad b'_j = b_j + \lambda \cdot t_j$$
 
-### Custom Guide
+This is applied *before* the NNLS solve in `apply_features()`, alongside other Gram-level regularization (L2, angular, graph Laplacian, L21).
 
-```cpp
-template<typename Scalar>
-struct MyGuide : public guides::Guide<Scalar> {
-    void apply(DenseMatrix<Scalar>& G, DenseMatrix<Scalar>& B) const override {
-        G.diagonal().array() += std::abs(this->lambda);
-        // steer B toward your target...
-    }
-    void update(const DenseMatrix<Scalar>& factor, int iteration) override {
-        // recompute targets from current factor state
-    }
-};
+### Key Properties
+
+- **Positive λ**: Attracts factors toward the target (standard supervised steering)
+- **Zero λ**: No effect (target disabled)
+- **Target ownership**: Caller owns the target matrix; the config stores a non-owning pointer
+- **GPU support**: The GPU pipeline has its own alignment guide infrastructure (`AlignmentGuideConfig`) with additional features: annealing schedules, warm-up periods, Mahalanobis precision, and classifier centroid computation on-the-fly
+
+### R-Side API
+
+```r
+# From R: compute target from labels, then pass to nmf()
+target <- compute_target(H_init, labels = labels)
+model  <- nmf(A, k = 10, target_H = target, target_lambda = 0.5)
+
+# Or via factor_net graph:
+out <- nmf_layer(inp, k = 10, H_config = H(target = target, target_lambda = 0.5))
 ```
 
 ---
@@ -965,8 +959,7 @@ FactorNet/
 ├── primitives/
 │   ├── cpu/       ← OpenMP-parallel Gram, RHS, NNLS, loss
 │   └── gpu/       ← CUDA kernels (same API via template dispatch)
-├── features/      ← Regularization: L1, L2, L21, angular, graph, bounds
-├── guides/        ← Semi-supervised targets (classifier, external)
+├── features/      ← Regularization: L1, L2, L21, angular, graph, target, bounds
 ├── clustering/    ← Spectral bipartitioning, divisive clustering
 ├── io/            ← DataLoader (in-memory, SPZ streaming)
 ├── gpu/           ← GPU context, bridge for CPU-only builds
@@ -986,11 +979,10 @@ FactorNet/
 
 ---
 
-## Complete Example: Multi-Layer NMF with Guides
+## Complete Example: Multi-Layer NMF with Target Regularization
 
 ```cpp
 #include <FactorNet/graph/graph_all.hpp>
-#include <FactorNet/guides/classifier_guide.hpp>
 
 using namespace FactorNet;
 using namespace FactorNet::graph;
@@ -1009,11 +1001,11 @@ int main() {
     encoder.H_config.L1 = 0.01f;
     encoder.W_config.L21 = 0.1f;
 
-    // Guide bottleneck H toward cell-type centroids
-    guides::ClassifierGuide<float> guide;
-    guide.lambda = 0.5f;
-    guide.set_labels(labels, 10);
-    bottleneck.H_config.guides.push_back(&guide);
+    // Target regularization: steer bottleneck H toward class centroids
+    // (target_H is a pre-computed k × n matrix of per-sample class centroids)
+    DenseMatrix<float> target_H = compute_centroids(labels, 10);  // user-defined
+    bottleneck.H_config.target = &target_H;
+    bottleneck.H_config.target_lambda = 0.5f;
 
     // Compile and fit
     FactorGraph<float> net({&inp}, &bottleneck);

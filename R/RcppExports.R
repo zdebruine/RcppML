@@ -5,12 +5,12 @@ Rcpp_factor_net_fit <- function(descriptor) {
     .Call(`_RcppML_Rcpp_factor_net_fit`, descriptor)
 }
 
-Rcpp_nmf_rank_cv <- function(A_sexp, k_init = 2L, max_k = 50L, tolerance = 2L, holdout_fraction = 0.1, cv_seed = 1L, tol = 1e-4, maxit = 100L, verbose = FALSE, L1, L2, threads = 0L) {
+Rcpp_nmf_rank_cv <- function(A_sexp, k_init = 2L, max_k = 50L, tolerance = 2L, holdout_fraction = 0.1, cv_seed = 1L, tol = 1e-4, maxit = 100L, verbose = FALSE, L1 = NULL, L2 = NULL, threads = 0L) {
     .Call(`_RcppML_Rcpp_nmf_rank_cv`, A_sexp, k_init, max_k, tolerance, holdout_fraction, cv_seed, tol, maxit, verbose, L1, L2, threads)
 }
 
-Rcpp_nmf_full <- function(A_sexp, k_vec, k_auto, k_auto_min, k_auto_max, L1, L2, L21, angular, upper_bound, graph_lambda, tol, maxit, cd_maxit, cd_tol, cd_abs_tol, threads, seed, nonneg_w, nonneg_h, sort_model, mask_zeros, track_loss_history, track_train_loss, loss_str, huber_delta, holdout_fraction, cv_seeds, cv_patience, resource_override, norm_str = "L1", graph_W_sexp = NULL, graph_H_sexp = NULL, w_init_sexp = NULL, h_init_sexp = NULL, verbose = FALSE, mask_sexp = NULL, projective = FALSE, symmetric_nmf = FALSE, solver_mode = 0L, init_mode = 0L, irls_max_iter = 20L, irls_tol = 1e-4, gp_dispersion_mode = 1L, gp_theta_init = 0.1, gp_theta_max = 5.0, zi_mode = 0L, zi_em_iters = 1L, gp_theta_min = 0.0, nb_size_init = 10.0, nb_size_max = 1e6, nb_size_min = 0.01, gamma_phi_init = 1.0, gamma_phi_max = 1e4, gamma_phi_min = 1e-6, robust_delta = 0.0, tweedie_power = 1.5, on_iteration_r = NULL, guides_list = NULL, enable_profiling = FALSE) {
-    .Call(`_RcppML_Rcpp_nmf_full`, A_sexp, k_vec, k_auto, k_auto_min, k_auto_max, L1, L2, L21, angular, upper_bound, graph_lambda, tol, maxit, cd_maxit, cd_tol, cd_abs_tol, threads, seed, nonneg_w, nonneg_h, sort_model, mask_zeros, track_loss_history, track_train_loss, loss_str, huber_delta, holdout_fraction, cv_seeds, cv_patience, resource_override, norm_str, graph_W_sexp, graph_H_sexp, w_init_sexp, h_init_sexp, verbose, mask_sexp, projective, symmetric_nmf, solver_mode, init_mode, irls_max_iter, irls_tol, gp_dispersion_mode, gp_theta_init, gp_theta_max, zi_mode, zi_em_iters, gp_theta_min, nb_size_init, nb_size_max, nb_size_min, gamma_phi_init, gamma_phi_max, gamma_phi_min, robust_delta, tweedie_power, on_iteration_r, guides_list, enable_profiling)
+Rcpp_nmf_full <- function(A_sexp, k_vec, k_auto, k_auto_min, k_auto_max, L1, L2, L21, angular, upper_bound, graph_lambda, tol, maxit, cd_maxit, cd_tol, threads, seed, nonneg_w, nonneg_h, sort_model, mask_zeros, track_loss_history, track_train_loss, loss_str, huber_delta, holdout_fraction, cv_seeds, cv_patience, resource_override, norm_str = "L1", graph_W_sexp = NULL, graph_H_sexp = NULL, w_init_sexp = NULL, h_init_sexp = NULL, verbose = FALSE, mask_sexp = NULL, projective = FALSE, symmetric_nmf = FALSE, solver_mode = 0L, init_mode = 0L, irls_max_iter = 20L, irls_tol = 1e-4, gp_dispersion_mode = 1L, gp_theta_init = 0.1, gp_theta_max = 5.0, zi_mode = 0L, zi_em_iters = 1L, gp_theta_min = 0.0, nb_size_init = 10.0, nb_size_max = 1e6, nb_size_min = 0.01, gamma_phi_init = 1.0, gamma_phi_max = 1e4, gamma_phi_min = 1e-6, robust_delta = 0.0, tweedie_power = 1.5, on_iteration_r = NULL, target_H_sexp = NULL, target_lambda = NULL, enable_profiling = FALSE) {
+    .Call(`_RcppML_Rcpp_nmf_full`, A_sexp, k_vec, k_auto, k_auto_min, k_auto_max, L1, L2, L21, angular, upper_bound, graph_lambda, tol, maxit, cd_maxit, cd_tol, threads, seed, nonneg_w, nonneg_h, sort_model, mask_zeros, track_loss_history, track_train_loss, loss_str, huber_delta, holdout_fraction, cv_seeds, cv_patience, resource_override, norm_str, graph_W_sexp, graph_H_sexp, w_init_sexp, h_init_sexp, verbose, mask_sexp, projective, symmetric_nmf, solver_mode, init_mode, irls_max_iter, irls_tol, gp_dispersion_mode, gp_theta_init, gp_theta_max, zi_mode, zi_em_iters, gp_theta_min, nb_size_init, nb_size_max, nb_size_min, gamma_phi_init, gamma_phi_max, gamma_phi_min, robust_delta, tweedie_power, on_iteration_r, target_H_sexp, target_lambda, enable_profiling)
 }
 
 Rcpp_nmf_streaming_spz <- function(path, k, tol, maxit, L1, L2, L21, angular, upper_bound, graph_lambda, nonneg_w, nonneg_h, cd_maxit, cd_tol, threads, seed, verbose, loss_str, huber_delta, holdout_fraction, mask_zeros, cv_seed, norm_str = "L1", mask_sexp = NULL, graph_W_sexp = NULL, graph_H_sexp = NULL, solver_mode = 0L, init_mode = 0L, projective = FALSE, symmetric = FALSE, enable_profiling = FALSE) {
@@ -93,7 +93,7 @@ c_knn_jaccard <- function(sim_matrix, knn) {
     .Call(`_RcppML_c_knn_jaccard`, sim_matrix, knn)
 }
 
-#' @title Write a dgCMatrix to a SparsePress (.spz) file
+#' @title Write a dgCMatrix to a StreamPress (.spz) file
 #' @param A A sparse matrix (dgCMatrix)
 #' @param path Output file path (.spz)
 #' @param use_delta Use delta prediction (better for structured data)
@@ -108,17 +108,18 @@ Rcpp_sp_write <- function(A, path, use_delta = TRUE, use_value_pred = FALSE, ver
     .Call(`_RcppML_Rcpp_sp_write`, A, path, use_delta, use_value_pred, verbose, precision, row_sort, include_transpose, chunk_cols, obs_raw, var_raw)
 }
 
-#' @title Read a SparsePress (.spz) file into a dgCMatrix
+#' @title Read a StreamPress (.spz) file into a dgCMatrix
 #' @param path Input file path (.spz)
 #' @param cols Optional integer vector of column indices to read (1-indexed)
 #' @param reorder Whether to undo row permutation (default TRUE)
+#' @param threads Number of threads for parallel decompression (0 = all available, default 0)
 #' @return A sparse matrix (dgCMatrix)
 #' @keywords internal
-Rcpp_sp_read <- function(path, cols = NULL, reorder = TRUE) {
-    .Call(`_RcppML_Rcpp_sp_read`, path, cols, reorder)
+Rcpp_sp_read <- function(path, cols = NULL, reorder = TRUE, threads = 0L) {
+    .Call(`_RcppML_Rcpp_sp_read`, path, cols, reorder, threads)
 }
 
-#' @title Read the pre-stored transpose from a v2 SparsePress (.spz) file
+#' @title Read the pre-stored transpose from a v2 StreamPress (.spz) file
 #' @param path Input file path (.spz)
 #' @return A sparse matrix (dgCMatrix) containing CSC(A^T)
 #' @keywords internal
@@ -126,7 +127,7 @@ Rcpp_sp_read_transpose <- function(path) {
     .Call(`_RcppML_Rcpp_sp_read_transpose`, path)
 }
 
-#' @title Get metadata from a SparsePress (.spz) file without decompressing
+#' @title Get metadata from a StreamPress (.spz) file without decompressing
 #' @param path Input file path (.spz)
 #' @return A list with matrix metadata
 #' @keywords internal
@@ -134,7 +135,7 @@ Rcpp_sp_metadata <- function(path) {
     .Call(`_RcppML_Rcpp_sp_metadata`, path)
 }
 
-#' @title Convert a dgCMatrix to SparsePress format (in-memory)
+#' @title Convert a dgCMatrix to StreamPress format (in-memory)
 #' @param A A sparse matrix (dgCMatrix)
 #' @param use_delta Use delta prediction
 #' @param use_value_pred Use value prediction
@@ -144,8 +145,8 @@ Rcpp_sp_compress <- function(A, use_delta = TRUE, use_value_pred = FALSE) {
     .Call(`_RcppML_Rcpp_sp_compress`, A, use_delta, use_value_pred)
 }
 
-#' @title Decompress a SparsePress raw vector to a dgCMatrix
-#' @param data A raw vector containing compressed SparsePress data
+#' @title Decompress a StreamPress raw vector to a dgCMatrix
+#' @param data A raw vector containing compressed StreamPress data
 #' @return A sparse matrix (dgCMatrix)
 #' @keywords internal
 Rcpp_sp_decompress <- function(data) {

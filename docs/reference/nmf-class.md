@@ -24,3 +24,10 @@ The S4 class for NMF model results.
   set), test_seed (CV seed), test_fraction (CV holdout fraction),
   train_loss (CV training loss), test_loss (CV test loss), and best_iter
   (CV best iteration)
+
+## See also
+
+[`nmf`](https://zdebruine.github.io/RcppML/reference/nmf.md),
+[`evaluate`](https://zdebruine.github.io/RcppML/reference/evaluate.md),
+[`align`](https://zdebruine.github.io/RcppML/reference/align.md),
+[`predict,nmf-method`](https://zdebruine.github.io/RcppML/reference/nmf-class-methods.md)

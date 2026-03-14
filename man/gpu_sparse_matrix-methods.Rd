@@ -31,7 +31,7 @@
 }
 \description{
 S3 methods for the \code{gpu_sparse_matrix} class returned by
-\code{\link{sp_read_gpu}}.
+\code{\link{st_read_gpu}}.
 }
 \examples{
 \dontrun{

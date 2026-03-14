@@ -44,7 +44,8 @@ __global__ void apply_L21_from_norms_kernel(
 //   G += λ * normalized_overlap
 // ========================================================================
 
-// Normalize overlap in-place to cosine similarity and scale by lambda
+// Normalize overlap in-place to cosine similarity and scale by lambda.
+// Full cosine matrix (including diagonal) is kept to preserve PSD.
 template<typename Scalar>
 __global__ void normalize_and_scale_overlap_kernel(
     Scalar* __restrict__ overlap,          // k×k column-major

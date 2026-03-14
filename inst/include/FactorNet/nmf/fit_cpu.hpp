@@ -430,7 +430,7 @@ template<typename Resource, typename Scalar, typename MatrixType>
     const bool can_fuse = is_sparse_v<MatrixType>
                        && !use_mask
                        && !config.requires_irls()
-                       && !config.has_guides();  // guides need standard path for B modification
+                       && !config.has_target();  // target reg needs standard path for B modification
 
     if (config.verbose && can_fuse) {
         FACTORNET_LOG_NMF(FactorNet::LogLevel::SUMMARY, true,
@@ -481,12 +481,6 @@ template<typename Resource, typename Scalar, typename MatrixType>
             // STANDARD NMF: Gram → RHS → features → NNLS → normalize
             // --------------------------------------------------------
 
-            // Update H-side guide targets before this iteration's update
-            for (auto* guide : config.H.guides) {
-                if (guide && guide->is_active())
-                    guide->update(H, iter);
-            }
-
             // Use normalized W_T directly (unit-norm rows) for well-conditioned
             // Gram matrix, matching old backend behavior.
             // d is NOT applied before Gram/RHS — this preserves conditioning.
@@ -510,8 +504,7 @@ template<typename Resource, typename Scalar, typename MatrixType>
                 _t_rhs_h = std::chrono::high_resolution_clock::now();
                 prof_timer.begin("features_H");
                 if (config.H.L2 > 0) G.diagonal().array() += config.H.L2;
-                if (config.H.angular > 0)
-                    features::apply_angular(G, H, config.H.angular);
+                // Angular: applied post-NNLS via apply_angular_posthoc
                 if (config.H.graph)
                     features::apply_graph_reg(G, *config.H.graph, H, config.H.graph_lambda);
                 if (config.H.L21 > 0)
@@ -528,8 +521,7 @@ template<typename Resource, typename Scalar, typename MatrixType>
                         config.H.nonneg,
                         eff_threads,
                         iter > 0,
-                        static_cast<Scalar>(0),
-                        config.cd_abs_tol);
+                        static_cast<Scalar>(0));
                 } else {
                     // Modes 1 and 2: pre-factorized Cholesky fused path
                     primitives::fused_rhs_cholesky_sparse(
@@ -635,15 +627,16 @@ template<typename Resource, typename Scalar, typename MatrixType>
                                                      config.H.nonneg,
                                                      config.threads,
                                                      static_cast<Scalar>(0),  // upper_bound
-                                                     iter > 0,                // warm_start
-                                                     config.cd_abs_tol);
+                                                     iter > 0);               // warm_start
                 }
             }  // end fused vs standard H-update NNLS
             if (!h_used_fused) prof_timer.end();  // end nnls_H for standard path
 
-            // 5. Post-NNLS bounds
+            // 5. Post-NNLS bounds and angular decorrelation
             if (config.H.upper_bound > 0)
                 features::apply_upper_bound(H, config.H.upper_bound);
+            if (config.H.angular > 0)
+                features::apply_angular_posthoc(H, config.H.angular);
 
             _t_norm_h = std::chrono::high_resolution_clock::now();
             // 6. Normalize H → d
@@ -696,12 +689,13 @@ template<typename Resource, typename Scalar, typename MatrixType>
                                                  config.W.nonneg,
                                                  config.threads,
                                                  static_cast<Scalar>(0),
-                                                 iter > 0,
-                                                 config.cd_abs_tol);
+                                                 iter > 0);
             }
 
             if (config.W.upper_bound > 0)
                 features::apply_upper_bound(W_T, config.W.upper_bound);
+            if (config.W.angular > 0)
+                features::apply_angular_posthoc(W_T, config.W.angular);
 
             // Normalize W_T → d
             variant::extract_scaling(W_T, d, config.norm_type);
@@ -713,12 +707,6 @@ template<typename Resource, typename Scalar, typename MatrixType>
             // --------------------------------------------------------
             // STANDARD or PROJECTIVE W update
             // --------------------------------------------------------
-
-            // Update W-side guide targets before this iteration's update
-            for (auto* guide : config.W.guides) {
-                if (guide && guide->is_active())
-                    guide->update(W_T, iter);
-            }
 
             // Use normalized H directly (unit-norm rows) for well-conditioned
             // Gram matrix, matching old backend behavior.
@@ -748,8 +736,7 @@ template<typename Resource, typename Scalar, typename MatrixType>
 
                 // Apply G-modifying features before the fused loop
                 if (config.W.L2 > 0) G.diagonal().array() += config.W.L2;
-                if (config.W.angular > 0)
-                    features::apply_angular(G, W_T, config.W.angular);
+                // Angular: applied post-NNLS via apply_angular_posthoc
                 if (config.W.graph)
                     features::apply_graph_reg(G, *config.W.graph, W_T, config.W.graph_lambda);
                 if (config.W.L21 > 0)
@@ -766,8 +753,7 @@ template<typename Resource, typename Scalar, typename MatrixType>
                         config.W.nonneg,
                         eff_threads,
                         iter > 0,
-                        static_cast<Scalar>(0),
-                        config.cd_abs_tol);
+                        static_cast<Scalar>(0));
                 } else {
                     // Modes 1 and 2: pre-factorized Cholesky fused path
                     primitives::fused_rhs_cholesky_sparse(
@@ -890,14 +876,15 @@ template<typename Resource, typename Scalar, typename MatrixType>
                                                      config.W.nonneg,
                                                      config.threads,
                                                      static_cast<Scalar>(0),  // upper_bound
-                                                     iter > 0,                // warm_start
-                                                     config.cd_abs_tol);
+                                                     iter > 0);               // warm_start
                 }
             }  // end fused vs standard W-update NNLS
             if (!used_fused_w) prof_timer.end();  // end nnls_W for standard path
 
             if (config.W.upper_bound > 0)
                 features::apply_upper_bound(W_T, config.W.upper_bound);
+            if (config.W.angular > 0)
+                features::apply_angular_posthoc(W_T, config.W.angular);
 
             _t_norm_w = std::chrono::high_resolution_clock::now();
             // Normalize W_T → d

@@ -70,6 +70,9 @@ void rcppml_gpu_nmf_unified_double(
     double* robust_delta, double* tweedie_power,
     // Dispersion output
     double* out_theta, int* out_theta_len,
+    // Classifier guides (H-side, multi-guide)
+    const int* guide_H_labels_flat, const int* guide_H_ns,
+    const double* guide_H_lambdas, const int* guide_H_ncs, int* guide_H_count,
     // Standard outputs
     int* out_iter, int* out_converged, double* out_loss,
     int* out_status,
@@ -137,6 +140,22 @@ void rcppml_gpu_nmf_unified_double(
                 graph_H_p, graph_H_i, graph_H_x);
             config.H.graph = &graph_H_mat;
             config.H.graph_lambda = *graph_H_lambda;
+        }
+
+        // Classifier guides (H-side, multi-guide)
+        {
+            int offset = 0;
+            for (int gi = 0; gi < *guide_H_count; ++gi) {
+                int gn = guide_H_ns[gi];
+                if (gn > 0) {
+                    typename FactorNet::NMFConfig<double>::ClassifierGuideEntry entry;
+                    entry.labels.assign(guide_H_labels_flat + offset, guide_H_labels_flat + offset + gn);
+                    entry.lambda = guide_H_lambdas[gi];
+                    entry.n_classes = guide_H_ncs[gi];
+                    config.classifier_guides_H.push_back(std::move(entry));
+                    offset += gn;
+                }
+            }
         }
 
         // Initialize W (k×m) and H (k×n) from input arrays
@@ -469,6 +488,9 @@ void rcppml_gpu_nmf_unified_float(
     double* robust_delta, double* tweedie_power,
     // Dispersion output
     double* out_theta, int* out_theta_len,
+    // Classifier guides (H-side, multi-guide)
+    const int* guide_H_labels_flat, const int* guide_H_ns,
+    const double* guide_H_lambdas, const int* guide_H_ncs, int* guide_H_count,
     // Standard outputs
     int* out_iter, int* out_converged, double* out_loss,
     int* out_status,
@@ -535,6 +557,22 @@ void rcppml_gpu_nmf_unified_float(
                 graph_H_p, graph_H_i, graph_H_x);
             config.H.graph = &graph_H_mat;
             config.H.graph_lambda = static_cast<float>(*graph_H_lambda);
+        }
+
+        // Classifier guides (H-side, multi-guide)
+        {
+            int offset = 0;
+            for (int gi = 0; gi < *guide_H_count; ++gi) {
+                int gn = guide_H_ns[gi];
+                if (gn > 0) {
+                    typename FactorNet::NMFConfig<float>::ClassifierGuideEntry entry;
+                    entry.labels.assign(guide_H_labels_flat + offset, guide_H_labels_flat + offset + gn);
+                    entry.lambda = static_cast<float>(guide_H_lambdas[gi]);
+                    entry.n_classes = guide_H_ncs[gi];
+                    config.classifier_guides_H.push_back(std::move(entry));
+                    offset += gn;
+                }
+            }
         }
 
         // Convert double input to float for initialization
@@ -924,6 +962,160 @@ void rcppml_gpu_nmf_zerocopy_double(
 
     } catch (const std::exception& e) {
         FACTORNET_GPU_WARN("GPU zero-copy NMF error: %s\n", e.what());
+        *out_status = -1;
+    }
+}
+
+
+/**
+ * @brief GPU NMF with alignment guide regularization (fp64).
+ *
+ * Extends the standard GPU NMF with NNLS regularization toward pre-computed
+ * targets. The alignment guide modifies G and B before each NNLS solve:
+ *   G_reg = G + lambda*M,  b_reg = b + lambda*M*t
+ *
+ * Supports 9 alignment types (A20-A28) with isotropic, Mahalanobis,
+ * batch nullspace, dual W+H, dynamic, whitened centroid, and annealed.
+ *
+ * @param align_type     Alignment type (1-9, see AlignmentGuideConfig)
+ * @param lambda_H       H-side regularization strength
+ * @param lambda_W       W-side regularization strength
+ * @param lambda_batch   Batch nullspace repulsion strength
+ * @param lambda_c       Classifier guide lambda (passthrough)
+ * @param warmup_iters   Iterations before enabling alignment
+ * @param anneal_sched   Annealing schedule (0=none, 1=cosine, 2=linear, etc.)
+ * @param update_interval Recompute targets every N iters (A26)
+ * @param align_labels   Per-sample labels for targets (-1=unlabeled)
+ * @param n_classes      Number of classes
+ * @param h_target       Pre-computed H-side target (k*n doubles, or k*n_classes)
+ * @param h_target_len   Length of h_target array
+ * @param w_target       Pre-computed W-side target (k*m doubles)
+ * @param w_target_len   Length of w_target array
+ * @param precision      Pre-computed precision matrix (k*k doubles)
+ * @param prec_len       Length of precision array
+ * @param batch_sub      Pre-computed batch subspace matrix (k*k doubles)
+ * @param batch_sub_len  Length of batch_sub array
+ */
+void rcppml_gpu_nmf_aligned_double(
+    // Standard CSC matrix
+    const int* col_ptr, const int* row_idx, const double* values,
+    int* m, int* n, int* nnz, int* k,
+    double* W, double* H, double* d,
+    int* max_iter, double* tol,
+    // Standard regularization
+    double* L1_H, double* L1_W, double* L2_H, double* L2_W,
+    int* cd_maxit, int* verbose, int* seed,
+    int* loss_every, int* patience,
+    int* nonneg_W, int* nonneg_H,
+    int* norm_type, int* solver_mode,
+    // Alignment guide parameters
+    int* align_type,
+    double* lambda_H, double* lambda_W, double* lambda_batch,
+    double* lambda_c,
+    int* warmup_iters, int* anneal_sched, int* update_interval,
+    const int* align_labels, int* n_classes,
+    // Pre-computed targets (flat arrays)
+    const double* h_target, int* h_target_len,
+    const double* w_target, int* w_target_len,
+    const double* precision, int* prec_len,
+    const double* batch_sub, int* batch_sub_len,
+    // Classifier guide (H-side, single guide for lambda_c)
+    const int* guide_labels, int* guide_n_classes, double* guide_lambda,
+    int* has_classifier_guide,
+    // Standard outputs
+    int* out_iter, int* out_converged, double* out_loss,
+    int* out_status, double* out_tol)
+{
+    try {
+        // Build unified config
+        FactorNet::NMFConfig<double> config;
+        config.rank = *k;
+        config.max_iter = *max_iter;
+        config.tol = *tol;
+        config.H.L1 = *L1_H;
+        config.W.L1 = *L1_W;
+        config.H.L2 = *L2_H;
+        config.W.L2 = *L2_W;
+        config.cd_max_iter = *cd_maxit;
+        config.verbose = (*verbose != 0);
+        config.seed = static_cast<uint32_t>(*seed);
+        config.loss_every = *loss_every;
+        config.patience = *patience;
+        config.W.nonneg = (*nonneg_W != 0);
+        config.H.nonneg = (*nonneg_H != 0);
+        config.norm_type = static_cast<FactorNet::NormType>(*norm_type);
+        config.solver_mode = *solver_mode;
+        config.track_loss_history = false;
+
+        // Alignment guide configuration
+        auto& ag = config.alignment_guide;
+        ag.type = *align_type;
+        ag.lambda_H = *lambda_H;
+        ag.lambda_W = *lambda_W;
+        ag.lambda_batch = *lambda_batch;
+        ag.lambda_c = *lambda_c;
+        ag.warmup_iters = *warmup_iters;
+        ag.anneal_schedule = *anneal_sched;
+        ag.update_interval = *update_interval;
+        ag.n_classes = *n_classes;
+
+        // Labels
+        if (*n_classes > 0 && align_labels != nullptr) {
+            ag.labels.assign(align_labels, align_labels + *n);
+        }
+
+        // Pre-computed targets
+        if (*h_target_len > 0 && h_target != nullptr) {
+            ag.h_target.assign(h_target, h_target + *h_target_len);
+        }
+        if (*w_target_len > 0 && w_target != nullptr) {
+            ag.w_target.assign(w_target, w_target + *w_target_len);
+        }
+        if (*prec_len > 0 && precision != nullptr) {
+            ag.precision.assign(precision, precision + *prec_len);
+        }
+        if (*batch_sub_len > 0 && batch_sub != nullptr) {
+            ag.batch_subspace.assign(batch_sub, batch_sub + *batch_sub_len);
+        }
+
+        // Optional classifier guide (for combined A23-style)
+        if (*has_classifier_guide != 0 && *guide_n_classes > 0) {
+            typename FactorNet::NMFConfig<double>::ClassifierGuideEntry entry;
+            entry.labels.assign(guide_labels, guide_labels + *n);
+            entry.lambda = *guide_lambda;
+            entry.n_classes = *guide_n_classes;
+            config.classifier_guides_H.push_back(std::move(entry));
+        }
+
+        // Initialize W and H
+        using DenseMatrix = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>;
+        DenseMatrix W_init = Eigen::Map<DenseMatrix>(W, *k, *m).transpose();
+        DenseMatrix H_init = Eigen::Map<DenseMatrix>(H, *k, *n);
+
+        auto result = FactorNet::nmf::nmf_fit_gpu<double>(
+            col_ptr, row_idx, values, *m, *n, *nnz,
+            config, &W_init, &H_init);
+
+        // Write results back
+        for (int i = 0; i < *m; ++i)
+            for (int f = 0; f < *k; ++f)
+                W[f + static_cast<size_t>(i) * (*k)] = result.W(i, f);
+
+        for (int j = 0; j < *n; ++j)
+            for (int f = 0; f < *k; ++f)
+                H[f + static_cast<size_t>(j) * (*k)] = result.H(f, j);
+
+        for (int f = 0; f < *k; ++f)
+            d[f] = result.d(f);
+
+        *out_iter = result.iterations;
+        *out_converged = result.converged ? 1 : 0;
+        *out_loss = static_cast<double>(result.train_loss);
+        *out_tol = static_cast<double>(result.final_tol);
+        *out_status = 0;
+
+    } catch (const std::exception& e) {
+        FACTORNET_GPU_WARN("GPU aligned NMF error: %s\n", e.what());
         *out_status = -1;
     }
 }

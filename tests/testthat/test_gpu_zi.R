@@ -2,11 +2,10 @@
 #
 # GPU ZI is currently a no-op: the GPU backend accepts the zi parameter but
 # ignores it (produces identical results to non-ZI, and does not return
-# pi_row/pi_col in misc).  ZI twoway GPU has been fixed with EMA damping
-# (FIX-ZI-TWOWAY-GPU) — it no longer produces NaN on high-sparsity data.
+# pi_row/pi_col in misc).
 #
 # These tests verify:
-#  1. GPU accepts zi= parameter without error for all combinations
+#  1. GPU accepts zi= parameter without error for row/col modes
 #  2. GPU produces valid (finite, non-negative) factors
 #  3. CPU ZI works correctly (produces pi vectors, different loss from non-ZI)
 # Skipped automatically if GPU is not available.
@@ -66,22 +65,6 @@ test_that("GPU ZIGP-col accepts zi param and produces valid factors", {
   A <- simulate_zi_data(m = 50, n = 35, k = 2, dropout = 0.15)
   model <- nmf(A, 2, loss = "gp", dispersion = "per_row",
                zi = "col", maxit = 20, tol = 1e-4,
-               seed = 42, resource = "gpu", verbose = FALSE)
-
-  expect_s4_class(model, "nmf")
-  expect_true(is.finite(model@misc$loss))
-  expect_true(all(model@w >= 0))
-  expect_true(all(model@h >= 0))
-})
-
-test_that("GPU ZIGP-twoway accepts zi param and produces valid factors", {
-  skip_on_cran()
-  skip("zi='twoway' is currently disabled due to numerical instability in pi estimates")
-  skip_if_no_gpu()
-
-  A <- simulate_zi_data(m = 60, n = 40, k = 3, dropout = 0.2)
-  model <- nmf(A, 3, loss = "gp", dispersion = "per_row",
-               zi = "twoway", maxit = 20, tol = 1e-4,
                seed = 42, resource = "gpu", verbose = FALSE)
 
   expect_s4_class(model, "nmf")
@@ -150,20 +133,6 @@ test_that("GPU ZINB-col accepts zi param and produces valid factors", {
   expect_true(all(model@h >= 0))
 })
 
-test_that("GPU ZINB-twoway accepts zi param and produces valid factors", {
-  skip_on_cran()
-  skip("zi='twoway' is currently disabled due to numerical instability in pi estimates")
-  skip_if_no_gpu()
-  model <- nmf(A, 2, loss = "nb", dispersion = "per_row",
-               zi = "twoway", maxit = 20, tol = 1e-4,
-               seed = 42, resource = "gpu", verbose = FALSE)
-
-  expect_s4_class(model, "nmf")
-  expect_true(is.finite(model@misc$loss))
-  expect_true(all(model@w >= 0))
-  expect_true(all(model@h >= 0))
-})
-
 # ============================================================
 # ZINB: CPU ZI correctness reference
 # ============================================================
@@ -188,46 +157,4 @@ test_that("CPU ZINB-row returns pi_row and has different loss than non-ZI", {
   expect_false(isTRUE(all.equal(cpu_zi@misc$loss, cpu_no_zi@misc$loss)))
 })
 
-# ============================================================
-# GPU ZI Twoway Tests (FIX-ZI-TWOWAY-GPU — EMA damping)
-# ============================================================
 
-test_that("GPU ZI twoway GP doesn't produce NaN on 95%-sparse matrix", {
-  skip("zi='twoway' is currently disabled due to numerical instability in pi estimates")
-  skip_if_no_gpu()
-
-  set.seed(42)
-  m <- 300; n <- 150; density <- 0.05
-  A <- Matrix::rsparsematrix(m, n, density = density)
-  A@x <- abs(A@x)
-  A <- as(A, "dgCMatrix")
-
-  result <- nmf(A, k = 5, loss = "gp", zi = "twoway", seed = 42,
-                resource = "gpu", maxit = 30, tol = 1e-10, verbose = FALSE)
-
-  expect_true(is.finite(result@misc$loss))
-  expect_true(all(is.finite(result@w)))
-  expect_true(all(is.finite(result@h)))
-  expect_true(all(result@w >= 0))
-  expect_true(all(result@h >= 0))
-})
-
-test_that("GPU ZI twoway NB doesn't produce NaN on 95%-sparse matrix", {
-  skip("zi='twoway' is currently disabled due to numerical instability in pi estimates")
-  skip_if_no_gpu()
-
-  set.seed(42)
-  m <- 300; n <- 150; density <- 0.05
-  A <- Matrix::rsparsematrix(m, n, density = density)
-  A@x <- abs(A@x)
-  A <- as(A, "dgCMatrix")
-
-  result <- nmf(A, k = 5, loss = "nb", zi = "twoway", seed = 42,
-                resource = "gpu", maxit = 30, tol = 1e-10, verbose = FALSE)
-
-  expect_true(is.finite(result@misc$loss))
-  expect_true(all(is.finite(result@w)))
-  expect_true(all(is.finite(result@h)))
-  expect_true(all(result@w >= 0))
-  expect_true(all(result@h >= 0))
-})

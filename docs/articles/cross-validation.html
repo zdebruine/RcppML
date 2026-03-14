@@ -84,7 +84,11 @@ holdout, speckled masking preserves the full structure of every sample
 and every feature. The optimal rank
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>k</mi><annotation encoding="application/x-tex">k</annotation></semantics></math>
 is where the test loss curve forms an “elbow” — decreasing sharply up to
-the true rank and flattening thereafter.</p>
+the true rank and flattening or increasing thereafter.</p>
+<p>Cross-validation is also one of the most computationally intensive
+operations in NMF, since it requires fitting multiple ranks across
+multiple replicates. GPU acceleration can provide substantial speedups
+(10–50×) for large-scale CV sweeps — see the <a href="gpu-acceleration.html">GPU Acceleration</a> vignette.</p>
 </div>
 <div class="section level2">
 <h2 id="api-reference">API Reference<a class="anchor" aria-label="anchor" href="#api-reference"></a>
@@ -97,7 +101,7 @@ the true rank and flattening thereafter.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">data</span>, k <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">4</span>, <span class="fl">6</span>, <span class="fl">8</span>, <span class="fl">10</span><span class="op">)</span>,</span>
 <span>    test_fraction <span class="op">=</span> <span class="fl">0.1</span>, cv_seed <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">3</span>,</span>
-<span>    mask_zeros <span class="op">=</span> <span class="cn">FALSE</span>, patience <span class="op">=</span> <span class="fl">5</span>, <span class="va">...</span><span class="op">)</span></span></code></pre></div>
+<span>    mask <span class="op">=</span> <span class="cn">NULL</span>, patience <span class="op">=</span> <span class="fl">5</span>, <span class="va">...</span><span class="op">)</span></span></code></pre></div>
 <table style="width:100%;" class="table">
 <colgroup>
 <col width="33%">
@@ -126,9 +130,12 @@ the true rank and flattening thereafter.</p>
 <td>Seed(s) for holdout mask. Vector length = number of replicates.</td>
 </tr>
 <tr class="even">
-<td><code>mask_zeros</code></td>
-<td>FALSE</td>
-<td>If TRUE, only nonzero entries are candidates for holdout</td>
+<td><code>mask</code></td>
+<td>NULL</td>
+<td>Missing data mask: <code>NULL</code>, <code>"zeros"</code>,
+<code>"NA"</code>, a matrix, or
+<code>list("zeros", &lt;matrix&gt;)</code>
+</td>
 </tr>
 <tr class="odd">
 <td><code>patience</code></td>
@@ -146,6 +153,10 @@ iterations</td>
 <p><strong>Return value</strong>: A <code>data.frame</code> of class
 <code>nmfCrossValidate</code> with columns:</p>
 <table class="table">
+<colgroup>
+<col width="38%">
+<col width="61%">
+</colgroup>
 <thead><tr class="header">
 <th>Column</th>
 <th>Description</th>
@@ -161,11 +172,13 @@ iterations</td>
 </tr>
 <tr class="odd">
 <td><code>train_mse</code></td>
-<td>Training set loss</td>
+<td>Training set loss (named <code>train_mse</code> regardless of the
+loss function used)</td>
 </tr>
 <tr class="even">
 <td><code>test_mse</code></td>
-<td>Held-out test set loss</td>
+<td>Held-out test set loss (named <code>test_mse</code> regardless of
+the loss function used)</td>
 </tr>
 <tr class="odd">
 <td><code>best_iter</code></td>
@@ -177,20 +190,44 @@ iterations</td>
 curve.</p>
 </div>
 <div class="section level3">
-<h3 id="mask_zeros-semantics">
-<code>mask_zeros</code> Semantics<a class="anchor" aria-label="anchor" href="#mask_zeros-semantics"></a>
+<h3 id="mask-semantics">
+<code>mask</code> Semantics<a class="anchor" aria-label="anchor" href="#mask-semantics"></a>
 </h3>
+<p>The <code>mask</code> parameter controls both fitting and
+cross-validation simultaneously — there is no separate CV-specific mask
+setting. It accepts five forms:</p>
 <ul>
 <li>
-<code>mask_zeros = FALSE</code> (default): All entries (including
-zeros) can be held out. Tests full-matrix reconstruction. Appropriate
-for dense or non-sparse data.</li>
+<code>mask = NULL</code> (default): All entries (including zeros)
+can be held out. Tests full-matrix reconstruction. Appropriate for dense
+data or applications where zero is a real measurement.</li>
 <li>
-<code>mask_zeros = TRUE</code>: Only nonzero entries can be held
-out. Zeros are treated as “unobserved,” not “zero-valued.” Appropriate
-for recommendation data or sparse ecological surveys where zero means
-“not seen” rather than “measured as zero.”</li>
+<code>mask = "zeros"</code>: Only nonzero entries can be held out.
+Zeros are treated as “unobserved,” not “zero-valued.” Essential for
+recommendation data (unrated items) and any domain where zero means “not
+measured.”</li>
+<li>
+<code>mask = "NA"</code>: NA entries in the data are treated as
+missing. If the data contains NAs and no mask is specified, this is set
+automatically with a warning.</li>
+<li>
+<code>mask = &lt;matrix&gt;</code>: A custom dgCMatrix or matrix of
+the same dimensions as <code>data</code>. Nonzero entries in the mask
+mark observed positions; zero entries mark unobserved positions.</li>
+<li>
+<code>mask = list("zeros", &lt;matrix&gt;)</code>: Combines
+zero-masking with a custom mask — zeros are treated as unobserved
+<em>and</em> the custom mask is applied simultaneously.</li>
 </ul>
+<blockquote>
+<p><strong>Caution</strong>: Do not compare test loss values across
+<code>mask</code> modes on the same axis. With
+<code>mask = "zeros"</code>, the test set only includes non-zero entries
+(e.g., actual ratings), producing loss values on their natural scale.
+With <code>mask = NULL</code>, the test set is dominated by zero
+entries, yielding much smaller absolute loss values. The two scales are
+fundamentally different and direct comparison is misleading.</p>
+</blockquote>
 </div>
 </div>
 <div class="section level2">
@@ -211,8 +248,17 @@ All other entries form the training set. This preserves matrix structure
 </h3>
 <p>Plot test loss against rank and look for the <strong>elbow</strong>:
 the point where test loss transitions from steep decrease (capturing
-real structure) to plateau or increase (overfitting noise). Below the
+real structure) to a plateau or increase (overfitting noise). Below the
 elbow, the model is underfitting. Above, it’s fitting noise.</p>
+</div>
+<div class="section level3">
+<h3 id="overfitting-dynamics">Overfitting Dynamics<a class="anchor" aria-label="anchor" href="#overfitting-dynamics"></a>
+</h3>
+<p>At the optimal rank, the model captures all real structure without
+fitting noise. Overfitting manifests as the test loss increasing while
+training loss continues to decrease. Higher ranks are more prone to
+overfitting because the model has more capacity to memorize noise in the
+training data.</p>
 </div>
 <div class="section level3">
 <h3 id="multiple-replicates">Multiple Replicates<a class="anchor" aria-label="anchor" href="#multiple-replicates"></a>
@@ -229,30 +275,224 @@ results.</p>
 <div class="section level3">
 <h3 id="example-1-recovering-true-rank-from-synthetic-data">Example 1: Recovering True Rank from Synthetic Data<a class="anchor" aria-label="anchor" href="#example-1-recovering-true-rank-from-synthetic-data"></a>
 </h3>
-<p>We generate a matrix with exactly 5 true factors and ask
-cross-validation to find the elbow.</p>
+<p>We generate a matrix with exactly 5 true factors and noise, then ask
+cross-validation to find the optimal rank.</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulateNMF.html">simulateNMF</a></span><span class="op">(</span><span class="fl">300</span>, <span class="fl">150</span>, k <span class="op">=</span> <span class="fl">5</span>, noise <span class="op">=</span> <span class="fl">0.3</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span>
-<span><span class="va">cv</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">A</span>, k <span class="op">=</span> <span class="fl">2</span><span class="op">:</span><span class="fl">10</span>, test_fraction <span class="op">=</span> <span class="fl">0.1</span>, cv_seed <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">3</span>,</span>
-<span>          tol <span class="op">=</span> <span class="fl">1e-3</span>, maxit <span class="op">=</span> <span class="fl">50</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulateNMF.html">simulateNMF</a></span><span class="op">(</span><span class="fl">200</span>, <span class="fl">80</span>, k <span class="op">=</span> <span class="fl">5</span>, noise <span class="op">=</span> <span class="fl">3.0</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span>
+<span><span class="va">cv</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">A</span>, k <span class="op">=</span> <span class="fl">2</span><span class="op">:</span><span class="fl">15</span>, test_fraction <span class="op">=</span> <span class="fl">0.05</span>, cv_seed <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">3</span>,</span>
+<span>          tol <span class="op">=</span> <span class="fl">1e-5</span>, maxit <span class="op">=</span> <span class="fl">200</span><span class="op">)</span></span></code></pre></div>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Compute mean test loss per rank</span></span>
-<span><span class="va">agg</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/aggregate.html" class="external-link">aggregate</a></span><span class="op">(</span><span class="va">test_mse</span> <span class="op">~</span> <span class="va">k</span>, data <span class="op">=</span> <span class="va">cv</span>, FUN <span class="op">=</span> <span class="va">mean</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="va">agg</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/aggregate.html" class="external-link">aggregate</a></span><span class="op">(</span><span class="va">test_mse</span> <span class="op">~</span> <span class="va">k</span>, data <span class="op">=</span> <span class="va">cv</span>, FUN <span class="op">=</span> <span class="va">mean</span><span class="op">)</span></span>
 <span><span class="va">agg</span><span class="op">$</span><span class="va">se</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/aggregate.html" class="external-link">aggregate</a></span><span class="op">(</span><span class="va">test_mse</span> <span class="op">~</span> <span class="va">k</span>, data <span class="op">=</span> <span class="va">cv</span>, FUN <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/stats/sd.html" class="external-link">sd</a></span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">sqrt</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">x</span><span class="op">)</span><span class="op">)</span><span class="op">)</span><span class="op">$</span><span class="va">test_mse</span></span>
 <span><span class="va">optimal_k</span> <span class="op">&lt;-</span> <span class="va">agg</span><span class="op">$</span><span class="va">k</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/which.min.html" class="external-link">which.min</a></span><span class="op">(</span><span class="va">agg</span><span class="op">$</span><span class="va">test_mse</span><span class="op">)</span><span class="op">]</span></span>
 <span></span>
 <span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>    k <span class="op">=</span> <span class="va">agg</span><span class="op">$</span><span class="va">k</span>,</span>
-<span>    `Mean Test Loss` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">agg</span><span class="op">$</span><span class="va">test_mse</span>, <span class="fl">6</span><span class="op">)</span>,</span>
-<span>    `SE` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">agg</span><span class="op">$</span><span class="va">se</span>, <span class="fl">6</span><span class="op">)</span>,</span>
+<span>    `Mean Test Loss` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/format.html" class="external-link">format</a></span><span class="op">(</span><span class="va">agg</span><span class="op">$</span><span class="va">test_mse</span>, digits <span class="op">=</span> <span class="fl">3</span>, scientific <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>    `SE` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/format.html" class="external-link">format</a></span><span class="op">(</span><span class="va">agg</span><span class="op">$</span><span class="va">se</span>, digits <span class="op">=</span> <span class="fl">3</span>, scientific <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
 <span>    check.names <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span>  <span class="op">)</span>,</span>
 <span>  caption <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"Mean test loss per rank (3 replicates). Optimal k = "</span>, <span class="va">optimal_k</span>, <span class="st">"."</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <table class="table">
 <caption>Mean test loss per rank (3 replicates). Optimal k =
-2.</caption>
+5.</caption>
+<thead><tr class="header">
+<th align="right">k</th>
+<th align="left">Mean Test Loss</th>
+<th align="left">SE</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td align="right">2</td>
+<td align="left">5.29e-07</td>
+<td align="left">9.17e-09</td>
+</tr>
+<tr class="even">
+<td align="right">3</td>
+<td align="left">5.03e-07</td>
+<td align="left">6.99e-09</td>
+</tr>
+<tr class="odd">
+<td align="right">4</td>
+<td align="left">4.72e-07</td>
+<td align="left">8.19e-09</td>
+</tr>
+<tr class="even">
+<td align="right">5</td>
+<td align="left">4.53e-07</td>
+<td align="left">1.03e-08</td>
+</tr>
+<tr class="odd">
+<td align="right">6</td>
+<td align="left">4.65e-07</td>
+<td align="left">7.82e-09</td>
+</tr>
+<tr class="even">
+<td align="right">7</td>
+<td align="left">4.64e-07</td>
+<td align="left">1.27e-08</td>
+</tr>
+<tr class="odd">
+<td align="right">8</td>
+<td align="left">4.88e-07</td>
+<td align="left">1.13e-08</td>
+</tr>
+<tr class="even">
+<td align="right">9</td>
+<td align="left">4.96e-07</td>
+<td align="left">1.63e-08</td>
+</tr>
+<tr class="odd">
+<td align="right">10</td>
+<td align="left">5.21e-07</td>
+<td align="left">2.52e-08</td>
+</tr>
+<tr class="even">
+<td align="right">11</td>
+<td align="left">5.28e-07</td>
+<td align="left">1.45e-08</td>
+</tr>
+<tr class="odd">
+<td align="right">12</td>
+<td align="left">5.47e-07</td>
+<td align="left">7.33e-09</td>
+</tr>
+<tr class="even">
+<td align="right">13</td>
+<td align="left">5.53e-07</td>
+<td align="left">1.46e-08</td>
+</tr>
+<tr class="odd">
+<td align="right">14</td>
+<td align="left">5.73e-07</td>
+<td align="left">1.86e-08</td>
+</tr>
+<tr class="even">
+<td align="right">15</td>
+<td align="left">5.71e-07</td>
+<td align="left">1.79e-08</td>
+</tr>
+</tbody>
+</table>
+<p>Cross-validation identifies the optimal rank — test loss drops
+sharply from k=2 to k=5 (the true rank), then increases beyond k=5 as
+the model begins fitting noise rather than structure.</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">cv</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Cross-Validation: Test Loss vs. Rank (Synthetic Data, True k = 5)"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme</span><span class="op">(</span>legend.position <span class="op">=</span> <span class="st">"none"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="cross-validation_files/figure-html/synthetic-cv-plot-1.png" class="r-plt" alt="" width="672"></p>
+<p>The clear elbow at k=5 confirms that speckled holdout CV recovers the
+planted rank. The individual replicate points cluster tightly, showing
+that 3 replicates suffice for stable estimates at this matrix size.</p>
+</div>
+<div class="section level3">
+<h3 id="example-2-overfitting-dynamics-epoch-plot">Example 2: Overfitting Dynamics (Epoch Plot)<a class="anchor" aria-label="anchor" href="#example-2-overfitting-dynamics-epoch-plot"></a>
+</h3>
+<p>Cross-validation works because overfitting worsens at higher ranks:
+more factors mean more capacity to memorize the training data. We can
+visualize this by tracking test loss at every iteration across multiple
+ranks, using the <code>on_iteration</code> callback to capture per-epoch
+dynamics.</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">hawaiibirds</span><span class="op">)</span></span>
+<span><span class="va">ranks_to_show</span> <span class="op">&lt;-</span> <span class="fl">2</span><span class="op">:</span><span class="fl">20</span></span>
+<span></span>
+<span><span class="co"># Capture per-iteration test loss at each rank</span></span>
+<span><span class="va">track_test</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">losses</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">numeric</a></span><span class="op">(</span><span class="fl">0</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
+<span>    callback <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">iter</span>, <span class="va">train_loss</span>, <span class="va">test_loss</span><span class="op">)</span> <span class="op">{</span> <span class="va">losses</span><span class="op">[</span><span class="va">iter</span><span class="op">]</span> <span class="op">&lt;&lt;-</span> <span class="va">test_loss</span> <span class="op">}</span>,</span>
+<span>    get <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="op">)</span> <span class="va">losses</span></span>
+<span>  <span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="va">iter_logs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">ranks_to_show</span>, <span class="kw">function</span><span class="op">(</span><span class="va">k_val</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">tracker</span> <span class="op">&lt;-</span> <span class="fu">track_test</span><span class="op">(</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">hawaiibirds</span>, k <span class="op">=</span> <span class="va">k_val</span>, test_fraction <span class="op">=</span> <span class="fl">0.1</span>, cv_seed <span class="op">=</span> <span class="fl">1</span>, seed <span class="op">=</span> <span class="fl">42</span>,</span>
+<span>      tol <span class="op">=</span> <span class="fl">0</span>, maxit <span class="op">=</span> <span class="fl">30</span>, patience <span class="op">=</span> <span class="fl">30</span>, on_iteration <span class="op">=</span> <span class="va">tracker</span><span class="op">$</span><span class="va">callback</span><span class="op">)</span></span>
+<span>  <span class="va">losses</span> <span class="op">&lt;-</span> <span class="va">tracker</span><span class="op">$</span><span class="fu">get</span><span class="op">(</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>k <span class="op">=</span> <span class="va">k_val</span>, iter <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_along</a></span><span class="op">(</span><span class="va">losses</span><span class="op">)</span>, test_loss <span class="op">=</span> <span class="va">losses</span><span class="op">)</span></span>
+<span><span class="op">}</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p>The <strong>epoch plot</strong> displays rank on the x-axis and test
+loss on the y-axis, with lines colored by iteration. Early iterations
+(bright) show high test loss at all ranks; as training progresses
+(dark), the optimal rank emerges as the one with the steepest
+improvement.</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Bound y-axis: from min test loss to 10x that</span></span>
+<span><span class="va">min_loss</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="va">iter_logs</span><span class="op">$</span><span class="va">test_loss</span><span class="op">)</span></span>
+<span><span class="va">y_lo</span> <span class="op">&lt;-</span> <span class="va">min_loss</span> <span class="op">*</span> <span class="fl">0.95</span></span>
+<span><span class="va">y_hi</span> <span class="op">&lt;-</span> <span class="va">min_loss</span> <span class="op">*</span> <span class="fl">10</span></span>
+<span></span>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">iter_logs</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">k</span>, y <span class="op">=</span> <span class="va">test_loss</span>, color <span class="op">=</span> <span class="va">iter</span>, group <span class="op">=</span> <span class="va">iter</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_line</span><span class="op">(</span>alpha <span class="op">=</span> <span class="fl">0.7</span>, linewidth <span class="op">=</span> <span class="fl">0.6</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_point</span><span class="op">(</span>size <span class="op">=</span> <span class="fl">1.5</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">scale_color_viridis_c</span><span class="op">(</span>option <span class="op">=</span> <span class="st">"B"</span>, direction <span class="op">=</span> <span class="op">-</span><span class="fl">1</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">scale_y_continuous</span><span class="op">(</span>trans <span class="op">=</span> <span class="st">"log10"</span>, limits <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">y_lo</span>, <span class="va">y_hi</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">scale_x_continuous</span><span class="op">(</span>breaks <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">20</span>, by <span class="op">=</span> <span class="fl">2</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span></span>
+<span>    title <span class="op">=</span> <span class="st">"Overfitting Dynamics: Test Loss by Rank and Iteration"</span>,</span>
+<span>    subtitle <span class="op">=</span> <span class="st">"Hawaiian birds data (k = 2:20) — later epochs (dark) reveal the optimal rank"</span>,</span>
+<span>    x <span class="op">=</span> <span class="st">"Rank (k)"</span>, y <span class="op">=</span> <span class="st">"Test Loss (log scale)"</span>, color <span class="op">=</span> <span class="st">"Iteration"</span></span>
+<span>  <span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<p><img src="cross-validation_files/figure-html/overfitting-epoch-plot-1.png" class="r-plt" alt="" width="672"></p>
+<p>Each line traces a single training epoch across ranks. At the optimal
+rank, test loss drops furthest as training progresses. At excessively
+high ranks, diminishing improvement (or rising test loss in later
+epochs) signals overfitting — the extra capacity is fitting noise rather
+than structure. The y-axis is clipped to 10× the minimum test loss to
+focus on the informative range.</p>
+</div>
+<div class="section level3">
+<h3 id="example-3-recommendation-data-with-mask-zeros">Example 3: Recommendation Data with <code>mask = "zeros"</code><a class="anchor" aria-label="anchor" href="#example-3-recommendation-data-with-mask-zeros"></a>
+</h3>
+<p>The <code>movielens</code> dataset (3,867 movies × 610 users)
+contains star ratings from 1–5. Most entries are zero — meaning the user
+has not rated that movie, <em>not</em> that they gave it zero stars. The
+<code>mask = "zeros"</code> setting is essential here: it restricts the
+holdout set to actual ratings and treats zeros as unobserved.</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">movielens</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"MovieLens dimensions:"</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">movielens</span><span class="op">)</span>, <span class="st">"×"</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">movielens</span><span class="op">)</span>, <span class="st">"\n"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; MovieLens dimensions: 3867 × 610</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Sparsity:"</span>, <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fl">1</span> <span class="op">-</span> <span class="fu">Matrix</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/nnzero-methods.html" class="external-link">nnzero</a></span><span class="op">(</span><span class="va">movielens</span><span class="op">)</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/prod.html" class="external-link">prod</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">movielens</span><span class="op">)</span><span class="op">)</span>, <span class="fl">4</span><span class="op">)</span> <span class="op">*</span> <span class="fl">100</span>, <span class="st">"%\n"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Sparsity: 96.81 %</span></span>
+<span></span>
+<span><span class="va">ranks</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">5</span>, <span class="fl">50</span>, by <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span>
+<span><span class="va">cv_movielens</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">movielens</span>, k <span class="op">=</span> <span class="va">ranks</span>, test_fraction <span class="op">=</span> <span class="fl">0.1</span>,</span>
+<span>                    mask <span class="op">=</span> <span class="st">"zeros"</span>, cv_seed <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, tol <span class="op">=</span> <span class="fl">1e-3</span>, maxit <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">agg_ml</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/aggregate.html" class="external-link">aggregate</a></span><span class="op">(</span><span class="va">test_mse</span> <span class="op">~</span> <span class="va">k</span>, data <span class="op">=</span> <span class="va">cv_movielens</span>, FUN <span class="op">=</span> <span class="va">mean</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">cv_movielens</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span></span>
+<span>    title <span class="op">=</span> <span class="st">"Cross-Validation on MovieLens (mask = 'zeros')"</span>,</span>
+<span>    subtitle <span class="op">=</span> <span class="st">"Test loss evaluated only on actual ratings — zeros are unobserved"</span></span>
+<span>  <span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<p><img src="cross-validation_files/figure-html/movielens-cv-plot-1.png" class="r-plt" alt="" width="672"></p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">agg_ml</span><span class="op">$</span><span class="va">se</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/aggregate.html" class="external-link">aggregate</a></span><span class="op">(</span><span class="va">test_mse</span> <span class="op">~</span> <span class="va">k</span>, data <span class="op">=</span> <span class="va">cv_movielens</span>, FUN <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/stats/sd.html" class="external-link">sd</a></span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">sqrt</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">x</span><span class="op">)</span><span class="op">)</span><span class="op">)</span><span class="op">$</span><span class="va">test_mse</span></span>
+<span><span class="va">opt_ml</span> <span class="op">&lt;-</span> <span class="va">agg_ml</span><span class="op">$</span><span class="va">k</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/which.min.html" class="external-link">which.min</a></span><span class="op">(</span><span class="va">agg_ml</span><span class="op">$</span><span class="va">test_mse</span><span class="op">)</span><span class="op">]</span></span>
+<span></span>
+<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>    k <span class="op">=</span> <span class="va">agg_ml</span><span class="op">$</span><span class="va">k</span>,</span>
+<span>    `Mean Test Loss` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">agg_ml</span><span class="op">$</span><span class="va">test_mse</span>, <span class="fl">4</span><span class="op">)</span>,</span>
+<span>    `SE` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">agg_ml</span><span class="op">$</span><span class="va">se</span>, <span class="fl">4</span><span class="op">)</span>,</span>
+<span>    check.names <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  <span class="op">)</span>,</span>
+<span>  caption <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"MovieLens CV results (mask = 'zeros'). Optimal k = "</span>, <span class="va">opt_ml</span>, <span class="st">"."</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<table class="table">
+<caption>MovieLens CV results (mask = ‘zeros’). Optimal k =
+35.</caption>
 <thead><tr class="header">
 <th align="right">k</th>
 <th align="right">Mean Test Loss</th>
@@ -260,183 +500,110 @@ cross-validation to find the elbow.</p>
 </tr></thead>
 <tbody>
 <tr class="odd">
-<td align="right">2</td>
-<td align="right">0.019603</td>
-<td align="right">0.000571</td>
-</tr>
-<tr class="even">
-<td align="right">3</td>
-<td align="right">0.019745</td>
-<td align="right">0.000557</td>
-</tr>
-<tr class="odd">
-<td align="right">4</td>
-<td align="right">0.019955</td>
-<td align="right">0.000539</td>
-</tr>
-<tr class="even">
 <td align="right">5</td>
-<td align="right">0.020189</td>
-<td align="right">0.000584</td>
-</tr>
-<tr class="odd">
-<td align="right">6</td>
-<td align="right">0.020283</td>
-<td align="right">0.000541</td>
+<td align="right">7.8795</td>
+<td align="right">0.0153</td>
 </tr>
 <tr class="even">
-<td align="right">7</td>
-<td align="right">0.020585</td>
-<td align="right">0.000641</td>
-</tr>
-<tr class="odd">
-<td align="right">8</td>
-<td align="right">0.020799</td>
-<td align="right">0.000594</td>
-</tr>
-<tr class="even">
-<td align="right">9</td>
-<td align="right">0.021188</td>
-<td align="right">0.000577</td>
-</tr>
-<tr class="odd">
 <td align="right">10</td>
-<td align="right">0.021472</td>
-<td align="right">0.000545</td>
+<td align="right">7.5856</td>
+<td align="right">0.0386</td>
+</tr>
+<tr class="odd">
+<td align="right">15</td>
+<td align="right">7.5319</td>
+<td align="right">0.0752</td>
+</tr>
+<tr class="even">
+<td align="right">20</td>
+<td align="right">7.3647</td>
+<td align="right">0.0531</td>
+</tr>
+<tr class="odd">
+<td align="right">25</td>
+<td align="right">7.2782</td>
+<td align="right">0.0364</td>
+</tr>
+<tr class="even">
+<td align="right">30</td>
+<td align="right">7.2941</td>
+<td align="right">0.0467</td>
+</tr>
+<tr class="odd">
+<td align="right">35</td>
+<td align="right">7.2119</td>
+<td align="right">0.0367</td>
+</tr>
+<tr class="even">
+<td align="right">40</td>
+<td align="right">7.2442</td>
+<td align="right">0.0646</td>
+</tr>
+<tr class="odd">
+<td align="right">45</td>
+<td align="right">7.2597</td>
+<td align="right">0.0048</td>
+</tr>
+<tr class="even">
+<td align="right">50</td>
+<td align="right">7.2512</td>
+<td align="right">0.0658</td>
 </tr>
 </tbody>
 </table>
-<p>Cross-validation correctly identifies k=5 as the optimal rank — the
-rank used to generate the synthetic data. Test loss drops sharply from
-k=2 to k=5, then flattens, indicating no additional structure beyond 5
-factors.</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">cv</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">labs</span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Cross-Validation: Test Loss vs. Rank (Synthetic Data, True k = 5)"</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-<p><img src="cross-validation_files/figure-html/synthetic-cv-plot-1.png" class="r-plt" alt="" width="672"></p>
-<p>The clear elbow at k=5 confirms that speckled holdout CV recovers the
-true rank. The individual replicate points (dots) cluster tightly,
-showing that 3 replicates suffice for stable estimates at this matrix
-size.</p>
+<p>With <code>mask = "zeros"</code>, cross-validation evaluates only the
+prediction of actual ratings — exactly the task a recommendation system
+performs.</p>
 </div>
 <div class="section level3">
-<h3 id="example-2-sparse-ecological-data-with-mask_zeros">Example 2: Sparse Ecological Data with <code>mask_zeros</code><a class="anchor" aria-label="anchor" href="#example-2-sparse-ecological-data-with-mask_zeros"></a>
+<h3 id="example-4-ecological-survey-data">Example 4: Ecological Survey Data<a class="anchor" aria-label="anchor" href="#example-4-ecological-survey-data"></a>
 </h3>
-<p>The <code>hawaiibirds</code> dataset contains 183 bird species ×
-1,183 grid cells from Hawaiian bird surveys. It is highly sparse — most
-species are absent from most cells.</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<p>The <code>hawaiibirds</code> dataset records 183 bird species across
+1,183 grid cells. In ecological surveys, zeros typically mean “species
+not detected” rather than “measured abundance is zero.” We use the
+default <code>mask = NULL</code> here because we want to evaluate the
+model’s ability to reconstruct the full abundance matrix, including
+correctly predicting that many species are absent from many sites.</p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">hawaiibirds</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">ranks</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">3</span>, <span class="fl">5</span>, <span class="fl">8</span>, <span class="fl">12</span>, <span class="fl">16</span><span class="op">)</span></span>
-<span><span class="va">cv_dense</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">hawaiibirds</span>, k <span class="op">=</span> <span class="va">ranks</span>, test_fraction <span class="op">=</span> <span class="fl">0.1</span>,</span>
-<span>                mask_zeros <span class="op">=</span> <span class="cn">FALSE</span>, cv_seed <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, tol <span class="op">=</span> <span class="fl">1e-3</span>, maxit <span class="op">=</span> <span class="fl">50</span><span class="op">)</span></span>
-<span><span class="va">cv_sparse</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">hawaiibirds</span>, k <span class="op">=</span> <span class="va">ranks</span>, test_fraction <span class="op">=</span> <span class="fl">0.1</span>,</span>
-<span>                 mask_zeros <span class="op">=</span> <span class="cn">TRUE</span>, cv_seed <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, tol <span class="op">=</span> <span class="fl">1e-3</span>, maxit <span class="op">=</span> <span class="fl">50</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">agg_dense</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/aggregate.html" class="external-link">aggregate</a></span><span class="op">(</span><span class="va">test_mse</span> <span class="op">~</span> <span class="va">k</span>, data <span class="op">=</span> <span class="va">cv_dense</span>, FUN <span class="op">=</span> <span class="va">mean</span><span class="op">)</span></span>
-<span><span class="va">agg_sparse</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/aggregate.html" class="external-link">aggregate</a></span><span class="op">(</span><span class="va">test_mse</span> <span class="op">~</span> <span class="va">k</span>, data <span class="op">=</span> <span class="va">cv_sparse</span>, FUN <span class="op">=</span> <span class="va">mean</span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">opt_dense</span> <span class="op">&lt;-</span> <span class="va">agg_dense</span><span class="op">$</span><span class="va">k</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/which.min.html" class="external-link">which.min</a></span><span class="op">(</span><span class="va">agg_dense</span><span class="op">$</span><span class="va">test_mse</span><span class="op">)</span><span class="op">]</span></span>
-<span><span class="va">opt_sparse</span> <span class="op">&lt;-</span> <span class="va">agg_sparse</span><span class="op">$</span><span class="va">k</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/which.min.html" class="external-link">which.min</a></span><span class="op">(</span><span class="va">agg_sparse</span><span class="op">$</span><span class="va">test_mse</span><span class="op">)</span><span class="op">]</span></span>
-<span></span>
-<span><span class="va">comparison</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
-<span>  k <span class="op">=</span> <span class="va">ranks</span>,</span>
-<span>  `Dense Test Loss` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">agg_dense</span><span class="op">$</span><span class="va">test_mse</span>, <span class="fl">6</span><span class="op">)</span>,</span>
-<span>  `Sparse Test Loss` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">agg_sparse</span><span class="op">$</span><span class="va">test_mse</span>, <span class="fl">4</span><span class="op">)</span>,</span>
-<span>  check.names <span class="op">=</span> <span class="cn">FALSE</span></span>
-<span><span class="op">)</span></span>
-<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span></span>
-<span>  <span class="va">comparison</span>,</span>
-<span>  caption <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"mask_zeros comparison on hawaiibirds. Dense optimal k = "</span>,</span>
-<span>                    <span class="va">opt_dense</span>, <span class="st">", Sparse optimal k = "</span>, <span class="va">opt_sparse</span>, <span class="st">"."</span><span class="op">)</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<table class="table">
-<caption>mask_zeros comparison on hawaiibirds. Dense optimal k = 8,
-Sparse optimal k = 12.</caption>
-<thead><tr class="header">
-<th align="right">k</th>
-<th align="right">Dense Test Loss</th>
-<th align="right">Sparse Test Loss</th>
-</tr></thead>
-<tbody>
-<tr class="odd">
-<td align="right">3</td>
-<td align="right">0.006898</td>
-<td align="right">0.0410</td>
-</tr>
-<tr class="even">
-<td align="right">5</td>
-<td align="right">0.006261</td>
-<td align="right">0.0344</td>
-</tr>
-<tr class="odd">
-<td align="right">8</td>
-<td align="right">0.005589</td>
-<td align="right">0.0309</td>
-</tr>
-<tr class="even">
-<td align="right">12</td>
-<td align="right">0.005823</td>
-<td align="right">0.0307</td>
-</tr>
-<tr class="odd">
-<td align="right">16</td>
-<td align="right">0.007532</td>
-<td align="right">0.0321</td>
-</tr>
-</tbody>
-</table>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">cv_dense</span><span class="op">$</span><span class="va">mode</span> <span class="op">&lt;-</span> <span class="st">"mask_zeros = FALSE"</span></span>
-<span><span class="va">cv_sparse</span><span class="op">$</span><span class="va">mode</span> <span class="op">&lt;-</span> <span class="st">"mask_zeros = TRUE"</span></span>
-<span><span class="va">cv_both</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span><span class="va">cv_dense</span>, <span class="va">cv_sparse</span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">agg_both</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/aggregate.html" class="external-link">aggregate</a></span><span class="op">(</span><span class="va">test_mse</span> <span class="op">~</span> <span class="va">k</span> <span class="op">+</span> <span class="va">mode</span>, data <span class="op">=</span> <span class="va">cv_both</span>, FUN <span class="op">=</span> <span class="va">mean</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">cv_both</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">k</span>, y <span class="op">=</span> <span class="va">test_mse</span>, color <span class="op">=</span> <span class="va">mode</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">geom_point</span><span class="op">(</span>alpha <span class="op">=</span> <span class="fl">0.5</span>, size <span class="op">=</span> <span class="fl">2</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">geom_line</span><span class="op">(</span>data <span class="op">=</span> <span class="va">agg_both</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">k</span>, y <span class="op">=</span> <span class="va">test_mse</span>, color <span class="op">=</span> <span class="va">mode</span><span class="op">)</span>, linewidth <span class="op">=</span> <span class="fl">1</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">scale_color_brewer</span><span class="op">(</span>palette <span class="op">=</span> <span class="st">"Set1"</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">scale_x_continuous</span><span class="op">(</span>breaks <span class="op">=</span> <span class="va">ranks</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">labs</span><span class="op">(</span></span>
-<span>    title <span class="op">=</span> <span class="st">"Cross-Validation: mask_zeros Comparison (Hawaiian Birds)"</span>,</span>
-<span>    x <span class="op">=</span> <span class="st">"Rank (k)"</span>, y <span class="op">=</span> <span class="st">"Test Loss"</span>, color <span class="op">=</span> <span class="st">"Mode"</span></span>
-<span>  <span class="op">)</span> <span class="op">+</span></span>
+<span><span class="va">cv_birds</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">hawaiibirds</span>, k <span class="op">=</span> <span class="va">ranks</span>, test_fraction <span class="op">=</span> <span class="fl">0.1</span>,</span>
+<span>                cv_seed <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, tol <span class="op">=</span> <span class="fl">1e-3</span>, maxit <span class="op">=</span> <span class="fl">50</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">cv_birds</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Cross-Validation on Hawaiian Birds (default mask)"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-<p><img src="cross-validation_files/figure-html/hawaiibirds-comparison-plot-1.png" class="r-plt" alt="" width="672"></p>
-<p>The two modes operate on different scales:
-<code>mask_zeros = FALSE</code> tests full-matrix reconstruction
-(including predicting zeros), while <code>mask_zeros = TRUE</code> tests
-only the prediction of observed species counts. For ecological survey
-data where zeros mean “species not detected,”
-<code>mask_zeros = TRUE</code> focuses the evaluation on ecologically
-meaningful predictions.</p>
+<p><img src="cross-validation_files/figure-html/hawaiibirds-cv-plot-1.png" class="r-plt" alt="" width="672"></p>
 </div>
 <div class="section level3">
-<h3 id="example-3-effect-of-test_fraction">Example 3: Effect of <code>test_fraction</code><a class="anchor" aria-label="anchor" href="#example-3-effect-of-test_fraction"></a>
+<h3 id="example-5-effect-of-test_fraction">Example 5: Effect of <code>test_fraction</code><a class="anchor" aria-label="anchor" href="#example-5-effect-of-test_fraction"></a>
 </h3>
-<p>Using the synthetic data, we compare different holdout fractions to
-test how they affect rank selection stability.</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">fractions</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.05</span>, <span class="fl">0.1</span>, <span class="fl">0.2</span><span class="op">)</span></span>
-<span><span class="va">fraction_results</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">fractions</span>, <span class="kw">function</span><span class="op">(</span><span class="va">frac</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="va">cv_res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">A</span>, k <span class="op">=</span> <span class="fl">2</span><span class="op">:</span><span class="fl">10</span>, test_fraction <span class="op">=</span> <span class="va">frac</span>, cv_seed <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">3</span>,</span>
-<span>                tol <span class="op">=</span> <span class="fl">1e-3</span>, maxit <span class="op">=</span> <span class="fl">50</span><span class="op">)</span></span>
+<p>We compare different holdout fractions to show how they affect rank
+selection stability. The true planted rank is 5.</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">fractions</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.01</span>, <span class="fl">0.05</span>, <span class="fl">0.1</span>, <span class="fl">0.15</span>, <span class="fl">0.2</span>, <span class="fl">0.3</span><span class="op">)</span></span>
+<span><span class="va">fraction_results</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">fractions</span>, <span class="kw">function</span><span class="op">(</span><span class="va">frac</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">cv_res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">A</span>, k <span class="op">=</span> <span class="fl">2</span><span class="op">:</span><span class="fl">15</span>, test_fraction <span class="op">=</span> <span class="va">frac</span>, cv_seed <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">3</span>,</span>
+<span>                tol <span class="op">=</span> <span class="fl">1e-4</span>, maxit <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span>
 <span>  <span class="va">agg</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/aggregate.html" class="external-link">aggregate</a></span><span class="op">(</span><span class="va">test_mse</span> <span class="op">~</span> <span class="va">k</span>, data <span class="op">=</span> <span class="va">cv_res</span>, FUN <span class="op">=</span> <span class="va">mean</span><span class="op">)</span></span>
-<span>  <span class="va">se</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/aggregate.html" class="external-link">aggregate</a></span><span class="op">(</span><span class="va">test_mse</span> <span class="op">~</span> <span class="va">k</span>, data <span class="op">=</span> <span class="va">cv_res</span>, FUN <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/stats/sd.html" class="external-link">sd</a></span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">sqrt</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">x</span><span class="op">)</span><span class="op">)</span><span class="op">)</span><span class="op">$</span><span class="va">test_mse</span></span>
+<span>  <span class="va">se_vals</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/aggregate.html" class="external-link">aggregate</a></span><span class="op">(</span><span class="va">test_mse</span> <span class="op">~</span> <span class="va">k</span>, data <span class="op">=</span> <span class="va">cv_res</span>, FUN <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/stats/sd.html" class="external-link">sd</a></span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">sqrt</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">x</span><span class="op">)</span><span class="op">)</span><span class="op">)</span><span class="op">$</span><span class="va">test_mse</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
-<span>    `Test Fraction` <span class="op">=</span> <span class="va">frac</span>,</span>
-<span>    `Optimal k` <span class="op">=</span> <span class="va">agg</span><span class="op">$</span><span class="va">k</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/which.min.html" class="external-link">which.min</a></span><span class="op">(</span><span class="va">agg</span><span class="op">$</span><span class="va">test_mse</span><span class="op">)</span><span class="op">]</span>,</span>
-<span>    `Min Test Loss` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="va">agg</span><span class="op">$</span><span class="va">test_mse</span><span class="op">)</span>, <span class="fl">6</span><span class="op">)</span>,</span>
-<span>    `Mean SE` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">se</span><span class="op">)</span>, <span class="fl">6</span><span class="op">)</span>,</span>
-<span>    check.names <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>    test_fraction <span class="op">=</span> <span class="va">frac</span>,</span>
+<span>    optimal_k <span class="op">=</span> <span class="va">agg</span><span class="op">$</span><span class="va">k</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/which.min.html" class="external-link">which.min</a></span><span class="op">(</span><span class="va">agg</span><span class="op">$</span><span class="va">test_mse</span><span class="op">)</span><span class="op">]</span>,</span>
+<span>    min_test_loss <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="va">agg</span><span class="op">$</span><span class="va">test_mse</span><span class="op">)</span>,</span>
+<span>    mean_se <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">se_vals</span><span class="op">)</span></span>
 <span>  <span class="op">)</span></span>
-<span><span class="op">}</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="va">fraction_results</span><span class="op">)</span>,</span>
+<span><span class="op">}</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>    `Test Fraction` <span class="op">=</span> <span class="va">fraction_results</span><span class="op">$</span><span class="va">test_fraction</span>,</span>
+<span>    `Selected k` <span class="op">=</span> <span class="va">fraction_results</span><span class="op">$</span><span class="va">optimal_k</span>,</span>
+<span>    `Min Test Loss` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/format.html" class="external-link">format</a></span><span class="op">(</span><span class="va">fraction_results</span><span class="op">$</span><span class="va">min_test_loss</span>, digits <span class="op">=</span> <span class="fl">3</span>, scientific <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>    `Mean SE` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/format.html" class="external-link">format</a></span><span class="op">(</span><span class="va">fraction_results</span><span class="op">$</span><span class="va">mean_se</span>, digits <span class="op">=</span> <span class="fl">3</span>, scientific <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>    check.names <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  <span class="op">)</span>,</span>
 <span>  caption <span class="op">=</span> <span class="st">"Effect of test_fraction on rank selection (synthetic data, true k = 5)."</span>,</span>
 <span>  row.names <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -445,35 +612,78 @@ test how they affect rank selection stability.</p>
 k = 5).</caption>
 <thead><tr class="header">
 <th align="right">Test Fraction</th>
-<th align="right">Optimal k</th>
-<th align="right">Min Test Loss</th>
-<th align="right">Mean SE</th>
+<th align="right">Selected k</th>
+<th align="left">Min Test Loss</th>
+<th align="left">Mean SE</th>
 </tr></thead>
 <tbody>
 <tr class="odd">
-<td align="right">0.05</td>
-<td align="right">2</td>
-<td align="right">0.019567</td>
-<td align="right">0.001016</td>
+<td align="right">0.01</td>
+<td align="right">5</td>
+<td align="left">4.29e-07</td>
+<td align="left">3.94e-08</td>
 </tr>
 <tr class="even">
+<td align="right">0.05</td>
+<td align="right">5</td>
+<td align="left">4.53e-07</td>
+<td align="left">1.32e-08</td>
+</tr>
+<tr class="odd">
 <td align="right">0.10</td>
-<td align="right">2</td>
-<td align="right">0.019603</td>
-<td align="right">0.000572</td>
+<td align="right">5</td>
+<td align="left">4.61e-07</td>
+<td align="left">1.01e-08</td>
+</tr>
+<tr class="even">
+<td align="right">0.15</td>
+<td align="right">5</td>
+<td align="left">4.61e-07</td>
+<td align="left">1.07e-08</td>
 </tr>
 <tr class="odd">
 <td align="right">0.20</td>
-<td align="right">2</td>
-<td align="right">0.019965</td>
-<td align="right">0.000235</td>
+<td align="right">5</td>
+<td align="left">4.74e-07</td>
+<td align="left">1.09e-08</td>
+</tr>
+<tr class="even">
+<td align="right">0.30</td>
+<td align="right">5</td>
+<td align="left">4.84e-07</td>
+<td align="left">1.00e-08</td>
 </tr>
 </tbody>
 </table>
-<p>All three fractions identify the same optimal rank, confirming the
-robustness of speckled holdout CV. Higher test fractions give more
-precise estimates (lower SE) but leave less data for training. For
-matrices with 10,000+ nonzero entries, 5–10% is a reliable default.</p>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu">ggplot</span><span class="op">(</span><span class="va">fraction_results</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">test_fraction</span>, y <span class="op">=</span> <span class="va">min_test_loss</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_line</span><span class="op">(</span>linewidth <span class="op">=</span> <span class="fl">1</span>, color <span class="op">=</span> <span class="st">"steelblue"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_point</span><span class="op">(</span>size <span class="op">=</span> <span class="fl">3</span>, color <span class="op">=</span> <span class="st">"steelblue"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_text</span><span class="op">(</span><span class="fu">aes</span><span class="op">(</span>label <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"k="</span>, <span class="va">optimal_k</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>            vjust <span class="op">=</span> <span class="op">-</span><span class="fl">1</span>, size <span class="op">=</span> <span class="fl">3.5</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span></span>
+<span>    title <span class="op">=</span> <span class="st">"Test Loss vs. Holdout Fraction (True k = 5)"</span>,</span>
+<span>    x <span class="op">=</span> <span class="st">"Test Fraction"</span>, y <span class="op">=</span> <span class="st">"Minimum Test Loss"</span></span>
+<span>  <span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<p><img src="cross-validation_files/figure-html/test-fraction-plot-1.png" class="r-plt" alt="" width="672"></p>
+<p>Rank selection is robust across a wide range of holdout fractions.
+Very small fractions (1%) have higher variance due to the small test
+set, while very large fractions (30%) leave less data for training.</p>
+<blockquote>
+<p><strong>Computational cost scales with test fraction.</strong> Every
+masked entry requires a per-iteration prediction and loss evaluation
+against the current model, adding
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mrow><mo stretchy="true" form="prefix">(</mo><mi>k</mi><mo stretchy="true" form="postfix">)</mo></mrow></mrow><annotation encoding="application/x-tex">O(k)</annotation></semantics></math>
+work per held-out entry at every epoch. Doubling the test fraction
+roughly doubles this overhead — and for large sparse matrices the
+masked-entry bookkeeping can dominate total runtime. A test fraction of
+<strong>1–5%</strong> is usually sufficient for stable rank selection
+while keeping the computational burden negligible relative to the NMF
+solve itself. Reserve larger fractions (10–20%) only for small matrices
+where the absolute number of test entries would otherwise be too few for
+reliable estimates.</p>
+</blockquote>
 </div>
 </div>
 <div class="section level2">
@@ -485,13 +695,13 @@ matrices with 10,000+ nonzero entries, 5–10% is a reliable default.</p>
 for count data. See the <a href="distributions.html">Distributions</a>
 vignette.</li>
 <li>
-<strong>Recommendation data</strong>: <code>mask_zeros = TRUE</code>
-is essential for rating prediction. See the Recommendation Systems
-vignette.</li>
-<li>
 <strong>Robust factorization</strong>: Combine CV-selected rank with
 <code><a href="../reference/consensus_nmf.html">consensus_nmf()</a></code> for stable factors across multiple runs.
-See the Clustering vignette.</li>
+See <a href="clustering.html">Clustering</a>.</li>
+<li>
+<strong>GPU acceleration</strong>: Speed up large CV sweeps by
+10–50× on GPUs. See <a href="gpu-acceleration.html">GPU
+Acceleration</a>.</li>
 </ul>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

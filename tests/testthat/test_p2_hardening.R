@@ -1,5 +1,5 @@
 # Test: Cholesky dense, regularization dense, projective/symmetric dense,
-#       guided NMF, and edge cases
+#       seeded NMF, and edge cases
 
 options(RcppML.verbose = FALSE)
 
@@ -119,10 +119,10 @@ test_that("Symmetric NMF works on dense symmetric data", {
 })
 
 # ============================================================
-# Guided NMF: Seed W
+# Seeded NMF: Seed W
 # ============================================================
 
-test_that("Guided NMF with custom W seed recovers factors", {
+test_that("Seeded NMF with custom W seed recovers factors", {
   skip_on_cran()
   # GPU NMF backend may not use matrix seeds the same way, causing worse convergence
   skip_if(!identical(getOption("RcppML.gpu", FALSE), FALSE), "GPU NMF may not support matrix W seeds")
@@ -134,17 +134,17 @@ test_that("Guided NMF with custom W seed recovers factors", {
   A@x[A@x < 0] <- 0
 
   # Use true W as seed (should converge faster and closer to true solution)
-  model_guided <- nmf(A, k, seed = W_true, maxit = 30, tol = 1e-8, verbose = FALSE)
+  model_seeded <- nmf(A, k, seed = W_true, maxit = 30, tol = 1e-8, verbose = FALSE)
   model_random <- nmf(A, k, seed = 123L, maxit = 30, tol = 1e-8, verbose = FALSE)
 
-  expect_s4_class(model_guided, "nmf")
-  # Guided should achieve lower or equal loss
-  expect_true(model_guided@misc$loss <= model_random@misc$loss * 1.5,
-              info = paste0("guided_loss=", model_guided@misc$loss,
+  expect_s4_class(model_seeded, "nmf")
+  # Seeded should achieve lower or equal loss
+  expect_true(model_seeded@misc$loss <= model_random@misc$loss * 1.5,
+              info = paste0("seeded_loss=", model_seeded@misc$loss,
                             " random_loss=", model_random@misc$loss))
 })
 
-test_that("Guided NMF with custom H seed produces valid result", {
+test_that("Seeded NMF with custom H seed produces valid result", {
   skip_on_cran()
   set.seed(42)
   m <- 50; n <- 40; k <- 3
@@ -165,7 +165,7 @@ test_that("Guided NMF with custom H seed produces valid result", {
   expect_true(all(model@h >= 0))
 })
 
-test_that("Guided NMF with W+H seeds achieves lower loss than random", {
+test_that("Seeded NMF with W+H seeds achieves lower loss than random", {
   skip_on_cran()
   set.seed(42)
   m <- 50; n <- 40; k <- 3

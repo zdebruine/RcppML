@@ -57,7 +57,7 @@
 <span>  row_sort <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  include_transpose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  chunk_cols <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  chunk_bytes <span class="op">=</span> <span class="fl">6.4e+07</span>,</span>
+<span>  chunk_bytes <span class="op">=</span> <span class="fl">8e+06</span>,</span>
 <span>  transp_chunk_cols <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  transp_chunk_bytes <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  threads <span class="op">=</span> <span class="fl">0L</span></span>
@@ -120,7 +120,9 @@ Default <code>FALSE</code>.</p></dd>
 
 <dt id="arg-chunk-bytes">chunk_bytes<a class="anchor" aria-label="anchor" href="#arg-chunk-bytes"></a></dt>
 <dd><p>Numeric; target bytes per chunk when <code>chunk_cols</code>
-is NULL. Default 64 MB.</p></dd>
+is NULL. Default 8 MB, which yields ~50 columns per chunk for typical
+scRNA-seq matrices (~38 k rows). Smaller chunks create more parallel work
+during reading; larger chunks compress slightly better.</p></dd>
 
 
 <dt id="arg-transp-chunk-cols">transp_chunk_cols<a class="anchor" aria-label="anchor" href="#arg-transp-chunk-cols"></a></dt>
@@ -132,7 +134,8 @@ is NULL. Default 64 MB.</p></dd>
 
 
 <dt id="arg-threads">threads<a class="anchor" aria-label="anchor" href="#arg-threads"></a></dt>
-<dd><p>Integer; number of threads (0 = all available). Default 0.</p></dd>
+<dd><p>Integer; number of threads for parallel compression
+(0 = all available). Default 0.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -153,7 +156,7 @@ is NULL. Default 64 MB.</p></dd>
 <span class="r-in"><span><span class="fu">st_write</span><span class="op">(</span><span class="va">A</span>, <span class="va">f</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">B</span> <span class="op">&lt;-</span> <span class="fu"><a href="st_read.html">st_read</a></span><span class="op">(</span><span class="va">f</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/all.equal-methods.html" class="external-link">all.equal</a></span><span class="op">(</span><span class="va">A</span>, <span class="va">B</span><span class="op">)</span>  <span class="co"># TRUE</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "Mean relative difference: 2.408568e-08"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "Mean relative difference: 2.431235e-08"</span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/unlink.html" class="external-link">unlink</a></span><span class="op">(</span><span class="va">f</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="co"># }</span></span></span>
 <span class="r-in"><span></span></span>

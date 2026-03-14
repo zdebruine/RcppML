@@ -9,8 +9,7 @@ override these where specified.
 factor_config(
   maxit = 100,
   tol = 1e-04,
-  loss = c("mse", "mae", "huber", "kl", "gp", "nb", "gamma", "inverse_gaussian",
-    "tweedie"),
+  loss = c("mse", "gp", "nb", "gamma", "inverse_gaussian", "tweedie"),
   verbose = FALSE,
   seed = NULL,
   threads = 0,
@@ -21,8 +20,7 @@ factor_config(
   cv_seed = 0L,
   mask_zeros = FALSE,
   patience = 5L,
-  holdout_fraction,
-  cv_patience
+  ...
 )
 ```
 
@@ -38,8 +36,9 @@ factor_config(
 
 - loss:
 
-  Loss function: "mse", "mae", "huber", "kl", "gp", "nb", "gamma",
-  "inverse_gaussian", "tweedie". Default "mse".
+  Loss function: "mse", "gp", "nb", "gamma", "inverse_gaussian",
+  "tweedie". Default "mse". For robust (Huber/MAE) fitting, use the
+  `robust` parameter at the layer level instead.
 
 - verbose:
 
@@ -85,13 +84,18 @@ factor_config(
   Number of iterations without test-loss improvement before early
   stopping during CV. Default 5.
 
-- holdout_fraction:
+- ...:
 
-  Deprecated. Use `test_fraction` instead.
-
-- cv_patience:
-
-  Deprecated. Use `patience` instead.
+  Additional arguments applied network-wide. These are forwarded to the
+  underlying
+  [`nmf`](https://zdebruine.github.io/RcppML/reference/nmf.md) or
+  [`svd`](https://zdebruine.github.io/RcppML/reference/svd.md) call at
+  fit time as lowest-priority defaults (layer-level `...` overrides
+  these). Supports distribution tuning (`dispersion`, `theta_init`,
+  etc.), IRLS control, solver tuning, and more. See
+  [`?nmf`](https://zdebruine.github.io/RcppML/reference/nmf.md) or
+  [`?svd`](https://zdebruine.github.io/RcppML/reference/svd.md) for the
+  complete list.
 
 ## Value
 

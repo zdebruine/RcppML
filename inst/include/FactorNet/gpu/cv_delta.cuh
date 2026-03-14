@@ -191,6 +191,82 @@ __global__ void compute_cv_deltas_w_global_kernel(
     }
 }
 
+// ---------------------------------------------------------------------------
+// Correction kernel for mask_zeros=FALSE: add zero-entry test contributions
+// to delta_G that the sparse kernel missed.
+//
+// For mask_zeros=FALSE, test entries include zero positions. The sparse kernel
+// only iterates over non-zeros, so zero-position test entries are not included
+// in delta_G. This kernel iterates over ALL rows per column, skips non-zeros
+// (already handled), and adds outer products for zero-position test entries.
+// ---------------------------------------------------------------------------
+
+template<typename Scalar>
+__global__ void add_zero_test_deltas_h_kernel(
+    const int*    __restrict__ row_idx,
+    const int*    __restrict__ col_ptr,
+    int n, int m,
+    const Scalar* __restrict__ W,
+    int k,
+    uint64_t rng_state,
+    uint64_t inv_prob,
+    Scalar* __restrict__ delta_G,
+    const int*    __restrict__ mask_col_ptr,
+    const int*    __restrict__ mask_row_idx)
+{
+    const int j = blockIdx.x;
+    if (j >= n) return;
+
+    Scalar* g_dG = delta_G + static_cast<size_t>(j) * k * k;
+
+    int nz_start = col_ptr[j];
+    int nz_end   = col_ptr[j + 1];
+
+    for (int i = threadIdx.x; i < m; i += blockDim.x) {
+        // Binary search: is row i a non-zero in column j?
+        bool is_nz = false;
+        {
+            int lo = nz_start, hi = nz_end;
+            while (lo < hi) {
+                int mid = (lo + hi) >> 1;
+                int r = row_idx[mid];
+                if (r < i) lo = mid + 1;
+                else if (r > i) hi = mid;
+                else { is_nz = true; break; }
+            }
+        }
+        if (is_nz) continue; // already handled by sparse kernel
+
+        // Check user mask for this zero entry
+        bool add_to_delta = false;
+        if (mask_col_ptr) {
+            add_to_delta = is_user_masked_device(i, j, mask_col_ptr, mask_row_idx);
+        }
+
+        // Check CV holdout
+        if (!add_to_delta) {
+            uint64_t h = rng_state
+                       + static_cast<uint64_t>(i) * 0x9e3779b97f4a7c15ULL
+                       + static_cast<uint64_t>(j) * 0x6c62272e07bb0142ULL;
+            h = (h ^ (h >> 30)) * 0xbf58476d1ce4e5b9ULL;
+            h = (h ^ (h >> 27)) * 0x94d049bb133111ebULL;
+            h ^= h >> 31;
+            add_to_delta = (inv_prob > 0) && (h < (0xFFFFFFFFFFFFFFFFULL / inv_prob));
+        }
+
+        if (add_to_delta) {
+            for (int a = 0; a < k; ++a) {
+                Scalar wa = W[a + i * k];
+                for (int b = a; b < k; ++b) {
+                    Scalar contrib = wa * W[b + i * k];
+                    atomicAdd(&g_dG[a + b * k], contrib);
+                    if (a != b) atomicAdd(&g_dG[b + a * k], contrib);
+                }
+            }
+        }
+    }
+}
+
 /**
  * @brief Compute H-update CV deltas on GPU.
  *
@@ -198,6 +274,10 @@ __global__ void compute_cv_deltas_w_global_kernel(
  * non-zeros, classifies train/test, and accumulates delta_G, delta_b.
  * Uses parallel accumulation with atomicAdd for scalability.
  * Falls back to global-memory atomics for very large k where smem doesn't fit.
+ *
+ * When mask_zeros=FALSE, launches a second correction kernel that adds
+ * Gram delta contributions from zero-valued test entries (which the sparse
+ * kernel cannot see).
  *
  * @param delta_G Output: k*k*n flattened array (one k×k block per column)
  * @param delta_b Output: k*n flattened array
@@ -216,7 +296,8 @@ void compute_cv_deltas_h_gpu(
     DenseMatrixGPU<Scalar>* B_full = nullptr, // k × n (optional)
     const __half* W_half = nullptr,          // mixed precision (optional)
     const int* mask_col_ptr = nullptr,       // user mask CSC col pointer (device, optional)
-    const int* mask_row_idx = nullptr)       // user mask CSC row indices (device, optional)
+    const int* mask_row_idx = nullptr,       // user mask CSC row indices (device, optional)
+    bool mask_zeros = true)                  // TRUE: test set from non-zeros only
 {
     // Zero outputs
     CUDA_CHECK(cudaMemsetAsync(delta_G.data.get(), 0,
@@ -238,6 +319,19 @@ void compute_cv_deltas_h_gpu(
         delta_G.data.get(), delta_b.data.get(),
         B_full ? B_full->data.get() : nullptr,
         W_half, mask_col_ptr, mask_row_idx);
+
+    // For mask_zeros=FALSE, add missing Gram corrections from zero-position
+    // test entries. The sparse kernel above only sees non-zeros.
+    if (!mask_zeros) {
+        int m = W.cols;
+        int corr_threads = min(max(m / 4, 128), 512);
+        add_zero_test_deltas_h_kernel<Scalar><<<n, corr_threads, 0, ctx.stream>>>(
+            A.row_indices.get(), A.col_ptr.get(),
+            n, m, W.data.get(), k,
+            rng_state, inv_prob,
+            delta_G.data.get(),
+            mask_col_ptr, mask_row_idx);
+    }
 }
 
 /**
@@ -253,6 +347,79 @@ void compute_cv_deltas_h_gpu(
 // ==========================================================================
 // GPU W-update delta computation using transposed matrix A^T
 // ==========================================================================
+
+// ---------------------------------------------------------------------------
+// Correction kernel for mask_zeros=FALSE (W-update direction): add
+// zero-entry test contributions to delta_G that the sparse kernel missed.
+//
+// Operates on A^T in CSC format. Each block handles row i of A.
+// Iterates all n columns, skips non-zeros, adds outer products for
+// zero-position test entries.
+// ---------------------------------------------------------------------------
+
+template<typename Scalar>
+__global__ void add_zero_test_deltas_w_kernel(
+    const int*    __restrict__ col_idx,   // At.row_indices (col indices of A's row)
+    const int*    __restrict__ row_ptr,   // At.col_ptr (row pointers of A)
+    int m, int n,
+    const Scalar* __restrict__ H,
+    int k,
+    uint64_t rng_state,
+    uint64_t inv_prob,
+    Scalar* __restrict__ delta_G,
+    const int*    __restrict__ mask_col_ptr,
+    const int*    __restrict__ mask_row_idx)
+{
+    const int i = blockIdx.x;
+    if (i >= m) return;
+
+    Scalar* g_dG = delta_G + static_cast<size_t>(i) * k * k;
+
+    int nz_start = row_ptr[i];
+    int nz_end   = row_ptr[i + 1];
+
+    for (int j = threadIdx.x; j < n; j += blockDim.x) {
+        // Binary search: is column j a non-zero in row i of A?
+        bool is_nz = false;
+        {
+            int lo = nz_start, hi = nz_end;
+            while (lo < hi) {
+                int mid = (lo + hi) >> 1;
+                int c = col_idx[mid];
+                if (c < j) lo = mid + 1;
+                else if (c > j) hi = mid;
+                else { is_nz = true; break; }
+            }
+        }
+        if (is_nz) continue;
+
+        bool add_to_delta = false;
+        if (mask_col_ptr) {
+            add_to_delta = is_user_masked_device(i, j, mask_col_ptr, mask_row_idx);
+        }
+
+        if (!add_to_delta) {
+            uint64_t h = rng_state
+                       + static_cast<uint64_t>(i) * 0x9e3779b97f4a7c15ULL
+                       + static_cast<uint64_t>(j) * 0x6c62272e07bb0142ULL;
+            h = (h ^ (h >> 30)) * 0xbf58476d1ce4e5b9ULL;
+            h = (h ^ (h >> 27)) * 0x94d049bb133111ebULL;
+            h ^= h >> 31;
+            add_to_delta = (inv_prob > 0) && (h < (0xFFFFFFFFFFFFFFFFULL / inv_prob));
+        }
+
+        if (add_to_delta) {
+            for (int a = 0; a < k; ++a) {
+                Scalar ha = H[a + j * k];
+                for (int b = a; b < k; ++b) {
+                    Scalar contrib = ha * H[b + j * k];
+                    atomicAdd(&g_dG[a + b * k], contrib);
+                    if (a != b) atomicAdd(&g_dG[b + a * k], contrib);
+                }
+            }
+        }
+    }
+}
 
 
 
@@ -303,6 +470,9 @@ void compute_csc_transpose(
  * Uses A^T stored in CSC format on GPU. One block per row of A.
  * Eliminates the need to download H to host, compute on CPU, and upload.
  *
+ * When mask_zeros=FALSE, launches a second correction kernel that adds
+ * Gram delta contributions from zero-valued test entries.
+ *
  * @param At     A^T in CSC format on GPU (n×m, col i has row i's entries)
  * @param H      Current factor H (k × n) on GPU
  * @param delta_G Output: k*k*m per-row Gram deltas on GPU
@@ -322,7 +492,8 @@ void compute_cv_deltas_w_gpu(
     DenseMatrixGPU<Scalar>* B_full = nullptr, // k × m (optional)
     const __half* H_half = nullptr,          // mixed precision (optional)
     const int* mask_col_ptr = nullptr,       // user mask CSC col pointer (device, optional)
-    const int* mask_row_idx = nullptr)       // user mask CSC row indices (device, optional)
+    const int* mask_row_idx = nullptr,       // user mask CSC row indices (device, optional)
+    bool mask_zeros = true)                  // TRUE: test set from non-zeros only
 {
     // Zero outputs
     CUDA_CHECK(cudaMemsetAsync(delta_G.data.get(), 0,
@@ -344,6 +515,19 @@ void compute_cv_deltas_w_gpu(
         delta_G.data.get(), delta_b.data.get(),
         B_full ? B_full->data.get() : nullptr,
         H_half, mask_col_ptr, mask_row_idx);
+
+    // For mask_zeros=FALSE, add missing Gram corrections from zero-position
+    // test entries.
+    if (!mask_zeros) {
+        int n = H.cols;
+        int corr_threads = min(max(n / 4, 128), 512);
+        add_zero_test_deltas_w_kernel<Scalar><<<m, corr_threads, 0, ctx.stream>>>(
+            At.row_indices.get(), At.col_ptr.get(),
+            m, n, H.data.get(), k,
+            rng_state, inv_prob,
+            delta_G.data.get(),
+            mask_col_ptr, mask_row_idx);
+    }
 }
 
 } // namespace gpu

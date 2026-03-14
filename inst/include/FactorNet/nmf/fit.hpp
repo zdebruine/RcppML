@@ -243,10 +243,36 @@ NMFResult<Scalar> dispatch_cv(
 template<typename Scalar, typename MatrixType>
 NMFResult<Scalar> nmf(
     const MatrixType& A,
-    const NMFConfig<Scalar>& config,
+    const NMFConfig<Scalar>& config_in,
     const DenseMatrix<Scalar>* W_init = nullptr,
     const DenseMatrix<Scalar>* H_init = nullptr)
 {
+    // ------------------------------------------------------------------
+    // 0. Pre-compute target Gram for PROJ_ADV (negative target_lambda)
+    // ------------------------------------------------------------------
+    // PROJ_ADV subtracts |λ| * T*T^T/n from the Gram matrix each iteration.
+    // Pre-computing T*T^T/n once avoids O(k²·n) per iteration.
+    // We make a mutable copy of the config only when needed.
+    NMFConfig<Scalar> config_mut;
+    const bool need_proj_adv_H = config_in.H.target && config_in.H.target_lambda < 0;
+    const bool need_proj_adv_W = config_in.W.target && config_in.W.target_lambda < 0;
+
+    if (need_proj_adv_H || need_proj_adv_W) {
+        config_mut = config_in;
+        if (need_proj_adv_H) {
+            const auto& T = *config_mut.H.target;
+            config_mut.H.target_gram = (T * T.transpose())
+                                     / static_cast<Scalar>(T.cols());
+        }
+        if (need_proj_adv_W) {
+            const auto& T = *config_mut.W.target;
+            config_mut.W.target_gram = (T * T.transpose())
+                                     / static_cast<Scalar>(T.cols());
+        }
+    }
+    const NMFConfig<Scalar>& config = (need_proj_adv_H || need_proj_adv_W)
+                                    ? config_mut : config_in;
+
     // ------------------------------------------------------------------
     // 1. Detect resources
     // ------------------------------------------------------------------

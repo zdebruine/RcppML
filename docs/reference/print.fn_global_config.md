@@ -22,3 +22,8 @@ print(x, ...)
 ## Value
 
 Invisibly returns `x`.
+
+## See also
+
+[`factor_config`](https://zdebruine.github.io/RcppML/reference/factor_config.md),
+[`factor_net`](https://zdebruine.github.io/RcppML/reference/factor_net.md)

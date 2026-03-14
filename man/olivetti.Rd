@@ -6,7 +6,7 @@
 \title{Olivetti Faces Dataset}
 \format{
 A \code{dgCMatrix} sparse matrix (400 x 4096) containing grayscale
-  face images. Each row is a flattened 64x64 pixel image with values in [0,1].
+  face images. Each row is a flattened 64x64 pixel image with values in \code{[0,1]}.
   Subject labels are stored as an attribute.
 
   Access metadata via:

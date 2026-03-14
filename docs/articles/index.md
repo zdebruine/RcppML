@@ -21,15 +21,10 @@
 
 - [Clustering, Consensus, and
   Classification](https://zdebruine.github.io/RcppML/articles/clustering.md):
-- [Factorization Graphs, Guides, and Semi-Supervised
-  Learning](https://zdebruine.github.io/RcppML/articles/factor-graphs.md):
-
-### Applications
-
-- [Image Decomposition: Learning Visual
-  Parts](https://zdebruine.github.io/RcppML/articles/image-decomposition.md):
-- [Building a Movie Recommendation Engine with
-  NMF](https://zdebruine.github.io/RcppML/articles/recommendation-systems.md):
+- [Factorization
+  Graphs](https://zdebruine.github.io/RcppML/articles/factor-graphs.md):
+- [Guided NMF: Label-Informed
+  Factorization](https://zdebruine.github.io/RcppML/articles/guided-nmf.md):
 
 ### Infrastructure
 

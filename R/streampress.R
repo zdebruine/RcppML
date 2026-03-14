@@ -2,15 +2,18 @@
 #'
 #' @description
 #' Functions for reading and writing matrices in StreamPress (.spz) format.
-#' StreamPress achieves 10-20x compression on typical
-#' scRNA-seq sparse matrices using rANS entropy coding, and supports
-#' dense v3 format with multiple compression codecs.
+#' StreamPress achieves 5-10x compression over raw float32 CSC binary on
+#' typical scRNA-seq sparse matrices using rANS entropy coding.  Beyond storage
+#' savings, SPZ is also faster to read than raw CSC binary at any thread count:
+#' the bottleneck in reading large sparse matrices is sparse object construction
+#' (sorting indices, allocating R/Eigen structures), which SPZ parallelises
+#' across independent chunks while raw CSC must perform sequentially.
 #'
 #' @details
 #' StreamPress (.spz) supports two format versions:
 #' \itemize{
 #'   \item \strong{v2 (sparse)}: Column-oriented compressed CSC format.
-#'     Lossless, 10-20x compression. Self-describing header.
+#'     Lossless, 5-10x compression over raw float32 CSC. Self-describing header.
 #'   \item \strong{v3 (dense)}: Column-major dense panels with optional
 #'     FP16/QUANT8/rANS compression. For streaming NMF on dense data.
 #' }
@@ -40,10 +43,13 @@ NULL
 #' @param chunk_cols Integer or NULL; columns per chunk. If NULL, computed from
 #'   \code{chunk_bytes}.
 #' @param chunk_bytes Numeric; target bytes per chunk when \code{chunk_cols}
-#'   is NULL. Default 64 MB.
+#'   is NULL. Default 8 MB, which yields ~50 columns per chunk for typical
+#'   scRNA-seq matrices (~38 k rows). Smaller chunks create more parallel work
+#'   during reading; larger chunks compress slightly better.
 #' @param transp_chunk_cols Integer or NULL; columns per transpose chunk.
 #' @param transp_chunk_bytes Numeric or NULL; target bytes per transpose chunk.
-#' @param threads Integer; number of threads (0 = all available). Default 0.
+#' @param threads Integer; number of threads for parallel compression
+#'   (0 = all available). Default 0.
 #'
 #' @return Invisibly returns a list with compression statistics.
 #'
@@ -65,7 +71,7 @@ st_write <- function(x, path, obs = NULL, var = NULL,
                      precision = "auto", row_sort = FALSE,
                      include_transpose = TRUE,
                      chunk_cols = NULL,
-                     chunk_bytes = 64e6,
+                     chunk_bytes = 8e6,
                      transp_chunk_cols = NULL,
                      transp_chunk_bytes = NULL,
                      threads = 0L) {
@@ -133,7 +139,11 @@ st_write <- function(x, path, obs = NULL, var = NULL,
 #' @param path Path to a \code{.spz} file.
 #' @param cols Optional integer vector of column indices to read (1-indexed).
 #' @param reorder Logical; if \code{TRUE} (default), undo any row permutation.
-#' @param threads Integer; number of threads (0 = all available). Default 0.
+#' @param threads Integer or NULL; threads for parallel decompression.
+#'   \code{NULL} (default) enables automatic selection: 1 thread for files
+#'   smaller than 50 MB (where threading overhead exceeds the benefit), and
+#'   all available threads for larger files. Use \code{0} to always request
+#'   all available threads, or a positive integer to fix the count.
 #'
 #' @return A \code{dgCMatrix} sparse matrix with dimnames if available.
 #'
@@ -150,9 +160,13 @@ st_write <- function(x, path, obs = NULL, var = NULL,
 #'
 #' @seealso \code{\link{st_write}}, \code{\link{st_info}}
 #' @export
-st_read <- function(path, cols = NULL, reorder = TRUE, threads = 0L) {
+st_read <- function(path, cols = NULL, reorder = TRUE, threads = NULL) {
   path <- normalizePath(path, mustWork = TRUE)
-  Rcpp_sp_read(path, cols = cols, reorder = reorder)
+  if (is.null(threads)) {
+    fsize <- file.info(path)$size
+    threads <- if (!is.na(fsize) && fsize < 50e6) 1L else 0L
+  }
+  Rcpp_sp_read(path, cols = cols, reorder = reorder, threads = as.integer(threads))
 }
 
 #' Read Pre-Stored Transpose from a StreamPress File
@@ -361,12 +375,44 @@ st_convert <- function(input, output, precision = "auto",
   ))
 }
 
+# Internal helpers for h5ad metadata sidecar (requires hdf5r)
+.extract_h5ad_metadata <- function(path) {
+  if (!requireNamespace("hdf5r", quietly = TRUE)) return(list())
+  h5 <- hdf5r::H5File$new(path, mode = "r")
+  on.exit(h5$close_all(), add = TRUE)
+  meta <- list()
+  if (h5$exists("obs"))
+    meta$obs_names <- tryCatch(h5[["obs/_index"]]$read(), error = function(e) NULL)
+  if (h5$exists("var"))
+    meta$var_names <- tryCatch(h5[["var/_index"]]$read(), error = function(e) NULL)
+  meta
+}
+
+.write_sidecar <- function(path, meta) {
+  if (!requireNamespace("jsonlite", quietly = TRUE)) {
+    saveRDS(meta, path)
+  } else {
+    writeLines(jsonlite::toJSON(meta, auto_unbox = TRUE), path)
+  }
+}
+
 #' Add Transpose Section to an Existing StreamPress File
 #'
 #' @param path Path to a \code{.spz} file.
 #' @param verbose Logical; print progress. Default TRUE.
 #' @return Invisibly returns the path.
 #' @seealso \code{\link{st_write}}, \code{\link{st_read}}
+#'
+#' @examples
+#' \donttest{
+#' library(Matrix)
+#' m <- rsparsematrix(50, 20, 0.3)
+#' tmp <- tempfile(fileext = ".spz")
+#' st_write(m, tmp, include_transpose = FALSE)
+#' st_add_transpose(tmp)
+#' info <- st_info(tmp)
+#' unlink(tmp)
+#' }
 #'
 #' @export
 st_add_transpose <- function(path, verbose = TRUE) {
@@ -702,7 +748,6 @@ st_write_list <- function(x, path, obs = NULL, var = NULL,
   nr <- nrow(mats[[1]])
   if (!all(vapply(mats, nrow, integer(1)) == nr))
     stop("All matrices must have the same nrow")
-  # TODO(python): For very large lists, implement streaming writer to avoid RAM peak
   combined <- do.call(cbind, mats)
   st_write(combined, path, obs = obs, var = var,
            chunk_bytes = chunk_bytes, chunk_cols = chunk_cols,

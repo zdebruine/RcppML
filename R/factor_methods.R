@@ -26,7 +26,7 @@
 #' @seealso \code{\link{factor_net}}, \code{\link{predict.factor_net_result}},
 #'   \code{\link{cross_validate_graph}}
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' library(Matrix)
 #' X <- rsparsematrix(100, 50, 0.1)
 #' inp <- factor_input(X, "X")
@@ -51,16 +51,6 @@ fit.factor_net <- function(object, logger = NULL, ...) {
 
   if (!is.null(logger) && !inherits(logger, "training_logger"))
     stop("logger must be a training_logger object from training_logger()")
-
-  # Check if we need R-side callbacks (reference/callback guides)
-  needs_r_callbacks <- .fn_has_r_callbacks(layers)
-
-  if (needs_r_callbacks) {
-    # Fall back to R-level outer ALS for reference/callback guides
-    if (length(layers) == 1)
-      return(.fn_fit_single_layer(object, logger = logger))
-    return(.fn_fit_deep(object, logger = logger))
-  }
 
   # --- C++ graph path: build descriptor and dispatch ---
   descriptor <- .fn_build_descriptor(object)
@@ -98,7 +88,43 @@ fit.factor_net <- function(object, logger = NULL, ...) {
 
   data <- .fn_resolve_data(input_node)
 
-  # --- Build nmf() arguments from config hierarchy ---
+  # --- Dispatch based on layer type ---
+  if (layer$type == "svd_layer") {
+    args <- .fn_build_svd_args(data, layer, config)
+    result <- do.call(svd, args)
+
+    # Log final state if logger provided
+    if (!is.null(logger)) {
+      layer_states <- list(list(W = result@u, d = result@d, H = result@v))
+      per_layer_loss <- c(result@misc$loss)
+      logger <- .log_snapshot(logger, result@misc$iter, layer_states,
+                              list(layer), per_layer_loss)
+    }
+
+    # Package as factor_net_result (SVD: u→W, v→H)
+    layer_result <- list(
+      W = result@u,
+      d = result@d,
+      H = result@v,
+      iterations = result@misc$iter,
+      loss = result@misc$train_loss,
+      converged = result@misc$converged
+    )
+    layer_name <- if (!is.null(layer$name)) layer$name else "L1"
+    res <- structure(list(
+      layers = setNames(list(layer_result), layer_name),
+      config = net$config,
+      n_layers = 1L,
+      multi_modal = FALSE,
+      total_iterations = result@misc$iter,
+      total_loss = result@misc$train_loss,
+      converged = result@misc$converged
+    ), class = "factor_net_result")
+    if (!is.null(logger)) res$logger <- logger
+    return(res)
+  }
+
+  # --- NMF path (default) ---
   args <- .fn_build_nmf_args(data, layer, config)
 
   # --- Call nmf() ---
@@ -330,9 +356,6 @@ fit.factor_net <- function(object, logger = NULL, ...) {
   converged <- FALSE
 
   for (outer_iter in seq_len(maxit)) {
-    # Resolve reference guides before each outer iteration
-    resolved_guides <- .fn_resolve_reference_guides(layers, layer_states, config, outer_iter)
-
     for (i in seq_len(n_layers)) {
       layer <- layers[[i]]
       effective_input <- .effective_input(i, layer_states)
@@ -341,12 +364,6 @@ fit.factor_net <- function(object, logger = NULL, ...) {
       update_args$maxit <- 1L
       update_args$sort_model <- FALSE
       update_args$tol <- 0
-
-      # Inject resolved reference guides for this layer
-      if (!is.null(resolved_guides[[i]])) {
-        existing <- if (!is.null(update_args$guides)) update_args$guides else list()
-        update_args$guides <- c(existing, resolved_guides[[i]])
-      }
 
       # Warm-start with current W
       update_args$seed <- layer_states[[i]]$W
@@ -415,49 +432,6 @@ fit.factor_net <- function(object, logger = NULL, ...) {
 }
 
 
-# ============================================================================
-# Internal: resolve reference guides to current layer matrices
-# ============================================================================
-
-.fn_resolve_reference_guides <- function(layers, layer_states, config, outer_iter = 0L) {
-  n <- length(layers)
-  resolved <- vector("list", n)
-  layer_names <- vapply(seq_len(n), function(i)
-    if (!is.null(layers[[i]]$name)) layers[[i]]$name else paste0("L", i),
-    character(1))
-
-  for (i in seq_len(n)) {
-    layer <- layers[[i]]
-    ref_guides <- list()
-
-    .check_guides <- function(fc, side) {
-      if (is.null(fc) || is.null(fc$guide)) return()
-      for (g in fc$guide) {
-        if (g$type == "reference") {
-          idx <- match(g$layer_name, layer_names)
-          if (is.na(idx))
-            stop(sprintf("guide_reference: layer '%s' not found in network", g$layer_name))
-          target <- if (g$side == "H") layer_states[[idx]]$H else layer_states[[idx]]$W
-          ref_guides[[length(ref_guides) + 1L]] <<- guide_external(
-            target = target, lambda = g$lambda, side = side)
-        }
-        if (g$type == "callback") {
-          factor <- if (side == "H") layer_states[[i]]$H else layer_states[[i]]$W
-          iter <- outer_iter
-          target <- g$fn(factor, iter)
-          ref_guides[[length(ref_guides) + 1L]] <<- guide_external(
-            target = target, lambda = g$lambda, side = side)
-        }
-      }
-    }
-
-    .check_guides(layer$W_config, "W")
-    .check_guides(layer$H_config, "H")
-
-    if (length(ref_guides) > 0) resolved[[i]] <- ref_guides
-  }
-  resolved
-}
 
 
 # ============================================================================
@@ -538,6 +512,25 @@ fit.factor_net <- function(object, logger = NULL, ...) {
   else if (config$solver == "cholesky") args$solver <- "cholesky"
   else args$solver <- "auto"
 
+  # --- Cross-validation params from config (previously silently dropped) ---
+  if (config$test_fraction > 0) {
+    args$test_fraction <- config$test_fraction
+    args$patience <- config$patience
+    # mask_zeros -> mask = "zeros" translation
+    if (isTRUE(config$mask_zeros)) {
+      # Only set if layer doesn't override mask
+      if (is.null(layer$mask)) args$mask <- "zeros"
+    }
+  }
+  if (config$cv_seed != 0L) args$cv_seed <- config$cv_seed
+
+  # --- NMF-specific params from layer ---
+  if (!is.null(layer$mask)) args$mask <- layer$mask
+  if (!is.null(layer$zi) && layer$zi != "none") args$zi <- layer$zi
+  if (isTRUE(layer$projective)) args$projective <- TRUE
+  if (isTRUE(layer$symmetric)) args$symmetric <- TRUE
+  if (isTRUE(layer$robust)) args$robust <- TRUE
+
   # Resolve per-factor config: layer defaults < W()/H() overrides
   ld <- layer$layer_defaults
   wc <- layer$W_config
@@ -589,21 +582,113 @@ fit.factor_net <- function(object, logger = NULL, ...) {
   }
   args$graph_lambda <- c(gl_w, gl_h)
 
-  # Guides: collect from W_config and H_config
-  guides <- list()
-  if (!is.null(wc) && !is.null(wc$guide)) {
-    for (g in wc$guide) {
-      g$side <- "W"
-      guides <- c(guides, list(g))
-    }
+  # Target regularization: extract from W_config and H_config
+  w_tl <- if (!is.null(wc) && !is.null(wc$target_lambda)) wc$target_lambda else 0
+  h_tl <- if (!is.null(hc) && !is.null(hc$target_lambda)) hc$target_lambda else 0
+  args$target_lambda <- c(w_tl, h_tl)
+  if (!is.null(hc) && !is.null(hc$target)) args$target_H <- hc$target
+
+  # --- Forward ... from config (lowest priority) then layer (overrides) ---
+  config_dots <- if (!is.null(config$dots)) config$dots else list()
+  layer_dots <- if (!is.null(layer$dots)) layer$dots else list()
+  # Layer dots override config dots
+  extra <- config_dots
+  for (nm in names(layer_dots)) extra[[nm]] <- layer_dots[[nm]]
+  # Merge extra into args (don't overwrite explicitly-set args)
+  for (nm in names(extra)) {
+    if (is.null(args[[nm]])) args[[nm]] <- extra[[nm]]
   }
-  if (!is.null(hc) && !is.null(hc$guide)) {
-    for (g in hc$guide) {
-      g$side <- "H"
-      guides <- c(guides, list(g))
-    }
+
+  args
+}
+
+
+# ============================================================================
+# Internal: build svd() argument list from config hierarchy
+# ============================================================================
+
+.fn_build_svd_args <- function(data, layer, config) {
+  args <- list(
+    A = data,
+    k = layer$k,
+    tol = config$tol,
+    maxit = config$maxit,
+    verbose = config$verbose,
+    resource = config$resource
+  )
+
+  if (!is.null(config$seed)) args$seed <- config$seed
+
+  # SVD-specific params from layer
+  if (isTRUE(layer$center)) args$center <- TRUE
+  if (isTRUE(layer$scale)) args$scale <- TRUE
+  if (!is.null(layer$method) && layer$method != "auto") args$method <- layer$method
+  if (!is.null(layer$mask)) args$mask <- layer$mask
+  if (isTRUE(layer$robust)) args$robust <- TRUE
+
+  # Cross-validation params from config
+  if (config$test_fraction > 0) {
+    args$test_fraction <- config$test_fraction
+    if (is.null(layer$mask) && isTRUE(config$mask_zeros))
+      args$mask <- "zeros"
   }
-  if (length(guides) > 0) args$guides <- guides
+  if (config$cv_seed != 0L) args$cv_seed <- config$cv_seed
+
+  # Resolve per-factor config: layer defaults < W()/H() overrides
+  ld <- layer$layer_defaults
+  wc <- layer$W_config
+  hc <- layer$H_config
+
+  # SVD uses scalar penalties (single value, not c(w,h) pairs)
+  # Use W config for "U" side, H config for "V" side
+  w_L1 <- if (!is.null(wc) && !is.null(wc$L1)) wc$L1 else ld$L1
+  h_L1 <- if (!is.null(hc) && !is.null(hc$L1)) hc$L1 else ld$L1
+  # svd() takes scalar L1 — use mean if asymmetric
+  if (w_L1 == h_L1) args$L1 <- w_L1
+  else args$L1 <- c(w_L1, h_L1)  # svd() doesn't support this but pass for validation
+
+  w_L2 <- if (!is.null(wc) && !is.null(wc$L2)) wc$L2 else ld$L2
+  h_L2 <- if (!is.null(hc) && !is.null(hc$L2)) hc$L2 else ld$L2
+  if (w_L2 == h_L2) args$L2 <- w_L2
+  else args$L2 <- c(w_L2, h_L2)
+
+  w_ub <- if (!is.null(wc) && !is.null(wc$upper_bound)) wc$upper_bound else ld$upper_bound
+  h_ub <- if (!is.null(hc) && !is.null(hc$upper_bound)) hc$upper_bound else ld$upper_bound
+  if (w_ub == h_ub) args$upper_bound <- w_ub
+  else args$upper_bound <- c(w_ub, h_ub)
+
+  # Nonneg: svd_layer defaults to FALSE
+  w_nn <- if (!is.null(wc) && !is.null(wc$nonneg)) wc$nonneg else FALSE
+  h_nn <- if (!is.null(hc) && !is.null(hc$nonneg)) hc$nonneg else FALSE
+  if (w_nn || h_nn) args$nonneg <- TRUE  # svd() takes scalar nonneg
+
+  # Graphs: svd() uses graph_U/graph_V
+  if (!is.null(wc) && !is.null(wc$graph)) args$graph_U <- wc$graph
+  if (!is.null(hc) && !is.null(hc$graph)) args$graph_V <- hc$graph
+  gl_w <- if (!is.null(wc) && !is.null(wc$graph_lambda)) wc$graph_lambda else 0
+  gl_h <- if (!is.null(hc) && !is.null(hc$graph_lambda)) hc$graph_lambda else 0
+  if (gl_w != 0 || gl_h != 0) args$graph_lambda <- c(gl_w, gl_h)
+
+  # L21 / angular via ...
+  w_L21 <- if (!is.null(wc) && !is.null(wc$L21)) wc$L21 else ld$L21
+  h_L21 <- if (!is.null(hc) && !is.null(hc$L21)) hc$L21 else ld$L21
+  if (w_L21 != 0 || h_L21 != 0) args$L21 <- c(w_L21, h_L21)
+
+  w_ang <- if (!is.null(wc) && !is.null(wc$angular)) wc$angular else ld$angular
+  h_ang <- if (!is.null(hc) && !is.null(hc$angular)) hc$angular else ld$angular
+  if (w_ang != 0 || h_ang != 0) args$angular <- c(w_ang, h_ang)
+
+  # Threads from config
+  args$threads <- config$threads
+
+  # Forward ... from config (lowest priority) then layer (overrides)
+  config_dots <- if (!is.null(config$dots)) config$dots else list()
+  layer_dots <- if (!is.null(layer$dots)) layer$dots else list()
+  extra <- config_dots
+  for (nm in names(layer_dots)) extra[[nm]] <- layer_dots[[nm]]
+  for (nm in names(extra)) {
+    if (is.null(args[[nm]])) args[[nm]] <- extra[[nm]]
+  }
 
   args
 }
@@ -770,22 +855,9 @@ summary.factor_net_result <- function(object, ...) {
 # C++ graph dispatcher helpers
 # ============================================================================
 
-#' Check if any layer uses R-side callback or reference guides
-#' @keywords internal
-.fn_has_r_callbacks <- function(layers) {
-  for (layer in layers) {
-    for (fc in list(layer$W_config, layer$H_config)) {
-      if (!is.null(fc) && !is.null(fc$guide)) {
-        for (g in fc$guide) {
-          if (g$type %in% c("callback", "reference")) return(TRUE)
-        }
-      }
-    }
-  }
-  FALSE
-}
 
 #' Build a flat descriptor for Rcpp_factor_net_fit()
+#' @return A named list describing the factor network graph for C++.
 #' @keywords internal
 .fn_build_descriptor <- function(net) {
   layers <- net$layers
@@ -794,7 +866,7 @@ summary.factor_net_result <- function(object, ...) {
 
   # --- Solver mode ---
   # IRLS losses (anything non-MSE) require CD solver; cholesky is only valid for MSE.
-  irls_losses <- c("mae", "huber", "kl", "gp", "nb", "gamma", "inverse_gaussian", "tweedie")
+  irls_losses <- c("gp", "nb", "gamma", "inverse_gaussian", "tweedie")
   solver_mode <- if (config$solver == "cd") 0L
                  else if (config$solver == "cholesky") 1L
                  else if (config$loss %in% irls_losses) 0L
@@ -893,39 +965,12 @@ summary.factor_net_result <- function(object, ...) {
     )
   }
 
-  # --- Build guides list (classifier + external only) ---
-  guides <- list()
-  for (i in seq_along(layers)) {
-    layer <- layers[[i]]
-    for (side_info in list(
-      list(fc = layer$W_config, side = "W"),
-      list(fc = layer$H_config, side = "H"))) {
-      fc <- side_info$fc
-      if (!is.null(fc) && !is.null(fc$guide)) {
-        for (g in fc$guide) {
-          if (g$type == "classifier") {
-            guides[[length(guides) + 1L]] <- list(
-              type = "classifier", lambda = g$lambda,
-              side = side_info$side, layer_idx = i - 1L,
-              labels = g$labels)
-          } else if (g$type == "external") {
-            guides[[length(guides) + 1L]] <- list(
-              type = "external", lambda = g$lambda,
-              side = side_info$side, layer_idx = i - 1L,
-              target = g$target)
-          }
-        }
-      }
-    }
-  }
-
   desc <- list(
     inputs = inputs,
     layers = layer_descs,
     config = cfg_list
   )
   if (length(conditions) > 0) desc$conditions <- conditions
-  if (length(guides) > 0) desc$guides <- guides
 
   # --- Generate W_init for the first layer (match nmf() R-RNG behavior) ---
   # nmf() uses set.seed(seed); runif(m*k) to initialize W, then passes
@@ -968,6 +1013,7 @@ summary.factor_net_result <- function(object, ...) {
 }
 
 #' Resolve a node to an input_ref string for the C++ descriptor
+#' @return A character string encoding the input reference.
 #' @keywords internal
 .fn_resolve_input_ref <- function(node, layer_names, layers, input_nodes,
                                    conditions) {
@@ -1025,6 +1071,7 @@ summary.factor_net_result <- function(object, ...) {
 }
 
 #' Find the index of a node in the layers list
+#' @return An integer index, or \code{NULL} if not found.
 #' @keywords internal
 .fn_find_layer_idx <- function(node, layers) {
   for (j in seq_along(layers)) {
@@ -1034,6 +1081,7 @@ summary.factor_net_result <- function(object, ...) {
 }
 
 #' Wrap C++ graph result into factor_net_result
+#' @return A \code{factor_net_result} object.
 #' @keywords internal
 .fn_wrap_graph_result <- function(raw, net) {
   layers <- raw$layers

@@ -11,9 +11,14 @@ replicates, tracking which samples consistently co-cluster, and building
 a robust consensus matrix.
 
 Beyond flat clustering, RcppML provides **divisive hierarchical
-clustering** via recursive rank-2 NMF splits, and **classification from
-embeddings** that leverages the low-dimensional H representation for
-supervised tasks.
+clustering** (`dclust`) via recursive rank-2 NMF splits. The core idea
+is that **rank-2 NMF is binary clustering**: each split partitions
+samples into two groups based on which of the two factors dominates.
+`dclust` applies this recursively, building a full hierarchy — each node
+in the tree is a
+[`bipartition()`](https://zdebruine.github.io/RcppML/reference/bipartition.md)
+that finds the best binary split. Classification from embeddings
+leverages the low-dimensional H representation for supervised tasks.
 
 ## API Reference
 
@@ -63,8 +68,10 @@ returns 0-indexed `$samples`. Add 1 for R-style indexing.
 bipartiteMatch(x)
 ```
 
-Hungarian algorithm for optimal 1:1 factor correspondence given a cost
-matrix. Returns 0-indexed `$assignment` and total `$cost`.
+Hungarian algorithm for optimal 1:1 factor correspondence given a
+**cost** (dissimilarity) matrix. Returns 0-indexed `$assignment` and
+total `$cost`. If using cosine similarity, convert to cost first:
+`bipartiteMatch(1 - cosine_sim)`.
 
 ### Classification from Embeddings
 
@@ -123,16 +130,23 @@ check how well they correspond to the known ALL/AML labels.
 
 ``` r
 # Confusion matrix: consensus clusters vs. true labels
-conf <- table(Cluster = cons$clusters, Cancer = labels)
-knitr::kable(conf, caption = "Consensus clusters vs. true cancer type")
+conf <- table(Cluster = paste0("Cluster ", cons$clusters), Cancer = labels)
+knitr::kable(conf, caption = "Consensus cluster assignments vs. true cancer type (ALL/AML)")
 ```
 
-| ALL | AML |
-|----:|----:|
-|  24 |   1 |
-|   3 |  10 |
+|           | ALL | AML |
+|:----------|----:|----:|
+| Cluster 1 |  24 |   1 |
+| Cluster 2 |   3 |  10 |
 
-Consensus clusters vs. true cancer type
+Consensus cluster assignments vs. true cancer type (ALL/AML)
+
+> **Reading the confusion matrix**: Each row is a consensus cluster,
+> each column a true cancer type. A well-separated clustering aligns
+> each row with predominantly one column. Here, Cluster 1 captures
+> nearly all ALL samples and Cluster 2 captures most AML samples. The
+> overall **purity** (fraction of samples assigned to their majority
+> class) is 0.895.
 
 ``` r
 summary_df <- data.frame(
@@ -156,11 +170,53 @@ Consensus NMF with k = 2 cleanly separates the two leukemia subtypes.
 The cophenetic correlation confirms high clustering stability across
 replicates.
 
-## Example 2: Hierarchical Clustering with dclust (AML Chromatin)
+### Going Deeper: k = 5 Reveals Substructure
 
-The AML dataset contains 824 chromatin accessibility regions across 135
-samples with known subtype annotations. Divisive clustering discovers a
-hierarchy of subtypes.
+What happens when we push beyond the known two classes? With k = 5,
+consensus NMF discovers finer-grained substructure within both ALL and
+AML.
+
+``` r
+cons5 <- consensus_nmf(golub, k = 5, reps = 20, seed = 42, verbose = FALSE)
+```
+
+``` r
+plot(cons5, show_clusters = TRUE) +
+  ggtitle("Consensus matrix: Golub leukemia (k = 5, 20 replicates)")
+```
+
+![](clustering_files/figure-html/golub-k5-heatmap-1.png)
+
+``` r
+conf5 <- table(Cluster = paste0("C", cons5$clusters), Cancer = labels)
+knitr::kable(conf5, caption = "k = 5 consensus clusters vs. cancer type: substructure within ALL and AML")
+```
+
+|     | ALL | AML |
+|:----|----:|----:|
+| C1  |  10 |   0 |
+| C2  |   5 |   1 |
+| C3  |   2 |   4 |
+| C4  |   9 |   0 |
+| C5  |   1 |   6 |
+
+k = 5 consensus clusters vs. cancer type: substructure within ALL and
+AML
+
+At k = 5, the consensus matrix reveals that ALL and AML each contain
+subpopulations — ALL splits into 2–3 subgroups and AML into 2. A
+cophenetic correlation of 0.999 confirms stable cluster boundaries even
+at this finer resolution. This substructure is biologically meaningful:
+ALL includes B-cell and T-cell subtypes, and AML harbors distinct
+genetic programs.
+
+## Example 2: Hierarchical Clustering with dclust (AML Methylation)
+
+The AML dataset contains 824 differentially methylated regions (DMRs)
+with beta-value measurements across 135 samples with known subtype
+annotations (AML and matched controls at MEP, GMP, and L-MPP progenitor
+stages). Divisive clustering discovers a hierarchy of subtypes by
+recursively applying rank-2 NMF splits.
 
 ``` r
 data(aml)
@@ -185,76 +241,155 @@ cluster_info <- do.call(rbind, lapply(clusters, function(cl) {
   )
 }))
 
-knitr::kable(head(cluster_info, 8), caption = "Divisive clustering of AML chromatin data")
+knitr::kable(head(cluster_info, 8), caption = "Divisive clustering of AML methylation data")
 ```
 
 | Cluster | Size | Top Category  | Top Count | Composition                                         |
-|--------:|-----:|:--------------|----------:|:----------------------------------------------------|
-|       0 |   13 | AML (L-MPP)   |        12 | AML (L-MPP):12, Control (MEP):1                     |
-|       1 |   15 | Control (GMP) |         5 | Control (GMP):5, Control (L-MPP):5, Control (MEP):4 |
-|       2 |   11 | AML (GMP)     |         7 | AML (GMP):7, AML (MEP):4                            |
-|       3 |   21 | AML (GMP)     |        14 | AML (GMP):14, AML (MEP):7                           |
-|       4 |   17 | AML (GMP)     |        16 | AML (GMP):16, AML (MEP):1                           |
-|       5 |   16 | AML (GMP)     |        14 | AML (GMP):14, AML (MEP):2                           |
-|       6 |   16 | AML (GMP)     |        16 | AML (GMP):16                                        |
-|       7 |   12 | AML (GMP)     |        12 | AML (GMP):12                                        |
+|:--------|-----:|:--------------|----------:|:----------------------------------------------------|
+| 111     |   13 | AML (L-MPP)   |        12 | AML (L-MPP):12, Control (MEP):1                     |
+| 110     |   15 | Control (GMP) |         5 | Control (GMP):5, Control (L-MPP):5, Control (MEP):4 |
+| 101     |   11 | AML (GMP)     |         7 | AML (GMP):7, AML (MEP):4                            |
+| 100     |   21 | AML (GMP)     |        14 | AML (GMP):14, AML (MEP):7                           |
+| 011     |   17 | AML (GMP)     |        16 | AML (GMP):16, AML (MEP):1                           |
+| 010     |   16 | AML (GMP)     |        14 | AML (GMP):14, AML (MEP):2                           |
+| 001     |   16 | AML (GMP)     |        16 | AML (GMP):16                                        |
+| 0001    |   12 | AML (GMP)     |        12 | AML (GMP):12                                        |
 
-Divisive clustering of AML chromatin data
+Divisive clustering of AML methylation data
 
 Divisive clustering discovers a hierarchy of subtypes, with early splits
 separating biologically distinct cell populations. Each cluster’s
 composition reflects known AML subtype structure.
 
-## Example 3: Comparing Classification Methods
+### Splitting Hierarchy
 
-Using the Golub NMF model, we compare classification accuracy from k-NN
-and logistic regression applied to the H embedding.
+Cluster labels encode the splitting path as binary strings: each
+character records whether a node went left (“0”) or right (“1”). The
+root split (depth 0) produces children “0” and “1”. Splits at depth 1
+subdivide those further: “0” → “00” (left) and “01” (right), and so on.
+The string length minus one gives the split depth at which each cluster
+was created.
 
 ``` r
-# Fit NMF to get embeddings
-model <- nmf(t(golub), k = 3, seed = 42, maxit = 100)
-embedding <- t(model@h)  # 38 samples x 3 factors
-int_labels <- as.integer(labels) - 1L  # 0-indexed
+plot(clusters, labels = meta$category,
+     main = "Divisive Hierarchy with Subtype Composition")
+```
 
-# Use same test split for fair comparison
+![](clustering_files/figure-html/dclust-tree-1.png)
+
+The top panel shows the true splitting tree with branch points
+corresponding to individual
+[`bipartition()`](https://zdebruine.github.io/RcppML/reference/bipartition.md)
+calls. The bottom panel shows the composition of each leaf cluster as a
+stacked bar, aligned with the tree above. The root split (depth 0)
+separates biologically distinct cell populations, while deeper splits
+resolve finer substructure within AML subtypes.
+
+## Example 3: Classification from NMF Embeddings (AML Subtypes)
+
+AML methylation data provides a realistic multi-class classification
+challenge: 6 subtypes with imbalanced class sizes. The NMF embedding
+compresses 824 DMRs into k factors; we classify subtypes from this
+low-dimensional representation.
+
+``` r
+# Fit NMF to AML data (features x samples)
+model <- nmf(aml, k = 8, seed = 42, maxit = 100)
+embedding <- t(model@h)  # 135 samples x 8 factors
+int_labels <- as.integer(factor(meta$category)) - 1L  # 0-indexed
+
+# 20% held-out test set
 set.seed(42)
 n <- nrow(embedding)
-test_idx <- sort(sample(n, floor(n * 0.3)))
+test_idx <- sort(sample(n, floor(n * 0.2)))
 
-knn_eval <- classify_embedding(embedding, int_labels, test_idx = test_idx, k = 3, seed = 42)
+knn_eval <- classify_embedding(embedding, int_labels, test_idx = test_idx, k = 5, seed = 42)
 log_eval <- classify_logistic(embedding, int_labels, test_idx = test_idx, seed = 42)
 
 comp_table <- data.frame(
-  Method = c("k-NN (k=3)", "Logistic regression"),
+  Method = c("k-NN (k=5)", "Logistic regression"),
   Accuracy = c(knn_eval$accuracy, log_eval$accuracy),
   `Macro F1` = c(knn_eval$macro_f1, log_eval$macro_f1),
   check.names = FALSE
 )
 knitr::kable(comp_table, digits = 3,
-             caption = "Classification from NMF embeddings (k = 3)")
+             caption = "Classification from NMF embeddings (k = 8, AML subtypes)")
 ```
 
 | Method              | Accuracy | Macro F1 |
 |:--------------------|---------:|---------:|
-| k-NN (k=3)          |        1 |        1 |
-| Logistic regression |        1 |        1 |
+| k-NN (k=5)          |    0.778 |    0.324 |
+| Logistic regression |    0.889 |    0.467 |
 
-Classification from NMF embeddings (k = 3)
+Classification from NMF embeddings (k = 8, AML subtypes)
 
-Both classifiers achieve high accuracy from just 3 NMF factors,
-confirming that the low-dimensional embedding captures the ALL/AML
-distinction effectively. The NMF representation compresses 5,000 genes
-into a handful of components without losing discriminative power.
+``` r
+# k-NN confusion matrix
+conf_knn <- knn_eval$confusion
+cat_levels <- levels(factor(meta$category))
+if (nrow(conf_knn) == length(cat_levels)) {
+  rownames(conf_knn) <- cat_levels
+  colnames(conf_knn) <- cat_levels
+}
+knitr::kable(conf_knn, caption = "k-NN confusion matrix (AML subtypes)")
+```
+
+|                 | AML (GMP) | AML (L-MPP) | AML (MEP) | Control (GMP) | Control (L-MPP) | Control (MEP) |
+|:----------------|----------:|------------:|----------:|--------------:|----------------:|--------------:|
+| AML (GMP)       |        17 |           0 |         0 |             0 |               0 |             0 |
+| AML (L-MPP)     |         0 |           4 |         0 |             0 |               0 |             0 |
+| AML (MEP)       |         2 |           0 |         0 |             0 |               0 |             0 |
+| Control (GMP)   |         0 |           0 |         0 |             0 |               4 |             0 |
+| Control (L-MPP) |         0 |           0 |         0 |             0 |               0 |             0 |
+| Control (MEP)   |         0 |           0 |         0 |             0 |               0 |             0 |
+
+k-NN confusion matrix (AML subtypes)
+
+Unlike the two-class Golub problem (where NMF achieves near-perfect
+separation with any classifier), AML’s 6 subtypes with imbalanced class
+sizes are harder to classify from 8 factors. The confusion matrix shows
+which subtypes are well-resolved and which are confused.
+
+### UMAP of Factor Embeddings
+
+``` r
+library(uwot)
+set.seed(42)
+umap_coords <- umap(embedding, n_neighbors = 15, min_dist = 0.3, n_components = 2)
+
+umap_df <- data.frame(
+  UMAP1 = umap_coords[, 1],
+  UMAP2 = umap_coords[, 2],
+  Subtype = meta$category,
+  Set = ifelse(seq_len(n) %in% test_idx, "Test", "Train")
+)
+
+ggplot(umap_df, aes(x = UMAP1, y = UMAP2, color = Subtype, shape = Set)) +
+  geom_point(size = 2, alpha = 0.8) +
+  scale_color_brewer(palette = "Set2") +
+  scale_shape_manual(values = c(Train = 16, Test = 4)) +
+  labs(title = "UMAP of NMF Embeddings (AML Subtypes)",
+       subtitle = "8-factor NMF embedding colored by subtype, shaped by train/test split") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+![](clustering_files/figure-html/umap-classify-1.png)
+
+The UMAP projection reveals how well separated the subtypes are in the
+8-dimensional NMF embedding space. Tight, isolated groups indicate
+subtypes that will classify well; overlapping groups indicate subtypes
+that share methylation structure.
 
 ## What’s Next
 
 - *See the [Factor
   Graphs](https://zdebruine.github.io/RcppML/articles/factor-graphs.md)
-  vignette for semi-supervised NMF with `guide_classifier` to improve
-  embeddings with labels.*
+  vignette for improving embeddings with
+  [`refine()`](https://zdebruine.github.io/RcppML/reference/refine.md).*
 - *See the
   [Cross-Validation](https://zdebruine.github.io/RcppML/articles/cross-validation.md)
   vignette for choosing the optimal k for clustering.*
 - *See the [NMF
   Fundamentals](https://zdebruine.github.io/RcppML/articles/nmf-fundamentals.md)
-  vignette for the core API.*
+  vignette for the core NMF API.*

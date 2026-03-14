@@ -4,12 +4,10 @@
 \alias{validate_mask}
 \title{Validate mask parameter}
 \usage{
-validate_mask(mask, sparse, has_na)
+validate_mask(mask, has_na = FALSE)
 }
 \arguments{
-\item{mask}{NULL, character (\code{"zeros"} or \code{"NA"}), or matrix}
-
-\item{sparse}{Logical; whether sparse mode is enabled}
+\item{mask}{NULL, character, matrix, or list}
 
 \item{has_na}{Logical; whether data contains NA values}
 }
@@ -17,6 +15,13 @@ validate_mask(mask, sparse, has_na)
 List with \code{mask_matrix} (dgCMatrix), \code{mask_zeros} (logical), and optionally \code{mask_na}
 }
 \description{
-Validate mask parameter
+Supports the extended mask syntax:
+\itemize{
+  \item \code{NULL}: no masking
+  \item \code{"zeros"}: mask zero entries (sets mask_zeros=TRUE)
+  \item \code{"NA"}: mask NA entries
+  \item dgCMatrix or matrix: custom mask matrix
+  \item \code{list("zeros", <matrix>)}: mask zeros AND custom mask simultaneously
+}
 }
 \keyword{internal}

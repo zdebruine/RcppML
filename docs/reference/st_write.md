@@ -17,7 +17,7 @@ st_write(
   row_sort = FALSE,
   include_transpose = TRUE,
   chunk_cols = NULL,
-  chunk_bytes = 6.4e+07,
+  chunk_bytes = 8e+06,
   transp_chunk_cols = NULL,
   transp_chunk_bytes = NULL,
   threads = 0L
@@ -78,8 +78,10 @@ st_write(
 
 - chunk_bytes:
 
-  Numeric; target bytes per chunk when `chunk_cols` is NULL. Default 64
-  MB.
+  Numeric; target bytes per chunk when `chunk_cols` is NULL. Default 8
+  MB, which yields ~50 columns per chunk for typical scRNA-seq matrices
+  (~38 k rows). Smaller chunks create more parallel work during reading;
+  larger chunks compress slightly better.
 
 - transp_chunk_cols:
 
@@ -91,7 +93,8 @@ st_write(
 
 - threads:
 
-  Integer; number of threads (0 = all available). Default 0.
+  Integer; number of threads for parallel compression (0 = all
+  available). Default 0.
 
 ## Value
 
@@ -112,7 +115,7 @@ f <- tempfile(fileext = ".spz")
 st_write(A, f)
 B <- st_read(f)
 all.equal(A, B)  # TRUE
-#> [1] "Mean relative difference: 2.408568e-08"
+#> [1] "Mean relative difference: 2.431235e-08"
 unlink(f)
 # }
 ```

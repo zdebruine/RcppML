@@ -37,7 +37,7 @@ A list with:
 
 - zi_mode:
 
-  Recommended mode: "none", "row", "col", or "twoway"
+  Recommended mode: "none", "row", or "col"
 
 - row_excess:
 

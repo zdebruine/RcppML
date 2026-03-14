@@ -14,8 +14,7 @@ evaluate(
   data,
   mask = NULL,
   missing_only = FALSE,
-  loss = c("mse", "mae", "huber", "gp"),
-  huber_delta = 1,
+  loss = c("mse", "gp"),
   test_fraction = 0,
   test_seed = NULL,
   eval_set = c("all", "test", "train"),
@@ -34,7 +33,7 @@ evaluate(
 
 - ...:
 
-  additional development parameters
+  advanced parameters. See **Advanced Parameters** section.
 
 - data:
 
@@ -45,8 +44,10 @@ evaluate(
 
 - mask:
 
-  dense or sparse matrix of values in `data` to handle as missing.
-  Alternatively, specify "`zeros`" or "`NA`".
+  missing data mask. Accepts: `NULL` (no masking), `"zeros"` (mask
+  zeros), `"NA"` (mask NAs), a dgCMatrix/matrix (custom mask), or
+  `list("zeros", <matrix>)` to mask zeros and use a custom mask
+  simultaneously.
 
 - missing_only:
 
@@ -54,14 +55,8 @@ evaluate(
 
 - loss:
 
-  loss function to use: "mse" (Mean Squared Error, default), "mae" (Mean
-  Absolute Error), "huber" (Huber loss), or "kl" (Kullback-Leibler
-  divergence)
-
-- huber_delta:
-
-  delta parameter for Huber loss (default 1.0), ignored for other loss
-  functions
+  loss function to use: "mse" (Mean Squared Error, default) or "gp"
+  (Generalized Poisson / KL divergence)
 
 - test_fraction:
 
@@ -90,8 +85,8 @@ evaluate(
 
 ## Value
 
-A single numeric value: the loss (MSE, MAE, Huber, or KL divergence) of
-the model on the data.
+A single numeric value: the loss (MSE or GP/KL divergence) of the model
+on the data.
 
 ## See also
 
@@ -106,7 +101,5 @@ A <- rsparsematrix(100, 50, 0.1)
 model <- nmf(A, 3, seed = 1, maxit = 50, tol = 1e-4)
 evaluate(model, A)  # MSE
 #> [1] 0.09021044
-evaluate(model, A, loss = "mae")  # MAE
-#> [1] 0.08829401
 # }
 ```

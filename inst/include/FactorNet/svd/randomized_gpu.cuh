@@ -764,5 +764,271 @@ SVDResult<Scalar> randomized_svd_gpu(
     return result;
 }
 
+
+// ============================================================================
+// Dense GPU Randomized SVD (cuBLAS GEMM instead of cuSPARSE SpMM)
+// ============================================================================
+
+/**
+ * @brief GPU randomized truncated SVD/PCA for dense matrices.
+ *
+ * Uses cuBLAS GEMM for forward (A*X) and transpose (A'*Y) products,
+ * which is significantly faster than converting dense to CSC and using
+ * cuSPARSE SpMM.
+ *
+ * @tparam Scalar     float or double
+ * @param h_A         Host column-major dense matrix (m × n)
+ * @param m           Number of rows
+ * @param n           Number of columns
+ * @param config      SVD configuration
+ * @return SVDResult with factors
+ */
+template<typename Scalar>
+SVDResult<Scalar> randomized_svd_gpu_dense(
+    const Scalar* h_A,
+    int m, int n,
+    const SVDConfig<Scalar>& config)
+{
+    using namespace FactorNet::gpu;
+    using DenseMatrixS = Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>;
+    using DenseVectorS = Eigen::Matrix<Scalar, Eigen::Dynamic, 1>;
+
+    auto t_start = std::chrono::high_resolution_clock::now();
+
+    const int k = config.k_max;
+    const int p = std::min(std::max(10, k / 5), std::min(m, n) - k);
+    const int l = k + std::max(p, 0);
+    const int q = (config.max_iter <= 0) ? 3 : std::min(config.max_iter, 10);
+
+    SVDResult<Scalar> result;
+    result.centered = config.center;
+
+    const int BLOCK_SIZE = 256;
+
+    // ------------------------------------------------------------------
+    // 1. GPU context and dense matrix upload
+    // ------------------------------------------------------------------
+    GPUContext ctx;
+
+    const size_t mn = static_cast<size_t>(m) * n;
+    DeviceMemory<Scalar> d_A(mn);
+    d_A.upload(h_A, mn);
+
+    // ------------------------------------------------------------------
+    // 2. Row means and Frobenius norm
+    // ------------------------------------------------------------------
+    DenseVectorS row_means;
+    DeviceMemory<Scalar> d_mu;
+    DeviceMemory<Scalar> d_colsums(l);
+    DeviceMemory<Scalar> d_mu_dots(l);
+
+    double A_norm_sq = 0;
+    for (size_t i = 0; i < mn; ++i)
+        A_norm_sq += static_cast<double>(h_A[i]) * static_cast<double>(h_A[i]);
+
+    if (config.center) {
+        row_means.resize(m);
+        row_means.setZero();
+        for (int j = 0; j < n; ++j)
+            for (int i = 0; i < m; ++i)
+                row_means(i) += h_A[i + static_cast<size_t>(j) * m];
+        if (n > 0) row_means /= static_cast<Scalar>(n);
+        A_norm_sq -= static_cast<double>(n) * static_cast<double>(row_means.squaredNorm());
+
+        result.row_means = row_means;
+        d_mu = DeviceMemory<Scalar>(m);
+        d_mu.upload(row_means.data(), m);
+    }
+    result.frobenius_norm_sq = A_norm_sq;
+
+    // ------------------------------------------------------------------
+    // 3. Allocate dense matrices on GPU
+    // ------------------------------------------------------------------
+    DeviceMemory<Scalar> d_Y(static_cast<size_t>(m) * l);  // m × l
+    DeviceMemory<Scalar> d_Z(static_cast<size_t>(n) * l);  // n × l
+
+    // ------------------------------------------------------------------
+    // Helper lambdas for GEMM with PCA correction
+    // ------------------------------------------------------------------
+
+    // Forward GEMM: Y = A * X, then PCA correct
+    // X is d_src_n (n × l), Y is d_Y (m × l)
+    auto gemm_forward = [&](Scalar* d_src_n) {
+        // Y = A * X: A is m×n, X is n×l → Y is m×l
+        detail::cublas_gemm<Scalar>(
+            ctx.cublas, CUBLAS_OP_N, CUBLAS_OP_N,
+            m, l, n,
+            Scalar(1), d_A.get(), m,
+            d_src_n, n,
+            Scalar(0), d_Y.get(), m);
+
+        if (config.center) {
+            int smem = BLOCK_SIZE * sizeof(Scalar);
+            detail::compute_colsums_kernel<<<l, BLOCK_SIZE, smem, ctx.stream>>>(
+                d_src_n, d_colsums.get(), n, l);
+            int total = m * l;
+            int blocks = (total + BLOCK_SIZE - 1) / BLOCK_SIZE;
+            detail::pca_correct_forward_kernel<<<blocks, BLOCK_SIZE, 0, ctx.stream>>>(
+                d_Y.get(), d_mu.get(), d_colsums.get(), m, l);
+        }
+    };
+
+    // Transpose GEMM: Z = A' * Y, then PCA correct
+    // Y is d_src_m (m × l), Z is d_Z (n × l)
+    auto gemm_transpose = [&](Scalar* d_src_m) {
+        // Z = A' * Y: A' is n×m, Y is m×l → Z is n×l
+        detail::cublas_gemm<Scalar>(
+            ctx.cublas, CUBLAS_OP_T, CUBLAS_OP_N,
+            n, l, m,
+            Scalar(1), d_A.get(), m,
+            d_src_m, m,
+            Scalar(0), d_Z.get(), n);
+
+        if (config.center) {
+            int smem = BLOCK_SIZE * sizeof(Scalar);
+            detail::compute_mu_dots_kernel<<<l, BLOCK_SIZE, smem, ctx.stream>>>(
+                d_mu.get(), d_src_m, d_mu_dots.get(), m, l);
+            int total = n * l;
+            int blocks = (total + BLOCK_SIZE - 1) / BLOCK_SIZE;
+            detail::pca_correct_transpose_kernel<<<blocks, BLOCK_SIZE, 0, ctx.stream>>>(
+                d_Z.get(), d_mu_dots.get(), n, l);
+        }
+    };
+
+    if (config.verbose) {
+        FACTORNET_PRINT_IMPL("  GPU Randomized SVD (dense): k=%d, l=%d, power_iter=%d\n", k, l, q);
+    }
+
+    // ========================================================================
+    // Step 1: Random sketch Omega (n × l) → upload to d_Z
+    // ========================================================================
+    {
+        DenseMatrixS Omega(n, l);
+        rng::SplitMix64 rng(config.seed == 0 ? 42ULL : static_cast<uint64_t>(config.seed));
+        rng.fill_uniform(Omega.data(), Omega.rows(), Omega.cols());
+        Omega.array() -= static_cast<Scalar>(0.5);
+        d_Z.upload(Omega.data(), static_cast<size_t>(n) * l);
+    }
+
+    // ========================================================================
+    // Step 2: Y = A_c * Omega  (m × l)
+    // ========================================================================
+    gemm_forward(d_Z.get());
+
+    // ========================================================================
+    // cuSOLVER QR workspace (pre-allocated once, reused)
+    // ========================================================================
+    const int tau_len = l;
+    DeviceMemory<Scalar> d_tau(tau_len);
+    DeviceMemory<int> d_qr_info(1);
+
+    int lwork_y_geqrf = detail::cusolver_geqrf_bufferSize<Scalar>(
+        ctx.cusolver, m, l, d_Y.get(), m);
+    int lwork_y_orgqr = detail::cusolver_orgqr_bufferSize<Scalar>(
+        ctx.cusolver, m, l, l, d_Y.get(), m, d_tau.get());
+    int lwork_z_geqrf = detail::cusolver_geqrf_bufferSize<Scalar>(
+        ctx.cusolver, n, l, d_Z.get(), n);
+    int lwork_z_orgqr = detail::cusolver_orgqr_bufferSize<Scalar>(
+        ctx.cusolver, n, l, l, d_Z.get(), n, d_tau.get());
+    int qr_lwork = std::max({lwork_y_geqrf, lwork_y_orgqr, lwork_z_geqrf, lwork_z_orgqr});
+    DeviceMemory<Scalar> d_qr_work(qr_lwork > 0 ? qr_lwork : 1);
+
+    // ========================================================================
+    // Step 3: Power iterations
+    // ========================================================================
+    for (int i = 0; i < q; ++i) {
+        detail::device_thin_qr<Scalar>(
+            ctx.cusolver, d_Y.get(), m, l, d_tau.get(), d_qr_work.get(), qr_lwork, d_qr_info.get());
+        gemm_transpose(d_Y.get());
+        detail::device_thin_qr<Scalar>(
+            ctx.cusolver, d_Z.get(), n, l, d_tau.get(), d_qr_work.get(), qr_lwork, d_qr_info.get());
+        gemm_forward(d_Z.get());
+
+        if (config.verbose) {
+            FACTORNET_PRINT_IMPL("    power iter %d/%d done\n", i + 1, q);
+        }
+    }
+
+    // ========================================================================
+    // Step 4: Final QR of Y → orthonormal Q (m × l)
+    // ========================================================================
+    detail::device_thin_qr<Scalar>(
+        ctx.cusolver, d_Y.get(), m, l, d_tau.get(), d_qr_work.get(), qr_lwork, d_qr_info.get());
+
+    // ========================================================================
+    // Step 5: Bt = A_c' * Q  (n × l)
+    // ========================================================================
+    gemm_transpose(d_Y.get());
+
+    // ========================================================================
+    // Step 6: Device SVD of Bt (n × l) via cuSOLVER gesvdj
+    // ========================================================================
+    {
+        gesvdjInfo_t gesvdj_params = nullptr;
+        CUSOLVER_CHECK(cusolverDnCreateGesvdjInfo(&gesvdj_params));
+        CUSOLVER_CHECK(cusolverDnXgesvdjSetTolerance(gesvdj_params, 1e-12));
+        CUSOLVER_CHECK(cusolverDnXgesvdjSetMaxSweeps(gesvdj_params, 100));
+
+        DeviceMemory<Scalar> d_svd_U(static_cast<size_t>(n) * l);
+        DeviceMemory<Scalar> d_svd_S(l);
+        DeviceMemory<Scalar> d_svd_V(static_cast<size_t>(l) * l);
+        DeviceMemory<int> d_svd_info(1);
+
+        int svd_lwork = detail::cusolver_gesvdj_bufferSize<Scalar>(
+            ctx.cusolver, CUSOLVER_EIG_MODE_VECTOR, 1,
+            n, l, d_Z.get(), n,
+            d_svd_S.get(), d_svd_U.get(), n, d_svd_V.get(), l,
+            gesvdj_params);
+        DeviceMemory<Scalar> d_svd_work(svd_lwork > 0 ? svd_lwork : 1);
+
+        detail::cusolver_gesvdj<Scalar>(
+            ctx.cusolver, CUSOLVER_EIG_MODE_VECTOR, 1,
+            n, l, d_Z.get(), n,
+            d_svd_S.get(), d_svd_U.get(), n, d_svd_V.get(), l,
+            d_svd_work.get(), svd_lwork, d_svd_info.get(),
+            gesvdj_params);
+
+        CUSOLVER_CHECK(cusolverDnDestroyGesvdjInfo(gesvdj_params));
+
+        int k_actual = std::min(k, l);
+
+        // GEMM: result_U = Q * V_bt[:, :k]
+        DeviceMemory<Scalar> d_U_final(static_cast<size_t>(m) * k_actual);
+        detail::cublas_gemm<Scalar>(
+            ctx.cublas, CUBLAS_OP_N, CUBLAS_OP_N,
+            m, k_actual, l,
+            Scalar(1), d_Y.get(), m,
+            d_svd_V.get(), l,
+            Scalar(0), d_U_final.get(), m);
+
+        // Download results
+        result.d.resize(k_actual);
+        result.U.resize(m, k_actual);
+        result.V.resize(n, k_actual);
+
+        CUDA_CHECK(cudaStreamSynchronize(ctx.stream));
+
+        d_svd_S.download(result.d.data(), k_actual);
+        d_U_final.download(result.U.data(), static_cast<size_t>(m) * k_actual);
+        d_svd_U.download(result.V.data(), static_cast<size_t>(n) * k_actual);
+    }
+
+    int k_actual = std::min(k, l);
+    result.k_selected = k_actual;
+    result.iters_per_factor.push_back(q);
+
+    auto t_end = std::chrono::high_resolution_clock::now();
+    result.wall_time_ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();
+
+    if (config.verbose) {
+        FACTORNET_PRINT_IMPL("  GPU Randomized SVD (dense) done: %.1f ms, d[0]=%.4e d[k-1]=%.4e\n",
+            result.wall_time_ms,
+            static_cast<double>(result.d(0)),
+            static_cast<double>(result.d(k_actual - 1)));
+    }
+
+    return result;
+}
+
 }  // namespace svd
 }  // namespace FactorNet

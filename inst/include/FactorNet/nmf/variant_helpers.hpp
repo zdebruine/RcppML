@@ -38,8 +38,7 @@
 #include <FactorNet/features/graph_reg.hpp>
 #include <FactorNet/features/bounds.hpp>
 
-// Guide headers
-#include <FactorNet/guides/guide.hpp>
+#include <Eigen/Eigenvalues>  // SelfAdjointEigenSolver for PROJ_ADV
 
 namespace FactorNet {
 namespace nmf {
@@ -96,8 +95,8 @@ inline void apply_features(
 {
     features::apply_L1_L2(G, B, fc.L1, fc.L2);
 
-    if (fc.angular > 0)
-        features::apply_angular(G, Factor, fc.angular);
+    // Angular is now applied post-NNLS via apply_angular_posthoc,
+    // not as a Gram modification. See angular.hpp.
 
     if (fc.graph)
         features::apply_graph_reg(G, *fc.graph, Factor, fc.graph_lambda);
@@ -105,9 +104,44 @@ inline void apply_features(
     if (fc.L21 > 0)
         features::apply_L21(G, Factor, fc.L21);
 
-    for (auto* guide : fc.guides) {
-        if (guide && guide->is_active())
-            guide->apply(G, B);
+    if (fc.target && fc.target_lambda != 0) {
+        if (fc.target_lambda > 0) {
+            // ENRICHMENT: ridge toward target.
+            // G.diagonal() += λ;  B += λ * T
+            G.diagonal().array() += fc.target_lambda;
+            B.noalias() += fc.target_lambda * (*fc.target);
+        } else {
+            // PROJ_ADV batch removal: subtract trace-scaled target covariance
+            // from Gram, then eigendecompose and clip negative eigenvalues.
+            // B is NOT modified — we only project out target directions from
+            // the system matrix, preserving the reconstruction objective.
+            //
+            // Trace-scaling: target_gram has entries ~O(1) while G has entries
+            // ~O(||W||²).  Scale target_gram so its trace matches G's trace,
+            // making λ interpretable as the fraction of target energy to remove.
+            const Scalar abs_lambda = std::abs(fc.target_lambda);
+            const Scalar trace_G  = G.trace();
+            const Scalar trace_GT = fc.target_gram.trace();
+            const Scalar scale = (trace_GT > static_cast<Scalar>(1e-10))
+                               ? (trace_G / trace_GT) : static_cast<Scalar>(0);
+            G.noalias() -= abs_lambda * scale * fc.target_gram;
+
+            // Eigendecompose G (symmetric k×k) and clip negative eigenvalues
+            Eigen::SelfAdjointEigenSolver<DenseMatrix<Scalar>> eig(G);
+            auto evals = eig.eigenvalues();
+            constexpr Scalar eps = static_cast<Scalar>(1e-8);
+            bool has_neg = false;
+            for (int i = 0; i < evals.size(); ++i) {
+                if (evals(i) < eps) {
+                    evals(i) = eps;
+                    has_neg = true;
+                }
+            }
+            if (has_neg) {
+                G.noalias() = eig.eigenvectors() * evals.asDiagonal()
+                            * eig.eigenvectors().transpose();
+            }
+        }
     }
 }
 
@@ -122,8 +156,7 @@ inline void apply_tier2_features(
     DenseMatrix<Scalar>& Factor,
     const FactorConfig<Scalar>& fc)
 {
-    if (fc.angular > 0)
-        features::apply_angular(G, Factor, fc.angular);
+    // Angular is now applied post-NNLS via apply_angular_posthoc.
 
     if (fc.graph)
         features::apply_graph_reg(G, *fc.graph, Factor, fc.graph_lambda);
@@ -146,8 +179,7 @@ inline void apply_cv_features(
     if (fc.L2 > 0)
         G.diagonal().array() += fc.L2;
 
-    if (fc.angular > 0)
-        features::apply_angular(G, Factor, fc.angular);
+    // Angular is now applied post-NNLS via apply_angular_posthoc.
 
     if (fc.graph)
         features::apply_graph_reg(G, *fc.graph, Factor, fc.graph_lambda);

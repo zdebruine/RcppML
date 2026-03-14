@@ -2,7 +2,7 @@
 % Please edit documentation in R/RcppExports.R
 \name{Rcpp_sp_read_transpose}
 \alias{Rcpp_sp_read_transpose}
-\title{Read the pre-stored transpose from a v2 SparsePress (.spz) file}
+\title{Read the pre-stored transpose from a v2 StreamPress (.spz) file}
 \usage{
 Rcpp_sp_read_transpose(path)
 }
@@ -13,6 +13,6 @@ Rcpp_sp_read_transpose(path)
 A sparse matrix (dgCMatrix) containing CSC(A^T)
 }
 \description{
-Read the pre-stored transpose from a v2 SparsePress (.spz) file
+Read the pre-stored transpose from a v2 StreamPress (.spz) file
 }
 \keyword{internal}

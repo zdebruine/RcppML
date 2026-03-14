@@ -12,15 +12,14 @@ nnls(
   w = NULL,
   h = NULL,
   A,
-  warm_start = NULL,
   L1 = c(0, 0),
   L2 = c(0, 0),
-  cd_maxit = 100L,
-  cd_tol = 1e-08,
+  loss = "mse",
   upper_bound = c(0, 0),
   nonneg = c(TRUE, TRUE),
   threads = 0,
-  verbose = FALSE
+  verbose = FALSE,
+  ...
 )
 ```
 
@@ -38,51 +37,39 @@ nnls(
 
 - A:
 
-  data matrix (n_features x n_samples for w-\>h, n_samples x n_features
-  for h-\>w). Can be dense (matrix) or sparse (dgCMatrix from Matrix
-  package).
-
-- warm_start:
-
-  optional matrix to initialize the solution. Must match output
-  dimensions (k x n_samples for H, n_features x k for W). Can accelerate
-  convergence.
+  data matrix. Can be dense (matrix) or sparse (dgCMatrix).
 
 - L1:
 
-  L1/LASSO penalty, length 1 or 2 for c(w_penalty, h_penalty). Range
-  \[0, 1).
+  L1/LASSO penalty, length 1 or 2. Range \[0, 1).
 
 - L2:
 
-  Ridge penalty, length 1 or 2 for c(w_penalty, h_penalty). Range \[0,
-  Inf).
+  Ridge penalty, length 1 or 2. Range \[0, Inf).
 
-- cd_maxit:
+- loss:
 
-  maximum number of coordinate descent iterations (default 100)
-
-- cd_tol:
-
-  stopping tolerance for coordinate descent (default 1e-8)
+  loss function: `"mse"` (default) or others via NMF dispatch.
 
 - upper_bound:
 
-  maximum value in solution, length 1 or 2 for c(w_bound, h_bound). 0 =
-  no bound.
+  maximum value in solution, length 1 or 2. 0 = no bound.
 
 - nonneg:
 
-  non-negativity constraints, length 1 or 2 for c(w_constraint,
-  h_constraint)
+  non-negativity constraints, length 1 or 2.
 
 - threads:
 
-  number of threads for OpenMP parallelization (0 = all available)
+  number of threads for OpenMP parallelization (0 = all available).
 
 - verbose:
 
-  print progress information
+  print progress information.
+
+- ...:
+
+  advanced parameters. See **Advanced Parameters** section.
 
 ## Value
 
@@ -90,7 +77,7 @@ matrix of dimension (k x n_samples) for H or (n_features x k) for W
 
 ## Details
 
-This function solves NNLS projection problems with full flexibility:
+This function solves NNLS projection problems with full flexibility.
 
 **Projection Modes:**
 
@@ -102,51 +89,90 @@ This function solves NNLS projection problems with full flexibility:
 
 - Exactly one of `w` or `h` must be NULL
 
-**Normal Equations:**
+## Advanced Parameters (via `...`)
 
-- For H: \\W'W H = W'A\\
+- `L21`:
 
-- For W: \\HH' W' = HA'\\ (solved as transpose problem)
+  L2,1 group sparsity penalty, length 1 or 2 (default `c(0,0)`)
 
-The problem is solved by forming the Gram matrix and right-hand side in
-C++ with OpenMP parallelization across samples. Sequential coordinate
-descent with warm starts enables fast convergence.
+- `angular`:
 
-**Dimension Matching:** When dimensions don't match exactly, the
-function attempts to:
+  Angular decorrelation penalty, length 1 or 2 (default `c(0,0)`)
 
-1.  Auto-transpose if one orientation matches
+- `cd_maxit`:
 
-2.  Match by rownames/colnames and reorder/subset to the intersection
+  Max coordinate descent iterations (default 100)
 
-3.  Error if no valid dimension alignment is possible
+- `cd_tol`:
 
-**Warm Start:** Provide an optional `warm_start` matrix to initialize
-the solution. This can dramatically accelerate convergence when
-solutions are expected to be similar across related problems (e.g.,
-incremental updates, time series).
+  CD stopping tolerance (default 1e-8)
 
-**Penalties:**
+- `warm_start`:
 
-- L1 (LASSO): Encourages sparsity by subtracting L1 from the right-hand
-  side
+  Optional initial solution matrix
 
-- L2 (Ridge): Shrinks solutions by adding L2 to the diagonal of the Gram
-  matrix
+- `dispersion`:
 
-- Graph Laplacian: *Not yet implemented in nnls. Use nmf() for graph
-  regularization.*
+  Dispersion estimation mode: `"per_row"` (default) or `"global"`
 
-- Length-2 vectors `c(w_penalty, h_penalty)` control penalties for W and
-  H separately
+- `theta_init`:
 
-## Note
+  Initial GP theta (default 0.1)
 
-`nnls()` uses `A` for the data matrix (linear algebra convention),
-matching [`svd()`](https://zdebruine.github.io/RcppML/reference/svd.md)
-and the normal equations \\W'WH = W'A\\. In contrast,
-[`nmf()`](https://zdebruine.github.io/RcppML/reference/nmf.md) uses
-`data` (statistical modeling convention).
+- `theta_max`:
+
+  Maximum GP theta (default 5.0)
+
+- `theta_min`:
+
+  Minimum GP theta (default 0.0)
+
+- `nb_size_init`:
+
+  Initial NB size parameter (default 10.0)
+
+- `nb_size_max`:
+
+  Maximum NB size (default 1e6)
+
+- `nb_size_min`:
+
+  Minimum NB size (default 0.01)
+
+- `gamma_phi_init`:
+
+  Initial Gamma shape parameter (default 1.0)
+
+- `gamma_phi_max`:
+
+  Maximum Gamma shape (default 1e4)
+
+- `gamma_phi_min`:
+
+  Minimum Gamma shape (default 1e-6)
+
+- `tweedie_power`:
+
+  Tweedie variance power (default 1.5)
+
+- `irls_max_iter`:
+
+  Maximum IRLS iterations per solve (default 5)
+
+- `irls_tol`:
+
+  IRLS convergence tolerance (default 1e-4)
+
+## Target Regularization
+
+When `target_H` and `target_lambda` are provided (via `...`), `nnls()`
+routes the solve through a single NMF iteration internally. Positive
+`target_lambda` attracts the solution toward `target_H` (label
+enrichment). Negative `target_lambda` uses eigenvalue-projected
+adversarial removal (PROJ_ADV) to suppress target-correlated structure
+(batch removal). See
+[`vignette("guided-nmf")`](https://zdebruine.github.io/RcppML/articles/guided-nmf.md)
+for details.
 
 ## References
 
@@ -158,8 +184,7 @@ Coordinate-Wise Algorithm for the Non-negative Least Squares Problem."
 
 ## See also
 
-[`nmf`](https://zdebruine.github.io/RcppML/reference/nmf.md),
-[`solve`](https://zdebruine.github.io/RcppML/reference/solve.md)
+[`nmf`](https://zdebruine.github.io/RcppML/reference/nmf.md)
 
 ## Author
 
@@ -180,24 +205,7 @@ h_recovered <- nnls(w = w, A = A)
 cor(as.vector(h_true), as.vector(h_recovered))
 #> [1] 0.9668001
 
-# Project H onto new features to find W (transpose problem)
-w_recovered <- nnls(h = h_true, A = A)
-cor(as.vector(w), as.vector(w_recovered))
-#> [1] 0.8989978
-
 # With L1 penalty for sparse H
 h_sparse <- nnls(w = w, A = A, L1 = c(0, 0.1))
-
-# Warm start for faster convergence
-h_init <- matrix(0.5, 5, 10)
-h_warm <- nnls(w = w, A = A, warm_start = h_init)
-
-# Allow negative values (semi-NMF)
-h_unconstrained <- nnls(w = w, A = A, nonneg = c(TRUE, FALSE))
-
-# Dimension matching by names
-rownames(w) <- paste0("gene_", 1:20)
-rownames(A) <- paste0("gene_", 20:1)  # Reversed order
-h_matched <- nnls(w = w, A = A)  # Automatically reorders A by rownames
 # }
 ```

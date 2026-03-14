@@ -4,7 +4,7 @@ Use `W()` and `H()` inside
 [`nmf_layer()`](https://zdebruine.github.io/RcppML/reference/nmf_layer.md)
 or
 [`svd_layer()`](https://zdebruine.github.io/RcppML/reference/svd_layer.md)
-to set factor-specific regularization, constraints, and guides.
+to set factor-specific regularization, constraints, and targets.
 Parameters not set inherit from the layer defaults.
 
 ## Usage
@@ -17,9 +17,10 @@ W(
   angular = NULL,
   upper_bound = NULL,
   nonneg = NULL,
-  guide = NULL,
   graph = NULL,
-  graph_lambda = NULL
+  graph_lambda = NULL,
+  target = NULL,
+  target_lambda = NULL
 )
 
 H(
@@ -29,9 +30,10 @@ H(
   angular = NULL,
   upper_bound = NULL,
   nonneg = NULL,
-  guide = NULL,
   graph = NULL,
-  graph_lambda = NULL
+  graph_lambda = NULL,
+  target = NULL,
+  target_lambda = NULL
 )
 ```
 
@@ -61,10 +63,6 @@ H(
 
   Non-negativity constraint. Default TRUE for NMF, FALSE for SVD.
 
-- guide:
-
-  An `nmf_guide` or list of guides for this factor.
-
 - graph:
 
   Sparse graph Laplacian matrix (or NULL).
@@ -73,9 +71,25 @@ H(
 
   Graph regularization strength. Default 0.
 
+- target:
+
+  Target matrix for regularization (k x n for H, k x m for W). See
+  [`compute_target`](https://zdebruine.github.io/RcppML/reference/compute_target.md)
+  for constructing targets from labels.
+
+- target_lambda:
+
+  Target regularization strength. Default 0.
+
 ## Value
 
 An `fn_factor_config` object.
+
+## See also
+
+[`factor_config`](https://zdebruine.github.io/RcppML/reference/factor_config.md),
+[`nmf_layer`](https://zdebruine.github.io/RcppML/reference/nmf_layer.md),
+[`factor_net`](https://zdebruine.github.io/RcppML/reference/factor_net.md)
 
 ## Examples
 

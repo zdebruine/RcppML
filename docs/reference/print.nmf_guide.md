@@ -22,3 +22,9 @@ print(x, ...)
 ## Value
 
 Invisibly returns `x`.
+
+## See also
+
+[`guide_external`](https://zdebruine.github.io/RcppML/reference/guide_external.md),
+[`guide_callback`](https://zdebruine.github.io/RcppML/reference/guide_callback.md),
+[`nmf`](https://zdebruine.github.io/RcppML/reference/nmf.md)

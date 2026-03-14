@@ -2,7 +2,7 @@
 % Please edit documentation in R/RcppExports.R
 \name{Rcpp_sp_write}
 \alias{Rcpp_sp_write}
-\title{Write a dgCMatrix to a SparsePress (.spz) file}
+\title{Write a dgCMatrix to a StreamPress (.spz) file}
 \usage{
 Rcpp_sp_write(
   A,
@@ -39,6 +39,6 @@ Rcpp_sp_write(
 A list with compression statistics
 }
 \description{
-Write a dgCMatrix to a SparsePress (.spz) file
+Write a dgCMatrix to a StreamPress (.spz) file
 }
 \keyword{internal}

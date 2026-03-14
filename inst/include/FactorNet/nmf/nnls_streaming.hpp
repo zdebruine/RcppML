@@ -20,7 +20,7 @@
 #include <FactorNet/primitives/cpu/nnls_batch.hpp>
 #include <FactorNet/primitives/cpu/cholesky_clip.hpp>
 #include <FactorNet/primitives/cpu/gram.hpp>
-#include <sparsepress/sparsepress_v3.hpp>
+#include <streampress/sparsepress_v3.hpp>
 
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
@@ -76,7 +76,7 @@ Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> nnls_streaming_spz(
     probe.read(reinterpret_cast<char*>(header_buf), 8);
     probe.close();
 
-    uint32_t version = sparsepress::v3::detect_version(header_buf, 8);
+    uint32_t version = streampress::v3::detect_version(header_buf, 8);
 
     std::unique_ptr<FactorNet::io::DataLoader<Scalar>> loader;
     if (version == 3) {

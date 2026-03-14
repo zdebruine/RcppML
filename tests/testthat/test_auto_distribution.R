@@ -6,11 +6,11 @@ test_that("auto_nmf_distribution runs with default distributions", {
   res <- auto_nmf_distribution(A, k = 3, maxit = 20)
 
   expect_type(res, "list")
-  expect_true("best" %in% names(res))
+  expect_true("loss" %in% names(res))
   expect_true("comparison" %in% names(res))
   expect_true("models" %in% names(res))
 
-  expect_true(res$best %in% c("mse", "gp", "nb"))
+  expect_true(res$loss %in% c("mse", "gp", "nb"))
   expect_s3_class(res$comparison, "data.frame")
   expect_equal(nrow(res$comparison), 3)
   expect_true(all(c("distribution", "nll", "df", "aic", "bic", "selected") %in%
@@ -33,7 +33,7 @@ test_that("auto_nmf_distribution works with subset of distributions", {
 
   expect_equal(nrow(res$comparison), 2)
   expect_equal(length(res$models), 2)
-  expect_true(res$best %in% c("mse", "gp"))
+  expect_true(res$loss %in% c("mse", "gp"))
 })
 
 test_that("auto_nmf_distribution AIC criterion works", {
@@ -43,7 +43,7 @@ test_that("auto_nmf_distribution AIC criterion works", {
 
   res <- auto_nmf_distribution(A, k = 3, criterion = "aic", maxit = 20)
 
-  expect_true(res$best %in% c("mse", "gp", "nb"))
+  expect_true(res$loss %in% c("mse", "gp", "nb"))
   # AIC-selected should have lowest AIC
   best_row <- res$comparison[res$comparison$selected, ]
   expect_equal(best_row$aic, min(res$comparison$aic))
@@ -75,7 +75,7 @@ test_that("auto_nmf_distribution works with dense matrix", {
   res <- auto_nmf_distribution(A, k = 3, maxit = 20)
 
   expect_type(res, "list")
-  expect_true(res$best %in% c("mse", "gp", "nb"))
+  expect_true(res$loss %in% c("mse", "gp", "nb"))
   expect_equal(nrow(res$comparison), 3)
 })
 
@@ -110,6 +110,6 @@ test_that("auto_nmf_distribution single distribution works", {
   res <- auto_nmf_distribution(A, k = 3, distributions = "gp", maxit = 20)
 
   expect_equal(nrow(res$comparison), 1)
-  expect_equal(res$best, "gp")
+  expect_equal(res$loss, "gp")
   expect_true(res$comparison$selected[1])
 })

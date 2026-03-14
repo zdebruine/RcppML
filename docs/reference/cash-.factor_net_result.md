@@ -22,3 +22,8 @@ x$name
 ## Value
 
 The layer result list, or the named field if not a layer name.
+
+## See also
+
+[`factor_net`](https://zdebruine.github.io/RcppML/reference/factor_net.md),
+[`fit`](https://zdebruine.github.io/RcppML/reference/fit.md)

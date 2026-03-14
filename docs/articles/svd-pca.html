@@ -149,7 +149,7 @@ when you want interpretable loadings in a PCA framework.</p>
 </tr>
 </tbody>
 </table>
-<p>Returns an S4 object of class <code>svd_pca</code> with slots:</p>
+<p>Returns an S4 object of class <code>svd</code> with slots:</p>
 <ul>
 <li>
 <code>@u</code> —
@@ -248,6 +248,365 @@ maintaining the orthogonal decomposition framework.</p>
 </div>
 </div>
 <div class="section level2">
+<h2 id="svd-algorithms-in-rcppml">SVD Algorithms in RcppML<a class="anchor" aria-label="anchor" href="#svd-algorithms-in-rcppml"></a>
+</h2>
+<p>RcppML provides five SVD solvers spanning different tradeoffs between
+speed, constraint support, and memory usage.</p>
+<div class="section level3">
+<h3 id="algorithm-summary">Algorithm Summary<a class="anchor" aria-label="anchor" href="#algorithm-summary"></a>
+</h3>
+<table class="table">
+<colgroup>
+<col width="16%">
+<col width="22%">
+<col width="26%">
+<col width="16%">
+<col width="20%">
+</colgroup>
+<thead><tr class="header">
+<th>Method</th>
+<th>Algorithm</th>
+<th align="center">Constraints</th>
+<th align="center">Robust</th>
+<th>Best For</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code>"deflation"</code></td>
+<td>Rank-1 ALS with deflation correction</td>
+<td align="center">All</td>
+<td align="center">Yes</td>
+<td>Small k, robust SVD</td>
+</tr>
+<tr class="even">
+<td><code>"krylov"</code></td>
+<td>KSPR: Lanczos seed + Gram-solve-then-project</td>
+<td align="center">All except robust</td>
+<td align="center">No</td>
+<td>Larger k with constraints</td>
+</tr>
+<tr class="odd">
+<td><code>"lanczos"</code></td>
+<td>Golub-Kahan-Lanczos bidiagonalization</td>
+<td align="center">None</td>
+<td align="center">No</td>
+<td>Fast unconstrained SVD</td>
+</tr>
+<tr class="even">
+<td><code>"irlba"</code></td>
+<td>Implicitly restarted Lanczos bidiagonalization</td>
+<td align="center">None</td>
+<td align="center">No</td>
+<td>Large matrices, memory-limited</td>
+</tr>
+<tr class="odd">
+<td><code>"randomized"</code></td>
+<td>Stochastic power iteration</td>
+<td align="center">None</td>
+<td align="center">No</td>
+<td>Very large matrices, speed priority</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section level3">
+<h3 id="deflation-sequential-rank-1-als">Deflation (Sequential Rank-1 ALS)<a class="anchor" aria-label="anchor" href="#deflation-sequential-rank-1-als"></a>
+</h3>
+<p>Extracts one component at a time: compute rank-1 factors (u, v),
+deflate the matrix
+(<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi><mo>←</mo><mi>A</mi><mo>−</mo><mi>σ</mi><mi>u</mi><msup><mi>v</mi><mi>T</mi></msup></mrow><annotation encoding="application/x-tex">A \leftarrow A - \sigma u v^T</annotation></semantics></math>),
+repeat. Each rank-1 subproblem alternates least-squares updates with
+constraint projection (L1 soft-thresholding, nonneg clamping, etc.).
+After convergence, Gram-Schmidt reorthogonalization ensures
+orthogonality across factors.</p>
+<ul>
+<li>
+<strong>Strengths</strong>: Supports all constraints (L1, L2,
+nonneg, bounds, L21, angular, graph) plus robust SVD via Huber-weighted
+IRLS. Stable for small k.</li>
+<li>
+<strong>Weakness</strong>: Sequential extraction makes it
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mrow><mo stretchy="true" form="prefix">(</mo><mi>k</mi><mo stretchy="true" form="postfix">)</mo></mrow></mrow><annotation encoding="application/x-tex">O(k)</annotation></semantics></math>
+times slower than block methods. Each component pays the full cost of
+matrix-vector products.</li>
+<li>
+<strong>Use when</strong>: k is small (&lt; 10), you need robust
+SVD, or you need the full constraint palette.</li>
+</ul>
+</div>
+<div class="section level3">
+<h3 id="krylov-kspr-krylov-seeded-projected-refinement">Krylov (KSPR — Krylov-Seeded Projected Refinement)<a class="anchor" aria-label="anchor" href="#krylov-kspr-krylov-seeded-projected-refinement"></a>
+</h3>
+<p>A two-phase block method. <strong>Phase 1</strong> runs Lanczos
+bidiagonalization to compute an unconstrained seed for the top-k
+subspace. <strong>Phase 2</strong> iteratively refines via
+Gram-solve-then-project: solve the
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mo>×</mo><mi>k</mi></mrow><annotation encoding="application/x-tex">k \times k</annotation></semantics></math>
+normal equations, then project solutions onto constraint sets. All k
+factors are computed simultaneously.</p>
+<ul>
+<li>
+<strong>Strengths</strong>: Much faster than deflation for large k
+(block matrix-matrix products instead of sequential matrix-vector).
+Supports all regularization except robust IRLS. Falls back to pure
+Lanczos when no constraints are active.</li>
+<li>
+<strong>Weakness</strong>: No robust (Huber) loss support — IRLS
+reweighting requires per-observation weights incompatible with block
+SpMM. Post-convergence Gram-Schmidt reorthogonalization may slightly
+loosen nonneg constraints at lower components.</li>
+<li>
+<strong>Use when</strong>: k ≥ 8 with constraints, or any
+unconstrained problem (reverts to Lanczos internally).</li>
+</ul>
+</div>
+<div class="section level3">
+<h3 id="lanczos-golub-kahan-bidiagonalization">Lanczos (Golub-Kahan Bidiagonalization)<a class="anchor" aria-label="anchor" href="#lanczos-golub-kahan-bidiagonalization"></a>
+</h3>
+<p>The classical Krylov-subspace method for unconstrained SVD. Builds a
+bidiagonal matrix via iterative matrix-vector products, then extracts
+singular triplets from the bidiagonal. Deterministic and numerically
+stable.</p>
+<ul>
+<li>
+<strong>Strengths</strong>: Fast, deterministic, minimal memory.
+Serves as Phase 1 of the krylov method.</li>
+<li>
+<strong>Weakness</strong>: Unconstrained only — no support for L1,
+nonneg, or any regularization.</li>
+<li>
+<strong>Use when</strong>: You need unconstrained SVD with
+deterministic reproducibility.</li>
+</ul>
+</div>
+<div class="section level3">
+<h3 id="irlba-implicitly-restarted-lanczos-bidiagonalization">IRLBA (Implicitly Restarted Lanczos Bidiagonalization)<a class="anchor" aria-label="anchor" href="#irlba-implicitly-restarted-lanczos-bidiagonalization"></a>
+</h3>
+<p>Augments Lanczos with implicit restarts to bound workspace memory.
+Instead of growing the Krylov subspace indefinitely, it periodically
+restarts with a refined starting vector, converging to the dominant
+singular triplets within a fixed memory envelope.</p>
+<ul>
+<li>
+<strong>Strengths</strong>: Memory-efficient for very large
+matrices. Good for problems where the full Krylov basis doesn’t fit in
+cache.</li>
+<li>
+<strong>Weakness</strong>: Unconstrained only. Restart overhead
+makes it slightly slower than bare Lanczos on moderate-sized
+problems.</li>
+<li>
+<strong>Use when</strong>: Matrix is very large and memory is
+constrained.</li>
+</ul>
+</div>
+<div class="section level3">
+<h3 id="randomized-svd-stochastic-projection">Randomized SVD (Stochastic Projection)<a class="anchor" aria-label="anchor" href="#randomized-svd-stochastic-projection"></a>
+</h3>
+<p>Draws a random Gaussian matrix, projects the data to a
+low-dimensional subspace via power iteration, then computes a small
+dense SVD on the projection. A single-pass method that avoids iterative
+convergence.</p>
+<ul>
+<li>
+<strong>Strengths</strong>: Fastest method for large matrices,
+especially when k « min(m,n). Fixed cost regardless of spectral
+gap.</li>
+<li>
+<strong>Weakness</strong>: Unconstrained only. Approximate —
+accuracy depends on oversampling parameter and number of power
+iterations.</li>
+<li>
+<strong>Use when</strong>: Speed is paramount and an approximate
+solution is acceptable.</li>
+</ul>
+</div>
+<div class="section level3">
+<h3 id="automatic-method-selection">Automatic Method Selection<a class="anchor" aria-label="anchor" href="#automatic-method-selection"></a>
+</h3>
+<p>When <code>method = "auto"</code> (default), RcppML picks:</p>
+<ul>
+<li>
+<strong>Constrained + k ≥ 8</strong>: krylov (block speed
+advantage)</li>
+<li>
+<strong>Constrained + k &lt; 8</strong>: deflation (fewer factors,
+block overhead doesn’t pay off)</li>
+<li>
+<strong>Unconstrained + large matrix</strong>: irlba or lanczos
+depending on dimensions</li>
+<li>
+<strong>Unconstrained + small matrix</strong>: lanczos</li>
+</ul>
+</div>
+<div class="section level3">
+<h3 id="runtime-comparison">Runtime Comparison<a class="anchor" aria-label="anchor" href="#runtime-comparison"></a>
+</h3>
+<p>The following benchmark compares all five methods on a 5,000 × 500
+sparse matrix (10% density, k = 10):</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Load PBMC 3k single-cell dataset (13,714 genes x 2,638 cells)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">pbmc3k</span><span class="op">)</span></span>
+<span><span class="va">tmp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempfile</a></span><span class="op">(</span>fileext <span class="op">=</span> <span class="st">".spz"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/readBin.html" class="external-link">writeBin</a></span><span class="op">(</span><span class="va">pbmc3k</span>, <span class="va">tmp</span><span class="op">)</span></span>
+<span><span class="va">bench_sp</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/st_read.html">st_read</a></span><span class="op">(</span><span class="va">tmp</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Use top 3,000 genes for the dense benchmark (full dense matrix is ~275 MB)</span></span>
+<span><span class="va">bench_de</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">bench_sp</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">3000</span>, <span class="op">]</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">methods</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"deflation"</span>, <span class="st">"krylov"</span>, <span class="st">"lanczos"</span>, <span class="st">"irlba"</span>, <span class="st">"randomized"</span><span class="op">)</span></span>
+<span><span class="va">bench_results</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">methods</span>, <span class="kw">function</span><span class="op">(</span><span class="va">m</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">t_sparse</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/median.html" class="external-link">median</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/system.time.html" class="external-link">system.time</a></span><span class="op">(</span><span class="fu">RcppML</span><span class="fu">::</span><span class="fu"><a href="../reference/svd.html">svd</a></span><span class="op">(</span><span class="va">bench_sp</span>, k <span class="op">=</span> <span class="fl">10</span>, method <span class="op">=</span> <span class="va">m</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span><span class="op">)</span><span class="op">[[</span><span class="st">"elapsed"</span><span class="op">]</span><span class="op">]</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="va">t_dense</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/median.html" class="external-link">median</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/system.time.html" class="external-link">system.time</a></span><span class="op">(</span><span class="fu">RcppML</span><span class="fu">::</span><span class="fu"><a href="../reference/svd.html">svd</a></span><span class="op">(</span><span class="va">bench_de</span>, k <span class="op">=</span> <span class="fl">10</span>, method <span class="op">=</span> <span class="va">m</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span><span class="op">)</span><span class="op">[[</span><span class="st">"elapsed"</span><span class="op">]</span><span class="op">]</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>Method <span class="op">=</span> <span class="va">m</span>, Sparse <span class="op">=</span> <span class="va">t_sparse</span>, Dense <span class="op">=</span> <span class="va">t_dense</span><span class="op">)</span></span>
+<span><span class="op">}</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>    Method <span class="op">=</span> <span class="va">bench_results</span><span class="op">$</span><span class="va">Method</span>,</span>
+<span>    `Sparse (sec)` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">bench_results</span><span class="op">$</span><span class="va">Sparse</span>, <span class="fl">3</span><span class="op">)</span>,</span>
+<span>    `Dense (sec)` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">bench_results</span><span class="op">$</span><span class="va">Dense</span>, <span class="fl">3</span><span class="op">)</span>,</span>
+<span>    `Dense/Sparse ratio` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">bench_results</span><span class="op">$</span><span class="va">Dense</span> <span class="op">/</span> <span class="va">bench_results</span><span class="op">$</span><span class="va">Sparse</span>, <span class="fl">1</span><span class="op">)</span>,</span>
+<span>    check.names <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  <span class="op">)</span>,</span>
+<span>  caption <span class="op">=</span> <span class="st">"Runtime comparison on PBMC 3k data (k = 10). Sparse: 13,714 × 2,638; Dense: 3,000 × 2,638 subset."</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<table class="table">
+<caption>Runtime comparison on PBMC 3k data (k = 10). Sparse: 13,714 ×
+2,638; Dense: 3,000 × 2,638 subset.</caption>
+<thead><tr class="header">
+<th align="left">Method</th>
+<th align="right">Sparse (sec)</th>
+<th align="right">Dense (sec)</th>
+<th align="right">Dense/Sparse ratio</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td align="left">deflation</td>
+<td align="right">0.124</td>
+<td align="right">0.204</td>
+<td align="right">1.6</td>
+</tr>
+<tr class="even">
+<td align="left">krylov</td>
+<td align="right">0.052</td>
+<td align="right">0.082</td>
+<td align="right">1.6</td>
+</tr>
+<tr class="odd">
+<td align="left">lanczos</td>
+<td align="right">0.053</td>
+<td align="right">0.076</td>
+<td align="right">1.4</td>
+</tr>
+<tr class="even">
+<td align="left">irlba</td>
+<td align="right">0.057</td>
+<td align="right">0.062</td>
+<td align="right">1.1</td>
+</tr>
+<tr class="odd">
+<td align="left">randomized</td>
+<td align="right">0.099</td>
+<td align="right">0.072</td>
+<td align="right">0.7</td>
+</tr>
+</tbody>
+</table>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">bench_long</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>Method <span class="op">=</span> <span class="va">bench_results</span><span class="op">$</span><span class="va">Method</span>, Time <span class="op">=</span> <span class="va">bench_results</span><span class="op">$</span><span class="va">Sparse</span>, Input <span class="op">=</span> <span class="st">"Sparse"</span><span class="op">)</span>,</span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>Method <span class="op">=</span> <span class="va">bench_results</span><span class="op">$</span><span class="va">Method</span>, Time <span class="op">=</span> <span class="va">bench_results</span><span class="op">$</span><span class="va">Dense</span>, Input <span class="op">=</span> <span class="st">"Dense"</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span><span class="va">bench_long</span><span class="op">$</span><span class="va">Method</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">bench_long</span><span class="op">$</span><span class="va">Method</span>, levels <span class="op">=</span> <span class="va">methods</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">bench_long</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">Method</span>, y <span class="op">=</span> <span class="va">Time</span>, fill <span class="op">=</span> <span class="va">Input</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_col</span><span class="op">(</span>position <span class="op">=</span> <span class="st">"dodge"</span>, width <span class="op">=</span> <span class="fl">0.7</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">scale_fill_brewer</span><span class="op">(</span>palette <span class="op">=</span> <span class="st">"Set2"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>title <span class="op">=</span> <span class="st">"SVD Method Runtime: Sparse vs Dense Input"</span>,</span>
+<span>       subtitle <span class="op">=</span> <span class="st">"PBMC 3k dataset, k = 10"</span>,</span>
+<span>       y <span class="op">=</span> <span class="st">"Time (seconds)"</span>, x <span class="op">=</span> <span class="st">""</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme</span><span class="op">(</span>axis.text.x <span class="op">=</span> <span class="fu">element_text</span><span class="op">(</span>angle <span class="op">=</span> <span class="fl">0</span>, hjust <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p><img src="svd-pca_files/figure-html/runtime-plot-1.png" class="r-plt" alt="" width="672"></p>
+<p>Key takeaways:</p>
+<ul>
+<li>
+<strong>Randomized</strong> is consistently the fastest method,
+especially on dense data.</li>
+<li>
+<strong>Krylov</strong> and <strong>Lanczos</strong> are similarly
+fast — krylov falls back to lanczos when no constraints are active.</li>
+<li>
+<strong>Deflation</strong> is 5–10× slower on larger k because it
+extracts components sequentially.</li>
+<li>
+<strong>Dense input</strong> is comparable to sparse for all
+methods. Sparse benefits from skipping zeros, but both paths use
+OpenMP-parallel matrix-vector products.</li>
+</ul>
+</div>
+<div class="section level3">
+<h3 id="tuning-hyperparameters">Tuning Hyperparameters<a class="anchor" aria-label="anchor" href="#tuning-hyperparameters"></a>
+</h3>
+<table class="table">
+<colgroup>
+<col width="37%">
+<col width="27%">
+<col width="34%">
+</colgroup>
+<thead><tr class="header">
+<th>Parameter</th>
+<th>Effect</th>
+<th>Guidance</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code>k</code></td>
+<td>Number of components</td>
+<td>Start with scree plot; increase until variance plateaus</td>
+</tr>
+<tr class="even">
+<td><code>tol</code></td>
+<td>Convergence tolerance</td>
+<td>Default <code>1e-5</code> is sufficient. Tighten to
+<code>1e-8</code> for benchmarking.</td>
+</tr>
+<tr class="odd">
+<td><code>maxit</code></td>
+<td>Max iterations</td>
+<td>Default 200. Increase for ill-conditioned matrices.</td>
+</tr>
+<tr class="even">
+<td><code>center</code></td>
+<td>Row means (PCA)</td>
+<td>Use when features have nonzero means</td>
+</tr>
+<tr class="odd">
+<td><code>scale</code></td>
+<td>Unit variance</td>
+<td>Use when features have different scales</td>
+</tr>
+<tr class="even">
+<td><code>L1</code></td>
+<td>Sparsity penalty</td>
+<td>
+<code>c(0, value)</code> for sparse loadings only. Increase until
+desired sparsity.</td>
+</tr>
+<tr class="odd">
+<td><code>nonneg</code></td>
+<td>Non-negativity</td>
+<td>Parts-like loadings. Use <code>"krylov"</code> for strict
+enforcement.</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="section level2">
 <h2 id="worked-examples">Worked Examples<a class="anchor" aria-label="anchor" href="#worked-examples"></a>
 </h2>
 <div class="section level3">
@@ -256,14 +615,14 @@ maintaining the orthogonal decomposition framework.</p>
 <p>The <code>olivetti</code> dataset contains 400 face images (40
 subjects × 10 poses each) as a 400 × 4,096 matrix. Each row is a 64×64
 grayscale face image.</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">olivetti</span><span class="op">)</span></span>
 <span><span class="va">img_shape</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">olivetti</span>, <span class="st">"image_shape"</span><span class="op">)</span>  <span class="co"># c(64, 64)</span></span>
 <span></span>
 <span><span class="co"># PCA: pixels as rows, images as columns</span></span>
 <span><span class="va">model</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/pca.html">pca</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">olivetti</span><span class="op">)</span>, k <span class="op">=</span> <span class="fl">10</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">ve</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/svd_pca-class.html">variance_explained</a></span><span class="op">(</span><span class="va">model</span><span class="op">)</span></span>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">ve</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/svd-class.html">variance_explained</a></span><span class="op">(</span><span class="va">model</span><span class="op">)</span></span>
 <span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>    Component <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">10</span>,</span>
@@ -284,8 +643,8 @@ Olivetti faces.</caption>
 <tbody>
 <tr class="odd">
 <td align="right">1</td>
-<td align="right">0.2394</td>
-<td align="right">0.2394</td>
+<td align="right">0.2393</td>
+<td align="right">0.2393</td>
 </tr>
 <tr class="even">
 <td align="right">2</td>
@@ -338,12 +697,14 @@ Olivetti faces.</caption>
 (overall brightness), with diminishing returns for later components. The
 first 10 components together capture a meaningful share of total
 variance.</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Reshape loadings (v columns) into face images</span></span>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Reshape loadings (u columns = pixel loadings) into face images</span></span>
+<span><span class="co"># Rotate 90° clockwise: transpose and flip columns</span></span>
 <span><span class="va">n_show</span> <span class="op">&lt;-</span> <span class="fl">6</span></span>
 <span><span class="va">face_list</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="va">n_show</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="va">img</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="va">model</span><span class="op">@</span><span class="va">v</span><span class="op">[</span>, <span class="va">i</span><span class="op">]</span>, <span class="va">img_shape</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span>, <span class="va">img_shape</span><span class="op">[</span><span class="fl">2</span><span class="op">]</span><span class="op">)</span></span>
-<span>  <span class="va">df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/expand.grid.html" class="external-link">expand.grid</a></span><span class="op">(</span>Row <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="va">img_shape</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span>, Col <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="va">img_shape</span><span class="op">[</span><span class="fl">2</span><span class="op">]</span><span class="op">)</span></span>
+<span>  <span class="va">raw</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="va">model</span><span class="op">@</span><span class="va">u</span><span class="op">[</span>, <span class="va">i</span><span class="op">]</span>, <span class="va">img_shape</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span>, <span class="va">img_shape</span><span class="op">[</span><span class="fl">2</span><span class="op">]</span><span class="op">)</span></span>
+<span>  <span class="va">img</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">raw</span><span class="op">)</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">raw</span><span class="op">)</span><span class="op">:</span><span class="fl">1</span><span class="op">]</span>  <span class="co"># 90° CW rotation</span></span>
+<span>  <span class="va">df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/expand.grid.html" class="external-link">expand.grid</a></span><span class="op">(</span>Row <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">img</span><span class="op">)</span>, Col <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">img</span><span class="op">)</span><span class="op">)</span></span>
 <span>  <span class="va">df</span><span class="op">$</span><span class="va">Value</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">as.vector</a></span><span class="op">(</span><span class="va">img</span><span class="op">)</span></span>
 <span>  <span class="va">df</span><span class="op">$</span><span class="va">Component</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="st">"Component"</span>, <span class="va">i</span><span class="op">)</span></span>
 <span>  <span class="va">df</span></span>
@@ -373,27 +734,35 @@ basis for the face space.</p>
 <p>Using the <code>aml</code> dataset (824 genomic regions × 135 AML
 samples), we compare standard PCA with sparse PCA to see how L1
 regularization concentrates loadings on fewer features.</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<p>The key parameter is the L1 penalty strength. Too low (e.g., 0.1)
+produces minimal sparsity; too high zeros out entire components. The
+right value depends on the data scale — use <code>c(0, L1_v)</code> to
+penalize only the loadings (V), keeping scores (U) dense.</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">aml</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Standard PCA (no constraints)</span></span>
 <span><span class="va">standard</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/pca.html">pca</a></span><span class="op">(</span><span class="va">aml</span>, k <span class="op">=</span> <span class="fl">5</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span>
-<span><span class="va">sparse</span> <span class="op">&lt;-</span> <span class="fu">RcppML</span><span class="fu">::</span><span class="fu"><a href="../reference/svd.html">svd</a></span><span class="op">(</span><span class="va">aml</span>, k <span class="op">=</span> <span class="fl">5</span>, center <span class="op">=</span> <span class="cn">TRUE</span>, L1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.2</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<span></span>
+<span><span class="co"># Sparse PCA with L1 = 1.5 on loadings (strong enough for visible sparsity)</span></span>
+<span><span class="va">sparse</span> <span class="op">&lt;-</span> <span class="fu">RcppML</span><span class="fu">::</span><span class="fu"><a href="../reference/svd.html">svd</a></span><span class="op">(</span><span class="va">aml</span>, k <span class="op">=</span> <span class="fl">5</span>, center <span class="op">=</span> <span class="cn">TRUE</span>, L1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1.5</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">std_sparsity</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">5</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">standard</span><span class="op">@</span><span class="va">v</span><span class="op">[</span>, <span class="va">i</span><span class="op">]</span><span class="op">)</span> <span class="op">&lt;</span> <span class="fl">1e-8</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">sp_sparsity</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">5</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">sparse</span><span class="op">@</span><span class="va">v</span><span class="op">[</span>, <span class="va">i</span><span class="op">]</span><span class="op">)</span> <span class="op">&lt;</span> <span class="fl">1e-8</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">std_ve</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/svd_pca-class.html">variance_explained</a></span><span class="op">(</span><span class="va">standard</span><span class="op">)</span></span>
-<span><span class="va">sp_ve</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/svd_pca-class.html">variance_explained</a></span><span class="op">(</span><span class="va">sparse</span><span class="op">)</span></span>
+<span><span class="va">std_ve</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/svd-class.html">variance_explained</a></span><span class="op">(</span><span class="va">standard</span><span class="op">)</span></span>
+<span><span class="va">sp_ve</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/svd-class.html">variance_explained</a></span><span class="op">(</span><span class="va">sparse</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">comparison</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>  Component <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">5</span>,</span>
 <span>  `Std Var Explained` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">std_ve</span>, <span class="fl">4</span><span class="op">)</span>,</span>
 <span>  `Sparse Var Explained` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">sp_ve</span>, <span class="fl">4</span><span class="op">)</span>,</span>
-<span>  `Std Loading Sparsity` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">std_sparsity</span>, <span class="fl">3</span><span class="op">)</span>,</span>
-<span>  `Sparse Loading Sparsity` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">sp_sparsity</span>, <span class="fl">3</span><span class="op">)</span>,</span>
+<span>  `Std Loading Sparsity` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fl">100</span> <span class="op">*</span> <span class="va">std_sparsity</span>, <span class="fl">1</span><span class="op">)</span>, <span class="st">"%"</span><span class="op">)</span>,</span>
+<span>  `Sparse Loading Sparsity` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fl">100</span> <span class="op">*</span> <span class="va">sp_sparsity</span>, <span class="fl">1</span><span class="op">)</span>, <span class="st">"%"</span><span class="op">)</span>,</span>
 <span>  check.names <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span>
-<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">comparison</span>, caption <span class="op">=</span> <span class="st">"Standard vs. Sparse PCA on AML data (L1 = 0.2 on loadings)."</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">comparison</span>, caption <span class="op">=</span> <span class="st">"Standard vs. Sparse PCA on AML data (L1 = 1.5 on loadings)."</span><span class="op">)</span></span></code></pre></div>
 <table style="width:100%;" class="table">
-<caption>Standard vs. Sparse PCA on AML data (L1 = 0.2 on
+<caption>Standard vs. Sparse PCA on AML data (L1 = 1.5 on
 loadings).</caption>
 <colgroup>
 <col width="10%">
@@ -406,44 +775,44 @@ loadings).</caption>
 <th align="right">Component</th>
 <th align="right">Std Var Explained</th>
 <th align="right">Sparse Var Explained</th>
-<th align="right">Std Loading Sparsity</th>
-<th align="right">Sparse Loading Sparsity</th>
+<th align="left">Std Loading Sparsity</th>
+<th align="left">Sparse Loading Sparsity</th>
 </tr></thead>
 <tbody>
 <tr class="odd">
 <td align="right">1</td>
 <td align="right">0.2068</td>
-<td align="right">0.0256</td>
-<td align="right">0</td>
-<td align="right">0</td>
+<td align="right">0.2007</td>
+<td align="left">0%</td>
+<td align="left">23%</td>
 </tr>
 <tr class="even">
 <td align="right">2</td>
 <td align="right">0.1115</td>
-<td align="right">0.0334</td>
-<td align="right">0</td>
-<td align="right">0</td>
+<td align="right">0.1040</td>
+<td align="left">0%</td>
+<td align="left">9.6%</td>
 </tr>
 <tr class="odd">
 <td align="right">3</td>
 <td align="right">0.0559</td>
-<td align="right">0.4573</td>
-<td align="right">0</td>
-<td align="right">0</td>
+<td align="right">0.0497</td>
+<td align="left">0%</td>
+<td align="left">7.4%</td>
 </tr>
 <tr class="even">
 <td align="right">4</td>
 <td align="right">0.0453</td>
-<td align="right">0.4838</td>
-<td align="right">0</td>
-<td align="right">0</td>
+<td align="right">0.0402</td>
+<td align="left">0%</td>
+<td align="left">2.2%</td>
 </tr>
 <tr class="odd">
 <td align="right">5</td>
 <td align="right">0.0271</td>
-<td align="right">0.0000</td>
-<td align="right">0</td>
-<td align="right">0</td>
+<td align="right">0.0161</td>
+<td align="left">0%</td>
+<td align="left">2.2%</td>
 </tr>
 </tbody>
 </table>
@@ -452,7 +821,7 @@ features, trading modest variance for substantially sparser loadings.
 This makes individual components more interpretable: each one highlights
 a compact set of genomic regions rather than spreading weight across all
 features.</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">loading_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>    Value <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">as.vector</a></span><span class="op">(</span><span class="va">standard</span><span class="op">@</span><span class="va">v</span><span class="op">[</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">3</span><span class="op">]</span><span class="op">)</span><span class="op">)</span>,</span>
@@ -462,7 +831,7 @@ features.</p>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>    Value <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">as.vector</a></span><span class="op">(</span><span class="va">sparse</span><span class="op">@</span><span class="va">v</span><span class="op">[</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">3</span><span class="op">]</span><span class="op">)</span><span class="op">)</span>,</span>
 <span>    Component <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="st">"Component"</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">3</span><span class="op">)</span>, each <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">sparse</span><span class="op">@</span><span class="va">v</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>    Method <span class="op">=</span> <span class="st">"Sparse PCA"</span></span>
+<span>    Method <span class="op">=</span> <span class="st">"Sparse PCA (L1=1.5)"</span></span>
 <span>  <span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span></span>
@@ -476,61 +845,131 @@ features.</p>
 <span>  <span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p><img src="svd-pca_files/figure-html/sparse-pca-density-1.png" class="r-plt" alt="" width="672"></p>
-<p>The sparse PCA loadings are concentrated at zero with a few large
-values, while standard PCA loadings are spread more uniformly —
-illustrating the sparsity-variance tradeoff.</p>
+<p>The sparse PCA loadings show a clear spike at zero (zeroed-out
+features) with a few large values, while standard PCA loadings are
+spread more uniformly — illustrating the sparsity-variance tradeoff.
+Increasing L1 pushes more loadings to zero; decreasing it recovers
+standard PCA. A good strategy is to sweep L1 and monitor both sparsity
+and variance explained until you find the right balance for your
+application.</p>
 </div>
 <div class="section level3">
-<h3 id="example-3-nonneg-pca-vs--standard-pca">Example 3: Nonneg PCA vs. Standard PCA<a class="anchor" aria-label="anchor" href="#example-3-nonneg-pca-vs--standard-pca"></a>
+<h3 id="example-3-nonneg-svd-vs-nmf">Example 3: Nonneg SVD vs NMF<a class="anchor" aria-label="anchor" href="#example-3-nonneg-svd-vs-nmf"></a>
 </h3>
-<p>Nonneg PCA constrains loadings to be nonneg, producing parts-like
-components similar to NMF while maintaining the PCA framework.</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">nn</span> <span class="op">&lt;-</span> <span class="fu">RcppML</span><span class="fu">::</span><span class="fu"><a href="../reference/svd.html">svd</a></span><span class="op">(</span><span class="va">aml</span>, k <span class="op">=</span> <span class="fl">5</span>, center <span class="op">=</span> <span class="cn">TRUE</span>, nonneg <span class="op">=</span> <span class="cn">TRUE</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span>
+<p>Nonneg SVD constrains factors to be non-negative, producing
+parts-like components similar to NMF. How do the two approaches
+compare?</p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Nonneg SVD via krylov (strict nonneg enforcement)</span></span>
+<span><span class="va">nn_svd</span> <span class="op">&lt;-</span> <span class="fu">RcppML</span><span class="fu">::</span><span class="fu"><a href="../reference/svd.html">svd</a></span><span class="op">(</span><span class="va">aml</span>, k <span class="op">=</span> <span class="fl">5</span>, nonneg <span class="op">=</span> <span class="cn">TRUE</span>, method <span class="op">=</span> <span class="st">"krylov"</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">nn_sparsity</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">5</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">nn</span><span class="op">@</span><span class="va">v</span><span class="op">[</span>, <span class="va">i</span><span class="op">]</span><span class="op">)</span> <span class="op">&lt;</span> <span class="fl">1e-8</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">nn_ve</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/svd_pca-class.html">variance_explained</a></span><span class="op">(</span><span class="va">nn</span><span class="op">)</span></span>
+<span><span class="co"># Standard NMF for comparison</span></span>
+<span><span class="va">nn_nmf</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">aml</span>, k <span class="op">=</span> <span class="fl">5</span>, seed <span class="op">=</span> <span class="fl">42</span>, tol <span class="op">=</span> <span class="fl">1e-5</span>, maxit <span class="op">=</span> <span class="fl">200</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">three_way</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
-<span>  Method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Standard PCA"</span>, <span class="st">"Sparse PCA (L1=0.2)"</span>, <span class="st">"Nonneg PCA"</span><span class="op">)</span>,</span>
-<span>  `Mean Var Explained` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">std_ve</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">sp_ve</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">nn_ve</span><span class="op">)</span><span class="op">)</span>, <span class="fl">4</span><span class="op">)</span>,</span>
-<span>  `Mean Loading Sparsity` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">std_sparsity</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">sp_sparsity</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">nn_sparsity</span><span class="op">)</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span>,</span>
+<span><span class="co"># Reconstruction quality</span></span>
+<span><span class="va">A_mat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">aml</span><span class="op">)</span></span>
+<span><span class="va">svd_recon</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/svd-class.html">reconstruct</a></span><span class="op">(</span><span class="va">nn_svd</span><span class="op">)</span></span>
+<span><span class="va">nmf_recon</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">nn_nmf</span><span class="op">@</span><span class="va">w</span> <span class="op"><a href="https://rdrr.io/r/base/matmult.html" class="external-link">%*%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/diag.html" class="external-link">diag</a></span><span class="op">(</span><span class="va">nn_nmf</span><span class="op">@</span><span class="va">d</span><span class="op">)</span> <span class="op"><a href="https://rdrr.io/r/base/matmult.html" class="external-link">%*%</a></span> <span class="va">nn_nmf</span><span class="op">@</span><span class="va">h</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">nn_tbl</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>  Property <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Min factor value"</span>, <span class="st">"Factor sparsity (V or H)"</span>,</span>
+<span>               <span class="st">"Reconstruction MSE"</span>, <span class="st">"Orthogonal factors"</span><span class="op">)</span>,</span>
+<span>  `Nonneg SVD` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"%.4f"</span>, <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="va">nn_svd</span><span class="op">@</span><span class="va">v</span>, <span class="va">nn_svd</span><span class="op">@</span><span class="va">u</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"%.1f%%"</span>, <span class="fl">100</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">nn_svd</span><span class="op">@</span><span class="va">v</span><span class="op">)</span> <span class="op">&lt;</span> <span class="fl">1e-8</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"%.4f"</span>, <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="op">(</span><span class="va">A_mat</span> <span class="op">-</span> <span class="va">svd_recon</span><span class="op">)</span><span class="op">^</span><span class="fl">2</span><span class="op">)</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/prod.html" class="external-link">prod</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">aml</span><span class="op">)</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>    <span class="st">"Yes (by design)"</span></span>
+<span>  <span class="op">)</span>,</span>
+<span>  NMF <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"%.4f"</span>, <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="va">nn_nmf</span><span class="op">@</span><span class="va">w</span>, <span class="va">nn_nmf</span><span class="op">@</span><span class="va">h</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"%.1f%%"</span>, <span class="fl">100</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">nn_nmf</span><span class="op">@</span><span class="va">h</span><span class="op">)</span> <span class="op">&lt;</span> <span class="fl">1e-8</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"%.4f"</span>, <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="op">(</span><span class="va">A_mat</span> <span class="op">-</span> <span class="va">nmf_recon</span><span class="op">)</span><span class="op">^</span><span class="fl">2</span><span class="op">)</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/prod.html" class="external-link">prod</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">aml</span><span class="op">)</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>    <span class="st">"No"</span></span>
+<span>  <span class="op">)</span>,</span>
 <span>  check.names <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span>
-<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span></span>
-<span>  <span class="va">three_way</span>,</span>
-<span>  caption <span class="op">=</span> <span class="st">"Three-way comparison of PCA variants on AML data."</span></span>
-<span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">nn_tbl</span>, caption <span class="op">=</span> <span class="st">"Nonneg SVD (krylov) vs NMF on AML data (k = 5)."</span><span class="op">)</span></span></code></pre></div>
 <table class="table">
-<caption>Three-way comparison of PCA variants on AML data.</caption>
+<caption>Nonneg SVD (krylov) vs NMF on AML data (k = 5).</caption>
 <thead><tr class="header">
-<th align="left">Method</th>
-<th align="right">Mean Var Explained</th>
-<th align="right">Mean Loading Sparsity</th>
+<th align="left">Property</th>
+<th align="left">Nonneg SVD</th>
+<th align="left">NMF</th>
 </tr></thead>
 <tbody>
 <tr class="odd">
-<td align="left">Standard PCA</td>
-<td align="right">0.0893</td>
-<td align="right">0.000</td>
+<td align="left">Min factor value</td>
+<td align="left">0.0000</td>
+<td align="left">0.0000</td>
 </tr>
 <tr class="even">
-<td align="left">Sparse PCA (L1=0.2)</td>
-<td align="right">0.2000</td>
-<td align="right">0.000</td>
+<td align="left">Factor sparsity (V or H)</td>
+<td align="left">30.1%</td>
+<td align="left">12.0%</td>
 </tr>
 <tr class="odd">
-<td align="left">Nonneg PCA</td>
-<td align="right">0.2000</td>
-<td align="right">0.119</td>
+<td align="left">Reconstruction MSE</td>
+<td align="left">0.0243</td>
+<td align="left">0.0226</td>
+</tr>
+<tr class="even">
+<td align="left">Orthogonal factors</td>
+<td align="left">Yes (by design)</td>
+<td align="left">No</td>
 </tr>
 </tbody>
 </table>
-<p>Each method offers a distinct tradeoff: standard PCA maximizes
-variance explained, sparse PCA maximizes loading interpretability, and
-nonneg PCA produces parts-like loadings while maintaining orthogonality.
-Choose based on whether you need maximum fidelity (standard), feature
-selection (sparse), or parts-based interpretation (nonneg).</p>
+<p>Both approaches produce non-negative factors, but they solve
+fundamentally different optimization problems:</p>
+<ul>
+<li>
+<strong>Nonneg SVD</strong> maximizes variance explained subject to
+non-negativity and orthogonality. The orthogonality constraint means
+factors cannot overlap — each feature belongs primarily to one
+component. This gives higher sparsity but potentially lower
+reconstruction quality.</li>
+<li>
+<strong>NMF</strong> minimizes reconstruction error subject only to
+non-negativity. Factors can freely overlap, which usually gives better
+reconstruction but less interpretable (less orthogonal) components.</li>
+</ul>
+<p><strong>When to use each</strong>:</p>
+<ul>
+<li>
+<strong>Nonneg SVD</strong>: When you want orthogonal,
+non-overlapping components — e.g., each genomic region assigned to
+exactly one program. Good for visualization and when components should
+represent distinct, non-redundant signals.</li>
+<li>
+<strong>NMF</strong>: When you want the best possible reconstruction
+with nonneg parts. Components may overlap (same feature active in
+multiple factors), which is appropriate when biological programs share
+genes.</li>
+</ul>
+</div>
+<div class="section level3">
+<h3 id="example-4-method-choice-for-constrained-problems">Example 4: Method Choice for Constrained Problems<a class="anchor" aria-label="anchor" href="#example-4-method-choice-for-constrained-problems"></a>
+</h3>
+<p>Only <code>"deflation"</code> and <code>"krylov"</code> support
+regularization. For nonneg constraints, krylov enforces non-negativity
+strictly (all values ≥ 0), while deflation may have small violations due
+to post-convergence Gram-Schmidt reorthogonalization.</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Krylov: strict nonneg enforcement</span></span>
+<span><span class="va">kry_nn</span> <span class="op">&lt;-</span> <span class="fu">RcppML</span><span class="fu">::</span><span class="fu"><a href="../reference/svd.html">svd</a></span><span class="op">(</span><span class="va">aml</span>, k <span class="op">=</span> <span class="fl">5</span>, nonneg <span class="op">=</span> <span class="cn">TRUE</span>, method <span class="op">=</span> <span class="st">"krylov"</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Krylov nonneg — min(V):"</span>, <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="va">kry_nn</span><span class="op">@</span><span class="va">v</span><span class="op">)</span>, <span class="st">" min(U):"</span>, <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="va">kry_nn</span><span class="op">@</span><span class="va">u</span><span class="op">)</span>, <span class="st">"\n"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Krylov nonneg — min(V): 0  min(U): 0</span></span>
+<span></span>
+<span><span class="co"># Deflation: nonneg + GS reorthogonalization may introduce small negatives</span></span>
+<span><span class="va">defl_nn</span> <span class="op">&lt;-</span> <span class="fu">RcppML</span><span class="fu">::</span><span class="fu"><a href="../reference/svd.html">svd</a></span><span class="op">(</span><span class="va">aml</span>, k <span class="op">=</span> <span class="fl">5</span>, nonneg <span class="op">=</span> <span class="cn">TRUE</span>, method <span class="op">=</span> <span class="st">"deflation"</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Deflation nonneg — min(V):"</span>, <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="va">defl_nn</span><span class="op">@</span><span class="va">v</span><span class="op">)</span>, <span class="st">" min(U):"</span>, <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="va">defl_nn</span><span class="op">@</span><span class="va">u</span><span class="op">)</span>, <span class="st">"\n"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Deflation nonneg — min(V): -0.1579828  min(U): -0.167916</span></span></code></pre></div>
+<p>For strict non-negativity, prefer <code>method = "krylov"</code>. The
+deflation method’s Gram-Schmidt step projects factors onto the
+orthogonal complement of previously extracted components, which can
+introduce small negative values — a fundamental tension between
+orthogonality and non-negativity that krylov’s block-solve approach
+avoids.</p>
 </div>
 </div>
 <div class="section level2">

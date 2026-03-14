@@ -83,6 +83,7 @@ bipartition <- function(data, tol = 1e-5, nonneg = TRUE, threads = 0, verbose = 
 }
 
 #' Try GPU dispatch for bipartition
+#' @return A list with elements \code{v} and \code{d}, or \code{NULL}.
 #' @keywords internal
 .try_gpu_bipartition <- function(data, tol, p, nonneg, verbose) {
   use_gpu <- getOption("RcppML.gpu", "auto")

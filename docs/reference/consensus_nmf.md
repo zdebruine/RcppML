@@ -128,14 +128,14 @@ plot(cons_knn)
 
 # Check cophenetic coefficient (higher = more stable)
 print(cons_hard$cophenetic)
-#> [1] 0.901777
+#> [1] 0.8231326
 print(cons_knn$cophenetic)
-#> [1] 0.899601
+#> [1] 0.8317164
 
 # Get cluster assignments
 print(table(cons_hard$clusters))
 #> 
 #>  1  2  3  4  5 
-#> 23 20 21 19 17 
+#> 18 19 30 17 16 
 # }
 ```

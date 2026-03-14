@@ -61,39 +61,21 @@ setMethod("predict", signature = "nmf", function(object, data, L1 = NULL, L2 = N
   # Unified input validation (supports file paths, sparse, dense)
   data_info <- validate_data(data)
   data <- data_info$data
+  
   # NA detection
+  has_na <- FALSE
   if (is(data, "dgCMatrix")) {
-    if (any(is.na(data@x))) {
-      if (!is.null(mask) && mask != "NA") stop("data contains 'NA' values. Either remove these values or specify \"mask = 'NA'\"")
-      warning("NA values were detected in the data. Setting \"mask = 'NA'\"")
-      mask <- is.na(data)
-    }
+    has_na <- any(is.na(data@x))
   } else if (is.matrix(data)) {
-    if (any(is.na(data))) {
-      if (!is.null(mask) && mask != "NA") stop("data contains 'NA' values. Either remove these values or specify \"mask = 'NA'\"")
-      warning("NA values were detected in the data. Setting \"mask = 'NA'\"")
-      mask <- is.na(.to_dgCMatrix(data))
-    }
+    has_na <- any(is.na(data))
   }
-
-  if (is.null(mask)) {
-    mask_matrix <- new("dgCMatrix")
-    mask_zeros <- FALSE
-  } else if (class(mask)[[1]] == "character" && mask == "zeros") {
-    mask_matrix <- new("dgCMatrix")
-    mask_zeros <- TRUE
-  } else {
-    mask_zeros <- FALSE
-    if (!canCoerce(mask, "dgCMatrix")) {
-      if (canCoerce(mask, "matrix")) {
-        mask <- as.matrix(mask)
-      } else {
-        stop("could not coerce the value of 'mask' to a sparse pattern matrix (dgCMatrix)")
-      }
-    }
-    # Use dMatrix intermediate to avoid ngCMatrix -> dgCMatrix deprecation warning
-    mask_matrix <- .to_dgCMatrix(as(mask, "dMatrix"))
-  }
+  if (has_na && !is.null(mask) && !identical(mask, "NA"))
+    stop("data contains 'NA' values. Either remove these values or specify \"mask = 'NA'\"")
+  
+  # Validate mask (supports NULL, "zeros", "NA", matrix, list("zeros", <matrix>))
+  mask_result <- validate_mask(mask, has_na = has_na)
+  mask_matrix <- mask_result$mask_matrix
+  mask_zeros  <- mask_result$mask_zeros
 
   if (nrow(object@w) == nrow(data) && ncol(object@w) != nrow(data)) {
     w <- t(object@w)

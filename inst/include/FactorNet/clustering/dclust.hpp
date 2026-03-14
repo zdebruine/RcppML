@@ -21,6 +21,7 @@
 #include <FactorNet/clustering/bipartition.hpp>
 #include <numeric>
 #include <algorithm>
+#include <string>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -39,7 +40,7 @@ template<typename Scalar = double>
 struct Cluster {
     std::vector<unsigned int> samples; ///< Sample indices in cluster
     std::vector<Scalar> center;        ///< Cluster centroid
-    unsigned int id;                   ///< Cluster identifier
+    std::string id;                    ///< Binary path encoding split hierarchy ("0"/"1" sequence)
     unsigned int size;                 ///< Number of samples
     Scalar radius;                     ///< Cluster radius (optional)
 };
@@ -80,29 +81,31 @@ inline std::vector<Cluster<Scalar>> dclust(
     const unsigned int threads = 0) {
     
     std::vector<Cluster<Scalar>> clusters;
-    std::vector<std::vector<unsigned int>> to_partition;
+    // Stack tracks (samples, binary_path) pairs
+    std::vector<std::pair<std::vector<unsigned int>, std::string>> to_partition;
     
-    // Start with all samples
+    // Start with all samples, empty path
     std::vector<unsigned int> all_samples(A.cols());
     std::iota(all_samples.begin(), all_samples.end(), 0);
-    to_partition.push_back(all_samples);
+    to_partition.push_back({std::move(all_samples), std::string()});
     
-    unsigned int cluster_id = 0;
     bool calc_dist = (min_dist > static_cast<Scalar>(0));
     
     while (!to_partition.empty()) {
-        std::vector<unsigned int> current_samples = to_partition.back();
+        auto current = std::move(to_partition.back());
         to_partition.pop_back();
+        auto& current_samples = current.first;
+        auto& path = current.second;
         
         // Check if cluster is too small to partition
         if (current_samples.size() < min_samples * 2) {
             Cluster<Scalar> c;
-            c.samples = current_samples;
-            c.size = current_samples.size();
-            c.id = cluster_id++;
-            c.center = compute_centroid<Scalar>(A, current_samples);
+            c.samples = std::move(current_samples);
+            c.size = c.samples.size();
+            c.id = path;
+            c.center = compute_centroid<Scalar>(A, c.samples);
             c.radius = 0;
-            clusters.push_back(c);
+            clusters.push_back(std::move(c));
             continue;
         }
         
@@ -119,18 +122,18 @@ inline std::vector<Cluster<Scalar>> dclust(
         }
         
         if (valid_partition) {
-            // Successful partition - queue both subclusters
-            to_partition.push_back(model.samples1);
-            to_partition.push_back(model.samples2);
+            // Successful partition - queue both subclusters with extended paths
+            to_partition.push_back({std::move(model.samples1), path + "0"});
+            to_partition.push_back({std::move(model.samples2), path + "1"});
         } else {
             // Cannot partition further - create cluster
             Cluster<Scalar> c;
-            c.samples = current_samples;
-            c.size = current_samples.size();
-            c.id = cluster_id++;
-            c.center = compute_centroid<Scalar>(A, current_samples);
+            c.samples = std::move(current_samples);
+            c.size = c.samples.size();
+            c.id = path;
+            c.center = compute_centroid<Scalar>(A, c.samples);
             c.radius = calc_dist ? model.dist : static_cast<Scalar>(0);
-            clusters.push_back(c);
+            clusters.push_back(std::move(c));
         }
     }
     
@@ -159,19 +162,19 @@ inline std::vector<Cluster<Scalar>> dclust_parallel(
     const unsigned int threads = 0) {
     
     std::vector<Cluster<Scalar>> clusters;
-    std::vector<std::vector<unsigned int>> current_level;
+    // Level tracks (samples, binary_path) pairs 
+    std::vector<std::pair<std::vector<unsigned int>, std::string>> current_level;
     
-    // Start with all samples
+    // Start with all samples, empty path
     std::vector<unsigned int> all_samples(A.cols());
     std::iota(all_samples.begin(), all_samples.end(), 0);
-    current_level.push_back(all_samples);
+    current_level.push_back({std::move(all_samples), std::string()});
     
-    unsigned int cluster_id = 0;
     bool calc_dist = (min_dist > static_cast<Scalar>(0));
     
     // Process clusters level by level
     while (!current_level.empty()) {
-        std::vector<std::vector<unsigned int>> next_level;
+        std::vector<std::pair<std::vector<unsigned int>, std::string>> next_level;
         std::vector<Cluster<Scalar>> level_clusters(current_level.size());
         std::vector<bool> should_split(current_level.size(), false);
         
@@ -182,7 +185,7 @@ inline std::vector<Cluster<Scalar>> dclust_parallel(
         #pragma omp parallel for num_threads(num_threads) schedule(dynamic)
 #endif
         for (size_t i = 0; i < current_level.size(); ++i) {
-            const auto& current_samples = current_level[i];
+            const auto& current_samples = current_level[i].first;
             
             // Check if too small to partition
             if (current_samples.size() < min_samples * 2) {
@@ -222,17 +225,18 @@ inline std::vector<Cluster<Scalar>> dclust_parallel(
             }
         }
         
-        // Process results (single-threaded for cluster ID assignment)
+        // Process results (single-threaded for path assignment)
         for (size_t i = 0; i < current_level.size(); ++i) {
+            const auto& path = current_level[i].second;
             if (should_split[i]) {
                 // Re-run bipartition to get both partitions (this is inefficient but safe)
-                auto model = bipartition(A, tol, maxit, nonneg, current_level[i],
+                auto model = bipartition(A, tol, maxit, nonneg, current_level[i].first,
                                         seed + i, false, calc_dist, true);
-                next_level.push_back(model.samples1);
-                next_level.push_back(model.samples2);
+                next_level.push_back({std::move(model.samples1), path + "0"});
+                next_level.push_back({std::move(model.samples2), path + "1"});
             } else {
-                level_clusters[i].id = cluster_id++;
-                clusters.push_back(level_clusters[i]);
+                level_clusters[i].id = path;
+                clusters.push_back(std::move(level_clusters[i]));
             }
         }
         

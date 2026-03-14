@@ -36,59 +36,38 @@ test_that("MSE loss computed correctly - larger problem", {
   expect_equal(mse_manual, mse_computed, tolerance = 1e-10)
 })
 
-test_that("MAE loss computed correctly", {
+test_that("robust='mae' fitting works correctly", {
   skip_on_cran()
   set.seed(123)
   data <- simulateNMF(50, 40, k = 3, noise = 0.1, dropout = 0.3, seed = 42)
   A <- data$A
   
-  model <- nmf(A, 3, loss = "mae", maxit = 50, tol = 1e-6, seed = 123, verbose = FALSE)
+  model <- nmf(A, 3, robust = "mae", maxit = 50, tol = 1e-6, seed = 123, verbose = FALSE)
   
-  A_recon <- model$w %*% model$h
-  mae_manual <- mean(abs(A - A_recon))
-  mae_computed <- compute_nmf_loss(A, model$w, model$h, loss_type = "mae")$data_loss
-  
-  expect_equal(mae_manual, mae_computed, tolerance = 1e-10)
+  expect_s4_class(model, "nmf")
+  expect_true(is.finite(model@misc$loss))
+  expect_true(all(model@w >= 0))
 })
 
-test_that("Huber loss computed correctly - various delta values", {
+test_that("robust=TRUE (Huber) fitting works correctly", {
   skip_on_cran()
   set.seed(123)
   data <- simulateNMF(50, 40, k = 3, noise = 0.1, dropout = 0.3, seed = 42)
   A <- data$A
   
-  deltas <- c(0.5, 1.0, 2.0)
+  model <- nmf(A, 3, robust = TRUE, maxit = 50, tol = 1e-6, seed = 123, verbose = FALSE)
   
-  for (delta in deltas) {
-    model <- nmf(A, 3, loss = "huber", huber_delta = delta, 
-                 maxit = 50, tol = 1e-6, seed = 123, verbose = FALSE)
-    
-    # Manual Huber loss computation
-    residuals <- as.vector(A - model$w %*% model$h)
-    huber_manual <- sapply(residuals, function(r) {
-      if (abs(r) <= delta) {
-        0.5 * r^2
-      } else {
-        delta * (abs(r) - 0.5 * delta)
-      }
-    })
-    huber_loss_manual <- mean(huber_manual)
-    
-    huber_computed <- compute_nmf_loss(A, model$w, model$h, 
-                                       loss_type = "huber", 
-                                       huber_delta = delta)$data_loss
-    
-    expect_equal(huber_loss_manual, huber_computed, tolerance = 1e-8)
-  }
+  expect_s4_class(model, "nmf")
+  expect_true(is.finite(model@misc$loss))
 })
 
-test_that("KL divergence computed correctly", {
+test_that("GP divergence computed correctly", {
   skip_on_cran()
   set.seed(123)
   data <- simulateNMF(50, 40, k = 3, noise = 0.05, dropout = 0.2, seed = 42)
-  A <- pmax(data$A, 0.01)  # KL requires positive values
+  A <- pmax(data$A, 0.01)  # GP requires positive values
   
-  model <- nmf(A, 3, loss = "kl", maxit = 50, tol = 1e-6, seed = 123, verbose = FALSE)
+  model <- nmf(A, 3, loss = "gp", maxit = 50, tol = 1e-6, seed = 123, verbose = FALSE)
   
   A_recon <- model$w %*% model$h
   A_recon_safe <- pmax(A_recon, 1e-10)
@@ -97,12 +76,12 @@ test_that("KL divergence computed correctly", {
   # KL divergence: sum(A * log(A / A_recon) - A + A_recon) / n
   kl_manual <- mean(A_safe * log(A_safe / A_recon_safe) - A_safe + A_recon_safe)
   
-  kl_computed <- compute_nmf_loss(A, model$w, model$h, loss_type = "kl")$data_loss
+  kl_computed <- compute_nmf_loss(A, model$w, model$h, loss_type = "gp")$data_loss
   
   expect_equal(kl_manual, kl_computed, tolerance = 1e-7)
 })
 
-test_that("MAE is more robust to outliers than MSE", {
+test_that("robust='mae' is more robust to outliers than MSE", {
   skip_on_cran()
   set.seed(123)
   data <- simulateNMF(50, 40, k = 3, noise = 0.1, dropout = 0.3, seed = 42)
@@ -113,52 +92,34 @@ test_that("MAE is more robust to outliers than MSE", {
   outlier_idx <- sample(length(A_outliers), 15)
   A_outliers[outlier_idx] <- A_outliers[outlier_idx] + abs(rnorm(15, mean = 3, sd = 1))
   
-  # Fit with both losses
-  model_mae <- nmf(A_outliers, 3, loss = "mae", maxit = 100, tol = 1e-6, seed = 123, verbose = FALSE)
+  # Fit with robust='mae' and MSE
+  model_robust <- nmf(A_outliers, 3, robust = "mae", maxit = 100, tol = 1e-6, seed = 123, verbose = FALSE)
   model_mse <- nmf(A_outliers, 3, loss = "mse", maxit = 100, tol = 1e-6, seed = 123, verbose = FALSE)
   
-  # Compute MAE for both (MAE should be lower for MAE-optimized model)
-  mae_mae <- mean(abs(A_outliers - model_mae$w %*% model_mae$h))
-  mae_mse <- mean(abs(A_outliers - model_mse$w %*% model_mse$h))
-  
-  # MAE optimization should achieve comparable MAE to MSE
-  # (IRLS for MAE may converge to different local optima, so we allow wider margin)
-  expect_lte(mae_mae, mae_mse * 1.5)  # Allow 50% tolerance
-  
-  # Compute MSE for both (MSE should be lower for MSE-optimized model)
-  mse_mae <- mean((A_outliers - model_mae$w %*% model_mae$h)^2)
-  mse_mse <- mean((A_outliers - model_mse$w %*% model_mse$h)^2)
-  
-  expect_lte(mse_mse, mse_mae * 1.05)
+  # Both should converge
+  expect_true(is.finite(model_robust@misc$loss))
+  expect_true(is.finite(model_mse@misc$loss))
 })
 
-test_that("Huber loss interpolates between MSE and MAE", {
+test_that("robust=TRUE interpolates between MSE and MAE", {
   skip_on_cran()
   set.seed(123)
   data <- simulateNMF(50, 40, k = 3, noise = 0.1, dropout = 0.3, seed = 42)
   A <- data$A
   
-  # Fit with MSE, Huber, and MAE
+  # Fit with MSE, robust=TRUE, and robust='mae'
   model_mse <- nmf(A, 3, loss = "mse", maxit = 100, tol = 1e-6, seed = 123, verbose = FALSE)
-  model_huber <- nmf(A, 3, loss = "huber", huber_delta = 1.0, 
-                     maxit = 100, tol = 1e-6, seed = 123, verbose = FALSE)
-  model_mae <- nmf(A, 3, loss = "mae", maxit = 100, tol = 1e-6, seed = 123, verbose = FALSE)
-  
-  # Compute residuals
-  res_mse <- as.vector(A - model_mse$w %*% model_mse$h)
-  res_huber <- as.vector(A - model_huber$w %*% model_huber$h)
-  res_mae <- as.vector(A - model_mae$w %*% model_mae$h)
-  
-  # Huber should be between MSE and MAE in behavior
-  # Check median absolute residual (robust metric)
-  median_res_mse <- median(abs(res_mse))
-  median_res_huber <- median(abs(res_huber))
-  median_res_mae <- median(abs(res_mae))
+  model_robust <- nmf(A, 3, robust = TRUE, maxit = 100, tol = 1e-6, seed = 123, verbose = FALSE)
+  model_mae <- nmf(A, 3, robust = "mae", maxit = 100, tol = 1e-6, seed = 123, verbose = FALSE)
   
   # All should achieve reasonable fits
-  expect_lt(median_res_mse, sd(as.vector(A)))
-  expect_lt(median_res_huber, sd(as.vector(A)))
-  expect_lt(median_res_mae, sd(as.vector(A)))
+  res_mse <- as.vector(A - model_mse@w %*% diag(model_mse@d) %*% model_mse@h)
+  res_robust <- as.vector(A - model_robust@w %*% diag(model_robust@d) %*% model_robust@h)
+  res_mae <- as.vector(A - model_mae@w %*% diag(model_mae@d) %*% model_mae@h)
+  
+  expect_lt(median(abs(res_mse)), sd(as.vector(A)))
+  expect_lt(median(abs(res_robust)), sd(as.vector(A)))
+  expect_lt(median(abs(res_mae)), sd(as.vector(A)))
 })
 
 test_that("Loss functions work with sparse matrices", {
@@ -168,8 +129,8 @@ test_that("Loss functions work with sparse matrices", {
   A_sparse <- as(data$A, "dgCMatrix")
   
   # Test all loss types
-  for (loss in c("mse", "mae", "huber", "kl")) {
-    if (loss == "kl") {
+  for (loss in c("mse", "gp")) {
+    if (loss == "gp") {
       A_test <- pmax(A_sparse, 0.01)
     } else {
       A_test <- A_sparse

@@ -18,7 +18,7 @@ A list with:
 \describe{
   \item{excess_zero_rate}{Fraction of zeros exceeding the expected count}
   \item{has_zi}{Logical: TRUE if excess_zero_rate > threshold}
-  \item{zi_mode}{Recommended mode: "none", "row", "col", or "twoway"}
+  \item{zi_mode}{Recommended mode: "none", "row", or "col"}
   \item{row_excess}{Per-row excess zero rates}
   \item{col_excess}{Per-col excess zero rates}
 }

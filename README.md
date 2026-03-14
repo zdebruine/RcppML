@@ -1,7 +1,6 @@
 # RcppML <img src="man/figures/logo.png" align="right" height="139" />
 
 [![CRAN status](https://www.r-pkg.org/badges/version/RcppML)](https://cran.r-project.org/package=RcppML)
-[![R-CMD-check](https://github.com/zdebruine/RcppML/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/zdebruine/RcppML/actions/workflows/R-CMD-check.yaml)
 [![CRAN downloads](https://cranlogs.r-pkg.org/badges/grand-total/RcppML)](https://cran.r-project.org/package=RcppML)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
@@ -50,17 +49,17 @@ See `vignette("gpu-acceleration")` for build instructions.
 ```r
 library(RcppML)
 
-# Load a built-in single-cell gene expression dataset
-data(pbmc3k)  # 32738 genes × 2700 cells sparse matrix
+# Load a built-in gene expression dataset
+data(aml)  # 824 genomic regions × 135 samples (dense matrix)
 
-# Run NMF with rank k = 10
-model <- nmf(pbmc3k, k = 10)
+# Run NMF with rank k = 6
+model <- nmf(aml, k = 6, seed = 42)
 model
 #> nmf model
-#>   k = 10
-#>   w: 32738 x 10
-#>   d: 10
-#>   h: 10 x 2700
+#>   k = 6
+#>   w: 824 x 6
+#>   d: 6
+#>   h: 6 x 135
 
 # Inspect factor loadings
 head(model@w)
@@ -68,10 +67,10 @@ model@d
 model@h[, 1:5]
 
 # Reconstruction error
-evaluate(model, pbmc3k)
+evaluate(model, aml)
 
 # Project onto new data
-H_new <- predict(model, pbmc3k[, 1:100])
+H_new <- predict(model, aml[, 1:50])
 
 # Plot the model summary
 plot(model)
@@ -95,22 +94,20 @@ RcppML goes beyond standard Frobenius-norm NMF by supporting distribution-approp
 ### Example: Negative Binomial NMF for scRNA-seq
 
 ```r
-data(pbmc3k)
+data(aml)
 
-# NB is the natural choice for scRNA-seq count data
-model_nb <- nmf(pbmc3k, k = 10, loss = "nb")
+# NB is the natural choice for count data
+model_nb <- nmf(aml, k = 6, loss = "nb")
 
-# Or use the distribution API with fine-grained control
-model_nb <- nmf(pbmc3k, k = 10,
-                distribution = "nb",
-                distribution_config = list(
-                  nb_size_init = 10,     # Initial size parameter r
-                  nb_size_max = 1e6      # Upper bound for r
-                ))
+# Fine-grained control via ... parameters
+model_nb <- nmf(aml, k = 6,
+                loss = "nb",
+                nb_size_init = 10,     # Initial size parameter r
+                nb_size_max = 1e6)     # Upper bound for r
 
 # Automatic distribution selection via BIC
-auto <- auto_nmf_distribution(pbmc3k, k = 10)
-auto$best       # "nb"
+auto <- auto_nmf_distribution(aml, k = 6)
+auto$best       # best distribution name
 auto$comparison  # BIC/AIC table for each distribution
 ```
 
@@ -120,10 +117,10 @@ For data with excess zeros (e.g., droplet-based scRNA-seq), zero-inflated GP and
 
 ```r
 # Zero-inflated Negative Binomial with per-row dropout
-model_zinb <- nmf(pbmc3k, k = 10, loss = "nb", zi = "row")
+model_zinb <- nmf(aml, k = 6, loss = "nb", zi = "row")
 
-# Automatic zero-inflation detection
-model <- nmf(pbmc3k, k = 10, loss = "nb", zero_inflation = "auto")
+# Per-column dropout estimation
+model <- nmf(aml, k = 6, loss = "nb", zi = "col")
 ```
 
 ---
@@ -133,16 +130,16 @@ model <- nmf(pbmc3k, k = 10, loss = "nb", zero_inflation = "auto")
 Cross-validation uses a **speckled holdout mask** — a random subset of matrix entries are held out during training, and test error is computed on these entries. This enables principled rank selection.
 
 ```r
-data(pbmc3k)
+data(aml)
 
 # Sweep k = 2 through 20, three replicates per rank
-cv <- nmf(pbmc3k, k = 2:20, test_fraction = 0.1, cv_seed = 1:3)
+cv <- nmf(aml, k = 2:20, test_fraction = 0.1, cv_seed = 1:3)
 
 # Visualize test error vs rank
 plot(cv)
 
 # Automatic rank selection (binary search)
-model_auto <- nmf(pbmc3k, k = "auto")
+model_auto <- nmf(aml, k = "auto")
 model_auto@misc$rank_search$k_optimal
 ```
 
@@ -151,7 +148,7 @@ model_auto@misc$rank_search$k_optimal
 ```r
 cv <- nmf(data, k = 2:15,
           test_fraction = 0.1,      # 10% holdout
-          mask_zeros = TRUE,        # Only non-zero entries in test set (for sparse data)
+          mask = "zeros",           # Only non-zero entries in test set (for sparse data)
           patience = 5,             # Early stopping patience
           cv_seed = c(42, 123, 7))  # Multiple seeds for replicates
 ```
@@ -319,7 +316,7 @@ inp_atac <- factor_input(atac_matrix, "atac")
 shared <- factor_shared(inp_rna, inp_atac)
 
 # Build NMF layer with per-factor regularization
-layer <- shared |> nmf_layer(k = 10,
+layer <- shared |> nmf_layer(k = 10, name = "shared",
   W = W(L1 = 0.1),
   H = H(L1 = 0.05))
 
@@ -331,10 +328,10 @@ net <- factor_net(
 
 result <- fit(net)
 
-# Access results
-result$rna$W     # RNA feature loadings (genes × 10)
-result$atac$W    # ATAC feature loadings (peaks × 10)
-result$H         # Shared cell embedding (10 × n_cells)
+# Access results (layer name = "shared")
+result$shared$W$rna   # RNA feature loadings
+result$shared$W$atac  # ATAC feature loadings
+result$shared$H       # Shared cell embedding (k × n_cells)
 ```
 
 ### Deep NMF
@@ -357,15 +354,19 @@ result <- fit(net)
 
 ### Conditional Factorization
 
-Split samples by a condition and factorize each group:
+Append conditioning metadata to a layer's H before passing downstream:
 
 ```r
 inp <- factor_input(data, "X")
-cond <- factor_condition(inp, groups = cell_types)
+layer1 <- inp |> nmf_layer(k = 5)
 
-layer <- cond |> nmf_layer(k = 10)
+# Z is a conditioning matrix (n × p)
+Z <- matrix(rep(c(1, 0, 0, 1), c(50, 50, 50, 50)), nrow = 100, ncol = 2)
+conditioned <- factor_condition(layer1, Z)
 
-net <- factor_net(inputs = list(inp), output = layer,
+layer2 <- conditioned |> nmf_layer(k = 10, name = "output")
+
+net <- factor_net(inputs = list(inp), output = layer2,
                   config = factor_config(seed = 42))
 result <- fit(net)
 ```
@@ -466,7 +467,6 @@ all(model@h >= 0)  # TRUE — H remains non-negative
 |-----------|------|---------|-------------|
 | `k` | int/vector/"auto" | — | Rank (vector for CV sweep, "auto" for search) |
 | `loss` | string | `"mse"` | Loss function: mse, gp, nb, gamma, inverse_gaussian, tweedie |
-| `distribution` | string | `NULL` | Alternative API: auto, gaussian, poisson, gp, nb, gamma, inverse_gaussian, tweedie |
 | `L1` | numeric(2) | `c(0,0)` | LASSO penalty [W, H] |
 | `L2` | numeric(2) | `c(0,0)` | Ridge penalty [W, H] |
 | `L21` | numeric(2) | `c(0,0)` | Group sparsity [W, H] |
@@ -476,9 +476,9 @@ all(model@h >= 0)  # TRUE — H remains non-negative
 | `zi` | string | `"none"` | Zero-inflation: none, row, col |
 | `robust` | logical/numeric | `FALSE` | Huber robustness (TRUE = δ=1.345, numeric = custom δ) |
 | `solver` | string | `"auto"` | NNLS solver: auto, cd, cholesky |
-| `init` | string | `"random"` | Initialization: random, lanczos, irlba |
+| `seed` | int/matrix/string | `NULL` | Initialization: NULL (random), integer (reproducible), "lanczos", "irlba" |
+| `mask` | various | `NULL` | Missing data: NULL, "zeros", "NA", or a mask matrix |
 | `resource` | string | `"auto"` | Compute: auto, cpu, gpu |
-| `streaming` | string/logical | `"auto"` | Out-of-core mode for .spz files |
 | `test_fraction` | numeric | `0` | CV holdout fraction (0 = no CV) |
 | `tol` | numeric | `1e-4` | Convergence tolerance |
 | `maxit` | int | `100` | Maximum iterations |
@@ -489,15 +489,15 @@ all(model@h >= 0)  # TRUE — H remains non-negative
 
 ## Built-in Datasets
 
-| Dataset | Description | Dimensions |
-|---------|-------------|------------|
-| `pbmc3k` | PBMC single-cell RNA-seq (10x Genomics) | 32738 × 2700 |
-| `aml` | AML leukemia gene expression | 12023 × 200 |
-| `golub` | Golub leukemia microarray | 7129 × 72 |
-| `movielens` | MovieLens 100K ratings | 610 × 9724 |
-| `hawaiibirds` | Hawaii bird survey counts | 40 × 23 |
-| `olivetti` | Olivetti face images | 4096 × 400 |
-| `digits` | Handwritten digits (MNIST subset) | 784 × 1000 |
+| Dataset | Description | Dimensions | Format |
+|---------|-------------|------------|--------|
+| `pbmc3k` | PBMC single-cell RNA-seq (10x Genomics) | 13,714 × 2,638 | SPZ raw bytes |
+| `aml` | AML leukemia ATAC-seq | 824 × 135 | Dense matrix |
+| `golub` | Golub leukemia microarray | 38 × 5,000 | Sparse dgCMatrix |
+| `movielens` | MovieLens ratings | 3,867 × 610 | Sparse dgCMatrix |
+| `hawaiibirds` | Hawaii bird survey counts | 183 × 1,183 | Sparse dgCMatrix |
+| `olivetti` | Olivetti face images | 400 × 4,096 | Sparse dgCMatrix |
+| `digits` | Handwritten digits (MNIST subset) | 1,797 × 64 | Dense matrix |
 
 ---
 
@@ -507,7 +507,7 @@ all(model@h >= 0)  # TRUE — H remains non-negative
 
 2. **Solver selection**: For large k (> 32), `solver = "cholesky"` can be faster than coordinate descent. Use `solver = "auto"` (default) for automatic selection.
 
-3. **Initialization**: `init = "lanczos"` provides better starting points and can reduce iteration count by 30–50%, but adds upfront SVD cost.
+3. **Initialization**: `seed = "lanczos"` provides better starting points and can reduce iteration count by 30–50%, but adds upfront SVD cost.
 
 4. **Threads**: RcppML uses OpenMP. Set `options(RcppML.threads = 4)` to control parallelism, or `threads = 0` for all available cores.
 

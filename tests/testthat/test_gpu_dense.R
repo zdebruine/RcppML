@@ -564,10 +564,10 @@ test_that("GPU dense Semi-NMF allows negative W", {
 })
 
 # ---------------------------------------------------------------
-# GPU dense Guided NMF
+# GPU dense Seeded NMF
 # ---------------------------------------------------------------
 
-test_that("GPU dense guided NMF (seed W) matches CPU within 1%", {
+test_that("GPU dense seeded NMF (seed W) matches CPU within 1%", {
   skip_if_no_gpu()
   A <- .make_dense_pos()
   set.seed(99)
@@ -577,7 +577,7 @@ test_that("GPU dense guided NMF (seed W) matches CPU within 1%", {
   c <- nmf(A, 5, seed = W0, tol = 1e-5, maxit = 20,
            resource = "cpu", verbose = FALSE)
   gap <- abs(g@misc$loss - c@misc$loss) / max(abs(c@misc$loss), 1e-16)
-  expect_lt(gap, 0.01, label = sprintf("Guided NMF gap=%.4f", gap))
+  expect_lt(gap, 0.01, label = sprintf("Seeded NMF gap=%.4f", gap))
 })
 
 # ---------------------------------------------------------------

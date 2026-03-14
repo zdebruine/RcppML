@@ -20,6 +20,12 @@ factor_concat(...)
 
 An `fn_node` of type "concat".
 
+## See also
+
+[`factor_shared`](https://zdebruine.github.io/RcppML/reference/factor_shared.md),
+[`factor_add`](https://zdebruine.github.io/RcppML/reference/factor_add.md),
+[`factor_net`](https://zdebruine.github.io/RcppML/reference/factor_net.md)
+
 ## Examples
 
 ``` r

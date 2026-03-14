@@ -212,48 +212,55 @@ validate_graphs <- function(graph_W, graph_H, data_dims, graph_lambda) {
 }
 
 #' Validate mask parameter
-#' @param mask NULL, character (\code{"zeros"} or \code{"NA"}), or matrix
-#' @param sparse Logical; whether sparse mode is enabled
+#'
+#' Supports the extended mask syntax:
+#' \itemize{
+#'   \item \code{NULL}: no masking
+#'   \item \code{"zeros"}: mask zero entries (sets mask_zeros=TRUE)
+#'   \item \code{"NA"}: mask NA entries
+#'   \item dgCMatrix or matrix: custom mask matrix
+#'   \item \code{list("zeros", <matrix>)}: mask zeros AND custom mask simultaneously
+#' }
+#'
+#' @param mask NULL, character, matrix, or list
 #' @param has_na Logical; whether data contains NA values
 #' @return List with \code{mask_matrix} (dgCMatrix), \code{mask_zeros} (logical), and optionally \code{mask_na}
 #' @keywords internal
-validate_mask <- function(mask, sparse, has_na) {
+validate_mask <- function(mask, has_na = FALSE) {
   if (is.null(mask)) {
-    # Handle NA in data
     if (has_na) {
       warning("NA values were detected in the data. Setting \"mask = 'NA'\"")
       mask <- "NA"
     } else {
-      mask_matrix <- new("dgCMatrix")
-      mask_zeros <- sparse
-      return(list(mask_matrix = mask_matrix, mask_zeros = mask_zeros))
+      return(list(mask_matrix = new("dgCMatrix"), mask_zeros = FALSE))
     }
   }
   
-  if (class(mask)[[1]] == "character") {
+  # list("zeros", <matrix>) — both mask_zeros and custom mask
+
+  if (is.list(mask) && !inherits(mask, "Matrix")) {
+    if (length(mask) < 2 || !is.character(mask[[1]]) || mask[[1]] != "zeros")
+      stop("'mask' list must be list(\"zeros\", <matrix>)")
+    custom <- mask[[2]]
+    if (!canCoerce(custom, "dgCMatrix")) {
+      if (canCoerce(custom, "matrix")) custom <- as.matrix(custom)
+      else stop("could not coerce mask matrix to dgCMatrix")
+    }
+    mask_matrix <- .to_dgCMatrix(as(custom, "dMatrix"))
+    return(list(mask_matrix = mask_matrix, mask_zeros = TRUE))
+  }
+  
+  if (is.character(mask)) {
     if (mask == "zeros") {
-      mask_matrix <- new("dgCMatrix")
-      mask_zeros <- TRUE
-      if (sparse) {
-        warning("Both 'mask = \"zeros\"' and 'sparse = TRUE' specified. Using mask = \"zeros\".")
-      }
-      return(list(mask_matrix = mask_matrix, mask_zeros = mask_zeros))
+      return(list(mask_matrix = new("dgCMatrix"), mask_zeros = TRUE))
     } else if (mask == "NA") {
-      # Will be handled by data preparation
-      mask_matrix <- new("dgCMatrix")
-      mask_zeros <- FALSE
-      return(list(mask_matrix = mask_matrix, mask_zeros = mask_zeros, mask_na = TRUE))
+      return(list(mask_matrix = new("dgCMatrix"), mask_zeros = FALSE, mask_na = TRUE))
     } else {
-      stop("'mask' must be a matrix, 'zeros', 'NA', or NULL")
+      stop("'mask' must be NULL, 'zeros', 'NA', a matrix, or list(\"zeros\", <matrix>)")
     }
   }
   
   # mask is a matrix
-  mask_zeros <- FALSE
-  if (sparse) {
-    warning("'sparse = TRUE' is ignored when a mask matrix is provided")
-  }
-  
   if (!canCoerce(mask, "dgCMatrix")) {
     if (canCoerce(mask, "matrix")) {
       mask <- as.matrix(mask)
@@ -261,28 +268,20 @@ validate_mask <- function(mask, sparse, has_na) {
       stop("could not coerce the value of 'mask' to a sparse pattern matrix (dgCMatrix)")
     }
   }
-  
-  # Use dMatrix intermediate to avoid ngCMatrix -> dgCMatrix deprecation warning
   mask_matrix <- .to_dgCMatrix(as(mask, "dMatrix"))
   
-  list(mask_matrix = mask_matrix, mask_zeros = mask_zeros)
+  list(mask_matrix = mask_matrix, mask_zeros = FALSE)
 }
 
 #' Validate simple logical/numeric parameters
 #' @param sort_model Logical; whether to sort model factors
-#' @param sparse Logical; whether to use sparse mode
 #' @param nonneg Logical length 1 or 2; non-negativity constraints
-#' @return List with validated \code{sort_model}, \code{sparse}, and \code{nonneg}
+#' @return List with validated \code{sort_model} and \code{nonneg}
 #' @keywords internal
-validate_simple_params <- function(sort_model, sparse, nonneg) {
+validate_simple_params <- function(sort_model, nonneg) {
   # Validate sort_model
   if (!is.logical(sort_model) || length(sort_model) != 1) {
     stop("'sort_model' must be a single logical value")
-  }
-  
-  # Validate sparse
-  if (!is.logical(sparse) || length(sparse) != 1) {
-    stop("'sparse' must be a single logical value")
   }
   
   # Validate nonneg
@@ -296,7 +295,7 @@ validate_simple_params <- function(sort_model, sparse, nonneg) {
     stop("'nonneg' must be length 1 or 2 with no NA values")
   }
   
-  list(sort_model = sort_model, sparse = sparse, nonneg = nonneg)
+  list(sort_model = sort_model, nonneg = nonneg)
 }
 
 

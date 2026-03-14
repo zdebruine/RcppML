@@ -10,10 +10,12 @@ test_that("GPU lanczos init loss within 5% of CPU", {
   A <- m[1:300, 1:150]
   A <- as(A, "dgCMatrix")
 
-  cpu <- nmf(A, k = 5, init = "lanczos", maxit = 20, tol = 1e-10,
-             seed = 42, resource = "cpu", verbose = FALSE)
-  gpu <- nmf(A, k = 5, init = "lanczos", maxit = 20, tol = 1e-10,
-             seed = 42, resource = "gpu", verbose = FALSE)
+  set.seed(42)
+  cpu <- nmf(A, k = 5, seed = "lanczos", maxit = 20, tol = 1e-10,
+             resource = "cpu", verbose = FALSE)
+  set.seed(42)
+  gpu <- nmf(A, k = 5, seed = "lanczos", maxit = 20, tol = 1e-10,
+             resource = "gpu", verbose = FALSE)
 
   rel <- abs(cpu@misc$loss - gpu@misc$loss) / max(abs(cpu@misc$loss), 1e-16)
   expect_true(rel < 0.05,
@@ -27,8 +29,9 @@ test_that("GPU lanczos init produces valid factors", {
   A <- m[1:300, 1:150]
   A <- as(A, "dgCMatrix")
 
-  gpu <- nmf(A, k = 5, init = "lanczos", maxit = 20, tol = 1e-10,
-             seed = 42, resource = "gpu", verbose = FALSE)
+  set.seed(42)
+  gpu <- nmf(A, k = 5, seed = "lanczos", maxit = 20, tol = 1e-10,
+             resource = "gpu", verbose = FALSE)
 
   expect_true(all(is.finite(gpu@w)))
   expect_true(all(is.finite(gpu@h)))
@@ -46,9 +49,9 @@ test_that("GPU random init loss within 5% of CPU", {
   A <- m[1:300, 1:150]
   A <- as(A, "dgCMatrix")
 
-  cpu <- nmf(A, k = 5, init = "random", maxit = 20, tol = 1e-10,
+  cpu <- nmf(A, k = 5, maxit = 20, tol = 1e-10,
              seed = 42, resource = "cpu", verbose = FALSE)
-  gpu <- nmf(A, k = 5, init = "random", maxit = 20, tol = 1e-10,
+  gpu <- nmf(A, k = 5, maxit = 20, tol = 1e-10,
              seed = 42, resource = "gpu", verbose = FALSE)
 
   rel <- abs(cpu@misc$loss - gpu@misc$loss) / max(abs(cpu@misc$loss), 1e-16)
@@ -105,9 +108,9 @@ test_that("GPU dense random init loss within 5% of CPU", {
   m <- load_pbmc3k_matrix()
   A <- as.matrix(m[1:300, 1:150])
 
-  cpu <- nmf(A, k = 5, init = "random", maxit = 50, tol = 1e-10,
+  cpu <- nmf(A, k = 5, maxit = 50, tol = 1e-10,
              seed = 42, resource = "cpu", verbose = FALSE)
-  gpu <- nmf(A, k = 5, init = "random", maxit = 50, tol = 1e-10,
+  gpu <- nmf(A, k = 5, maxit = 50, tol = 1e-10,
              seed = 42, resource = "gpu", verbose = FALSE)
 
   rel <- abs(cpu@misc$loss - gpu@misc$loss) / max(abs(cpu@misc$loss), 1e-16)
@@ -121,10 +124,12 @@ test_that("GPU dense lanczos init loss within 5% of CPU", {
   m <- load_pbmc3k_matrix()
   A <- as.matrix(m[1:300, 1:150])
 
-  cpu <- nmf(A, k = 5, init = "lanczos", maxit = 50, tol = 1e-10,
-             seed = 42, resource = "cpu", verbose = FALSE)
-  gpu <- nmf(A, k = 5, init = "lanczos", maxit = 50, tol = 1e-10,
-             seed = 42, resource = "gpu", verbose = FALSE)
+  set.seed(42)
+  cpu <- nmf(A, k = 5, seed = "lanczos", maxit = 50, tol = 1e-10,
+             resource = "cpu", verbose = FALSE)
+  set.seed(42)
+  gpu <- nmf(A, k = 5, seed = "lanczos", maxit = 50, tol = 1e-10,
+             resource = "gpu", verbose = FALSE)
 
   rel <- abs(cpu@misc$loss - gpu@misc$loss) / max(abs(cpu@misc$loss), 1e-16)
   expect_true(rel < 0.05,

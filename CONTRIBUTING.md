@@ -3,6 +3,8 @@
 Thank you for your interest in contributing to RcppML! This document provides
 guidelines and instructions for contributing to the project.
 
+RcppML v1.0.0 was written in early 2026 in VSCode with GitHub Copilot and Claude Opus 4.6 Agent mode. A similar development IDE is recommended for further contributions due to the large number of backends, algorithms, and optimization branches that are difficult to trace manually. Please ensure all pull requests are as narrow in scope as possible.
+
 ## Getting Started
 
 1. **Fork and clone** the repository:
@@ -28,8 +30,11 @@ guidelines and instructions for contributing to the project.
 | Directory | Contents |
 |-----------|----------|
 | `R/` | R source files (roxygen documented) |
-| `src/` | C++ Rcpp bridge (`RcppFunctions.cpp`) |
-| `inst/include/RcppML/` | Header-only C++ library (core algorithms) |
+| `src/` | C++ Rcpp bridge files (`RcppFunctions*.cpp`, `sparsepress_bridge.cpp`) |
+| `inst/include/RcppML/` | Header-only C++ library (core NNLS, clustering) |
+| `inst/include/FactorNet/` | NMF/SVD engine, GPU kernels, factor graph fitting |
+| `inst/include/streampress/` | StreamPress I/O (rANS coding) |
+| `inst/include/sparsepress/` | SparsePress compression |
 | `tests/testthat/` | Unit tests (testthat) |
 | `vignettes/` | Package vignettes |
 | `man/` | **Auto-generated** — do NOT edit |
@@ -55,9 +60,11 @@ guidelines and instructions for contributing to the project.
 
 ### Editing C++ Code
 
-All C++ algorithm code lives in `inst/include/RcppML/` as a header-only library.
-The only compiled file is `src/RcppFunctions.cpp`, which provides `// [[Rcpp::export]]`
-wrappers.
+All C++ algorithm code lives in `inst/include/` as a header-only library
+(subdivided into `RcppML/`, `FactorNet/`, `streampress/`, and `sparsepress/`).
+The `src/` directory contains Rcpp bridge files (`RcppFunctions*.cpp`) that
+provide `// [[Rcpp::export]]` wrappers, plus `sparsepress_bridge.cpp` for
+StreamPress I/O.
 
 After changing `// [[Rcpp::export]]` annotations, run:
 ```r

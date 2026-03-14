@@ -13,26 +13,16 @@ svd(
   scale = FALSE,
   verbose = FALSE,
   seed = NULL,
-  threads = 0,
   L1 = 0,
   L2 = 0,
   nonneg = FALSE,
   upper_bound = 0,
-  L21 = 0,
-  angular = 0,
-  graph_U = NULL,
-  graph_V = NULL,
-  graph_lambda = 0,
-  convergence = "factor",
   test_fraction = 0,
-  cv_seed = NULL,
-  patience = 3,
-  mask_zeros = FALSE,
-  obs_mask = NULL,
+  mask = NULL,
   robust = FALSE,
-  k_max = 50,
   resource = "auto",
-  method = "auto"
+  method = "auto",
+  ...
 )
 }
 \arguments{
@@ -42,92 +32,42 @@ or a path to a \code{.spz} file for out-of-core streaming SVD.}
 \item{k}{Number of factors (rank). Use \code{"auto"} for automatic rank selection
 via cross-validation. Default: 10.}
 
-\item{tol}{Convergence tolerance per rank-1 subproblem. Measures
-\eqn{1 - |\cos(u_{new}, u_{old})|}. Default: 1e-5.}
+\item{tol}{Convergence tolerance per rank-1 subproblem. Default: 1e-5.}
 
 \item{maxit}{Maximum ALS iterations per factor. Default: 200.}
 
 \item{center}{If \code{TRUE}, subtract row means (PCA mode). Default: \code{FALSE}.}
 
-\item{scale}{If \code{TRUE}, divide each row by its standard deviation after centering
-(correlation PCA mode). Implies \code{center = TRUE}. This computes PCA on the
-correlation matrix rather than the covariance matrix. Default: \code{FALSE}.}
+\item{scale}{If \code{TRUE}, divide each row by its standard deviation after centering. Default: \code{FALSE}.}
 
 \item{verbose}{Print per-factor diagnostics. Default: \code{FALSE}.}
 
-\item{seed}{Random seed for initialization and cross-validation.
-Default: NULL (random). Use an integer for reproducibility.}
+\item{seed}{Random seed for initialization and cross-validation. Default: NULL.}
 
-\item{threads}{Number of OpenMP threads. 0 = all available. Default: 0.}
+\item{L1}{L1 (lasso) penalty. Single value or length-2 vector. Default: 0.}
 
-\item{L1}{L1 (lasso) penalty. Either a single value (applied to both u and v)
-or a length-2 vector \code{c(L1_u, L1_v)}. Default: 0.}
+\item{L2}{L2 (ridge) penalty. Single value or length-2 vector. Default: 0.}
 
-\item{L2}{L2 (ridge) penalty. Either a single value or length-2 vector. Default: 0.}
+\item{nonneg}{Non-negativity constraints. Single logical or length-2 vector. Default: \code{FALSE}.}
 
-\item{nonneg}{Non-negativity constraints. Either a single logical (both sides)
-or a length-2 logical vector \code{c(nonneg_u, nonneg_v)}. Default: \code{FALSE}.}
+\item{upper_bound}{Upper bound constraints. Single value or length-2 vector. Default: 0.}
 
-\item{upper_bound}{Upper bound constraints. Single value or length-2 vector. Default: 0 (no bound).}
+\item{test_fraction}{Fraction of entries to hold out for cross-validation. Default: 0.}
 
-\item{L21}{L2,1 (group sparsity) penalty. Drives entire components toward zero.
-Single value or length-2 vector \code{c(L21_u, L21_v)}. Default: 0.
-Supported by: \code{deflation} (adaptive L2), \code{krylov} (Gram-level).}
+\item{mask}{Masking control. \code{NULL} (default, no masking), \code{"zeros"}
+(mask zero entries — only non-zero entries can be holdout in CV),
+a \code{dgCMatrix} (custom mask matrix where non-zero entries are excluded),
+or \code{list("zeros", <dgCMatrix>)} to combine both.}
 
-\item{angular}{Angular (orthogonality) penalty. Decorrelates components.
-Single value or length-2 vector \code{c(angular_u, angular_v)}. Default: 0.
-Supported by: \code{deflation} and \code{krylov}.}
+\item{robust}{Robustness control: \code{FALSE} (default), \code{TRUE} (Huber delta=1.345),
+\code{"mae"} (near-MAE), or a positive numeric Huber delta.}
 
-\item{graph_U}{Sparse graph Laplacian matrix for features (rows, m x m).
-Encourages smooth loadings along feature graph edges. Default: \code{NULL}.
-Supported by: \code{deflation} and \code{krylov}.}
+\item{resource}{Compute backend: \code{"auto"} (default), \code{"cpu"}, or \code{"gpu"}.}
 
-\item{graph_V}{Sparse graph Laplacian matrix for samples (columns, n x n).
-Default: \code{NULL}. Supported by: \code{deflation} and \code{krylov}.}
+\item{method}{Algorithm: \code{"auto"} (default), \code{"deflation"}, \code{"krylov"},
+\code{"lanczos"}, \code{"irlba"}, \code{"randomized"}.}
 
-\item{graph_lambda}{Graph regularization strength. Single value or length-2 vector
-\code{c(graph_u_lambda, graph_v_lambda)}. Default: 0.}
-
-\item{convergence}{Convergence criterion: \code{"factor"} (track change in factors,
-default), \code{"loss"} (track change in explained variance), or \code{"both"}
-(stop when either criterion is met).}
-
-\item{test_fraction}{Fraction of entries to hold out for cross-validation / auto-rank.
-Default: 0 (disabled). Set to a value in (0, 1) to enable CV holdout, or use
-\code{k = "auto"} which automatically sets this to 0.05.}
-
-\item{cv_seed}{Separate seed for holdout mask. Default: NULL (derive from \code{seed}).}
-
-\item{patience}{For auto-rank: stop after this many non-improving factors. Default: 3.}
-
-\item{mask_zeros}{If \code{TRUE}, only non-zero entries can be holdout (for sparse
-recommendation data). Default: \code{FALSE}.}
-
-\item{obs_mask}{Optional sparse matrix (\code{dgCMatrix}) of the same dimensions as
-\code{A}. Non-zero entries indicate observations to exclude from fitting
-(e.g., known outliers or missing-data indicators). Currently supported by
-the \code{deflation} method. Default: \code{NULL} (no masking).}
-
-\item{robust}{Robustness control for outlier downweighting via Huber loss.
-\code{FALSE} (default): standard MSE (no robustness).
-\code{TRUE}: Huber-type robustness with delta=1.345 (95\% asymptotic efficiency).
-\code{"mae"}: near-MAE behavior (delta=1e-4).
-Numeric: custom Huber delta value.
-Uses IRLS reweighting within the ALS deflation loop. Supported by \code{deflation}
-method only; other methods are automatically redirected to deflation when robust is active.}
-
-\item{k_max}{Maximum rank for auto-rank mode. Default: 50.}
-
-\item{resource}{Compute backend: \code{"auto"} (default, auto-detect),
-\code{"cpu"}, or \code{"gpu"}.}
-
-\item{method}{Algorithm to use. One of \code{"auto"} (default), \code{"deflation"},
-\code{"krylov"}, \code{"lanczos"}, \code{"irlba"}, \code{"randomized"}.
-When \code{"auto"}: constraints route to deflation/krylov; otherwise
-method is selected based on rank and resource (GPU: Lanczos k<32,
-Randomized 32<=k<64, IRLBA k>=64; CPU: Lanczos k<64, IRLBA k>=64).}
-
-\item{...}{Additional arguments passed to \code{\link{svd}} (used by convenience wrappers).}
+\item{...}{Advanced parameters. See \strong{Advanced Parameters} section.}
 }
 \value{
 An S4 object of class \code{svd} with slots:
@@ -153,7 +93,7 @@ Multiple algorithms are available via the \code{method} parameter:
     Supports all constraints/CV/auto-rank. Best for small k with mixed constraints.}
   \item{\code{"krylov"}}{Krylov-Seeded Projected Refinement (KSPR). Block
     method: computes all k factors simultaneously via Lanczos seed + Gram-solve-then-project.
-    Faster than deflation for larger k. Supports all regularization. CV is
+    Faster than deflation for larger k. Supports all regularization except robust. CV is
     evaluated post-convergence.}
   \item{\code{"lanczos"}}{Unconstrained Lanczos bidiagonalization. Fast for
     unconstrained SVD. No regularization support.}
@@ -165,9 +105,7 @@ Multiple algorithms are available via the \code{method} parameter:
 }
 \note{
 This function shadows \code{base::svd()}. To use the base R version,
-call \code{base::svd()} explicitly. The RcppML version provides iterative
-SVD algorithms suitable for large sparse matrices, whereas \code{base::svd()}
-computes the full SVD using LAPACK.
+call \code{base::svd()} explicitly.
 }
 \section{Auto-rank}{
 
@@ -177,55 +115,25 @@ improve for \code{patience} consecutive factors. The returned model is
 truncated to the best rank.
 }
 
-\section{Convenience Aliases}{
+\section{Advanced Parameters (via \code{...})}{
 
-\itemize{
-  \item \code{pca(A, k, ...)}: PCA (same as \code{svd(A, k, center = TRUE, ...)})
-}
-}
-
-\section{Unsupported Combinations}{
-
+The following parameters can be passed via \code{...}:
 \describe{
-  \item{Robust + non-deflation method}{Huber-type robustness (\code{robust=TRUE}
-    or numeric delta) requires IRLS reweighting and is only supported by the
-    \code{deflation} method. Other methods are automatically redirected to
-    deflation when \code{robust} is active.}
-  \item{GPU dense streaming}{GPU streaming SVD for dense matrices is not yet
-    implemented. Dense streaming requires SPZ v3 dense format support.}
-  \item{GPU Krylov dense}{The Krylov method does not have a GPU dense
-    implementation. Use \code{lanczos}, \code{irlba}, or \code{randomized}
-    on GPU with dense input.}
-  \item{Constraints + matrix-free methods}{Regularization (L1, L2, L21, angular,
-    graph, nonneg, upper_bound) is only supported by \code{deflation} and
-    \code{krylov} methods. Using constraints with \code{lanczos}, \code{irlba},
-    or \code{randomized} will produce an error.}
-}
-}
-
-\section{Parameter Conventions (vs. nmf)}{
-
-Several parameters in \code{svd()} differ intentionally from \code{\link{nmf}()}:
-\describe{
-  \item{Input naming}{\code{svd()} uses \code{A} (linear algebra convention);
-    \code{nmf()} uses \code{data} (statistical modeling convention).}
-  \item{Graph parameters}{\code{svd()} uses \code{graph_U}/\code{graph_V}
-    matching SVD factor names (U, V); \code{nmf()} uses
-    \code{graph_W}/\code{graph_H}.}
-  \item{Penalty shape}{\code{svd()} accepts scalars (expanded internally
-    to length-2); \code{nmf()} requires explicit \code{c(w, h)} vectors.
-    The scalar API is simpler for per-factor SVD iteration.}
-  \item{Non-negativity shape}{\code{svd()} accepts a single logical;
-    \code{nmf()} requires \code{c(w, h)}. SVD rarely needs
-    side-specific control.}
-  \item{Tolerance}{\code{svd()} defaults to \code{tol = 1e-5}
-    (per-factor convergence); \code{nmf()} defaults to \code{tol = 1e-4}
-    (global convergence across all factors simultaneously).}
+  \item{\code{L21}}{L2,1 (group sparsity) penalty. Single value or length-2 vector (default 0).}
+  \item{\code{angular}}{Angular (orthogonality) penalty. Single value or length-2 vector (default 0).}
+  \item{\code{graph_U}}{Sparse graph Laplacian for features (m x m). Default NULL.}
+  \item{\code{graph_V}}{Sparse graph Laplacian for samples (n x n). Default NULL.}
+  \item{\code{graph_lambda}}{Graph regularization strength. Single value or length-2 (default 0).}
+  \item{\code{convergence}}{Convergence criterion: \code{"factor"} (default) or \code{"global"}.}
+  \item{\code{cv_seed}}{Separate seed for holdout mask. Default NULL.}
+  \item{\code{patience}}{Auto-rank non-improving factor patience (default 3).}
+  \item{\code{k_max}}{Maximum rank for auto-rank mode (default 50).}
+  \item{\code{threads}}{Number of OpenMP threads. 0 = all (default 0).}
 }
 }
 
 \examples{
-\dontrun{
+\donttest{
 library(RcppML)
 data(iris)
 A <- as.matrix(iris[, 1:4])
@@ -236,17 +144,8 @@ s <- svd(A, k = 3)
 # PCA with centering (convenience wrapper)
 p <- pca(A, k = 3)
 
-# Sparse PCA
-sp <- sparse_pca(A, k = 3, L1 = 0.5)
-
-# Non-negative PCA
-nn <- nn_pca(A, k = 3)
-
 # Auto-rank PCA
 ar <- svd(A, k = "auto", center = TRUE, verbose = TRUE)
-
-# Krylov with angular penalty
-ka <- svd(A, k = 10, method = "krylov", angular = 0.1)
 
 # Robust PCA (outlier-resistant)
 rp <- svd(A, k = 3, center = TRUE, robust = TRUE, verbose = TRUE)
@@ -254,5 +153,5 @@ rp <- svd(A, k = 3, center = TRUE, robust = TRUE, verbose = TRUE)
 
 }
 \seealso{
-\code{\link{nmf}}, \code{\link{project}}, \code{\link{pca}}
+\code{\link{nmf}}, \code{\link{pca}}
 }

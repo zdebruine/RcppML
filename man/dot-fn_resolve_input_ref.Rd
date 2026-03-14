@@ -6,6 +6,9 @@
 \usage{
 .fn_resolve_input_ref(node, layer_names, layers, input_nodes, conditions)
 }
+\value{
+A character string encoding the input reference.
+}
 \description{
 Resolve a node to an input_ref string for the C++ descriptor
 }

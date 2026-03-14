@@ -170,7 +170,8 @@ str(clusters)
 #>  $ :List of 4
 #>   ..$ samples: num [1:50] 0 1 2 3 4 5 6 7 8 9 ...
 #>   ..$ center : num [1:4] 7.79 170.76 65.54 21.23
-#>   ..$ id     : num 0
+#>   ..$ id     : chr ""
 #>   ..$ size   : num 50
+#>  - attr(*, "class")= chr "dclust"
 # }
 ```

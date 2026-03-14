@@ -45,41 +45,54 @@ vignette.
 
 ## Quick NMF Demo
 
-Generate a synthetic nonnegative matrix and recover its factors:
+Factor the Hawaiian birds species-count matrix (183 species × 1,183 grid
+cells) into 10 components:
 
 ``` r
-sim <- simulateNMF(200, 100, k = 5, noise = 0.3, seed = 42)
-model <- nmf(sim$A, k = 5, seed = 1)
+data(hawaiibirds)
+model <- nmf(hawaiibirds, k = 10, seed = 42, tol = 1e-5, maxit = 100)
 ```
 
 | Rows | Columns | Rank | Reconstruction MSE | Iterations | Runtime (sec) |
-|-----:|--------:|-----:|-------------------:|-----------:|--------------:|
-|  200 |     100 |    5 |             0.0173 |         21 |          0.24 |
+|-----:|--------:|-----:|:-------------------|-----------:|--------------:|
+|  183 |    1183 |   10 | 3.73e-03           |        100 |          0.28 |
 
 NMF model summary
 
-With a low-noise signal and the correct rank, NMF recovers the
-generating factors and achieves near-zero reconstruction error.
+Each of the 10 factors captures a distinct pattern of bird species
+co-occurrence across Hawaiian survey sites.
+
+![](getting-started_files/figure-html/nmf-convergence-1.png)
 
 ## Quick SVD Demo
 
-Compute a rank-5 truncated SVD of the AML chromatin-accessibility
-dataset:
+We can also decompose the same data with SVD, which captures directions
+of maximum variance rather than additive nonneg parts:
 
 ``` r
-data(aml)
-sv <- svd(aml, k = 5)
+data(hawaiibirds)
+sv <- svd(hawaiibirds, k = 10)
 ```
 
-| Component | Variance Explained | Cumulative |
-|----------:|:-------------------|:-----------|
-|         1 | 91.9%              | 91.9%      |
-|         2 | 1.7%               | 93.6%      |
-|         3 | 0.7%               | 94.3%      |
-|         4 | 0.5%               | 94.7%      |
-|         5 | 0.3%               | 95.1%      |
+![](getting-started_files/figure-html/svd-scree-1.png)
 
-Variance explained by the first 5 components
+The first component captures the dominant species-composition gradient,
+and each subsequent component adds progressively less explanatory power
+— the hallmark of effective dimensionality reduction.
+
+For PCA (centered and optionally scaled SVD), use the
+[`pca()`](https://zdebruine.github.io/RcppML/reference/pca.md)
+convenience wrapper:
+
+``` r
+pc <- pca(hawaiibirds, k = 5, seed = 42)  # center = TRUE by default
+# Equivalent to: svd(hawaiibirds, k = 5, center = TRUE)
+```
+
+PCA centers the data before decomposition, so the first component
+captures the dominant direction of variation rather than the overall
+mean level. Use `scale = TRUE` for data where features have different
+units or widely varying magnitude.
 
 ## Quick Cross-Validation Demo
 
@@ -87,35 +100,40 @@ Use speckled holdout cross-validation to find the best rank for the AML
 data:
 
 ``` r
-cv <- nmf(aml, k = c(2, 4, 6, 8, 10), test_fraction = 0.2, seed = 42, maxit = 50)
+data(aml)
+cv <- nmf(aml, k = c(2, 4, 6, 8, 10), test_fraction = 0.2, seed = 42)
 ```
 
 ![](getting-started_files/figure-html/cv-plot-1.png)
 
-The test loss curve reveals the rank at which the model begins to
-overfit. The minimum identifies the optimal number of factors for this
-dataset.
+Training loss always decreases with rank, but test loss reveals where
+the model begins to overfit. The test-loss minimum identifies the
+optimal number of factors.
 
 ## Built-in Datasets
 
 RcppML ships seven datasets spanning diverse domains:
 
-| Dataset       | Dimensions  | Type               | Domain                        |
-|:--------------|:------------|:-------------------|:------------------------------|
-| `aml`         | 824 × 135   | Dense matrix       | Chromatin accessibility (AML) |
-| `golub`       | 38 × 5,000  | Sparse (dgCMatrix) | Gene expression (leukemia)    |
-| `hawaiibirds` | 183 × 1,183 | Sparse (dgCMatrix) | Bird species counts           |
-| `movielens`   | 3,867 × 610 | Sparse (dgCMatrix) | Movie ratings                 |
-| `olivetti`    | 400 × 4,096 | Sparse (dgCMatrix) | Face images (Olivetti)        |
-| `digits_full` | 1,797 × 64  | Sparse (dgCMatrix) | Handwritten digit images      |
-| `pbmc3k`      | 8,000 × 500 | SPZ raw bytes      | Single-cell RNA-seq (PBMCs)   |
+| Dataset       | Dimensions     | Type               | Domain                      |
+|:--------------|:---------------|:-------------------|:----------------------------|
+| `aml`         | 824 × 135      | Dense matrix       | DNA methylation (AML)       |
+| `golub`       | 38 × 5,000     | Sparse (dgCMatrix) | Gene expression (leukemia)  |
+| `hawaiibirds` | 183 × 1,183    | Sparse (dgCMatrix) | Bird species counts         |
+| `movielens`   | 3,867 × 610    | Sparse (dgCMatrix) | Movie ratings               |
+| `olivetti`    | 400 × 4,096    | Sparse (dgCMatrix) | Face images (Olivetti)      |
+| `digits`      | 1,797 × 64     | Sparse (dgCMatrix) | Handwritten digit images    |
+| `pbmc3k`      | 13,714 × 2,638 | SPZ raw bytes      | Single-cell RNA-seq (PBMCs) |
 
 Shipped datasets
 
-The `pbmc3k` dataset is stored as StreamPress-compressed raw bytes.
-Decompress it with
-[`st_read()`](https://zdebruine.github.io/RcppML/reference/st_read.md) —
-see the
+The `pbmc3k` dataset is stored as StreamPress-compressed raw bytes
+containing the full **13,714 genes × 2,638 cells** from the 10x Genomics
+PBMC 3k dataset, with 9 Seurat-annotated cell types embedded as column
+metadata. Decompress it with
+[`st_read()`](https://zdebruine.github.io/RcppML/reference/st_read.md)
+and access annotations via
+[`st_read_var()`](https://zdebruine.github.io/RcppML/reference/st_read_var.md)
+— see the
 [StreamPress](https://zdebruine.github.io/RcppML/articles/streampress.md)
 vignette.
 
@@ -146,15 +164,6 @@ vignette.
   Graphs](https://zdebruine.github.io/RcppML/articles/factor-graphs.md)
   — Multi-modal and guided factorization via
   [`factor_net()`](https://zdebruine.github.io/RcppML/reference/factor_net.md)
-
-### Applications
-
-- [Image
-  Decomposition](https://zdebruine.github.io/RcppML/articles/image-decomposition.md)
-  — Learning visual parts from face and digit images
-- [Recommendation
-  Systems](https://zdebruine.github.io/RcppML/articles/recommendation-systems.md)
-  — Building a movie recommender with sparse NMF
 
 ### Infrastructure
 

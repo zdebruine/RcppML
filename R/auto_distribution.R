@@ -16,7 +16,7 @@
 #'
 #' @return A list with:
 #' \describe{
-#'   \item{best}{Character string: name of the best distribution}
+#'   \item{loss}{Character string: name of the best distribution (loss function)}
 #'   \item{comparison}{Data frame with distribution, nll, df, aic, bic, selected}
 #'   \item{models}{Named list of fitted nmf objects}
 #' }
@@ -39,13 +39,13 @@
 #' AIC = \eqn{2 \times \text{NLL} + 2 \times \text{df}}.
 #'
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' library(Matrix)
 #' set.seed(42)
 #' A <- abs(rsparsematrix(100, 50, 0.3))
 #' result <- auto_nmf_distribution(A, k = 5)
 #' print(result$comparison)
-#' cat("Best distribution:", result$best, "\n")
+#' cat("Best distribution:", result$loss, "\n")
 #' }
 #'
 #' @seealso \code{\link{score_test_distribution}}, \code{\link{diagnose_zero_inflation}},
@@ -59,7 +59,7 @@ auto_nmf_distribution <- function(data, k,
                                    verbose = FALSE,
                                    ...) {
   criterion <- match.arg(criterion)
-  distributions <- match.arg(distributions, c("mse", "gp", "nb", "mae", "huber"),
+  distributions <- match.arg(distributions, c("mse", "gp", "nb"),
                               several.ok = TRUE)
 
   m <- nrow(data)
@@ -134,7 +134,7 @@ auto_nmf_distribution <- function(data, k,
   }
 
   list(
-    best = best_dist,
+    loss = best_dist,
     comparison = results,
     models = models
   )
@@ -181,7 +181,7 @@ auto_nmf_distribution <- function(data, k,
 #' suggesting NB may be preferable to GP.
 #'
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' A <- abs(rsparsematrix(200, 100, 0.3))
 #' model <- nmf(A, k = 5, loss = "mse")
 #' diag <- score_test_distribution(A, model)
@@ -279,7 +279,7 @@ score_test_distribution <- function(data, model,
 #' \describe{
 #'   \item{excess_zero_rate}{Fraction of zeros exceeding the expected count}
 #'   \item{has_zi}{Logical: TRUE if excess_zero_rate > threshold}
-#'   \item{zi_mode}{Recommended mode: "none", "row", "col", or "twoway"}
+#'   \item{zi_mode}{Recommended mode: "none", "row", or "col"}
 #'   \item{row_excess}{Per-row excess zero rates}
 #'   \item{col_excess}{Per-col excess zero rates}
 #' }
@@ -348,7 +348,7 @@ diagnose_zero_inflation <- function(data, model, threshold = 0.05) {
     row_structured <- row_var > 0.001
     col_structured <- col_var > 0.001
     if (row_structured && col_structured) {
-      zi_mode <- "col"  # twoway is disabled; use col as best available fallback
+      zi_mode <- "col"  # use col as best available fallback
     } else if (col_structured) {
       zi_mode <- "col"
     } else {

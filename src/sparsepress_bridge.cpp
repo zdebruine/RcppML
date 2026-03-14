@@ -1,32 +1,28 @@
 /**
- * @file sparsepress_bridge.cpp
- * @brief Rcpp bridge for SparsePress compression/decompression.
+ * @file streampress_bridge.cpp
+ * @brief Rcpp bridge for StreamPress compression/decompression.
  *
- * Converts between R's dgCMatrix and sparsepress::CSCMatrix,
- * then delegates to the header-only sparsepress library.
+ * Converts between R's dgCMatrix and streampress::CSCMatrix,
+ * then delegates to the header-only streampress library.
  * Supports both v1 (monolithic) and v2 (chunked) formats.
  */
 
 #include <Rcpp.h>
 
-// Redirect sparsepress verbose logging to R's message stream.
-// This avoids the CRAN NOTE about compiled code writing to stderr.
-#define SPARSEPRESS_LOG(...) REprintf(__VA_ARGS__)
-
-#include <sparsepress/sparsepress.hpp>
-#include <sparsepress/sparsepress_v2.hpp>
-#include <sparsepress/sparsepress_v3.hpp>
-#include <sparsepress/format/header_v2.hpp>
-#include <sparsepress/format/header_v3.hpp>
+#include <streampress/sparsepress.hpp>
+#include <streampress/sparsepress_v2.hpp>
+#include <streampress/sparsepress_v3.hpp>
+#include <streampress/format/header_v2.hpp>
+#include <streampress/format/header_v3.hpp>
 #include <FactorNet/core/platform.hpp>  // get_available_ram_bytes()
 #include <streampress/transpose.hpp>
 
 using namespace Rcpp;
 
 // =============================================================================
-// Helper: R dgCMatrix → sparsepress CSCMatrix
+// Helper: R dgCMatrix → streampress CSCMatrix
 // =============================================================================
-static sparsepress::CSCMatrix dgc_to_csc(const S4& dgc) {
+static streampress::CSCMatrix dgc_to_csc(const S4& dgc) {
     IntegerVector dims = dgc.slot("Dim");
     IntegerVector p = dgc.slot("p");
     IntegerVector i = dgc.slot("i");
@@ -36,7 +32,7 @@ static sparsepress::CSCMatrix dgc_to_csc(const S4& dgc) {
     uint32_t n = static_cast<uint32_t>(dims[1]);
     uint64_t nnz = static_cast<uint64_t>(x.size());
 
-    sparsepress::CSCMatrix mat(m, n, nnz);
+    streampress::CSCMatrix mat(m, n, nnz);
 
     for (uint32_t j = 0; j <= n; ++j)
         mat.p[j] = static_cast<uint32_t>(p[j]);
@@ -80,9 +76,9 @@ static void extract_dimnames(const S4& dgc,
 }
 
 // =============================================================================
-// Helper: sparsepress CSCMatrix → R dgCMatrix (with optional dimnames)
+// Helper: streampress CSCMatrix → R dgCMatrix (with optional dimnames)
 // =============================================================================
-static S4 csc_to_dgc(const sparsepress::CSCMatrix& mat,
+static S4 csc_to_dgc(const streampress::CSCMatrix& mat,
                       const std::vector<std::string>& rownames = {},
                       const std::vector<std::string>& colnames = {}) {
     IntegerVector dims = IntegerVector::create(
@@ -130,7 +126,7 @@ static S4 csc_to_dgc(const sparsepress::CSCMatrix& mat,
 // Rcpp exports
 // =============================================================================
 
-//' @title Write a dgCMatrix to a SparsePress (.spz) file
+//' @title Write a dgCMatrix to a StreamPress (.spz) file
 //' @param A A sparse matrix (dgCMatrix)
 //' @param path Output file path (.spz)
 //' @param use_delta Use delta prediction (better for structured data)
@@ -152,7 +148,7 @@ List Rcpp_sp_write(const S4& A, const std::string& path,
                    int chunk_cols = 2048,
                    Nullable<RawVector> obs_raw = R_NilValue,
                    Nullable<RawVector> var_raw = R_NilValue) {
-    sparsepress::CSCMatrix mat = dgc_to_csc(A);
+    streampress::CSCMatrix mat = dgc_to_csc(A);
 
     // Extract dimnames for metadata
     std::vector<std::string> rownames, colnames;
@@ -162,7 +158,7 @@ List Rcpp_sp_write(const S4& A, const std::string& path,
     bool use_v2 = true;
 
     if (use_v2) {
-        sparsepress::v2::CompressConfig_v2 cfg2;
+        streampress::v2::CompressConfig_v2 cfg2;
         cfg2.precision = precision;
         cfg2.row_sort = row_sort;
         cfg2.include_transpose = include_transpose;
@@ -179,9 +175,9 @@ List Rcpp_sp_write(const S4& A, const std::string& path,
             cfg2.var_buf.assign(var_rv.begin(), var_rv.end());
         }
 
-        sparsepress::v2::CompressStats_v2 stats2;
-        std::vector<uint8_t> compressed = sparsepress::v2::compress_v2(mat, cfg2, &stats2);
-        sparsepress::v2::write_v2(path, compressed);
+        streampress::v2::CompressStats_v2 stats2;
+        std::vector<uint8_t> compressed = streampress::v2::compress_v2(mat, cfg2, &stats2);
+        streampress::v2::write_v2(path, compressed);
 
         return List::create(
             Named("raw_bytes") = static_cast<double>(stats2.raw_size),
@@ -199,14 +195,14 @@ List Rcpp_sp_write(const S4& A, const std::string& path,
     }
 
     // v1 path (legacy)
-    sparsepress::CompressConfig cfg;
+    streampress::CompressConfig cfg;
     cfg.use_delta_prediction = use_delta;
     cfg.use_value_prediction = use_value_pred;
     cfg.verbose = verbose;
 
-    sparsepress::CompressStats stats;
-    std::vector<uint8_t> compressed = sparsepress::compress(mat, cfg, &stats);
-    sparsepress::write_compressed(path, compressed);
+    streampress::CompressStats stats;
+    std::vector<uint8_t> compressed = streampress::compress(mat, cfg, &stats);
+    streampress::write_compressed(path, compressed);
 
     return List::create(
         Named("raw_bytes") = static_cast<double>(stats.raw_size),
@@ -219,17 +215,19 @@ List Rcpp_sp_write(const S4& A, const std::string& path,
     );
 }
 
-//' @title Read a SparsePress (.spz) file into a dgCMatrix
+//' @title Read a StreamPress (.spz) file into a dgCMatrix
 //' @param path Input file path (.spz)
 //' @param cols Optional integer vector of column indices to read (1-indexed)
 //' @param reorder Whether to undo row permutation (default TRUE)
+//' @param threads Number of threads for parallel decompression (0 = all available, default 0)
 //' @return A sparse matrix (dgCMatrix)
 //' @keywords internal
 // [[Rcpp::export]]
 S4 Rcpp_sp_read(const std::string& path,
                 Nullable<IntegerVector> cols = R_NilValue,
-                bool reorder = true) {
-    std::vector<uint8_t> data = sparsepress::read_compressed(path);
+                bool reorder = true,
+                int threads = 0) {
+    std::vector<uint8_t> data = streampress::read_compressed(path);
 
     // Check version to decide decode path
     if (data.size() >= 6) {
@@ -237,8 +235,9 @@ S4 Rcpp_sp_read(const std::string& path,
         std::memcpy(&version, data.data() + 4, 2);
         if (version == 2) {
             // v2 path: chunked decode with metadata support
-            sparsepress::v2::DecompressConfig_v2 dcfg;
+            streampress::v2::DecompressConfig_v2 dcfg;
             dcfg.reorder = reorder;
+            dcfg.num_threads = threads;
 
             if (cols.isNotNull()) {
                 IntegerVector col_vec(cols);
@@ -247,8 +246,8 @@ S4 Rcpp_sp_read(const std::string& path,
                 dcfg.col_end = col_vec[col_vec.size() - 1];  // exclusive
             }
 
-            sparsepress::v2::Metadata meta;
-            sparsepress::CSCMatrix mat = sparsepress::v2::decompress_v2(
+            streampress::v2::Metadata meta;
+            streampress::CSCMatrix mat = streampress::v2::decompress_v2(
                 data.data(), data.size(), dcfg, &meta);
 
             // Extract dimnames from metadata
@@ -259,34 +258,34 @@ S4 Rcpp_sp_read(const std::string& path,
         }
     }
 
-    sparsepress::CompressStats stats;
-    sparsepress::CSCMatrix mat = sparsepress::decompress(data, &stats);
+    streampress::CompressStats stats;
+    streampress::CSCMatrix mat = streampress::decompress(data, &stats);
 
     // v1 files don't store dimnames, return with NULL dimnames
     return csc_to_dgc(mat);
 }
 
-//' @title Read the pre-stored transpose from a v2 SparsePress (.spz) file
+//' @title Read the pre-stored transpose from a v2 StreamPress (.spz) file
 //' @param path Input file path (.spz)
 //' @return A sparse matrix (dgCMatrix) containing CSC(A^T)
 //' @keywords internal
 // [[Rcpp::export]]
 S4 Rcpp_sp_read_transpose(const std::string& path) {
-    std::vector<uint8_t> data = sparsepress::v2::read_v2(path);
+    std::vector<uint8_t> data = streampress::v2::read_v2(path);
 
-    if (!sparsepress::v2::has_transpose(data.data(), data.size())) {
+    if (!streampress::v2::has_transpose(data.data(), data.size())) {
         stop("File does not contain a pre-stored transpose. "
              "Use sp_write(..., include_transpose = TRUE) to create one.");
     }
 
-    sparsepress::v2::DecompressConfig_v2 dcfg;
-    sparsepress::CSCMatrix mat = sparsepress::v2::decompress_v2_transpose(
+    streampress::v2::DecompressConfig_v2 dcfg;
+    streampress::CSCMatrix mat = streampress::v2::decompress_v2_transpose(
         data.data(), data.size(), dcfg);
 
     return csc_to_dgc(mat);
 }
 
-//' @title Get metadata from a SparsePress (.spz) file without decompressing
+//' @title Get metadata from a StreamPress (.spz) file without decompressing
 //' @param path Input file path (.spz)
 //' @return A list with matrix metadata
 //' @keywords internal
@@ -318,21 +317,21 @@ List Rcpp_sp_metadata(const std::string& path) {
     // Verify magic
     if (header_bytes[0] != 'S' || header_bytes[1] != 'P' ||
         header_bytes[2] != 'R' || header_bytes[3] != 'Z') {
-        stop("Not a valid SparsePress file (bad magic bytes)");
+        stop("Not a valid StreamPress file (bad magic bytes)");
     }
 
     // Check version
     uint16_t version;
     std::memcpy(&version, header_bytes + 4, 2);
 
-    if (version == 3 && read_bytes >= sparsepress::v3::HEADER_SIZE_V3) {
+    if (version == 3 && read_bytes >= streampress::v3::HEADER_SIZE_V3) {
         // v3 header (dense format)
-        sparsepress::v3::FileHeader_v3 hdr =
-            sparsepress::v3::FileHeader_v3::deserialize(header_bytes);
+        streampress::v3::FileHeader_v3 hdr =
+            streampress::v3::FileHeader_v3::deserialize(header_bytes);
 
         double raw_bytes = static_cast<double>(hdr.m) * hdr.n *
-            sparsepress::v3::dense_value_bytes(
-                static_cast<sparsepress::v3::DenseValueType>(hdr.value_type));
+            streampress::v3::dense_value_bytes(
+                static_cast<streampress::v3::DenseValueType>(hdr.value_type));
         double ratio = (file_size > 0) ?
             raw_bytes / file_size : 0.0;
 
@@ -346,8 +345,8 @@ List Rcpp_sp_metadata(const std::string& path) {
             Named("ratio") = ratio,
             Named("version") = 3,
             Named("value_type") = std::string(
-                sparsepress::v3::dense_value_type_name(
-                    static_cast<sparsepress::v3::DenseValueType>(hdr.value_type))),
+                streampress::v3::dense_value_type_name(
+                    static_cast<streampress::v3::DenseValueType>(hdr.value_type))),
             Named("chunk_cols") = static_cast<int>(hdr.chunk_cols),
             Named("num_chunks") = static_cast<int>(hdr.num_chunks),
             Named("has_transpose") = static_cast<bool>(hdr.has_transpose),
@@ -355,17 +354,17 @@ List Rcpp_sp_metadata(const std::string& path) {
         );
     }
 
-    if (version == 2 && read_bytes >= sparsepress::v2::HEADER_SIZE_V2) {
+    if (version == 2 && read_bytes >= streampress::v2::HEADER_SIZE_V2) {
         // v2 header
-        sparsepress::v2::FileHeader_v2 hdr =
-            sparsepress::v2::FileHeader_v2::deserialize(header_bytes);
+        streampress::v2::FileHeader_v2 hdr =
+            streampress::v2::FileHeader_v2::deserialize(header_bytes);
 
         size_t raw_size = 12 +
             (static_cast<size_t>(hdr.n) + 1) * 4 +
             static_cast<size_t>(hdr.nnz) * 4 +
             static_cast<size_t>(hdr.nnz) *
-                sparsepress::v2::value_type_bytes(
-                    static_cast<sparsepress::v2::ValueType_v2>(hdr.value_type));
+                streampress::v2::value_type_bytes(
+                    static_cast<streampress::v2::ValueType_v2>(hdr.value_type));
         double ratio = (file_size > 0) ?
             static_cast<double>(raw_size) / file_size : 0.0;
 
@@ -378,8 +377,8 @@ List Rcpp_sp_metadata(const std::string& path) {
             Named("raw_bytes") = static_cast<double>(raw_size),
             Named("ratio") = ratio,
             Named("version") = static_cast<int>(hdr.version),
-            Named("value_type") = std::string(sparsepress::v2::value_type_name(
-                static_cast<sparsepress::v2::ValueType_v2>(hdr.value_type))),
+            Named("value_type") = std::string(streampress::v2::value_type_name(
+                static_cast<streampress::v2::ValueType_v2>(hdr.value_type))),
             Named("chunk_cols") = static_cast<int>(hdr.chunk_cols),
             Named("num_chunks") = static_cast<int>(hdr.num_chunks),
             Named("row_sorted") = static_cast<bool>(hdr.row_sorted),
@@ -394,19 +393,19 @@ List Rcpp_sp_metadata(const std::string& path) {
     }
 
     // v1 header
-    if (file_size < static_cast<long>(sparsepress::HEADER_SIZE)) {
+    if (file_size < static_cast<long>(streampress::HEADER_SIZE)) {
         stop("File too small to be a valid v1 .spz file");
     }
 
-    sparsepress::FileHeader header = sparsepress::FileHeader::deserialize(header_bytes);
+    streampress::FileHeader header = streampress::FileHeader::deserialize(header_bytes);
 
     double density = (header.m > 0 && header.n > 0)
         ? static_cast<double>(header.nnz) / (static_cast<double>(header.m) * header.n) * 100.0
         : 0.0;
 
-    bool has_delta = (header.flags & sparsepress::FLAG_DELTA_PREDICTION) != 0;
-    bool has_value = (header.flags & sparsepress::FLAG_VALUE_PREDICTION) != 0;
-    bool is_integer = (header.flags & sparsepress::FLAG_INTEGER_VALUES) != 0;
+    bool has_delta = (header.flags & streampress::FLAG_DELTA_PREDICTION) != 0;
+    bool has_value = (header.flags & streampress::FLAG_VALUE_PREDICTION) != 0;
+    bool is_integer = (header.flags & streampress::FLAG_INTEGER_VALUES) != 0;
 
     size_t raw_size = 12 +
         (static_cast<size_t>(header.n) + 1) * 4 +
@@ -431,7 +430,7 @@ List Rcpp_sp_metadata(const std::string& path) {
     );
 }
 
-//' @title Convert a dgCMatrix to SparsePress format (in-memory)
+//' @title Convert a dgCMatrix to StreamPress format (in-memory)
 //' @param A A sparse matrix (dgCMatrix)
 //' @param use_delta Use delta prediction
 //' @param use_value_pred Use value prediction
@@ -441,27 +440,27 @@ List Rcpp_sp_metadata(const std::string& path) {
 RawVector Rcpp_sp_compress(const S4& A,
                            bool use_delta = true,
                            bool use_value_pred = false) {
-    sparsepress::CSCMatrix mat = dgc_to_csc(A);
+    streampress::CSCMatrix mat = dgc_to_csc(A);
 
-    sparsepress::CompressConfig cfg;
+    streampress::CompressConfig cfg;
     cfg.use_delta_prediction = use_delta;
     cfg.use_value_prediction = use_value_pred;
 
-    std::vector<uint8_t> compressed = sparsepress::compress(mat, cfg);
+    std::vector<uint8_t> compressed = streampress::compress(mat, cfg);
 
     RawVector out(compressed.size());
     std::memcpy(out.begin(), compressed.data(), compressed.size());
     return out;
 }
 
-//' @title Decompress a SparsePress raw vector to a dgCMatrix
-//' @param data A raw vector containing compressed SparsePress data
+//' @title Decompress a StreamPress raw vector to a dgCMatrix
+//' @param data A raw vector containing compressed StreamPress data
 //' @return A sparse matrix (dgCMatrix)
 //' @keywords internal
 // [[Rcpp::export]]
 S4 Rcpp_sp_decompress(const RawVector& data) {
     std::vector<uint8_t> compressed(data.begin(), data.end());
-    sparsepress::CSCMatrix mat = sparsepress::decompress(compressed);
+    streampress::CSCMatrix mat = streampress::decompress(compressed);
     return csc_to_dgc(mat);
 }
 
@@ -491,8 +490,8 @@ List Rcpp_sp_write_dense(const NumericMatrix& A, const std::string& path,
     if (codec < 0 || codec > 4)
         stop("Invalid codec value. Must be 0-4.");
 
-    sparsepress::v3::DenseCodec dc =
-        static_cast<sparsepress::v3::DenseCodec>(codec);
+    streampress::v3::DenseCodec dc =
+        static_cast<streampress::v3::DenseCodec>(codec);
 
     // Convert R's column-major double matrix to float for storage
     std::vector<float> fdata(static_cast<size_t>(m) * n);
@@ -501,7 +500,7 @@ List Rcpp_sp_write_dense(const NumericMatrix& A, const std::string& path,
         fdata[k] = static_cast<float>(src[k]);
     }
 
-    sparsepress::v3::write_v3<float>(
+    streampress::v3::write_v3<float>(
         path, fdata.data(), m, n,
         static_cast<uint32_t>(chunk_cols), include_transpose, dc, delta);
 
@@ -525,7 +524,7 @@ List Rcpp_sp_write_dense(const NumericMatrix& A, const std::string& path,
         Named("cols") = static_cast<int>(n),
         Named("num_chunks") = static_cast<int>(num_chunks),
         Named("has_transpose") = include_transpose,
-        Named("codec") = sparsepress::v3::dense_codec_name(dc),
+        Named("codec") = streampress::v3::dense_codec_name(dc),
         Named("delta") = delta
     );
 }
@@ -551,7 +550,7 @@ NumericMatrix Rcpp_sp_read_dense(const std::string& path) {
     fclose(f);
 
     // Verify version
-    uint16_t ver = sparsepress::v3::detect_version(data.data(), file_size);
+    uint16_t ver = streampress::v3::detect_version(data.data(), file_size);
     if (ver != 3) {
         stop("Not an SPZ v3 file (version=" + std::to_string(ver) +
              "). Use sp_read() for v1/v2 sparse files.");
@@ -559,7 +558,7 @@ NumericMatrix Rcpp_sp_read_dense(const std::string& path) {
 
     std::vector<float> fdata;
     uint32_t m, n;
-    sparsepress::v3::read_full_matrix<float>(data.data(), file_size, fdata, m, n);
+    streampress::v3::read_full_matrix<float>(data.data(), file_size, fdata, m, n);
 
     NumericMatrix result(m, n);
     double* dst = result.begin();
@@ -588,25 +587,25 @@ List Rcpp_sp_metadata_v3(const std::string& path) {
 
     if (nread < 8) stop("File too small");
 
-    uint16_t ver = sparsepress::v3::detect_version(buf, nread);
+    uint16_t ver = streampress::v3::detect_version(buf, nread);
     if (ver != 3) {
         stop("Not an SPZ v3 file (version=" + std::to_string(ver) + ")");
     }
 
-    sparsepress::v3::FileHeader_v3 hdr =
-        sparsepress::v3::FileHeader_v3::deserialize(buf);
+    streampress::v3::FileHeader_v3 hdr =
+        streampress::v3::FileHeader_v3::deserialize(buf);
 
     double raw_bytes = static_cast<double>(hdr.m) * hdr.n *
-        sparsepress::v3::dense_value_bytes(
-            static_cast<sparsepress::v3::DenseValueType>(hdr.value_type));
+        streampress::v3::dense_value_bytes(
+            static_cast<streampress::v3::DenseValueType>(hdr.value_type));
 
     return List::create(
         Named("rows") = static_cast<int>(hdr.m),
         Named("cols") = static_cast<int>(hdr.n),
         Named("version") = 3,
         Named("value_type") = std::string(
-            sparsepress::v3::dense_value_type_name(
-                static_cast<sparsepress::v3::DenseValueType>(hdr.value_type))),
+            streampress::v3::dense_value_type_name(
+                static_cast<streampress::v3::DenseValueType>(hdr.value_type))),
         Named("chunk_cols") = static_cast<int>(hdr.chunk_cols),
         Named("num_chunks") = static_cast<int>(hdr.num_chunks),
         Named("has_transpose") = static_cast<bool>(hdr.has_transpose),
@@ -649,7 +648,7 @@ bool Rcpp_st_add_transpose(const std::string& path, bool verbose = true) {
 
 // Helper: serialize an R data.frame to obs_var_table binary format
 static std::vector<uint8_t> serialize_dataframe(const DataFrame& df) {
-    using namespace sparsepress::v2;
+    using namespace streampress::v2;
 
     int ncols = df.size();
     int nrows = df.nrows();
@@ -725,7 +724,7 @@ static std::vector<uint8_t> serialize_dataframe(const DataFrame& df) {
 
 // Helper: deserialize obs_var_table buffer to R DataFrame
 static DataFrame deserialize_to_dataframe(const uint8_t* buf, size_t buf_bytes) {
-    using namespace sparsepress::v2;
+    using namespace streampress::v2;
 
     std::vector<ColumnData> columns = obs_var_table_deserialize(buf, buf_bytes);
 
@@ -807,7 +806,7 @@ static DataFrame deserialize_to_dataframe(const uint8_t* buf, size_t buf_bytes) 
 
 // Helper: read a table blob from file at given offset
 static DataFrame read_table_at_offset(const std::string& path, uint64_t table_off) {
-    using namespace sparsepress::v2;
+    using namespace streampress::v2;
 
     if (table_off == 0) return DataFrame::create();
 
@@ -896,7 +895,7 @@ RawVector Rcpp_st_serialize_table(const DataFrame& df) {
 //' @keywords internal
 // [[Rcpp::export]]
 DataFrame Rcpp_st_read_obs(const std::string& path) {
-    using namespace sparsepress::v2;
+    using namespace streampress::v2;
 
     FILE* f = fopen(path.c_str(), "rb");
     if (!f) stop("Cannot open file: " + path);
@@ -921,7 +920,7 @@ DataFrame Rcpp_st_read_obs(const std::string& path) {
 //' @keywords internal
 // [[Rcpp::export]]
 DataFrame Rcpp_st_read_var(const std::string& path) {
-    using namespace sparsepress::v2;
+    using namespace streampress::v2;
 
     FILE* f = fopen(path.c_str(), "rb");
     if (!f) stop("Cannot open file: " + path);

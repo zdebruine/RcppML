@@ -24,6 +24,12 @@ factor_input(data, name = NULL)
 
 An `fn_node` object of type "input".
 
+## See also
+
+[`nmf_layer`](https://zdebruine.github.io/RcppML/reference/nmf_layer.md),
+[`svd_layer`](https://zdebruine.github.io/RcppML/reference/svd_layer.md),
+[`factor_net`](https://zdebruine.github.io/RcppML/reference/factor_net.md)
+
 ## Examples
 
 ``` r

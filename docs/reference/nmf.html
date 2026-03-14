@@ -52,63 +52,16 @@
 <span>  maxit <span class="op">=</span> <span class="fl">100</span>,</span>
 <span>  L1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span><span class="op">)</span>,</span>
 <span>  L2 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span><span class="op">)</span>,</span>
-<span>  L21 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span><span class="op">)</span>,</span>
-<span>  angular <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span><span class="op">)</span>,</span>
 <span>  seed <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  mask <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  loss <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"mse"</span>, <span class="st">"mae"</span>, <span class="st">"huber"</span>, <span class="st">"gp"</span>, <span class="st">"nb"</span>, <span class="st">"gamma"</span>, <span class="st">"inverse_gaussian"</span>, <span class="st">"tweedie"</span><span class="op">)</span>,</span>
-<span>  huber_delta <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  dispersion <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"per_row"</span>, <span class="st">"per_col"</span>, <span class="st">"global"</span>, <span class="st">"none"</span><span class="op">)</span>,</span>
-<span>  theta_init <span class="op">=</span> <span class="fl">0.1</span>,</span>
-<span>  theta_max <span class="op">=</span> <span class="fl">5</span>,</span>
-<span>  zi <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"none"</span>, <span class="st">"row"</span>, <span class="st">"col"</span>, <span class="st">"twoway"</span><span class="op">)</span>,</span>
-<span>  zi_em_iters <span class="op">=</span> <span class="fl">1L</span>,</span>
-<span>  theta_min <span class="op">=</span> <span class="fl">0</span>,</span>
-<span>  nb_size_init <span class="op">=</span> <span class="fl">10</span>,</span>
-<span>  nb_size_max <span class="op">=</span> <span class="fl">1e+06</span>,</span>
-<span>  nb_size_min <span class="op">=</span> <span class="fl">0.01</span>,</span>
-<span>  gamma_phi_init <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  gamma_phi_max <span class="op">=</span> <span class="fl">10000</span>,</span>
-<span>  gamma_phi_min <span class="op">=</span> <span class="fl">1e-06</span>,</span>
-<span>  tweedie_power <span class="op">=</span> <span class="fl">1.5</span>,</span>
-<span>  graph_W <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  graph_H <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  graph_lambda <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span><span class="op">)</span>,</span>
-<span>  guides <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  sort_model <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  mask_zeros <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  loss <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"mse"</span>, <span class="st">"gp"</span>, <span class="st">"nb"</span>, <span class="st">"gamma"</span>, <span class="st">"inverse_gaussian"</span>, <span class="st">"tweedie"</span><span class="op">)</span>,</span>
 <span>  nonneg <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="cn">TRUE</span>, <span class="cn">TRUE</span><span class="op">)</span>,</span>
-<span>  upper_bound <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span><span class="op">)</span>,</span>
 <span>  test_fraction <span class="op">=</span> <span class="fl">0</span>,</span>
-<span>  patience <span class="op">=</span> <span class="fl">5</span>,</span>
-<span>  cv_k_range <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">50</span><span class="op">)</span>,</span>
-<span>  cv_seed <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  track_train_loss <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  threads <span class="op">=</span> <span class="fl">0</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  cd_tol <span class="op">=</span> <span class="fl">1e-08</span>,</span>
-<span>  cd_maxit <span class="op">=</span> <span class="fl">100L</span>,</span>
-<span>  cd_abs_tol <span class="op">=</span> <span class="fl">1e-15</span>,</span>
-<span>  norm <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"L1"</span>, <span class="st">"L2"</span>, <span class="st">"none"</span><span class="op">)</span>,</span>
-<span>  streaming <span class="op">=</span> <span class="st">"auto"</span>,</span>
-<span>  panel_cols <span class="op">=</span> <span class="fl">0L</span>,</span>
-<span>  resource <span class="op">=</span> <span class="st">"auto"</span>,</span>
 <span>  projective <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  symmetric <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  solver <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"cholesky"</span>, <span class="st">"cd"</span><span class="op">)</span>,</span>
-<span>  init <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"random"</span>, <span class="st">"lanczos"</span>, <span class="st">"irlba"</span><span class="op">)</span>,</span>
-<span>  irls_max_iter <span class="op">=</span> <span class="fl">5L</span>,</span>
-<span>  irls_tol <span class="op">=</span> <span class="fl">1e-04</span>,</span>
+<span>  zi <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"none"</span>, <span class="st">"row"</span>, <span class="st">"col"</span><span class="op">)</span>,</span>
 <span>  robust <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  distribution <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  zero_inflation <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  distribution_config <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
-<span>  zi_config <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
-<span>  robust_config <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
-<span>  on_iteration <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  h_init <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  profile <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  dispatch <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -142,293 +95,63 @@ Also accepts a file path (character string) which will be auto-loaded based on e
 <dd><p>Ridge penalties greater than zero, single value or array of length two for <code>c(w, h)</code></p></dd>
 
 
-<dt id="arg-l-">L21<a class="anchor" aria-label="anchor" href="#arg-l-"></a></dt>
-<dd><p>Group sparsity (L2,1-norm) penalties, single value or array of length two for <code>c(w, h)</code></p></dd>
-
-
-<dt id="arg-angular">angular<a class="anchor" aria-label="anchor" href="#arg-angular"></a></dt>
-<dd><p>Angular regularization penalties, single value or array of length two for <code>c(w, h)</code> (default c(0, 0)).</p></dd>
-
-
 <dt id="arg-seed">seed<a class="anchor" aria-label="anchor" href="#arg-seed"></a></dt>
-<dd><p>random seed(s) for initialization and CV. Can be: <code>NULL</code> for random initialization, a single integer for reproducible initialization, a vector of integers for multiple CV replicates, or a custom W matrix (k x p) for custom initialization.</p></dd>
+<dd><p>initialization control. Accepts:
+<code>NULL</code> for random init, an integer for reproducible random init,
+a matrix (m x k) for custom W initialization, a list of matrices for multi-init,
+or a string: <code>"lanczos"</code>, <code>"irlba"</code>, <code>"randomized"</code>, or <code>"svd"</code>
+(auto-select) for SVD-based initialization.</p></dd>
 
 
 <dt id="arg-mask">mask<a class="anchor" aria-label="anchor" href="#arg-mask"></a></dt>
-<dd><p>dense or sparse matrix of values in <code>data</code> to handle as missing. Alternatively, specify "<code>zeros</code>" or "<code>NA</code>".</p></dd>
+<dd><p>missing data mask. Accepts:
+<code>NULL</code> (no masking), <code>"zeros"</code> (mask zeros), <code>"NA"</code> (mask NAs),
+a dgCMatrix/matrix (custom mask), or <code>list("zeros", &lt;matrix&gt;)</code> to mask
+zeros and use a custom mask simultaneously.</p></dd>
 
 
 <dt id="arg-loss">loss<a class="anchor" aria-label="anchor" href="#arg-loss"></a></dt>
-<dd><p>loss function: <code>"mse"</code> (default), <code>"mae"</code>, <code>"huber"</code>, <code>"gp"</code>, or <code>"nb"</code>.
-Use <code>loss="gp"</code> with <code>dispersion="none"</code> for KL divergence (Poisson).
-Use <code>loss="nb"</code> for Negative Binomial (quadratic variance-mean, standard for scRNA-seq).</p></dd>
-
-
-<dt id="arg-huber-delta">huber_delta<a class="anchor" aria-label="anchor" href="#arg-huber-delta"></a></dt>
-<dd><p>delta parameter for Huber loss (default 1.0).</p></dd>
-
-
-<dt id="arg-dispersion">dispersion<a class="anchor" aria-label="anchor" href="#arg-dispersion"></a></dt>
-<dd><p>dispersion mode for Generalized Poisson loss: <code>"per_row"</code> (default, per-feature dispersion),
-<code>"global"</code> (single shared dispersion), or <code>"none"</code> (no dispersion estimation;
-theta=0 reduces GP to Poisson/KL divergence).</p></dd>
-
-
-<dt id="arg-theta-init">theta_init<a class="anchor" aria-label="anchor" href="#arg-theta-init"></a></dt>
-<dd><p>initial theta value for GP dispersion (default 0.1).</p></dd>
-
-
-<dt id="arg-theta-max">theta_max<a class="anchor" aria-label="anchor" href="#arg-theta-max"></a></dt>
-<dd><p>maximum allowed theta value (default 5.0). Caps dispersion to prevent instability.</p></dd>
-
-
-<dt id="arg-zi">zi<a class="anchor" aria-label="anchor" href="#arg-zi"></a></dt>
-<dd><p>zero-inflation mode for ZIGP/ZINB: <code>"none"</code> (default), <code>"row"</code> (per-row dropout),
-<code>"col"</code> (per-column dropout), or <code>"twoway"</code> (row+column combined). Requires <code>loss="gp"</code> or <code>loss="nb"</code>.
-Estimates structural dropout probabilities pi separately from count model.
-Currently CPU-only; not yet supported in cross-validation mode.</p></dd>
-
-
-<dt id="arg-zi-em-iters">zi_em_iters<a class="anchor" aria-label="anchor" href="#arg-zi-em-iters"></a></dt>
-<dd><p>number of EM iterations per NMF iteration for the zero-inflation E-step
-and M-step (default 1). More iterations give more accurate pi estimates per NMF step.</p></dd>
-
-
-<dt id="arg-theta-min">theta_min<a class="anchor" aria-label="anchor" href="#arg-theta-min"></a></dt>
-<dd><p>minimum theta floor (default 0). Set &gt; 0 to prevent theta collapse to zero.</p></dd>
-
-
-<dt id="arg-nb-size-init">nb_size_init<a class="anchor" aria-label="anchor" href="#arg-nb-size-init"></a></dt>
-<dd><p>initial NB size (r) parameter for Negative Binomial dispersion (default 10.0).</p></dd>
-
-
-<dt id="arg-nb-size-max">nb_size_max<a class="anchor" aria-label="anchor" href="#arg-nb-size-max"></a></dt>
-<dd><p>maximum allowed NB size (default 1e6).</p></dd>
-
-
-<dt id="arg-nb-size-min">nb_size_min<a class="anchor" aria-label="anchor" href="#arg-nb-size-min"></a></dt>
-<dd><p>minimum allowed NB size (default 0.01).</p></dd>
-
-
-<dt id="arg-gamma-phi-init">gamma_phi_init<a class="anchor" aria-label="anchor" href="#arg-gamma-phi-init"></a></dt>
-<dd><p>initial dispersion parameter for Gamma/Inverse Gaussian (default 1.0).</p></dd>
-
-
-<dt id="arg-gamma-phi-max">gamma_phi_max<a class="anchor" aria-label="anchor" href="#arg-gamma-phi-max"></a></dt>
-<dd><p>maximum allowed Gamma/IG dispersion (default 1e4).</p></dd>
-
-
-<dt id="arg-gamma-phi-min">gamma_phi_min<a class="anchor" aria-label="anchor" href="#arg-gamma-phi-min"></a></dt>
-<dd><p>minimum allowed Gamma/IG dispersion (default 1e-6).</p></dd>
-
-
-<dt id="arg-tweedie-power">tweedie_power<a class="anchor" aria-label="anchor" href="#arg-tweedie-power"></a></dt>
-<dd><p>variance power parameter for Tweedie distribution (default 1.5).
-V(mu) = mu^p. Special cases: p=0 Gaussian, p=1 Poisson, p=2 Gamma, p=3 Inverse Gaussian.
-Can also be set via <code>distribution_config$tweedie_power</code>.</p></dd>
-
-
-<dt id="arg-graph-w">graph_W<a class="anchor" aria-label="anchor" href="#arg-graph-w"></a></dt>
-<dd><p>sparse graph Laplacian or weighted adjacency matrix (dgCMatrix, m x m) for
-feature (row) graph regularization. Must be square and symmetric. Pass the graph Laplacian
-\(L = D - A\) (recommended) or a raw adjacency matrix; RcppML converts to Laplacian
-internally. Controls similarity constraints on W rows.</p></dd>
-
-
-<dt id="arg-graph-h">graph_H<a class="anchor" aria-label="anchor" href="#arg-graph-h"></a></dt>
-<dd><p>sparse graph Laplacian or weighted adjacency matrix (dgCMatrix, n x n) for
-sample (column) graph regularization. Must be square and symmetric.
-Controls similarity constraints on H columns.</p></dd>
-
-
-<dt id="arg-graph-lambda">graph_lambda<a class="anchor" aria-label="anchor" href="#arg-graph-lambda"></a></dt>
-<dd><p>regularization strength for graph Laplacian term, single value
-(applied to both W and H graphs) or <code>c(lambda_W, lambda_H)</code> (default <code>c(0, 0)</code>).
-Larger values enforce stronger similarity within connected nodes.</p></dd>
-
-
-<dt id="arg-guides">guides<a class="anchor" aria-label="anchor" href="#arg-guides"></a></dt>
-<dd><p>reserved for future guided/semi-supervised NMF features.</p></dd>
-
-
-<dt id="arg-sort-model">sort_model<a class="anchor" aria-label="anchor" href="#arg-sort-model"></a></dt>
-<dd><p>if <code>TRUE</code> (default), sort factors by descending diagonal values.</p></dd>
-
-
-<dt id="arg-mask-zeros">mask_zeros<a class="anchor" aria-label="anchor" href="#arg-mask-zeros"></a></dt>
-<dd><p>if <code>TRUE</code>, treat all zero entries as missing (default <code>FALSE</code>).</p></dd>
+<dd><p>loss function: <code>"mse"</code> (default), <code>"gp"</code>,
+<code>"nb"</code>, <code>"gamma"</code>, <code>"inverse_gaussian"</code>, or <code>"tweedie"</code>.
+For robust loss (Huber/MAE), use the <code>robust</code> parameter instead.</p></dd>
 
 
 <dt id="arg-nonneg">nonneg<a class="anchor" aria-label="anchor" href="#arg-nonneg"></a></dt>
 <dd><p>logical vector of length 2 for <code>c(w, h)</code> specifying non-negativity constraints (default <code>c(TRUE, TRUE)</code>).</p></dd>
 
 
-<dt id="arg-upper-bound">upper_bound<a class="anchor" aria-label="anchor" href="#arg-upper-bound"></a></dt>
-<dd><p>upper bound constraints for factor values, single value or c(w_bound, h_bound) (default c(0, 0) = no bound).</p></dd>
-
-
 <dt id="arg-test-fraction">test_fraction<a class="anchor" aria-label="anchor" href="#arg-test-fraction"></a></dt>
 <dd><p>fraction of entries to hold out for cross-validation (default 0 = disabled).</p></dd>
-
-
-<dt id="arg-patience">patience<a class="anchor" aria-label="anchor" href="#arg-patience"></a></dt>
-<dd><p>early stopping patience for cross-validation (default 5).</p></dd>
-
-
-<dt id="arg-cv-k-range">cv_k_range<a class="anchor" aria-label="anchor" href="#arg-cv-k-range"></a></dt>
-<dd><p>rank range for automatic rank search, c(min, max) (default c(2, 50)).</p></dd>
-
-
-<dt id="arg-cv-seed">cv_seed<a class="anchor" aria-label="anchor" href="#arg-cv-seed"></a></dt>
-<dd><p>seed(s) for CV holdout pattern.</p></dd>
-
-
-<dt id="arg-track-train-loss">track_train_loss<a class="anchor" aria-label="anchor" href="#arg-track-train-loss"></a></dt>
-<dd><p>if <code>TRUE</code> (default), track training loss history during cross-validation.</p></dd>
-
-
-<dt id="arg-threads">threads<a class="anchor" aria-label="anchor" href="#arg-threads"></a></dt>
-<dd><p>number of threads for OpenMP parallelization (default 0 = all available)</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
 <dd><p>print progress information during fitting (default FALSE)</p></dd>
 
 
-<dt id="arg-cd-tol">cd_tol<a class="anchor" aria-label="anchor" href="#arg-cd-tol"></a></dt>
-<dd><p>relative convergence tolerance for coordinate descent NNLS solver (default 1e-8).</p></dd>
-
-
-<dt id="arg-cd-maxit">cd_maxit<a class="anchor" aria-label="anchor" href="#arg-cd-maxit"></a></dt>
-<dd><p>maximum number of coordinate descent iterations in the NNLS solver (default 100).
-Acts as a safety cap; with adaptive CD probing, the effective iteration count is determined
-automatically from a sample of columns (typically 3-10 with warm starts).</p></dd>
-
-
-<dt id="arg-cd-abs-tol">cd_abs_tol<a class="anchor" aria-label="anchor" href="#arg-cd-abs-tol"></a></dt>
-<dd><p>absolute convergence tolerance for coordinate descent (default 1e-15).</p></dd>
-
-
-<dt id="arg-norm">norm<a class="anchor" aria-label="anchor" href="#arg-norm"></a></dt>
-<dd><p>normalization type for the scaling diagonal: <code>"L1"</code> (default), <code>"L2"</code>, or <code>"none"</code>.
-Controls how W and H factors are normalized at each iteration and in the final result.</p></dd>
-
-
-<dt id="arg-streaming">streaming<a class="anchor" aria-label="anchor" href="#arg-streaming"></a></dt>
-<dd><p>streaming mode for large matrices: <code>"auto"</code>, <code>TRUE</code>, or <code>FALSE</code>.</p></dd>
-
-
-<dt id="arg-panel-cols">panel_cols<a class="anchor" aria-label="anchor" href="#arg-panel-cols"></a></dt>
-<dd><p>number of columns per streaming panel (default 0 = auto-detect).</p></dd>
-
-
-<dt id="arg-resource">resource<a class="anchor" aria-label="anchor" href="#arg-resource"></a></dt>
-<dd><p>compute resource override: <code>"auto"</code> (default) auto-detects available resources,
-<code>"cpu"</code> forces CPU, <code>"gpu"</code> forces GPU. Can also be set via the <code>RCPPML_RESOURCE</code>
-environment variable (param takes priority over env var).</p></dd>
-
-
 <dt id="arg-projective">projective<a class="anchor" aria-label="anchor" href="#arg-projective"></a></dt>
-<dd><p>if <code>TRUE</code>, use projective NMF where \(H = diag(d) \cdot W^T \cdot A\) instead of solving for H independently (default <code>FALSE</code>).
-This constrains the approximation to the column space of W, yielding parts-based representations with
-automatic sparsity in the coefficient matrix.</p></dd>
+<dd><p>if <code>TRUE</code>, use projective NMF (default <code>FALSE</code>).</p></dd>
 
 
 <dt id="arg-symmetric">symmetric<a class="anchor" aria-label="anchor" href="#arg-symmetric"></a></dt>
-<dd><p>if <code>TRUE</code>, use symmetric NMF where \(H = W^T\), factorizing \(A \approx W \cdot d \cdot W^T\) (default <code>FALSE</code>).
-Appropriate for symmetric matrices such as covariance, correlation, or similarity matrices.
-Only W is solved for; H is set equal to the transpose of W. Data should be a square symmetric matrix.</p></dd>
+<dd><p>if <code>TRUE</code>, use symmetric NMF where H = W^T (default <code>FALSE</code>).</p></dd>
 
 
-<dt id="arg-solver">solver<a class="anchor" aria-label="anchor" href="#arg-solver"></a></dt>
-<dd><p>NNLS solver for the alternating least squares subproblem:
-<code>"auto"</code> (default) selects the best solver for the given rank and hardware —
-CD for k &lt;= 32 on GPU, Cholesky otherwise.
-<code>"cholesky"</code> (Cholesky factorization + non-negativity clip, fastest for high ranks),
-<code>"cd"</code> (coordinate descent, exact non-negativity enforcement, best quality at low ranks).</p></dd>
-
-
-<dt id="arg-init">init<a class="anchor" aria-label="anchor" href="#arg-init"></a></dt>
-<dd><p>initialization method: <code>"random"</code> (default, uniform random),
-<code>"lanczos"</code> (Lanczos SVD seed with \(W = |U| \sqrt{\Sigma}\), \(H = |V| \sqrt{\Sigma}\);
-typically reduces iteration count by 30-50\<!-- % with better initial loss), or \code{"irlba"} -->
-(Implicitly Restarted Lanczos Bidiagonalization; alternative to Lanczos for high ranks k &gt;= 32).
-SVD-based methods (lanczos/irlba) provide better initialization quality but add overhead;
-use when initialization quality is more important than speed.</p></dd>
-
-
-<dt id="arg-irls-max-iter">irls_max_iter<a class="anchor" aria-label="anchor" href="#arg-irls-max-iter"></a></dt>
-<dd><p>maximum IRLS iterations for robust losses (default 20).</p></dd>
-
-
-<dt id="arg-irls-tol">irls_tol<a class="anchor" aria-label="anchor" href="#arg-irls-tol"></a></dt>
-<dd><p>convergence tolerance for IRLS weights (default 1e-4).</p></dd>
+<dt id="arg-zi">zi<a class="anchor" aria-label="anchor" href="#arg-zi"></a></dt>
+<dd><p>zero-inflation mode: <code>"none"</code> (default), <code>"row"</code>, or <code>"col"</code>.
+Requires <code>loss="gp"</code> or <code>loss="nb"</code>.</p></dd>
 
 
 <dt id="arg-robust">robust<a class="anchor" aria-label="anchor" href="#arg-robust"></a></dt>
-<dd><p>robustness control. <code>FALSE</code> (default) for no robustness. <code>TRUE</code> for
-Huber-type robustness with delta=1.345 (95\<!-- % asymptotic efficiency under Gaussian). -->
-A positive numeric value sets a custom Huber delta. Works with any distribution:
-IRLS weights are decomposed into distribution_weight * robust_huber_modifier.</p></dd>
-
-
-<dt id="arg-distribution">distribution<a class="anchor" aria-label="anchor" href="#arg-distribution"></a></dt>
-<dd><p>new unified distribution API. One of: <code>"auto"</code> (selects via
-score test on a quick baseline fit), <code>"gaussian"</code> (MSE),
-<code>"poisson"</code> (GP with dispersion=none), <code>"gp"</code> (Generalized Poisson),
-<code>"nb"</code> (Negative Binomial), <code>"gamma"</code> (Gamma),
-<code>"inverse_gaussian"</code> (Inverse Gaussian), or <code>"tweedie"</code> (Tweedie with
-continuous variance power V(mu) = mu^p; set p via <code>tweedie_power</code> or
-<code>distribution_config$tweedie_power</code>). When specified, takes precedence
-over the <code>loss</code> parameter. Use <code>distribution_config</code> to set distribution-specific
-tuning parameters.</p></dd>
-
-
-<dt id="arg-zero-inflation">zero_inflation<a class="anchor" aria-label="anchor" href="#arg-zero-inflation"></a></dt>
-<dd><p>zero-inflation mode (new API): <code>"none"</code>, <code>"row"</code>, <code>"col"</code>,
-<code>"twoway"</code>, or <code>"auto"</code>. Equivalent to the <code>zi</code> parameter but preferred
-in the new API. Use <code>zi_config</code> for additional tuning.</p></dd>
-
-
-<dt id="arg-distribution-config">distribution_config<a class="anchor" aria-label="anchor" href="#arg-distribution-config"></a></dt>
-<dd><p>named list of distribution-specific overrides. Supported keys:
-<code>dispersion</code> (dispersion mode), <code>theta_init</code>/<code>theta_max</code>/<code>theta_min</code>
-(GP theta), <code>nb_size_init</code>/<code>nb_size_max</code>/<code>nb_size_min</code> (NB size r),
-<code>gamma_phi_init</code>/<code>gamma_phi_max</code>/<code>gamma_phi_min</code> (Gamma/IG dispersion phi).</p></dd>
-
-
-<dt id="arg-zi-config">zi_config<a class="anchor" aria-label="anchor" href="#arg-zi-config"></a></dt>
-<dd><p>named list of zero-inflation overrides. Supported keys:
-<code>em_iters</code> (number of EM iterations per NMF step).</p></dd>
-
-
-<dt id="arg-robust-config">robust_config<a class="anchor" aria-label="anchor" href="#arg-robust-config"></a></dt>
-<dd><p>named list of robustness overrides. Supported keys:
-<code>delta</code> (Huber delta), <code>irls_max_iter</code>, <code>irls_tol</code>.</p></dd>
-
-
-<dt id="arg-on-iteration">on_iteration<a class="anchor" aria-label="anchor" href="#arg-on-iteration"></a></dt>
-<dd><p>optional callback function called after each NMF iteration.
-Receives iteration number and current loss. Return <code>FALSE</code> to stop early.</p></dd>
-
-
-<dt id="arg-h-init">h_init<a class="anchor" aria-label="anchor" href="#arg-h-init"></a></dt>
-<dd><p>optional initial H matrix (k x n) for custom initialization.
-When provided alongside a custom W via <code>seed</code>, both factors are
-initialized from user-supplied values. Default <code>NULL</code> (auto-init).</p></dd>
-
-
-<dt id="arg-profile">profile<a class="anchor" aria-label="anchor" href="#arg-profile"></a></dt>
-<dd><p>if <code>TRUE</code>, enable per-iteration timing profiling.
-Results stored in <code>misc$profile</code> of the returned object. Default <code>FALSE</code>.</p></dd>
-
-
-<dt id="arg-dispatch">dispatch<a class="anchor" aria-label="anchor" href="#arg-dispatch"></a></dt>
-<dd><p>StreamPress dispatch mode for .spz file input. <code>NULL</code> (default) or <code>"auto"</code> for automatic dispatch based on available RAM; a string like <code>"inmemory"</code>, <code>"chunked"</code>, or <code>"streaming"</code> to override.</p></dd>
+<dd><p>robustness control. <code>FALSE</code> (default), <code>TRUE</code> (Huber delta=1.345),
+<code>"mae"</code> (near-MAE via very small Huber delta), or a positive numeric Huber delta.
+Huber loss is quadratic for small residuals and linear for large ones, controlled by delta.
+<code>TRUE</code> (delta=1.345) provides moderate outlier robustness.
+A large delta (e.g. 100) approaches standard MSE; a small delta (e.g. 0.01) approaches MAE.
+<code>"mae"</code> is shorthand for delta=1e-4 (effectively L1 loss).</p></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
-<dd><p>additional development parameters</p></dd>
+<dd><p>advanced parameters. See <strong>Advanced Parameters</strong> section.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -444,8 +167,7 @@ Results stored in <code>misc$profile</code> of the returned object. Default <cod
 
 <dt><code>misc</code></dt>
 <dd><p>list containing <code>tol</code> (final tolerance), <code>iter</code> (iteration count),
-<code>loss</code> (final loss value), <code>loss_type</code> (loss function used), and <code>runtime</code> (seconds).
-Cross-validation models also include <code>test_mask</code>, <code>test_loss</code>, <code>train_loss</code>.</p></dd>
+<code>loss</code> (final loss value), <code>loss_type</code> (loss function used), and <code>runtime</code> (seconds).</p></dd>
 
 
 </dl><p>When <code>k</code> is a vector: a <code>data.frame</code> of class <code>nmfCrossValidate</code> with columns
@@ -478,9 +200,6 @@ with columns of \(w\) and rows of \(h\) scaled to sum to 1 via multiplication by
 
 
 <p>The <code>loss</code> parameter controls the objective function:</p><ul><li><p><code>"mse"</code>: Mean Squared Error (default). Standard Frobenius norm minimization.</p></li>
-<li><p><code>"mae"</code>: Mean Absolute Error. More robust to outliers than MSE.</p></li>
-<li><p><code>"huber"</code>: Huber loss. Quadratic for small errors, linear for large errors.
-Controlled by <code>huber_delta</code> parameter.</p></li>
 <li><p><code>"gp"</code>: Generalized Poisson. For overdispersed count data (e.g., scRNA-seq).
 Use <code>dispersion</code> to control per-row or global overdispersion estimation.
 With <code>dispersion="none"</code>, equivalent to KL divergence (Poisson model).</p></li>
@@ -493,79 +212,135 @@ positive continuous data with heavy right tails.</p></li>
 <li><p><code>"tweedie"</code>: Tweedie distribution. Variance proportional to mu^p where p is
 set via <code>tweedie_power</code> (default 1.5). Interpolates between Poisson (p=1),
 Gamma (p=2), and Inverse Gaussian (p=3).</p></li>
-</ul><p>Non-MSE losses use Iteratively Reweighted Least Squares (IRLS) which may be slower
-but provides robustness to outliers (MAE, Huber) or better fits for count data (GP, NB)
+</ul><p>For robust fitting (equivalent to Huber or MAE loss), use the <code>robust</code> parameter
+instead of a separate loss function. Setting <code>robust = TRUE</code> applies Huber-weighted
+IRLS with delta=1.345; <code>robust = "mae"</code> approximates mean absolute error.</p>
+<p>Non-MSE losses use Iteratively Reweighted Least Squares (IRLS) which may be slower
+but provides better fits for count data (GP, NB)
 and positive continuous data (Gamma, Inverse Gaussian).</p>
-<p>Alternatively, use the <code>distribution</code> parameter for the new unified API, which
-maps distribution names to loss functions and provides <code>distribution_config</code>
-for fine-grained tuning.</p>
     </div>
     <div class="section level2">
-    <h2 id="l-group-sparsity-regularization">L21 (Group Sparsity) Regularization<a class="anchor" aria-label="anchor" href="#l-group-sparsity-regularization"></a></h2>
+    <h2 id="advanced-parameters-via-">Advanced Parameters (via <code>...</code>)<a class="anchor" aria-label="anchor" href="#advanced-parameters-via-"></a></h2>
 
 
-<p>L21-norm regularization (also known as group LASSO) encourages entire rows of W or
-columns of H to become zero.</p>
-    </div>
-    <div class="section level2">
-    <h2 id="graph-regularization">Graph Regularization<a class="anchor" aria-label="anchor" href="#graph-regularization"></a></h2>
+<p>The following parameters can be passed via <code>...</code>:</p>
+<p><strong>Regularization:</strong></p><dl><dt><code>L21</code></dt>
+<dd><p>Group sparsity penalty, single value or <code>c(w, h)</code> (default <code>c(0,0)</code>)</p></dd>
+
+<dt><code>angular</code></dt>
+<dd><p>Angular decorrelation penalty, <code>c(w, h)</code> (default <code>c(0,0)</code>)</p></dd>
+
+<dt><code>upper_bound</code></dt>
+<dd><p>Box constraint on factors, <code>c(w, h)</code> (default <code>c(0,0)</code> = no bound)</p></dd>
+
+<dt><code>graph_W</code>, <code>graph_H</code></dt>
+<dd><p>Sparse graph Laplacian matrices for feature/sample regularization</p></dd>
+
+<dt><code>graph_lambda</code></dt>
+<dd><p>Graph regularization strength, <code>c(w, h)</code> (default <code>c(0,0)</code>)</p></dd>
+
+<dt><code>target_H</code></dt>
+<dd><p>Target matrix (k x n) for H-side regularization.
+Steers H toward a desired structure during fitting. See <code><a href="compute_target.html">compute_target</a></code>.</p></dd>
+
+<dt><code>target_lambda</code></dt>
+<dd><p>Target regularization strength, single value
+or <code>c(w, h)</code> (default 0). Positive values attract H toward the
+target (label enrichment); negative values use PROJ_ADV
+eigenvalue-projected adversarial removal to suppress
+target-correlated structure (batch removal).
+See <code><a href="../articles/guided-nmf.html">vignette("guided-nmf")</a></code> for details.</p></dd>
 
 
-<p>Graph Laplacian regularization encourages connected nodes in a graph to have similar
-factor representations.</p>
-    </div>
+</dl><p><strong>Distribution Tuning:</strong></p><dl><dt><code>dispersion</code></dt>
+<dd><p>Dispersion mode for GP loss: <code>"per_row"</code>, <code>"per_col"</code>, <code>"global"</code>, <code>"none"</code></p></dd>
+
+<dt><code>theta_init</code>, <code>theta_max</code>, <code>theta_min</code></dt>
+<dd><p>GP theta bounds</p></dd>
+
+<dt><code>nb_size_init</code>, <code>nb_size_max</code>, <code>nb_size_min</code></dt>
+<dd><p>NB dispersion bounds</p></dd>
+
+<dt><code>gamma_phi_init</code>, <code>gamma_phi_max</code>, <code>gamma_phi_min</code></dt>
+<dd><p>Gamma/IG dispersion bounds</p></dd>
+
+<dt><code>tweedie_power</code></dt>
+<dd><p>Tweedie variance power (default 1.5)</p></dd>
+
+<dt><code>irls_max_iter</code>, <code>irls_tol</code></dt>
+<dd><p>IRLS convergence parameters</p></dd>
+
+
+</dl><p><strong>Zero-Inflation:</strong></p><dl><dt><code>zi_em_iters</code></dt>
+<dd><p>EM iterations per NMF step (default 1)</p></dd>
+
+
+</dl><p><strong>Solver:</strong></p><dl><dt><code>solver</code></dt>
+<dd><p>NNLS solver: <code>"auto"</code>, <code>"cholesky"</code>, <code>"cd"</code></p></dd>
+
+<dt><code>cd_tol</code></dt>
+<dd><p>CD convergence tolerance (default 1e-8)</p></dd>
+
+<dt><code>cd_maxit</code></dt>
+<dd><p>CD max iterations (default 100)</p></dd>
+
+<dt><code>h_init</code></dt>
+<dd><p>Custom initial H matrix</p></dd>
+
+
+</dl><p><strong>Cross-Validation:</strong></p><dl><dt><code>cv_seed</code></dt>
+<dd><p>Separate seed(s) for CV holdout pattern</p></dd>
+
+<dt><code>patience</code></dt>
+<dd><p>Early stopping patience (default 5)</p></dd>
+
+<dt><code>cv_k_range</code></dt>
+<dd><p>Auto-rank search range (default <code>c(2, 50)</code>)</p></dd>
+
+<dt><code>track_train_loss</code></dt>
+<dd><p>Track training loss in CV (default TRUE)</p></dd>
+
+
+</dl><p><strong>Resources &amp; Output:</strong></p><dl><dt><code>threads</code></dt>
+<dd><p>OpenMP threads (default 0 = all)</p></dd>
+
+<dt><code>resource</code></dt>
+<dd><p>Compute backend: <code>"auto"</code>, <code>"cpu"</code>, <code>"gpu"</code></p></dd>
+
+<dt><code>norm</code></dt>
+<dd><p>Factor normalization: <code>"L1"</code>, <code>"L2"</code>, <code>"none"</code></p></dd>
+
+<dt><code>sort_model</code></dt>
+<dd><p>Sort factors by diagonal (default TRUE)</p></dd>
+
+
+</dl><p><strong>Streaming:</strong></p><dl><dt><code>streaming</code></dt>
+<dd><p>SPZ streaming mode: <code>"auto"</code>, <code>TRUE</code>, <code>FALSE</code></p></dd>
+
+<dt><code>panel_cols</code></dt>
+<dd><p>Panel size for streaming (default 0 = auto)</p></dd>
+
+<dt><code>dispatch</code></dt>
+<dd><p>StreamPress dispatch override</p></dd>
+
+
+</dl><p><strong>Callbacks:</strong></p><dl><dt><code>on_iteration</code></dt>
+<dd><p>Per-iteration callback function</p></dd>
+
+<dt><code>profile</code></dt>
+<dd><p>Enable timing profiling (default FALSE)</p></dd>
+
+
+</dl></div>
     <div class="section level2">
     <h2 id="compute-resources-cpu-vs-gpu-">Compute Resources (CPU vs GPU)<a class="anchor" aria-label="anchor" href="#compute-resources-cpu-vs-gpu-"></a></h2>
 
 
 <p>By default (<code>resource = "auto"</code>), RcppML auto-detects available hardware.
-All features are fully supported on CPU (the default backend):</p><ul><li><p>Standard NMF (sparse and dense)</p></li>
-<li><p>Cross-validation NMF</p></li>
-<li><p>All loss functions (MSE, MAE, Huber, KL)</p></li>
-<li><p>All regularization types (L1, L2, L21, angular, graph)</p></li>
-<li><p>Upper bound constraints</p></li>
-<li><p>OpenMP multi-threading</p></li>
-</ul><p>GPU acceleration (when compiled with CUDA support) accelerates:</p><ul><li><p>Sparse NMF (standard mode)</p></li>
-<li><p>Dense NMF (standard mode)</p></li>
-</ul><p>GPU is experimental and falls back to CPU automatically if unavailable.
-Use <code>resource = "gpu"</code> to force GPU, <code>resource = "cpu"</code> to force CPU.
-Set <code>verbose = TRUE</code> to see which backend is selected.</p>
+All features are fully supported on CPU (the default backend).
+GPU acceleration (when compiled with CUDA support) accelerates sparse and dense NMF.
+GPU is experimental and falls back to CPU automatically if unavailable.</p>
     </div>
-    <div class="section level2">
-    <h2 id="unsupported-combinations">Unsupported Combinations<a class="anchor" aria-label="anchor" href="#unsupported-combinations"></a></h2>
-
-
-<p>Not all parameter combinations are currently supported. The following will
-produce an error or unexpected results:</p><dl><dt>Cholesky + non-MSE loss</dt>
-<dd><p>The Cholesky solver (<code>solver="cholesky"</code>)
-does not support IRLS-based losses (GP, NB, Gamma, Inverse Gaussian, Tweedie).
-Use <code>solver="cd"</code> or <code>solver="auto"</code> (default) for non-MSE losses.</p></dd>
-
-<dt>Zero-inflation with non-GP/NB losses</dt>
-<dd><p>Zero-inflation (<code>zi</code> or
-<code>zero_inflation</code>) is only supported with <code>loss="gp"</code> and
-<code>loss="nb"</code>. Using ZI with MSE, Gamma, Inverse Gaussian, or Tweedie
-is unsupported and will produce incorrect results.</p></dd>
-
-<dt>Zero-inflation "twoway" mode</dt>
-<dd><p>The <code>zi="twoway"</code> mode is currently
-broken on all backends. Use <code>zi="row"</code> or <code>zi="col"</code> instead.</p></dd>
-
-<dt>MAE and Huber losses</dt>
-<dd><p>The <code>"mae"</code> and <code>"huber"</code> loss functions
-are deprecated. Use the <code>robust</code> parameter with any distribution instead
-(e.g., <code>robust=TRUE</code> with <code>distribution="gaussian"</code>).</p></dd>
-
-<dt>GPU + dense CV</dt>
-<dd><p>GPU cross-validation with dense matrices falls back to
-CPU via sparseView conversion. Native GPU dense CV is not yet implemented.</p></dd>
-
-<dt>GPU + projective/symmetric CV</dt>
-<dd><p>Cross-validation with <code>projective=TRUE</code>
-or <code>symmetric=TRUE</code> falls back to CPU on GPU builds.</p></dd>
-
-
-</dl></div>
     <div class="section level2">
     <h2 id="methods">Methods<a class="anchor" aria-label="anchor" href="#methods"></a></h2>
 
@@ -585,7 +360,8 @@ or <code>symmetric=TRUE</code> falls back to CPU on GPU builds.</p></dd>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></code>, <code><a href="mse.html">mse</a></code>, <code><a href="nnls.html">nnls</a></code>, <code><a href="align.html">align</a></code>, <code><a href="summary-nmf-method.html">summary,nmf-method</a></code></p></div>
+    <div class="dont-index"><p><code><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></code>, <code><a href="mse.html">mse</a></code>, <code><a href="nnls.html">nnls</a></code>,
+<code><a href="align.html">align</a></code>, <code><a href="summary-nmf-method.html">summary,nmf-method</a></code></p></div>
     </div>
     <div class="section level2">
     <h2 id="author">Author<a class="anchor" aria-label="anchor" href="#author"></a></h2>
@@ -599,15 +375,15 @@ or <code>symmetric=TRUE</code> falls back to CPU on GPU builds.</p></dd>
 <span class="r-in"><span><span class="va">model</span> <span class="op">&lt;-</span> <span class="fu">nmf</span><span class="op">(</span><span class="fu">Matrix</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/rsparsematrix.html" class="external-link">rsparsematrix</a></span><span class="op">(</span><span class="fl">1000</span>, <span class="fl">100</span>, <span class="fl">0.1</span><span class="op">)</span>, k <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># cross-validation to find optimal rank</span></span></span>
-<span class="r-in"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://Matrix.R-forge.R-project.org" class="external-link">Matrix</a></span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">A</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/rsparsematrix.html" class="external-link">rsparsematrix</a></span><span class="op">(</span><span class="fl">500</span>, <span class="fl">100</span>, <span class="fl">0.1</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">cv_results</span> <span class="op">&lt;-</span> <span class="fu">nmf</span><span class="op">(</span><span class="va">A</span>, k <span class="op">=</span> <span class="fl">2</span><span class="op">:</span><span class="fl">10</span>, cv_seed <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, test_fraction <span class="op">=</span> <span class="fl">0.1</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">cv_results</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="simulateNMF.html">simulateNMF</a></span><span class="op">(</span><span class="fl">200</span>, <span class="fl">80</span>, k <span class="op">=</span> <span class="fl">5</span>, noise <span class="op">=</span> <span class="fl">3.0</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">cv</span> <span class="op">&lt;-</span> <span class="fu">nmf</span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">A</span>, k <span class="op">=</span> <span class="fl">2</span><span class="op">:</span><span class="fl">10</span>, test_fraction <span class="op">=</span> <span class="fl">0.05</span>, cv_seed <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">3</span>,</span></span>
+<span class="r-in"><span>          tol <span class="op">=</span> <span class="fl">1e-5</span>, maxit <span class="op">=</span> <span class="fl">200</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">cv</span><span class="op">)</span></span></span>
 <span class="r-plt img"><img src="nmf-1.png" alt="" width="700" height="433"></span>
-<span class="r-in"><span><span class="va">optimal_k</span> <span class="op">&lt;-</span> <span class="va">cv_results</span><span class="op">$</span><span class="va">k</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/which.min.html" class="external-link">which.min</a></span><span class="op">(</span><span class="va">cv_results</span><span class="op">$</span><span class="va">test_mse</span><span class="op">)</span><span class="op">]</span></span></span>
+<span class="r-in"><span><span class="va">optimal_k</span> <span class="op">&lt;-</span> <span class="va">cv</span><span class="op">$</span><span class="va">k</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/which.min.html" class="external-link">which.min</a></span><span class="op">(</span><span class="va">cv</span><span class="op">$</span><span class="va">test_mse</span><span class="op">)</span><span class="op">]</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># fit final model with optimal rank</span></span></span>
-<span class="r-in"><span><span class="va">model</span> <span class="op">&lt;-</span> <span class="fu">nmf</span><span class="op">(</span><span class="va">A</span>, <span class="va">optimal_k</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">model</span> <span class="op">&lt;-</span> <span class="fu">nmf</span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">A</span>, <span class="va">optimal_k</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="co"># }</span></span></span>
 </code></pre></div>
     </div>

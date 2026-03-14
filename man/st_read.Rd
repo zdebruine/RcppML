@@ -4,7 +4,7 @@
 \alias{st_read}
 \title{Read a StreamPress file into a dgCMatrix}
 \usage{
-st_read(path, cols = NULL, reorder = TRUE, threads = 0L)
+st_read(path, cols = NULL, reorder = TRUE, threads = NULL)
 }
 \arguments{
 \item{path}{Path to a \code{.spz} file.}
@@ -13,7 +13,11 @@ st_read(path, cols = NULL, reorder = TRUE, threads = 0L)
 
 \item{reorder}{Logical; if \code{TRUE} (default), undo any row permutation.}
 
-\item{threads}{Integer; number of threads (0 = all available). Default 0.}
+\item{threads}{Integer or NULL; threads for parallel decompression.
+\code{NULL} (default) enables automatic selection: 1 thread for files
+smaller than 50 MB (where threading overhead exceeds the benefit), and
+all available threads for larger files. Use \code{0} to always request
+all available threads, or a positive integer to fix the count.}
 }
 \value{
 A \code{dgCMatrix} sparse matrix with dimnames if available.

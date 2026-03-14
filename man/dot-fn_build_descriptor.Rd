@@ -6,6 +6,9 @@
 \usage{
 .fn_build_descriptor(net)
 }
+\value{
+A named list describing the factor network graph for C++.
+}
 \description{
 Build a flat descriptor for Rcpp_factor_net_fit()
 }

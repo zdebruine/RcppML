@@ -2,7 +2,7 @@
 % Please edit documentation in R/RcppExports.R
 \name{Rcpp_sp_metadata}
 \alias{Rcpp_sp_metadata}
-\title{Get metadata from a SparsePress (.spz) file without decompressing}
+\title{Get metadata from a StreamPress (.spz) file without decompressing}
 \usage{
 Rcpp_sp_metadata(path)
 }
@@ -13,6 +13,6 @@ Rcpp_sp_metadata(path)
 A list with matrix metadata
 }
 \description{
-Get metadata from a SparsePress (.spz) file without decompressing
+Get metadata from a StreamPress (.spz) file without decompressing
 }
 \keyword{internal}

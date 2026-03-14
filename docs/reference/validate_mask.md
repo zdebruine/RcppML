@@ -1,22 +1,28 @@
 # Validate mask parameter
 
-Validate mask parameter
+Supports the extended mask syntax:
+
+- `NULL`: no masking
+
+- `"zeros"`: mask zero entries (sets mask_zeros=TRUE)
+
+- `"NA"`: mask NA entries
+
+- dgCMatrix or matrix: custom mask matrix
+
+- `list("zeros", <matrix>)`: mask zeros AND custom mask simultaneously
 
 ## Usage
 
 ``` r
-validate_mask(mask, sparse, has_na)
+validate_mask(mask, has_na = FALSE)
 ```
 
 ## Arguments
 
 - mask:
 
-  NULL, character (`"zeros"` or `"NA"`), or matrix
-
-- sparse:
-
-  Logical; whether sparse mode is enabled
+  NULL, character, matrix, or list
 
 - has_na:
 

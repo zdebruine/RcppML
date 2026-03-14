@@ -45,12 +45,12 @@ and `model` is returned.
 data <- simulateNMF(50, 30, k = 3, seed = 1)
 model <- nmf(data$A, 3, seed = 1, maxit = 50)
 sparsity(model)
-#>   factor  sparsity model
-#> 1   nmf1 0.1800000     w
-#> 2   nmf2 0.2200000     w
-#> 3   nmf3 0.1800000     w
-#> 4   nmf1 0.2666667     h
-#> 5   nmf2 0.2666667     h
-#> 6   nmf3 0.2000000     h
+#>   factor   sparsity model
+#> 1   nmf1 0.04000000     w
+#> 2   nmf2 0.06000000     w
+#> 3   nmf3 0.08000000     w
+#> 4   nmf1 0.06666667     h
+#> 5   nmf2 0.06666667     h
+#> 6   nmf3 0.06666667     h
 # }
 ```

@@ -87,11 +87,17 @@ suggesting NB may be preferable to GP.
 ## Examples
 
 ``` r
-if (FALSE) { # \dontrun{
+# \donttest{
 A <- abs(rsparsematrix(200, 100, 0.3))
 model <- nmf(A, k = 5, loss = "mse")
 diag <- score_test_distribution(A, model)
 print(diag$scores)
+#>   power        T_stat        abs_T     distribution
+#> 1     0 -4.365022e-01 4.365022e-01         gaussian
+#> 2     1  5.237193e+02 5.237193e+02               gp
+#> 3     2  5.222982e+08 5.222982e+08            gamma
+#> 4     3  5.222981e+14 5.222981e+14 inverse_gaussian
 cat("Best distribution:", diag$best_distribution, "\n")
-} # }
+#> Best distribution: gaussian 
+# }
 ```

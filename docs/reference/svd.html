@@ -66,33 +66,17 @@ holdout cross-validation.</p>
 <span>  scale <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  seed <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  threads <span class="op">=</span> <span class="fl">0</span>,</span>
 <span>  L1 <span class="op">=</span> <span class="fl">0</span>,</span>
 <span>  L2 <span class="op">=</span> <span class="fl">0</span>,</span>
 <span>  nonneg <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  upper_bound <span class="op">=</span> <span class="fl">0</span>,</span>
-<span>  L21 <span class="op">=</span> <span class="fl">0</span>,</span>
-<span>  angular <span class="op">=</span> <span class="fl">0</span>,</span>
-<span>  graph_U <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  graph_V <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  graph_lambda <span class="op">=</span> <span class="fl">0</span>,</span>
-<span>  convergence <span class="op">=</span> <span class="st">"factor"</span>,</span>
 <span>  test_fraction <span class="op">=</span> <span class="fl">0</span>,</span>
-<span>  cv_seed <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  patience <span class="op">=</span> <span class="fl">3</span>,</span>
-<span>  mask_zeros <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  obs_mask <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  mask <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  robust <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  k_max <span class="op">=</span> <span class="fl">50</span>,</span>
 <span>  resource <span class="op">=</span> <span class="st">"auto"</span>,</span>
-<span>  method <span class="op">=</span> <span class="st">"auto"</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu">sparse_pca</span><span class="op">(</span><span class="va">A</span>, k <span class="op">=</span> <span class="fl">10</span>, L1 <span class="op">=</span> <span class="fl">0.5</span>, <span class="va">...</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu">nn_pca</span><span class="op">(</span><span class="va">A</span>, k <span class="op">=</span> <span class="fl">10</span>, <span class="va">...</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu">svd_pca</span><span class="op">(</span><span class="va">...</span><span class="op">)</span></span></code></pre></div>
+<span>  method <span class="op">=</span> <span class="st">"auto"</span>,</span>
+<span>  <span class="va">...</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -110,8 +94,7 @@ via cross-validation. Default: 10.</p></dd>
 
 
 <dt id="arg-tol">tol<a class="anchor" aria-label="anchor" href="#arg-tol"></a></dt>
-<dd><p>Convergence tolerance per rank-1 subproblem. Measures
-\(1 - |\cos(u_{new}, u_{old})|\). Default: 1e-5.</p></dd>
+<dd><p>Convergence tolerance per rank-1 subproblem. Default: 1e-5.</p></dd>
 
 
 <dt id="arg-maxit">maxit<a class="anchor" aria-label="anchor" href="#arg-maxit"></a></dt>
@@ -123,9 +106,7 @@ via cross-validation. Default: 10.</p></dd>
 
 
 <dt id="arg-scale">scale<a class="anchor" aria-label="anchor" href="#arg-scale"></a></dt>
-<dd><p>If <code>TRUE</code>, divide each row by its standard deviation after centering
-(correlation PCA mode). Implies <code>center = TRUE</code>. This computes PCA on the
-correlation matrix rather than the covariance matrix. Default: <code>FALSE</code>.</p></dd>
+<dd><p>If <code>TRUE</code>, divide each row by its standard deviation after centering. Default: <code>FALSE</code>.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
@@ -133,126 +114,57 @@ correlation matrix rather than the covariance matrix. Default: <code>FALSE</code
 
 
 <dt id="arg-seed">seed<a class="anchor" aria-label="anchor" href="#arg-seed"></a></dt>
-<dd><p>Random seed for initialization and cross-validation.
-Default: NULL (random). Use an integer for reproducibility.</p></dd>
-
-
-<dt id="arg-threads">threads<a class="anchor" aria-label="anchor" href="#arg-threads"></a></dt>
-<dd><p>Number of OpenMP threads. 0 = all available. Default: 0.</p></dd>
+<dd><p>Random seed for initialization and cross-validation. Default: NULL.</p></dd>
 
 
 <dt id="arg-l-">L1<a class="anchor" aria-label="anchor" href="#arg-l-"></a></dt>
-<dd><p>L1 (lasso) penalty. Either a single value (applied to both u and v)
-or a length-2 vector <code>c(L1_u, L1_v)</code>. Default: 0.</p></dd>
+<dd><p>L1 (lasso) penalty. Single value or length-2 vector. Default: 0.</p></dd>
 
 
 <dt id="arg-l-">L2<a class="anchor" aria-label="anchor" href="#arg-l-"></a></dt>
-<dd><p>L2 (ridge) penalty. Either a single value or length-2 vector. Default: 0.</p></dd>
+<dd><p>L2 (ridge) penalty. Single value or length-2 vector. Default: 0.</p></dd>
 
 
 <dt id="arg-nonneg">nonneg<a class="anchor" aria-label="anchor" href="#arg-nonneg"></a></dt>
-<dd><p>Non-negativity constraints. Either a single logical (both sides)
-or a length-2 logical vector <code>c(nonneg_u, nonneg_v)</code>. Default: <code>FALSE</code>.</p></dd>
+<dd><p>Non-negativity constraints. Single logical or length-2 vector. Default: <code>FALSE</code>.</p></dd>
 
 
 <dt id="arg-upper-bound">upper_bound<a class="anchor" aria-label="anchor" href="#arg-upper-bound"></a></dt>
-<dd><p>Upper bound constraints. Single value or length-2 vector. Default: 0 (no bound).</p></dd>
-
-
-<dt id="arg-l-">L21<a class="anchor" aria-label="anchor" href="#arg-l-"></a></dt>
-<dd><p>L2,1 (group sparsity) penalty. Drives entire components toward zero.
-Single value or length-2 vector <code>c(L21_u, L21_v)</code>. Default: 0.
-Supported by: <code>deflation</code> (adaptive L2), <code>krylov</code> (Gram-level).</p></dd>
-
-
-<dt id="arg-angular">angular<a class="anchor" aria-label="anchor" href="#arg-angular"></a></dt>
-<dd><p>Angular (orthogonality) penalty. Decorrelates components.
-Single value or length-2 vector <code>c(angular_u, angular_v)</code>. Default: 0.
-Supported by: <code>deflation</code> and <code>krylov</code>.</p></dd>
-
-
-<dt id="arg-graph-u">graph_U<a class="anchor" aria-label="anchor" href="#arg-graph-u"></a></dt>
-<dd><p>Sparse graph Laplacian matrix for features (rows, m x m).
-Encourages smooth loadings along feature graph edges. Default: <code>NULL</code>.
-Supported by: <code>deflation</code> and <code>krylov</code>.</p></dd>
-
-
-<dt id="arg-graph-v">graph_V<a class="anchor" aria-label="anchor" href="#arg-graph-v"></a></dt>
-<dd><p>Sparse graph Laplacian matrix for samples (columns, n x n).
-Default: <code>NULL</code>. Supported by: <code>deflation</code> and <code>krylov</code>.</p></dd>
-
-
-<dt id="arg-graph-lambda">graph_lambda<a class="anchor" aria-label="anchor" href="#arg-graph-lambda"></a></dt>
-<dd><p>Graph regularization strength. Single value or length-2 vector
-<code>c(graph_u_lambda, graph_v_lambda)</code>. Default: 0.</p></dd>
-
-
-<dt id="arg-convergence">convergence<a class="anchor" aria-label="anchor" href="#arg-convergence"></a></dt>
-<dd><p>Convergence criterion: <code>"factor"</code> (track change in factors,
-default), <code>"loss"</code> (track change in explained variance), or <code>"both"</code>
-(stop when either criterion is met).</p></dd>
+<dd><p>Upper bound constraints. Single value or length-2 vector. Default: 0.</p></dd>
 
 
 <dt id="arg-test-fraction">test_fraction<a class="anchor" aria-label="anchor" href="#arg-test-fraction"></a></dt>
-<dd><p>Fraction of entries to hold out for cross-validation / auto-rank.
-Default: 0 (disabled). Set to a value in (0, 1) to enable CV holdout, or use
-<code>k = "auto"</code> which automatically sets this to 0.05.</p></dd>
+<dd><p>Fraction of entries to hold out for cross-validation. Default: 0.</p></dd>
 
 
-<dt id="arg-cv-seed">cv_seed<a class="anchor" aria-label="anchor" href="#arg-cv-seed"></a></dt>
-<dd><p>Separate seed for holdout mask. Default: NULL (derive from <code>seed</code>).</p></dd>
-
-
-<dt id="arg-patience">patience<a class="anchor" aria-label="anchor" href="#arg-patience"></a></dt>
-<dd><p>For auto-rank: stop after this many non-improving factors. Default: 3.</p></dd>
-
-
-<dt id="arg-mask-zeros">mask_zeros<a class="anchor" aria-label="anchor" href="#arg-mask-zeros"></a></dt>
-<dd><p>If <code>TRUE</code>, only non-zero entries can be holdout (for sparse
-recommendation data). Default: <code>FALSE</code>.</p></dd>
-
-
-<dt id="arg-obs-mask">obs_mask<a class="anchor" aria-label="anchor" href="#arg-obs-mask"></a></dt>
-<dd><p>Optional sparse matrix (<code>dgCMatrix</code>) of the same dimensions as
-<code>A</code>. Non-zero entries indicate observations to exclude from fitting
-(e.g., known outliers or missing-data indicators). Currently supported by
-the <code>deflation</code> method. Default: <code>NULL</code> (no masking).</p></dd>
+<dt id="arg-mask">mask<a class="anchor" aria-label="anchor" href="#arg-mask"></a></dt>
+<dd><p>Masking control. <code>NULL</code> (default, no masking), <code>"zeros"</code>
+(mask zero entries — only non-zero entries can be holdout in CV),
+a <code>dgCMatrix</code> (custom mask matrix where non-zero entries are excluded),
+or <code>list("zeros", &lt;dgCMatrix&gt;)</code> to combine both.</p></dd>
 
 
 <dt id="arg-robust">robust<a class="anchor" aria-label="anchor" href="#arg-robust"></a></dt>
-<dd><p>Robustness control for outlier downweighting via Huber loss.
-<code>FALSE</code> (default): standard MSE (no robustness).
-<code>TRUE</code>: Huber-type robustness with delta=1.345 (95% asymptotic efficiency).
-<code>"mae"</code>: near-MAE behavior (delta=1e-4).
-Numeric: custom Huber delta value.
-Uses IRLS reweighting within the ALS deflation loop. Supported by <code>deflation</code>
-method only; other methods are automatically redirected to deflation when robust is active.</p></dd>
-
-
-<dt id="arg-k-max">k_max<a class="anchor" aria-label="anchor" href="#arg-k-max"></a></dt>
-<dd><p>Maximum rank for auto-rank mode. Default: 50.</p></dd>
+<dd><p>Robustness control: <code>FALSE</code> (default), <code>TRUE</code> (Huber delta=1.345),
+<code>"mae"</code> (near-MAE), or a positive numeric Huber delta.</p></dd>
 
 
 <dt id="arg-resource">resource<a class="anchor" aria-label="anchor" href="#arg-resource"></a></dt>
-<dd><p>Compute backend: <code>"auto"</code> (default, auto-detect),
-<code>"cpu"</code>, or <code>"gpu"</code>.</p></dd>
+<dd><p>Compute backend: <code>"auto"</code> (default), <code>"cpu"</code>, or <code>"gpu"</code>.</p></dd>
 
 
 <dt id="arg-method">method<a class="anchor" aria-label="anchor" href="#arg-method"></a></dt>
-<dd><p>Algorithm to use. One of <code>"auto"</code> (default), <code>"deflation"</code>,
-<code>"krylov"</code>, <code>"lanczos"</code>, <code>"irlba"</code>, <code>"randomized"</code>.
-When <code>"auto"</code>: constraints route to deflation/krylov; otherwise
-method is selected based on rank and resource (GPU: Lanczos k&lt;32,
-Randomized 32&lt;=k&lt;64, IRLBA k&gt;=64; CPU: Lanczos k&lt;64, IRLBA k&gt;=64).</p></dd>
+<dd><p>Algorithm: <code>"auto"</code> (default), <code>"deflation"</code>, <code>"krylov"</code>,
+<code>"lanczos"</code>, <code>"irlba"</code>, <code>"randomized"</code>.</p></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
-<dd><p>Additional arguments passed to <code>svd</code> (used by convenience wrappers).</p></dd>
+<dd><p>Advanced parameters. See <strong>Advanced Parameters</strong> section.</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>An S4 object of class <code>svd_pca</code> with slots:</p><dl><dt><code>u</code></dt>
+    <p>An S4 object of class <code>svd</code> with slots:</p><dl><dt><code>u</code></dt>
 <dd><p>Left singular vectors (scores), m x k matrix</p></dd>
 
   <dt><code>d</code></dt>
@@ -276,7 +188,7 @@ Randomized 32&lt;=k&lt;64, IRLBA k&gt;=64; CPU: Lanczos k&lt;64, IRLBA k&gt;=64)
   <dt><code>"krylov"</code></dt>
 <dd><p>Krylov-Seeded Projected Refinement (KSPR). Block
     method: computes all k factors simultaneously via Lanczos seed + Gram-solve-then-project.
-    Faster than deflation for larger k. Supports all regularization. CV is
+    Faster than deflation for larger k. Supports all regularization except robust. CV is
     evaluated post-convergence.</p></dd>
 
   <dt><code>"lanczos"</code></dt>
@@ -296,9 +208,7 @@ Randomized 32&lt;=k&lt;64, IRLBA k&gt;=64; CPU: Lanczos k&lt;64, IRLBA k&gt;=64)
     <div class="section level2">
     <h2 id="note">Note<a class="anchor" aria-label="anchor" href="#note"></a></h2>
     <p>This function shadows <code><a href="https://rdrr.io/r/base/svd.html" class="external-link">base::svd()</a></code>. To use the base R version,
-call <code><a href="https://rdrr.io/r/base/svd.html" class="external-link">base::svd()</a></code> explicitly. The RcppML version provides iterative
-SVD algorithms suitable for large sparse matrices, whereas <code><a href="https://rdrr.io/r/base/svd.html" class="external-link">base::svd()</a></code>
-computes the full SVD using LAPACK.</p>
+call <code><a href="https://rdrr.io/r/base/svd.html" class="external-link">base::svd()</a></code> explicitly.</p>
     </div>
     <div class="section level2">
     <h2 id="auto-rank">Auto-rank<a class="anchor" aria-label="anchor" href="#auto-rank"></a></h2>
@@ -310,89 +220,49 @@ improve for <code>patience</code> consecutive factors. The returned model is
 truncated to the best rank.</p>
     </div>
     <div class="section level2">
-    <h2 id="convenience-aliases">Convenience Aliases<a class="anchor" aria-label="anchor" href="#convenience-aliases"></a></h2>
+    <h2 id="advanced-parameters-via-">Advanced Parameters (via <code>...</code>)<a class="anchor" aria-label="anchor" href="#advanced-parameters-via-"></a></h2>
 
 
-<ul><li><p><code>pca(A, k, ...)</code>: PCA (same as <code>svd(A, k, center = TRUE, ...)</code>)</p></li>
-<li><p><code>sparse_pca(A, k, L1, ...)</code>: PCA with L1 sparsity on v</p></li>
-<li><p><code>nn_pca(A, k, ...)</code>: Non-negative PCA (centered, non-negative u and v)</p></li>
-<li><p><code>svd_pca(...)</code>: Deprecated alias for <code>svd()</code></p></li>
-</ul></div>
-    <div class="section level2">
-    <h2 id="unsupported-combinations">Unsupported Combinations<a class="anchor" aria-label="anchor" href="#unsupported-combinations"></a></h2>
+<p>The following parameters can be passed via <code>...</code>:</p><dl><dt><code>L21</code></dt>
+<dd><p>L2,1 (group sparsity) penalty. Single value or length-2 vector (default 0).</p></dd>
 
+  <dt><code>angular</code></dt>
+<dd><p>Angular (orthogonality) penalty. Single value or length-2 vector (default 0).</p></dd>
 
-<dl><dt>Robust + non-deflation method</dt>
-<dd><p>Huber-type robustness (<code>robust=TRUE</code>
-    or numeric delta) requires IRLS reweighting and is only supported by the
-    <code>deflation</code> method. Other methods are automatically redirected to
-    deflation when <code>robust</code> is active.</p></dd>
+  <dt><code>graph_U</code></dt>
+<dd><p>Sparse graph Laplacian for features (m x m). Default NULL.</p></dd>
 
-  <dt>GPU dense streaming</dt>
-<dd><p>GPU streaming SVD for dense matrices is not yet
-    implemented. Dense streaming requires SPZ v3 dense format support.</p></dd>
+  <dt><code>graph_V</code></dt>
+<dd><p>Sparse graph Laplacian for samples (n x n). Default NULL.</p></dd>
 
-  <dt>GPU Krylov dense</dt>
-<dd><p>The Krylov method does not have a GPU dense
-    implementation. Use <code>lanczos</code>, <code>irlba</code>, or <code>randomized</code>
-    on GPU with dense input.</p></dd>
+  <dt><code>graph_lambda</code></dt>
+<dd><p>Graph regularization strength. Single value or length-2 (default 0).</p></dd>
 
-  <dt>Constraints + matrix-free methods</dt>
-<dd><p>Regularization (L1, L2, L21, angular,
-    graph, nonneg, upper_bound) is only supported by <code>deflation</code> and
-    <code>krylov</code> methods. Using constraints with <code>lanczos</code>, <code>irlba</code>,
-    or <code>randomized</code> will produce an error.</p></dd>
+  <dt><code>convergence</code></dt>
+<dd><p>Convergence criterion: <code>"factor"</code> (default) or <code>"global"</code>.</p></dd>
 
+  <dt><code>cv_seed</code></dt>
+<dd><p>Separate seed for holdout mask. Default NULL.</p></dd>
 
-</dl></div>
-    <div class="section level2">
-    <h2 id="parameter-conventions-vs-nmf-">Parameter Conventions (vs. nmf)<a class="anchor" aria-label="anchor" href="#parameter-conventions-vs-nmf-"></a></h2>
+  <dt><code>patience</code></dt>
+<dd><p>Auto-rank non-improving factor patience (default 3).</p></dd>
 
+  <dt><code>k_max</code></dt>
+<dd><p>Maximum rank for auto-rank mode (default 50).</p></dd>
 
-<p>Several parameters in <code>svd()</code> differ intentionally from <code><a href="nmf.html">nmf()</a></code>:</p><dl><dt>Input naming</dt>
-<dd><p><code>svd()</code> uses <code>A</code> (linear algebra convention);
-    <code><a href="nmf.html">nmf()</a></code> uses <code>data</code> (statistical modeling convention).</p></dd>
-
-  <dt>Graph parameters</dt>
-<dd><p><code>svd()</code> uses <code>graph_U</code>/<code>graph_V</code>
-    matching SVD factor names (U, V); <code><a href="nmf.html">nmf()</a></code> uses
-    <code>graph_W</code>/<code>graph_H</code>.</p></dd>
-
-  <dt>Penalty shape</dt>
-<dd><p><code>svd()</code> accepts scalars (expanded internally
-    to length-2); <code><a href="nmf.html">nmf()</a></code> requires explicit <code>c(w, h)</code> vectors.
-    The scalar API is simpler for per-factor SVD iteration.</p></dd>
-
-  <dt>Non-negativity shape</dt>
-<dd><p><code>svd()</code> accepts a single logical;
-    <code><a href="nmf.html">nmf()</a></code> requires <code>c(w, h)</code>. SVD rarely needs
-    side-specific control.</p></dd>
-
-  <dt>Tolerance</dt>
-<dd><p><code>svd()</code> defaults to <code>tol = 1e-5</code>
-    (per-factor convergence); <code><a href="nmf.html">nmf()</a></code> defaults to <code>tol = 1e-4</code>
-    (global convergence across all factors simultaneously).</p></dd>
+  <dt><code>threads</code></dt>
+<dd><p>Number of OpenMP threads. 0 = all (default 0).</p></dd>
 
 
 </dl></div>
-    <div class="section level2">
-    <h2 id="deprecated">Deprecated<a class="anchor" aria-label="anchor" href="#deprecated"></a></h2>
-
-
-<p><code>sparse_pca()</code> is deprecated. Use <code>svd(center=TRUE, L1=c(0, L1))</code> instead.</p>
-
-<p><code>nn_pca()</code> is deprecated. Use <code>svd(center=TRUE, nonneg=TRUE)</code> instead.</p>
-
-<p><code>svd_pca()</code> is deprecated. Use <code>svd()</code> instead.</p>
-    </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="nmf.html">nmf</a></code>, <code><a href="project.html">project</a></code>, <code><a href="pca.html">pca</a></code></p></div>
+    <div class="dont-index"><p><code><a href="nmf.html">nmf</a></code>, <code><a href="pca.html">pca</a></code></p></div>
     </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># \donttest{</span></span></span>
 <span class="r-in"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/zdebruine/RcppML" class="external-link">RcppML</a></span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">iris</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">A</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">iris</span><span class="op">[</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">4</span><span class="op">]</span><span class="op">)</span></span></span>
@@ -403,21 +273,24 @@ truncated to the best rank.</p>
 <span class="r-in"><span><span class="co"># PCA with centering (convenience wrapper)</span></span></span>
 <span class="r-in"><span><span class="va">p</span> <span class="op">&lt;-</span> <span class="fu"><a href="pca.html">pca</a></span><span class="op">(</span><span class="va">A</span>, k <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Sparse PCA</span></span></span>
-<span class="r-in"><span><span class="va">sp</span> <span class="op">&lt;-</span> <span class="fu">sparse_pca</span><span class="op">(</span><span class="va">A</span>, k <span class="op">=</span> <span class="fl">3</span>, L1 <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Non-negative PCA</span></span></span>
-<span class="r-in"><span><span class="va">nn</span> <span class="op">&lt;-</span> <span class="fu">nn_pca</span><span class="op">(</span><span class="va">A</span>, k <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span></span>
-<span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Auto-rank PCA</span></span></span>
 <span class="r-in"><span><span class="va">ar</span> <span class="op">&lt;-</span> <span class="fu">svd</span><span class="op">(</span><span class="va">A</span>, k <span class="op">=</span> <span class="st">"auto"</span>, center <span class="op">=</span> <span class="cn">TRUE</span>, verbose <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Krylov with angular penalty</span></span></span>
-<span class="r-in"><span><span class="va">ka</span> <span class="op">&lt;-</span> <span class="fu">svd</span><span class="op">(</span><span class="va">A</span>, k <span class="op">=</span> <span class="fl">10</span>, method <span class="op">=</span> <span class="st">"krylov"</span>, angular <span class="op">=</span> <span class="fl">0.1</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   auto method: deflation (k=50, gpu=FALSE)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   CV: 39 test entries held out (39 zeroed), denom_correction=0.9500</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   Factor 1: sigma=4.0891e+01  iters=4  test_mse=2.966425e+00</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   Factor 2: sigma=1.9770e+01  iters=10  test_mse=5.827467e+00</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   Factor 3: sigma=1.3789e+01  iters=6  test_mse=1.264707e+01</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   Factor 4: sigma=1.1120e+01  iters=2  test_mse=1.705114e+01</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   Auto-rank: patience exhausted at factor 4, best rank = 1 (test_mse=2.966425e+00)</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Robust PCA (outlier-resistant)</span></span></span>
 <span class="r-in"><span><span class="va">rp</span> <span class="op">&lt;-</span> <span class="fu">svd</span><span class="op">(</span><span class="va">A</span>, k <span class="op">=</span> <span class="fl">3</span>, center <span class="op">=</span> <span class="cn">TRUE</span>, robust <span class="op">=</span> <span class="cn">TRUE</span>, verbose <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   auto method: deflation (k=3, gpu=FALSE)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   Robust SVD: Huber delta=1.3450, IRLS reweighting active</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   Factor 1: sigma=4.0970e+01  iters=2</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   Factor 2: sigma=1.7062e+01  iters=3</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   Factor 3: sigma=2.1213e+00  iters=3</span>
+<span class="r-in"><span><span class="co"># }</span></span></span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

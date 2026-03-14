@@ -24,10 +24,10 @@
 #pragma once
 
 #include <FactorNet/core/types.hpp>
-#include <sparsepress/sparsepress_v2.hpp>
-#include <sparsepress/sparsepress_v3.hpp>
-#include <sparsepress/format/header_v2.hpp>
-#include <sparsepress/format/header_v3.hpp>
+#include <streampress/sparsepress_v2.hpp>
+#include <streampress/sparsepress_v3.hpp>
+#include <streampress/format/header_v2.hpp>
+#include <streampress/format/header_v3.hpp>
 
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
@@ -46,7 +46,7 @@ namespace detail {
 
 template<typename Scalar>
 inline Eigen::SparseMatrix<Scalar, Eigen::ColMajor>
-csc_typed_to_eigen(const sparsepress::CSCMatrixTyped<Scalar>& csc,
+csc_typed_to_eigen(const streampress::CSCMatrixTyped<Scalar>& csc,
                    uint32_t nrows, uint32_t ncols)
 {
     using SpMat = Eigen::SparseMatrix<Scalar, Eigen::ColMajor>;
@@ -80,10 +80,10 @@ struct StreamingContext {
     bool is_v3 = false;   ///< true for v3 dense format
 
     // v2-only
-    std::vector<sparsepress::v2::ChunkDescriptor_v2> chunks;
+    std::vector<streampress::v2::ChunkDescriptor_v2> chunks;
 
     // v3-only
-    sparsepress::v3::FileHeader_v3 v3_header;
+    streampress::v3::FileHeader_v3 v3_header;
 
     /// Row means (populated if center=true)
     DenseVector<Scalar> row_means;
@@ -125,7 +125,7 @@ struct StreamingContext {
             for (uint32_t c = 0; c < num_chunks; ++c) {
                 std::vector<Scalar> panel;
                 uint32_t col_start, nc;
-                sparsepress::v3::read_forward_chunk<Scalar>(
+                streampress::v3::read_forward_chunk<Scalar>(
                     file_data.data(), file_size, v3_header,
                     c, panel, col_start, nc);
                 // Map to Eigen dense matrix (column-major: m rows × nc cols)
@@ -138,10 +138,10 @@ struct StreamingContext {
             cached_panels.resize(num_chunks);
             for (uint32_t c = 0; c < num_chunks; ++c) {
                 uint32_t nc = chunks[c].num_cols;
-                sparsepress::v2::DecompressConfig_v2 dcfg;
+                streampress::v2::DecompressConfig_v2 dcfg;
                 dcfg.col_start = static_cast<int>(chunks[c].col_start);
                 dcfg.col_end = static_cast<int>(chunks[c].col_start + nc);
-                auto csc = sparsepress::v2::decompress_v2_typed<Scalar>(
+                auto csc = streampress::v2::decompress_v2_typed<Scalar>(
                     file_data.data(), file_data.size(), dcfg);
                 cached_panels[c] = csc_typed_to_eigen<Scalar>(csc, m, nc);
                 chunk_col_starts[c] = chunks[c].col_start;
@@ -184,17 +184,17 @@ struct StreamingContext {
         fclose(f);
 
         // Detect format version
-        uint16_t version = sparsepress::v3::detect_version(file_data.data(), file_size);
+        uint16_t version = streampress::v3::detect_version(file_data.data(), file_size);
 
         if (version == 3) {
             is_v3 = true;
-            v3_header = sparsepress::v3::read_header_v3(file_data.data(), file_size);
+            v3_header = streampress::v3::read_header_v3(file_data.data(), file_size);
             m = v3_header.m;
             n = v3_header.n;
             num_chunks = v3_header.num_chunks;
         } else {
             is_v3 = false;
-            auto header = sparsepress::v2::FileHeader_v2::deserialize(file_data.data());
+            auto header = streampress::v2::FileHeader_v2::deserialize(file_data.data());
             m = header.m;
             n = header.n;
             num_chunks = header.num_chunks;
@@ -203,8 +203,8 @@ struct StreamingContext {
             const uint8_t* chunk_idx_ptr = file_data.data() + header.chunk_index_offset;
             for (uint32_t c = 0; c < num_chunks; ++c) {
                 std::memcpy(&chunks[c],
-                            chunk_idx_ptr + c * sizeof(sparsepress::v2::ChunkDescriptor_v2),
-                            sizeof(sparsepress::v2::ChunkDescriptor_v2));
+                            chunk_idx_ptr + c * sizeof(streampress::v2::ChunkDescriptor_v2),
+                            sizeof(streampress::v2::ChunkDescriptor_v2));
             }
         }
 
@@ -243,10 +243,10 @@ struct StreamingContext {
             }
         } else {
             for (uint32_t c = 0; c < num_chunks; ++c) {
-                sparsepress::v2::DecompressConfig_v2 dcfg;
+                streampress::v2::DecompressConfig_v2 dcfg;
                 dcfg.col_start = static_cast<int>(chunks[c].col_start);
                 dcfg.col_end = static_cast<int>(chunks[c].col_start + chunks[c].num_cols);
-                auto csc = sparsepress::v2::decompress_v2_typed<Scalar>(
+                auto csc = streampress::v2::decompress_v2_typed<Scalar>(
                     file_data.data(), file_data.size(), dcfg);
                 for (uint64_t idx = 0; idx < csc.nnz; ++idx) {
                     sums(csc.i[idx]) += csc.x[idx];
@@ -268,10 +268,10 @@ struct StreamingContext {
             }
         } else {
             for (uint32_t c = 0; c < num_chunks; ++c) {
-                sparsepress::v2::DecompressConfig_v2 dcfg;
+                streampress::v2::DecompressConfig_v2 dcfg;
                 dcfg.col_start = static_cast<int>(chunks[c].col_start);
                 dcfg.col_end = static_cast<int>(chunks[c].col_start + chunks[c].num_cols);
-                auto csc = sparsepress::v2::decompress_v2_typed<Scalar>(
+                auto csc = streampress::v2::decompress_v2_typed<Scalar>(
                     file_data.data(), file_data.size(), dcfg);
                 for (uint64_t idx = 0; idx < csc.nnz; ++idx) {
                     sum_sq += csc.x[idx] * csc.x[idx];
@@ -296,10 +296,10 @@ struct StreamingContext {
             }
         } else {
             for (uint32_t c = 0; c < num_chunks; ++c) {
-                sparsepress::v2::DecompressConfig_v2 dcfg;
+                streampress::v2::DecompressConfig_v2 dcfg;
                 dcfg.col_start = static_cast<int>(chunks[c].col_start);
                 dcfg.col_end = static_cast<int>(chunks[c].col_start + chunks[c].num_cols);
-                auto csc = sparsepress::v2::decompress_v2_typed<Scalar>(
+                auto csc = streampress::v2::decompress_v2_typed<Scalar>(
                     file_data.data(), file_data.size(), dcfg);
                 for (uint64_t idx = 0; idx < csc.nnz; ++idx) {
                     sum_sq(csc.i[idx]) += csc.x[idx] * csc.x[idx];

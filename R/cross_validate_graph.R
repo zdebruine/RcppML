@@ -52,7 +52,7 @@
 #'     \item{all_fits}{List of all fit results (if \code{keep_fits = TRUE}).}
 #'   }
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' library(Matrix)
 #' X <- rsparsematrix(100, 50, 0.1)
 #' inp <- factor_input(X, "X")

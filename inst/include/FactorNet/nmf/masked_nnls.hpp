@@ -51,7 +51,6 @@ inline void masked_solve_col(
     bool nonneg,
     int cd_max_iter,
     Scalar cd_tol,
-    Scalar cd_abs_tol,
     int solver_mode)
 {
     if (solver_mode == 1) {
@@ -63,7 +62,7 @@ inline void masked_solve_col(
         FactorNet::primitives::detail::cd_nnls_col_fixed(
             G_local, b, x, k,
             static_cast<Scalar>(0), static_cast<Scalar>(0),
-            nonneg, cd_max_iter, static_cast<Scalar>(0), cd_tol, cd_abs_tol);
+            nonneg, cd_max_iter, static_cast<Scalar>(0), cd_tol);
     }
 }
 
@@ -148,7 +147,7 @@ void masked_nnls_h(
             ? DenseVector<Scalar>(H.col(j))
             : DenseVector<Scalar>::Zero(k);
         masked_solve_col(G_local, b.data(), x.data(), k,
-            config.H.nonneg, config.cd_max_iter, config.cd_tol, config.cd_abs_tol,
+            config.H.nonneg, config.cd_max_iter, config.cd_tol,
             config.solver_mode);
         H.col(j) = x;
     }
@@ -236,7 +235,7 @@ void masked_nnls_w(
 
         DenseVector<Scalar> x = warm_start ? DenseVector<Scalar>(W_T.col(j)) : DenseVector<Scalar>::Zero(k);
         masked_solve_col(G_local, b.data(), x.data(), k,
-            config.W.nonneg, config.cd_max_iter, config.cd_tol, config.cd_abs_tol,
+            config.W.nonneg, config.cd_max_iter, config.cd_tol,
             config.solver_mode);
         W_T.col(j) = x;
     }

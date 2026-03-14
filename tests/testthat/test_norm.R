@@ -135,11 +135,11 @@ test_that("different norm types produce different d values", {
 # ---- Cross-validation with norm ----
 test_that("cross-validation works with all norm types", {
   # Multi-rank CV uses test_fraction > 0
-  cv_l1 <- nmf(A_sparse, k = 2:3, test_fraction = 0.1, reps = 1,
+  cv_l1 <- nmf(A_sparse, k = 2:3, test_fraction = 0.1, cv_seed = 1,
                 norm = "L1", seed = 1, maxit = 10, v = FALSE)
-  cv_l2 <- nmf(A_sparse, k = 2:3, test_fraction = 0.1, reps = 1,
+  cv_l2 <- nmf(A_sparse, k = 2:3, test_fraction = 0.1, cv_seed = 1,
                 norm = "L2", seed = 1, maxit = 10, v = FALSE)
-  cv_none <- nmf(A_sparse, k = 2:3, test_fraction = 0.1, reps = 1,
+  cv_none <- nmf(A_sparse, k = 2:3, test_fraction = 0.1, cv_seed = 1,
                  norm = "none", seed = 1, maxit = 10, v = FALSE)
   expect_s3_class(cv_l1, "data.frame")
   expect_s3_class(cv_l2, "data.frame")

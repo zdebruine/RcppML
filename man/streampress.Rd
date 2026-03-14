@@ -5,15 +5,18 @@
 \title{StreamPress I/O: Read, Write, and Inspect Compressed Matrices}
 \description{
 Functions for reading and writing matrices in StreamPress (.spz) format.
-StreamPress achieves 10-20x compression on typical
-scRNA-seq sparse matrices using rANS entropy coding, and supports
-dense v3 format with multiple compression codecs.
+StreamPress achieves 5-10x compression over raw float32 CSC binary on
+typical scRNA-seq sparse matrices using rANS entropy coding.  Beyond storage
+savings, SPZ is also faster to read than raw CSC binary at any thread count:
+the bottleneck in reading large sparse matrices is sparse object construction
+(sorting indices, allocating R/Eigen structures), which SPZ parallelises
+across independent chunks while raw CSC must perform sequentially.
 }
 \details{
 StreamPress (.spz) supports two format versions:
 \itemize{
   \item \strong{v2 (sparse)}: Column-oriented compressed CSC format.
-    Lossless, 10-20x compression. Self-describing header.
+    Lossless, 5-10x compression over raw float32 CSC. Self-describing header.
   \item \strong{v3 (dense)}: Column-major dense panels with optional
     FP16/QUANT8/rANS compression. For streaming NMF on dense data.
 }

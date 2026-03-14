@@ -83,13 +83,13 @@ or \(w\) and \(h\) matrices. A long <code>data.frame</code> with columns <code>f
 <span class="r-in"><span><span class="va">data</span> <span class="op">&lt;-</span> <span class="fu"><a href="simulateNMF.html">simulateNMF</a></span><span class="op">(</span><span class="fl">50</span>, <span class="fl">30</span>, k <span class="op">=</span> <span class="fl">3</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">model</span> <span class="op">&lt;-</span> <span class="fu"><a href="nmf.html">nmf</a></span><span class="op">(</span><span class="va">data</span><span class="op">$</span><span class="va">A</span>, <span class="fl">3</span>, seed <span class="op">=</span> <span class="fl">1</span>, maxit <span class="op">=</span> <span class="fl">50</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu">sparsity</span><span class="op">(</span><span class="va">model</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   factor  sparsity model</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1   nmf1 0.1800000     w</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2   nmf2 0.2200000     w</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3   nmf3 0.1800000     w</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4   nmf1 0.2666667     h</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5   nmf2 0.2666667     h</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6   nmf3 0.2000000     h</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   factor   sparsity model</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1   nmf1 0.04000000     w</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2   nmf2 0.06000000     w</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3   nmf3 0.08000000     w</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4   nmf1 0.06666667     h</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5   nmf2 0.06666667     h</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6   nmf3 0.06666667     h</span>
 <span class="r-in"><span><span class="co"># }</span></span></span>
 </code></pre></div>
     </div>

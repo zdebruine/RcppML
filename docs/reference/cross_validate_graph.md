@@ -118,7 +118,7 @@ ensures reproducible cross-validation grid searches by default. Pass
 ## Examples
 
 ``` r
-if (FALSE) { # \dontrun{
+# \donttest{
 library(Matrix)
 X <- rsparsematrix(100, 50, 0.1)
 inp <- factor_input(X, "X")
@@ -130,8 +130,30 @@ cv <- cross_validate_graph(
   params = list(k = c(3, 5, 10, 20)),
   config = factor_config(maxit = 50, seed = 42)
 )
+#> Cross-validating 4 parameter combinations x 3 reps = 12 fits
+#>   [1/4] k = 3
+#>   [2/4] k = 5
+#>   [3/4] k = 10
+#>   [4/4] k = 20
+#> 
+#> Best: k = 3 -> test_loss = 0.301088 (SE = 0.046311)
 print(cv)
+#> factor_net cross-validation
+#>   Strategy: grid | Reps: 3 | Combos: 4
+#>   Holdout: 10.0%
+#> 
+#> Ranked results (by mean test loss):
+#>   k mean_test_loss se_test_loss mean_train_loss n_valid
+#>   3      0.3010881   0.04631067      0.09013363       3
+#>  10      0.4014847   0.07288210      0.07651645       3
+#>   5      0.4480407   0.10936952      0.08320824       3
+#>  20      1.1561439   0.12199328      0.07239668       3
+#> 
+#> Best: k = 3
 cv$best_params  # optimal rank
+#> $k
+#> [1] 3
+#> 
 
 # Multi-parameter search
 cv2 <- cross_validate_graph(
@@ -141,5 +163,17 @@ cv2 <- cross_validate_graph(
   config = factor_config(maxit = 50, seed = 42),
   reps = 3
 )
-} # }
+#> Cross-validating 9 parameter combinations x 3 reps = 27 fits
+#>   [1/9] k = 5, L1 = 0
+#>   [2/9] k = 10, L1 = 0
+#>   [3/9] k = 20, L1 = 0
+#>   [4/9] k = 5, L1 = 0.01
+#>   [5/9] k = 10, L1 = 0.01
+#>   [6/9] k = 20, L1 = 0.01
+#>   [7/9] k = 5, L1 = 0.1
+#>   [8/9] k = 10, L1 = 0.1
+#>   [9/9] k = 20, L1 = 0.1
+#> 
+#> Best: k = 5, L1 = 0.1 -> test_loss = 0.197064 (SE = 0.014186)
+# }
 ```

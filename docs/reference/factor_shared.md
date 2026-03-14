@@ -25,6 +25,12 @@ An `fn_node` of type "shared".
 Execution concatenates inputs row-wise and runs a single NMF:
 `rbind(X1, X2, ...) = rbind(W1, W2, ...) * diag(d) * H`.
 
+## See also
+
+[`factor_concat`](https://zdebruine.github.io/RcppML/reference/factor_concat.md),
+[`factor_add`](https://zdebruine.github.io/RcppML/reference/factor_add.md),
+[`factor_net`](https://zdebruine.github.io/RcppML/reference/factor_net.md)
+
 ## Examples
 
 ``` r

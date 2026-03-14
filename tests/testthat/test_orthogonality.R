@@ -78,11 +78,11 @@ test_that("angular works with different loss functions", {
   # MSE (default)
   expect_silent(nmf(A, 3, maxit = 5, angular = 0.1, loss = "mse", verbose = FALSE))
   
-  # MAE
-  expect_silent(nmf(A, 3, maxit = 5, angular = 0.1, loss = "mae", verbose = FALSE))
+  # Robust (Huber)
+  expect_silent(nmf(A, 3, maxit = 5, angular = 0.1, robust = TRUE, verbose = FALSE))
   
-  # Huber
-  expect_silent(nmf(A, 3, maxit = 5, angular = 0.1, loss = "huber", verbose = FALSE))
+  # Robust (MAE)
+  expect_silent(nmf(A, 3, maxit = 5, angular = 0.1, robust = "mae", verbose = FALSE))
 })
 
 test_that("angular H reduces correlation between H rows", {

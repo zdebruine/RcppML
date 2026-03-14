@@ -6,6 +6,9 @@
 \usage{
 .fn_wrap_graph_result(raw, net)
 }
+\value{
+A \code{factor_net_result} object.
+}
 \description{
 Wrap C++ graph result into factor_net_result
 }

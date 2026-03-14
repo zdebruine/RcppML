@@ -88,6 +88,33 @@ $w_{ij} = 1/V\left( {\widehat{\mu}}_{ij} \right)$ and solves the
 weighted NNLS problem. This iterative reweighting converges to the
 maximum likelihood estimate for the chosen distribution.
 
+### Dispersion
+
+Dispersion controls how much the observed variance deviates from the
+base variance function. For Negative Binomial, the dispersion parameter
+$\theta$ controls overdispersion: $V(\mu) = \mu + \mu^{2}/\theta$. For
+Generalized Poisson, $\phi$ controls extra-Poisson variation.
+
+The three dispersion modes control granularity:
+
+- **`per_row`** (default): Each feature (row) gets its own dispersion
+  $\phi_{i}$. Appropriate when features have different noise levels —
+  e.g., highly-expressed genes have different variance structure than
+  lowly-expressed genes.
+- **`per_col`**: Each sample (column) gets its own dispersion
+  $\phi_{j}$. Appropriate when samples have different quality — e.g.,
+  cells with different sequencing depth or capture efficiency.
+- **`global`**: A single scalar dispersion $\phi$ for the entire matrix.
+  Appropriate for homogeneous data where all features and samples have
+  similar noise characteristics.
+
+**Guidance**: For gene expression data, `per_row` is typically best
+(genes vary enormously in expression level and noise). For
+batch-variable data, `per_col` captures sample-level quality
+differences. Use
+[`diagnose_dispersion()`](https://zdebruine.github.io/RcppML/reference/diagnose_dispersion.md)
+to choose empirically.
+
 ### Zero-Inflation
 
 The ZI mixture model decomposes each observation as:
@@ -95,6 +122,54 @@ $P(X = 0) = \pi + (1 - \pi) \cdot f\left( 0|\mu \right)$. The EM
 algorithm alternates between estimating zero-inflation probabilities
 $\pi$ and updating NMF factors — capturing dropout or structural zeros
 that the base distribution cannot explain.
+
+### Recommended Workflow
+
+When modeling complex data, build up complexity incrementally rather
+than estimating everything simultaneously. Estimating distribution,
+dispersion, and zero-inflation together creates identifiability issues —
+the model may trade off between a more flexible distribution and higher
+zero-inflation, producing unstable results.
+
+1.  **Select distribution**: Use
+    [`auto_nmf_distribution()`](https://zdebruine.github.io/RcppML/reference/auto_nmf_distribution.md)
+    or
+    [`score_test_distribution()`](https://zdebruine.github.io/RcppML/reference/score_test_distribution.md)
+    to find the best variance function. Start with `dispersion = "none"`
+    and `zi = "none"`.
+2.  **Diagnose dispersion**: Use
+    [`diagnose_dispersion()`](https://zdebruine.github.io/RcppML/reference/diagnose_dispersion.md)
+    to determine whether per-row, per-col, or global dispersion is
+    needed.
+3.  **Test for zero-inflation**: Use
+    [`diagnose_zero_inflation()`](https://zdebruine.github.io/RcppML/reference/diagnose_zero_inflation.md)
+    to check for excess zeros.
+4.  **Combine**: Fit the final model with the chosen distribution,
+    dispersion mode, and ZI setting.
+
+> **Tip**: The `distribution` parameter (available in
+> [`auto_nmf_distribution()`](https://zdebruine.github.io/RcppML/reference/auto_nmf_distribution.md))
+> can be set to `"auto"` for automatic distribution selection. This
+> evaluates multiple candidates and selects the best one by the
+> specified criterion (default: BIC).
+
+### Information Criteria
+
+Distribution comparison uses standard model selection criteria:
+
+- **NLL** (Negative Log-Likelihood): The negative log-likelihood of the
+  data under the fitted model. Lower = better fit.
+- **AIC** (Akaike Information Criterion):
+  $\text{AIC} = 2 \cdot \text{NLL} + 2k$, where $k$ is the number of
+  parameters. Penalizes model complexity lightly.
+- **BIC** (Bayesian Information Criterion):
+  $\text{BIC} = 2 \cdot \text{NLL} + k\log(N)$, where $N$ is the number
+  of observations. Penalizes complexity more strongly than AIC,
+  preferring simpler models. **BIC is generally preferred** for
+  distribution selection.
+
+Note: NLL and AIC/BIC values can be negative — this reflects the scale
+of the log-likelihood, not an error.
 
 ## Worked Examples
 
@@ -124,13 +199,13 @@ comp_display <- data.frame(
 )
 knitr::kable(
   comp_display,
-  caption = paste0("Distribution comparison on hawaiibirds (BIC criterion). Best: ", result$best, ".")
+  caption = paste0("Distribution comparison on hawaiibirds (BIC criterion). Best: ", result$loss, ".")
 )
 ```
 
 | Distribution |      NLL |    df |      AIC |      BIC | Selected |
 |:-------------|---------:|------:|---------:|---------:|:---------|
-| mse          | -11136.2 | 10929 |   -414.5 |  90687.0 | \*\*\*   |
+| mse          | -11136.2 | 10929 |   -414.4 |  90687.0 | \*\*\*   |
 | gp           |  87417.5 | 11111 | 197056.9 | 289675.5 |          |
 | nb           |  15109.6 | 11111 |  52441.3 | 145059.9 |          |
 
@@ -147,10 +222,36 @@ ggplot(comp, aes(x = distribution, y = bic, fill = selected)) +
 
 ![](distributions_files/figure-html/auto-selection-plot-1.png)
 
-BIC selects a count-based distribution over MSE, confirming that bird
-count data has mean-dependent variance. The Gaussian assumption
-underestimates variance at high-count sites, inflating the effective
-number of parameters needed for a good fit.
+BIC selects the best-fitting distribution for the Hawaiian bird count
+data. Note that the BIC-preferred distribution may not always be a
+count-based model: if the variance-mean relationship in the data is
+closer to constant (Gaussian), BIC will prefer MSE over more complex
+alternatives. This is informative — it tells you whether the additional
+complexity of a count-based loss is warranted for your data. Higher BIC
+values for count distributions indicate that the extra dispersion
+parameters are not justified by the improvement in fit.
+
+``` r
+# Diagnose dispersion granularity for the best model
+best_model <- result$models[[result$loss]]
+disp_diag <- diagnose_dispersion(hawaiibirds, best_model)
+
+disp_df <- data.frame(
+  Property = c("Recommended mode", "Global φ", "Row CV", "Col CV"),
+  Value = c(disp_diag$mode, round(disp_diag$global_phi, 4),
+            round(disp_diag$row_cv, 4), round(disp_diag$col_cv, 4))
+)
+knitr::kable(disp_df, caption = "Dispersion diagnostics for hawaiibirds")
+```
+
+| Property         | Value   |
+|:-----------------|:--------|
+| Recommended mode | per_row |
+| Global φ         | 4e-04   |
+| Row CV           | 1.9884  |
+| Col CV           | 0.867   |
+
+Dispersion diagnostics for hawaiibirds
 
 ### Example 2: Score Test Diagnostics
 
@@ -184,11 +285,25 @@ knitr::kable(
 Score test results. Best power: p = 1 (gp).
 
 The power with the smallest $|T|$ best matches the observed
-variance-mean relationship. A power near 1 (Poisson/GP family) indicates
-mean-proportional variance, while power 2 (Gamma) indicates variance
-growing as mean-squared. For the bird count data, the score test
-confirms which variance function best characterizes the data’s noise
-structure.
+variance-mean relationship. The score test evaluates the variance power
+family $V(\mu) = \mu^{p}$:
+
+- **Power 0** (Gaussian): constant variance — if rejected (large $|T|$),
+  the data has heteroscedastic noise.
+- **Power 1** (Poisson/GP): variance proportional to mean — appropriate
+  for count data.
+- **Power 2** (Gamma): variance proportional to mean-squared —
+  appropriate for heavy-tailed continuous data.
+
+A negative T-statistic at a given power suggests the model
+over-estimates variance relative to the data at that power — the assumed
+variance function grows too quickly with the mean. A positive
+T-statistic suggests under-estimation — the data has more variance than
+the model predicts. The best power is the one where the T-statistic is
+closest to zero — the variance assumption matches reality. In practice,
+small absolute T-statistics (\< 0.1) across multiple powers suggest the
+data’s variance-mean relationship is well-behaved and the choice of
+distribution matters less.
 
 ``` r
 if (!is.null(scores$nb_diagnostic)) {
@@ -204,26 +319,42 @@ if (!is.null(scores$nb_diagnostic)) {
 
 Single-cell RNA-seq data has extreme sparsity with “dropout” zeros
 beyond what any count distribution predicts. We use `pbmc3k`, a
-representative subset (8,000 genes × 500 cells) stored as compressed SPZ
-raw bytes.
+variance-selected subset (8,000 genes × 500 cells) of the full 10x
+Genomics PBMC 3k dataset.
+
+Dropout is a pervasive artifact of scRNA-seq: during library
+preparation, low-abundance mRNAs are stochastically lost at the capture
+and reverse-transcription steps. The result is that genes with moderate
+true expression are frequently observed as zero — not because the cell
+lacks the transcript, but because the assay failed to detect it. This
+produces “excess zeros” far beyond what any single count distribution
+(Poisson, NB, GP) can explain. Capture efficiency also varies across
+cells, contributing to per-sample zero-inflation.
+
+> **Not all sparse data has excess zeros.** For example, `hawaiibirds`
+> is 97% sparse but
+> [`diagnose_zero_inflation()`](https://zdebruine.github.io/RcppML/reference/diagnose_zero_inflation.md)
+> finds an excess zero rate below 1% — the zeros are well-explained by
+> the count distribution itself. Zero-inflation modeling adds value only
+> when the diagnostic confirms structural excess zeros.
 
 ``` r
-data(pbmc3k)
+data(pbmc3k, package = "RcppML")
 tmp <- tempfile(fileext = ".spz")
 writeBin(pbmc3k, tmp)
 counts <- st_read(tmp)
 
-# Subset for speed: 500 genes × 500 cells
-counts_sub <- counts[1:min(500, nrow(counts)), 1:min(500, ncol(counts))]
-sparsity_pct <- round(100 * (1 - Matrix::nnzero(counts_sub) / prod(dim(counts_sub))), 1)
+sparsity_pct <- round(100 * (1 - Matrix::nnzero(counts) / prod(dim(counts))), 1)
+cat("Dimensions:", nrow(counts), "×", ncol(counts), "\n")
+#> Dimensions: 13714 × 2638
 ```
 
-The subset has 89.5% zeros — far more than any single count distribution
-can explain.
+The dataset has 93.8% zeros — far more than any single count
+distribution can explain.
 
 ``` r
-model_gp <- nmf(counts_sub, k = 8, loss = "gp", seed = 42, tol = 1e-3, maxit = 30)
-zi_diag <- diagnose_zero_inflation(counts_sub, model_gp)
+model_gp <- nmf(counts, k = 8, loss = "gp", seed = 42, tol = 1e-3, maxit = 30)
+zi_diag <- diagnose_zero_inflation(counts, model_gp)
 ```
 
 ``` r
@@ -235,24 +366,24 @@ zi_summary <- data.frame(
     zi_diag$zi_mode
   )
 )
-knitr::kable(zi_summary, caption = "Zero-inflation diagnostics on pbmc3k subset.")
+knitr::kable(zi_summary, caption = "Zero-inflation diagnostics on pbmc3k (8,000 genes × 500 cells).")
 ```
 
 | Metric                  | Value  |
 |:------------------------|:-------|
-| Excess Zero Rate        | 0.2049 |
+| Excess Zero Rate        | 0.2287 |
 | Zero-Inflation Detected | TRUE   |
 | Recommended ZI Mode     | col    |
 
-Zero-inflation diagnostics on pbmc3k subset.
+Zero-inflation diagnostics on pbmc3k (8,000 genes × 500 cells).
 
 ``` r
 if (zi_diag$has_zi && zi_diag$zi_mode != "none") {
-  model_zi <- nmf(counts_sub, k = 8, loss = "gp", zi = zi_diag$zi_mode,
+  model_zi <- nmf(counts, k = 8, loss = "gp", zi = zi_diag$zi_mode,
                   seed = 42, tol = 1e-3, maxit = 30)
   
-  loss_gp <- evaluate(model_gp, counts_sub, loss = "mse")
-  loss_zi <- evaluate(model_zi, counts_sub, loss = "mse")
+  loss_gp <- evaluate(model_gp, counts, loss = "mse")
+  loss_zi <- evaluate(model_zi, counts, loss = "mse")
   improvement <- round(100 * (1 - loss_zi / loss_gp), 1)
   
   loss_comp <- data.frame(
@@ -263,17 +394,6 @@ if (zi_diag$has_zi && zi_diag$zi_mode != "none") {
   knitr::kable(loss_comp, caption = "Reconstruction error: GP vs. GP with zero-inflation.")
 }
 ```
-
-| Model         |    MSE |
-|:--------------|-------:|
-| GP            | 0.7554 |
-| GP + ZI (col) | 0.6758 |
-
-Reconstruction error: GP vs. GP with zero-inflation.
-
-Adding col-wise zero-inflation reduces reconstruction error by 10.5%,
-confirming that the excess zeros in single-cell data are structural
-(gene dropout) rather than sampling noise.
 
 ## Next Steps
 

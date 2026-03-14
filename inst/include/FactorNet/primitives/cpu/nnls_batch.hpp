@@ -77,8 +77,7 @@ inline int cd_nnls_col_fixed(const DenseMatrix<Scalar>& G,
                               bool nonneg,
                               int maxit,
                               Scalar upper_bound = 0,
-                              Scalar cd_tol = 0,
-                              Scalar cd_abs_tol = Scalar(1e-15))
+                              Scalar cd_tol = 0)
 {
     const bool has_upper = (upper_bound > 0);
     const bool check_convergence = (cd_tol > 0);
@@ -115,7 +114,7 @@ inline int cd_nnls_col_fixed(const DenseMatrix<Scalar>& G,
             // Accumulate relative change for convergence check
             if (check_convergence) {
                 const Scalar abs_diff = (actual_diff >= 0) ? actual_diff : -actual_diff;
-                tol_sum += abs_diff / (std::abs(x[i]) + cd_abs_tol);
+                tol_sum += abs_diff / (std::abs(x[i]) + static_cast<Scalar>(CD_ABS_TOL));
             }
 
             // Update residual: b -= G(:,i) * actual_diff
@@ -160,8 +159,7 @@ inline void nnls_batch<CPU, double>(
     bool nonneg,
     int threads,
     double upper_bound,
-    bool warm_start,
-    double cd_abs_tol)
+    bool warm_start)
 {
     const int k = static_cast<int>(G.rows());
     const int n = static_cast<int>(B.cols());
@@ -182,7 +180,7 @@ inline void nnls_batch<CPU, double>(
     for (int j = 0; j < n; ++j) {
         detail::cd_nnls_col_fixed(G, B.col(j).data(), X.col(j).data(),
                                   k, L1, L2, nonneg, cd_maxit, upper_bound,
-                                  cd_tol, cd_abs_tol);
+                                  cd_tol);
     }
 }
 
@@ -201,8 +199,7 @@ inline void nnls_batch<CPU, float>(
     bool nonneg,
     int threads,
     float upper_bound,
-    bool warm_start,
-    float cd_abs_tol)
+    bool warm_start)
 {
     const int k = static_cast<int>(G.rows());
     const int n = static_cast<int>(B.cols());
@@ -223,7 +220,7 @@ inline void nnls_batch<CPU, float>(
     for (int j = 0; j < n; ++j) {
         detail::cd_nnls_col_fixed(G, B.col(j).data(), X.col(j).data(),
                                   k, L1, L2, nonneg, cd_maxit, upper_bound,
-                                  cd_tol, cd_abs_tol);
+                                  cd_tol);
     }
 }
 

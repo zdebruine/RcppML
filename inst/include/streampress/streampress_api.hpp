@@ -4,8 +4,6 @@
 //
 // This header provides a clean C++ interface to StreamPress functionality
 // for downstream C++ users (e.g., FactorNet) without requiring Rcpp.
-//
-// TODO(python): Python bindings should wrap these C++ API types.
 
 #ifndef STREAMPRESS_API_HPP
 #define STREAMPRESS_API_HPP
@@ -35,7 +33,7 @@ struct WriteOptions {
     bool     value_pred        = false;
     bool     row_sort          = false;
     uint32_t chunk_cols        = 0;     ///< 0 = compute from chunk_bytes
-    uint64_t chunk_bytes       = 64ULL * 1024 * 1024;  ///< 64 MB default
+    uint64_t chunk_bytes       = 8ULL * 1024 * 1024;   ///< 8 MB default (~50 cols for 38k-row matrices → ~60 chunks, enabling real parallelism)
     uint32_t transp_chunk_cols = 0;     ///< 0 = compute from chunk_bytes
     int      threads           = 0;     ///< 0 = all available
     std::string precision      = "auto";

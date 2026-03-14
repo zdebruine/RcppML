@@ -22,3 +22,9 @@ print(x, ...)
 ## Value
 
 Invisibly returns `x`.
+
+## See also
+
+[`factor_input`](https://zdebruine.github.io/RcppML/reference/factor_input.md),
+[`nmf_layer`](https://zdebruine.github.io/RcppML/reference/nmf_layer.md),
+[`factor_net`](https://zdebruine.github.io/RcppML/reference/factor_net.md)

@@ -45,7 +45,7 @@
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">st_read</span><span class="op">(</span><span class="va">path</span>, cols <span class="op">=</span> <span class="cn">NULL</span>, reorder <span class="op">=</span> <span class="cn">TRUE</span>, threads <span class="op">=</span> <span class="fl">0L</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">st_read</span><span class="op">(</span><span class="va">path</span>, cols <span class="op">=</span> <span class="cn">NULL</span>, reorder <span class="op">=</span> <span class="cn">TRUE</span>, threads <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -65,7 +65,11 @@
 
 
 <dt id="arg-threads">threads<a class="anchor" aria-label="anchor" href="#arg-threads"></a></dt>
-<dd><p>Integer; number of threads (0 = all available). Default 0.</p></dd>
+<dd><p>Integer or NULL; threads for parallel decompression.
+<code>NULL</code> (default) enables automatic selection: 1 thread for files
+smaller than 50 MB (where threading overhead exceeds the benefit), and
+all available threads for larger files. Use <code>0</code> to always request
+all available threads, or a positive integer to fix the count.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -86,7 +90,7 @@
 <span class="r-in"><span><span class="fu"><a href="st_write.html">st_write</a></span><span class="op">(</span><span class="va">A</span>, <span class="va">f</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">B</span> <span class="op">&lt;-</span> <span class="fu">st_read</span><span class="op">(</span><span class="va">f</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/all.equal-methods.html" class="external-link">all.equal</a></span><span class="op">(</span><span class="va">A</span>, <span class="va">B</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "Mean relative difference: 2.382063e-08"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "Mean relative difference: 2.357902e-08"</span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/unlink.html" class="external-link">unlink</a></span><span class="op">(</span><span class="va">f</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="co"># }</span></span></span>
 <span class="r-in"><span></span></span>

@@ -15,6 +15,7 @@
 
 #include <streampress/format/header_v3.hpp>
 #include <streampress/format/header_v2.hpp>  // Footer_v2, float_to_half, half_to_float
+#include <streampress/format/checksum.hpp>    // CRC32
 #include <streampress/codec/rans.hpp>
 
 #include <cstdint>
@@ -431,8 +432,12 @@ void write_v3(const std::string& path,
     FILE* f = fopen(path.c_str(), "wb");
     if (!f) throw std::runtime_error("Cannot open for writing: " + path);
 
+    // Accumulate CRC32 over everything before the footer
+    streampress::CRC32 crc;
+
     // Header
     auto hdr_buf = header.serialize();
+    crc.update(hdr_buf.data(), HEADER_SIZE_V3);
     if (fwrite(hdr_buf.data(), 1, HEADER_SIZE_V3, f) != HEADER_SIZE_V3) {
         fclose(f);
         throw std::runtime_error("Failed to write header");
@@ -441,9 +446,10 @@ void write_v3(const std::string& path,
     // Forward chunk index
     if (num_fwd_chunks > 0) {
         size_t idx_bytes = num_fwd_chunks * desc_size;
-        const void* idx_ptr = compressed
-            ? static_cast<const void*>(fwd_descs_ext.data())
-            : static_cast<const void*>(fwd_descs.data());
+        const uint8_t* idx_ptr = compressed
+            ? reinterpret_cast<const uint8_t*>(fwd_descs_ext.data())
+            : reinterpret_cast<const uint8_t*>(fwd_descs.data());
+        crc.update(idx_ptr, idx_bytes);
         if (fwrite(idx_ptr, 1, idx_bytes, f) != idx_bytes) {
             fclose(f);
             throw std::runtime_error("Failed to write forward chunk index");
@@ -452,6 +458,7 @@ void write_v3(const std::string& path,
 
     // Forward panel data
     for (uint32_t c = 0; c < num_fwd_chunks; ++c) {
+        crc.update(fwd_compressed[c]);
         if (fwrite(fwd_compressed[c].data(), 1, fwd_compressed[c].size(), f)
                 != fwd_compressed[c].size()) {
             fclose(f);
@@ -463,9 +470,10 @@ void write_v3(const std::string& path,
     if (include_transpose) {
         // Transpose chunk index
         size_t tidx_bytes = num_trans_chunks * desc_size;
-        const void* tidx_ptr = compressed
-            ? static_cast<const void*>(trans_descs_ext.data())
-            : static_cast<const void*>(trans_descs.data());
+        const uint8_t* tidx_ptr = compressed
+            ? reinterpret_cast<const uint8_t*>(trans_descs_ext.data())
+            : reinterpret_cast<const uint8_t*>(trans_descs.data());
+        crc.update(tidx_ptr, tidx_bytes);
         if (fwrite(tidx_ptr, 1, tidx_bytes, f) != tidx_bytes) {
             fclose(f);
             throw std::runtime_error("Failed to write transpose chunk index");
@@ -473,6 +481,7 @@ void write_v3(const std::string& path,
 
         // Transpose panel data
         for (uint32_t c = 0; c < num_trans_chunks; ++c) {
+            crc.update(trans_compressed[c]);
             if (fwrite(trans_compressed[c].data(), 1, trans_compressed[c].size(), f)
                     != trans_compressed[c].size()) {
                 fclose(f);
@@ -485,7 +494,7 @@ void write_v3(const std::string& path,
     // Footer (reuse v2 footer structure)
     streampress::v2::Footer_v2 footer;
     footer.metadata_size = 0;
-    footer.file_crc32 = 0;  // TODO: compute CRC32
+    footer.file_crc32 = crc.finalize();
     footer.total_chunks = num_fwd_chunks;
     auto ftr_buf = footer.serialize();
     if (fwrite(ftr_buf.data(), 1, streampress::v2::FOOTER_SIZE, f) !=

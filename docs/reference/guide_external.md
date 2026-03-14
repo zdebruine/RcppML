@@ -30,8 +30,8 @@ An `nmf_guide` object to pass to `nmf(guides = ...)`.
 
 ## See also
 
-[`guide_classifier`](https://zdebruine.github.io/RcppML/reference/guide_classifier.md),
 [`guide_callback`](https://zdebruine.github.io/RcppML/reference/guide_callback.md),
+[`guide_embedding`](https://zdebruine.github.io/RcppML/reference/guide_embedding.md),
 [`nmf`](https://zdebruine.github.io/RcppML/reference/nmf.md)
 
 ## Examples

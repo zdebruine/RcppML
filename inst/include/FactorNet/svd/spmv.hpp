@@ -276,21 +276,36 @@ void spmv_transpose_dense(const DenseMatrixType& A,
                           const DenseVector<Scalar>& u,
                           DenseVector<Scalar>& result,
                           const DenseVector<Scalar>* row_means = nullptr,
+                          int threads = 0,
                           const DenseVector<Scalar>* row_inv_sds = nullptr)
 {
+    const int n = static_cast<int>(A.cols());
+    result.resize(n);
+
+    // Pre-compute scaled u if needed
+    const DenseVector<Scalar>* u_eff = &u;
+    DenseVector<Scalar> u_scaled;
     if (row_inv_sds) {
-        DenseVector<Scalar> u_scaled = u.cwiseProduct(*row_inv_sds);
-        result.noalias() = A.transpose() * u_scaled;
-        if (row_means) {
-            Scalar correction = row_means->dot(u_scaled);
-            result.array() -= correction;
-        }
-    } else {
-        result.noalias() = A.transpose() * u;
-        if (row_means) {
-            Scalar correction = row_means->dot(u);
-            result.array() -= correction;
-        }
+        u_scaled = u.cwiseProduct(*row_inv_sds);
+        u_eff = &u_scaled;
+    }
+
+#ifdef _OPENMP
+    const int nthreads = threads > 0 ? threads : omp_get_max_threads();
+    // Column-parallel dot products: each A.col(j) is contiguous (cache-friendly)
+    #pragma omp parallel for schedule(static) num_threads(nthreads)
+    for (int j = 0; j < n; ++j) {
+        result(j) = A.col(j).dot(*u_eff);
+    }
+#else
+    for (int j = 0; j < n; ++j) {
+        result(j) = A.col(j).dot(*u_eff);
+    }
+#endif
+
+    if (row_means) {
+        Scalar correction = row_means->dot(*u_eff);
+        result.array() -= correction;
     }
 }
 
@@ -377,9 +392,38 @@ void spmv_forward_dense(const DenseMatrixType& A,
                         const DenseVector<Scalar>& v,
                         DenseVector<Scalar>& result,
                         const DenseVector<Scalar>* row_means = nullptr,
+                        int threads = 0,
                         const DenseVector<Scalar>* row_inv_sds = nullptr)
 {
-    result.noalias() = A * v;
+    const int m = static_cast<int>(A.rows());
+    const int n = static_cast<int>(A.cols());
+    result.resize(m);
+    result.setZero();
+
+#ifdef _OPENMP
+    const int nthreads = threads > 0 ? threads : omp_get_max_threads();
+    if (nthreads > 1) {
+        // Column-scatter pattern (cache-friendly for column-major A)
+        const int nt = std::min(nthreads, n);
+        std::vector<DenseVector<Scalar>> locals(nt, DenseVector<Scalar>::Zero(m));
+
+        #pragma omp parallel num_threads(nt)
+        {
+            const int tid = omp_get_thread_num();
+            auto& local = locals[tid];
+            #pragma omp for schedule(static)
+            for (int j = 0; j < n; ++j) {
+                Scalar vj = v(j);
+                if (vj != static_cast<Scalar>(0))
+                    local.noalias() += A.col(j) * vj;
+            }
+        }
+        for (int t = 0; t < nt; ++t) result += locals[t];
+    } else
+#endif
+    {
+        result.noalias() = A * v;
+    }
 
     if (row_means) {
         Scalar sum_v = v.sum();
@@ -479,9 +523,39 @@ void spmm_forward_dense(const DenseMatrixType& A,
                         const DenseMatrix<Scalar>& X,
                         DenseMatrix<Scalar>& Y,
                         const DenseVector<Scalar>* row_means = nullptr,
+                        int threads = 0,
                         const DenseVector<Scalar>* row_inv_sds = nullptr)
 {
-    Y.noalias() = A * X;
+    const int m = static_cast<int>(A.rows());
+    const int n = static_cast<int>(A.cols());
+    const int l = static_cast<int>(X.cols());
+    Y.resize(m, l);
+    Y.setZero();
+
+#ifdef _OPENMP
+    const int nthreads = threads > 0 ? threads : omp_get_max_threads();
+    if (nthreads > 1) {
+        const int nt = std::min(nthreads, n);
+        std::vector<DenseMatrix<Scalar>> locals(nt, DenseMatrix<Scalar>::Zero(m, l));
+
+        #pragma omp parallel num_threads(nt)
+        {
+            const int tid = omp_get_thread_num();
+            auto& local = locals[tid];
+            #pragma omp for schedule(static)
+            for (int j = 0; j < n; ++j) {
+                for (int c = 0; c < l; ++c) {
+                    local.col(c).noalias() += A.col(j) * X(j, c);
+                }
+            }
+        }
+        for (int t = 0; t < nt; ++t) Y += locals[t];
+    } else
+#endif
+    {
+        Y.noalias() = A * X;
+    }
+
     if (row_means) {
         DenseVector<Scalar> col_sums = X.colwise().sum();
         Y.noalias() -= (*row_means) * col_sums.transpose();
@@ -541,21 +615,34 @@ void spmm_transpose_dense(const DenseMatrixType& A,
                           const DenseMatrix<Scalar>& X,
                           DenseMatrix<Scalar>& Z,
                           const DenseVector<Scalar>* row_means = nullptr,
+                          int threads = 0,
                           const DenseVector<Scalar>* row_inv_sds = nullptr)
 {
+    const int n = static_cast<int>(A.cols());
+    const int l = static_cast<int>(X.cols());
+    Z.resize(n, l);
+
+    // Effective X: if scaling, pre-multiply X by D^{-1}
+    DenseMatrix<Scalar> X_scaled_storage;
+    const DenseMatrix<Scalar>* X_eff = &X;
     if (row_inv_sds) {
-        DenseMatrix<Scalar> X_scaled = X.array().colwise() * row_inv_sds->array();
-        Z.noalias() = A.transpose() * X_scaled;
-        if (row_means) {
-            DenseMatrix<Scalar> correction = row_means->transpose() * X_scaled;
-            Z.rowwise() -= correction.row(0);
+        X_scaled_storage = X.array().colwise() * row_inv_sds->array();
+        X_eff = &X_scaled_storage;
+    }
+
+#ifdef _OPENMP
+    const int nthreads = threads > 0 ? threads : omp_get_max_threads();
+    #pragma omp parallel for schedule(dynamic) num_threads(nthreads)
+#endif
+    for (int j = 0; j < n; ++j) {
+        for (int c = 0; c < l; ++c) {
+            Z(j, c) = A.col(j).dot((*X_eff).col(c));
         }
-    } else {
-        Z.noalias() = A.transpose() * X;
-        if (row_means) {
-            DenseMatrix<Scalar> correction = row_means->transpose() * X;
-            Z.rowwise() -= correction.row(0);
-        }
+    }
+
+    if (row_means) {
+        DenseMatrix<Scalar> correction = row_means->transpose() * (*X_eff);
+        Z.rowwise() -= correction.row(0);
     }
 }
 
@@ -591,7 +678,7 @@ void spmv_transpose(const MatrixType& A,
     if constexpr (is_sparse_matrix<MatrixType>::value) {
         spmv_transpose_sparse(A, u, result, row_means, threads, row_inv_sds);
     } else {
-        spmv_transpose_dense(A, u, result, row_means, row_inv_sds);
+        spmv_transpose_dense(A, u, result, row_means, threads, row_inv_sds);
     }
 }
 
@@ -607,7 +694,7 @@ void spmv_forward(const MatrixType& A,
     if constexpr (is_sparse_matrix<MatrixType>::value) {
         spmv_forward_sparse(A, v, result, row_means, threads, ws, row_inv_sds);
     } else {
-        spmv_forward_dense(A, v, result, row_means, row_inv_sds);
+        spmv_forward_dense(A, v, result, row_means, threads, row_inv_sds);
     }
 }
 
@@ -627,7 +714,7 @@ void spmm_forward(const MatrixType& A,
     if constexpr (is_sparse_matrix<MatrixType>::value) {
         spmm_forward_sparse(A, X, Y, row_means, threads, ws, row_inv_sds);
     } else {
-        spmm_forward_dense(A, X, Y, row_means, row_inv_sds);
+        spmm_forward_dense(A, X, Y, row_means, threads, row_inv_sds);
     }
 }
 
@@ -642,7 +729,7 @@ void spmm_transpose(const MatrixType& A,
     if constexpr (is_sparse_matrix<MatrixType>::value) {
         spmm_transpose_sparse(A, X, Z, row_means, threads, row_inv_sds);
     } else {
-        spmm_transpose_dense(A, X, Z, row_means, row_inv_sds);
+        spmm_transpose_dense(A, X, Z, row_means, threads, row_inv_sds);
     }
 }
 

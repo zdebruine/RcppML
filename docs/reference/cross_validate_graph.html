@@ -159,7 +159,7 @@ behavior.</p>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># \donttest{</span></span></span>
 <span class="r-in"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://Matrix.R-forge.R-project.org" class="external-link">Matrix</a></span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">X</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/rsparsematrix.html" class="external-link">rsparsematrix</a></span><span class="op">(</span><span class="fl">100</span>, <span class="fl">50</span>, <span class="fl">0.1</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">inp</span> <span class="op">&lt;-</span> <span class="fu"><a href="factor_input.html">factor_input</a></span><span class="op">(</span><span class="va">X</span>, <span class="st">"X"</span><span class="op">)</span></span></span>
@@ -171,8 +171,30 @@ behavior.</p>
 <span class="r-in"><span>  params <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>k <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">3</span>, <span class="fl">5</span>, <span class="fl">10</span>, <span class="fl">20</span><span class="op">)</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>  config <span class="op">=</span> <span class="fu"><a href="factor_config.html">factor_config</a></span><span class="op">(</span>maxit <span class="op">=</span> <span class="fl">50</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Cross-validating 4 parameter combinations x 3 reps = 12 fits</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   [1/4] k = 3</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   [2/4] k = 5</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   [3/4] k = 10</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   [4/4] k = 20</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Best: k = 3 -&gt; test_loss = 0.301088 (SE = 0.046311)</span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">cv</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> factor_net cross-validation</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   Strategy: grid | Reps: 3 | Combos: 4</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   Holdout: 10.0%</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Ranked results (by mean test loss):</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   k mean_test_loss se_test_loss mean_train_loss n_valid</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   3      0.3010881   0.04631067      0.09013363       3</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  10      0.4014847   0.07288210      0.07651645       3</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   5      0.4480407   0.10936952      0.08320824       3</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  20      1.1561439   0.12199328      0.07239668       3</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Best: k = 3</span>
 <span class="r-in"><span><span class="va">cv</span><span class="op">$</span><span class="va">best_params</span>  <span class="co"># optimal rank</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $k</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 3</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Multi-parameter search</span></span></span>
 <span class="r-in"><span><span class="va">cv2</span> <span class="op">&lt;-</span> <span class="fu">cross_validate_graph</span><span class="op">(</span></span></span>
@@ -182,7 +204,19 @@ behavior.</p>
 <span class="r-in"><span>  config <span class="op">=</span> <span class="fu"><a href="factor_config.html">factor_config</a></span><span class="op">(</span>maxit <span class="op">=</span> <span class="fl">50</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>  reps <span class="op">=</span> <span class="fl">3</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Cross-validating 9 parameter combinations x 3 reps = 27 fits</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   [1/9] k = 5, L1 = 0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   [2/9] k = 10, L1 = 0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   [3/9] k = 20, L1 = 0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   [4/9] k = 5, L1 = 0.01</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   [5/9] k = 10, L1 = 0.01</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   [6/9] k = 20, L1 = 0.01</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   [7/9] k = 5, L1 = 0.1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   [8/9] k = 10, L1 = 0.1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   [9/9] k = 20, L1 = 0.1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Best: k = 5, L1 = 0.1 -&gt; test_loss = 0.197064 (SE = 0.014186)</span>
+<span class="r-in"><span><span class="co"># }</span></span></span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

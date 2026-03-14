@@ -86,7 +86,7 @@ test_that("MSE loss decreases monotonically - combined regularization", {
   }
 })
 
-test_that("MAE loss decreases monotonically - IRLS iterations", {
+test_that("robust='mae' loss decreases monotonically - IRLS iterations", {
   skip_on_cran()
   set.seed(123)
   data <- simulateNMF(50, 40, k = 3, noise = 0.1, dropout = 0.3, seed = 42)
@@ -94,8 +94,8 @@ test_that("MAE loss decreases monotonically - IRLS iterations", {
   
   losses <- numeric(5)
   for (i in 1:5) {
-    m <- nmf(A, 3, loss = "mae", maxit = i * 10, tol = 0, seed = 123, verbose = FALSE)
-    losses[i] <- compute_nmf_loss(A, m$w, m$h, loss_type = "mae")$total
+    m <- nmf(A, 3, robust = "mae", maxit = i * 10, tol = 0, seed = 123, verbose = FALSE)
+    losses[i] <- m@misc$loss
   }
   
   for (i in 2:length(losses)) {
@@ -103,20 +103,17 @@ test_that("MAE loss decreases monotonically - IRLS iterations", {
   }
 })
 
-test_that("Huber loss decreases monotonically", {
+test_that("robust=TRUE (Huber) loss decreases monotonically", {
   skip_on_cran()
   set.seed(123)
   data <- simulateNMF(50, 40, k = 3, noise = 0.1, dropout = 0.3, seed = 42)
   A <- data$A
   
-  delta <- 1.0
-  
   losses <- numeric(5)
   for (i in 1:5) {
-    m <- nmf(A, 3, loss = "huber", huber_delta = delta, maxit = i * 10, tol = 0, 
+    m <- nmf(A, 3, robust = TRUE, maxit = i * 10, tol = 0, 
              seed = 123, verbose = FALSE)
-    losses[i] <- compute_nmf_loss(A, m$w, m$h, loss_type = "huber", 
-                                   huber_delta = delta)$total
+    losses[i] <- m@misc$loss
   }
   
   for (i in 2:length(losses)) {
@@ -124,17 +121,16 @@ test_that("Huber loss decreases monotonically", {
   }
 })
 
-test_that("KL divergence decreases monotonically", {
+test_that("GP divergence decreases monotonically", {
   skip_on_cran()
   set.seed(123)
   data <- simulateNMF(50, 40, k = 3, noise = 0.05, dropout = 0.2, seed = 42)
-  A <- pmax(data$A, 0.01)  # KL requires positive values
+  A <- pmax(data$A, 0.01)  # GP requires positive values
   
   losses <- numeric(5)
   for (i in 1:5) {
-    # Use more iterations for KL since it converges slower
-    m <- nmf(A, 3, loss = "kl", maxit = i * 20, tol = 0, seed = 123, verbose = FALSE)
-    losses[i] <- compute_nmf_loss(A, m$w, m$h, loss_type = "kl")$total
+    m <- nmf(A, 3, loss = "gp", maxit = i * 20, tol = 0, seed = 123, verbose = FALSE)
+    losses[i] <- compute_nmf_loss(A, m$w, m$h, loss_type = "gp")$total
   }
   
   for (i in 2:length(losses)) {

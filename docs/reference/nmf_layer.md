@@ -14,9 +14,15 @@ nmf_layer(
   L21 = 0,
   angular = 0,
   upper_bound = 0,
+  mask = NULL,
+  zi = c("none", "row", "col"),
+  projective = FALSE,
+  symmetric = FALSE,
+  robust = FALSE,
   W = NULL,
   H = NULL,
-  name = NULL
+  name = NULL,
+  ...
 )
 ```
 
@@ -50,6 +56,35 @@ nmf_layer(
 
   Box constraint. Default 0.
 
+- mask:
+
+  Masking mode: NULL (none), `"zeros"`, `"NA"`, or a sparse mask matrix.
+  See [`nmf`](https://zdebruine.github.io/RcppML/reference/nmf.md) for
+  details.
+
+- zi:
+
+  Zero-inflation mode: `"none"`, `"row"`, or `"col"`. Requires
+  `loss = "gp"` or `"nb"` in
+  [`factor_config()`](https://zdebruine.github.io/RcppML/reference/factor_config.md).
+  Default `"none"`.
+
+- projective:
+
+  Use projective NMF (W is reused as H). Default FALSE.
+
+- symmetric:
+
+  Use symmetric NMF (W == H). Default FALSE.
+
+- robust:
+
+  Robustness control: `FALSE` (default, no robustness), `TRUE` (Huber
+  delta=1.345), `"mae"` (near-MAE, delta=1e-4), or a positive numeric
+  Huber delta. See
+  [`nmf`](https://zdebruine.github.io/RcppML/reference/nmf.md) for
+  details.
+
 - W:
 
   Optional [`W()`](https://zdebruine.github.io/RcppML/reference/W.md)
@@ -63,6 +98,17 @@ nmf_layer(
 - name:
 
   Optional layer name (for results access).
+
+- ...:
+
+  Additional arguments forwarded to
+  [`nmf`](https://zdebruine.github.io/RcppML/reference/nmf.md) at fit
+  time. Supports all advanced parameters: distribution tuning
+  (`dispersion`, `theta_init`, etc.), IRLS control (`irls_max_iter`,
+  `irls_tol`), solver tuning (`cd_tol`, `cd_maxit`), streaming
+  (`streaming`, `panel_cols`), callbacks (`on_iteration`), and more. See
+  [`?nmf`](https://zdebruine.github.io/RcppML/reference/nmf.md) for the
+  complete list.
 
 ## Value
 
@@ -82,7 +128,8 @@ H unless overridden by
 
 [`svd_layer`](https://zdebruine.github.io/RcppML/reference/svd_layer.md),
 [`factor_net`](https://zdebruine.github.io/RcppML/reference/factor_net.md),
-[`factor_input`](https://zdebruine.github.io/RcppML/reference/factor_input.md)
+[`factor_input`](https://zdebruine.github.io/RcppML/reference/factor_input.md),
+[`nmf`](https://zdebruine.github.io/RcppML/reference/nmf.md)
 
 ## Examples
 
@@ -90,6 +137,8 @@ H unless overridden by
 data(aml)
 inp <- factor_input(aml)
 layer <- nmf_layer(inp, k = 5)
-layer
-#> fn_node: nmf_layer, k=5
+
+# With zero-inflation and distribution-specific tuning
+layer_gp <- nmf_layer(inp, k = 5, zi = "row",
+                      dispersion = "per_col", theta_init = 0.5)
 ```

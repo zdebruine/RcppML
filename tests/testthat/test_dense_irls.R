@@ -4,58 +4,53 @@
 options(RcppML.verbose = FALSE)
 options(RcppML.threads = 1)
 
-test_that("dense NMF with MAE loss converges", {
+test_that("dense NMF with robust=TRUE (Huber) converges", {
   skip_on_cran()
   set.seed(42)
   A <- abs(matrix(rnorm(50 * 40), 50, 40)) + 0.1
 
-  model <- nmf(A, 3, loss = "mae", maxit = 50, tol = 1e-5,
+  model <- nmf(A, 3, robust = TRUE, maxit = 50, tol = 1e-5,
                seed = 42, verbose = FALSE)
 
   expect_s4_class(model, "nmf")
   expect_true(is.finite(model@misc$loss))
   expect_true(all(model@w >= 0))
   expect_true(all(model@h >= 0))
-
-  # MAE should be positive
-  A_recon <- model@w %*% diag(model@d) %*% model@h
-  mae <- mean(abs(A - A_recon))
-  expect_gt(mae, 0)
 })
 
-test_that("dense NMF with Huber loss converges", {
+test_that("dense NMF with robust='mae' converges", {
   skip_on_cran()
   set.seed(42)
   A <- abs(matrix(rnorm(50 * 40), 50, 40)) + 0.1
 
-  model <- nmf(A, 3, loss = "huber", huber_delta = 1.0,
+  model <- nmf(A, 3, robust = "mae",
                maxit = 50, tol = 1e-5, seed = 42, verbose = FALSE)
 
   expect_s4_class(model, "nmf")
   expect_true(is.finite(model@misc$loss))
 })
 
-test_that("dense NMF with KL divergence converges", {
+test_that("dense NMF with GP divergence converges", {
   skip_on_cran()
   set.seed(42)
   A <- abs(matrix(rnorm(50 * 40), 50, 40)) + 0.5  # Strictly positive
 
-  model <- nmf(A, 3, loss = "kl", maxit = 50, tol = 1e-5,
+  model <- nmf(A, 3, loss = "gp", maxit = 50, tol = 1e-5,
                seed = 42, verbose = FALSE)
 
   expect_s4_class(model, "nmf")
   expect_true(is.finite(model@misc$loss))
 })
 
-test_that("dense MAE matches sparse MAE for same data", {
+test_that("dense robust=TRUE matches sparse robust=TRUE for same data", {
   skip_on_cran()
   set.seed(42)
   data <- simulateNMF(30, 25, k = 3, noise = 0.1, seed = 42)
   A_dense <- data$A
   A_sparse <- as(A_dense, "dgCMatrix")
 
-  m_dense <- nmf(A_dense, 3, loss = "mae", maxit = 30, seed = 42, verbose = FALSE)
-  m_sparse <- nmf(A_sparse, 3, loss = "mae", maxit = 30, seed = 42, verbose = FALSE)
+  m_dense <- nmf(A_dense, 3, robust = TRUE, maxit = 30, seed = 42, verbose = FALSE)
+  m_sparse <- nmf(A_sparse, 3, robust = TRUE, maxit = 30, seed = 42, verbose = FALSE)
 
   # Final loss should be same order of magnitude (dense/sparse IRLS paths
   # may converge to different local optima due to iteration order differences)
@@ -63,7 +58,7 @@ test_that("dense MAE matches sparse MAE for same data", {
   expect_lt(ratio, 1.0)  # Same order of magnitude
 })
 
-test_that("dense Huber loss interpolates behavior", {
+test_that("dense robust fitting with different delta values", {
   skip_on_cran()
   set.seed(42)
   A <- abs(matrix(rnorm(40 * 30), 40, 30)) + 0.1
@@ -73,22 +68,21 @@ test_that("dense Huber loss interpolates behavior", {
   A[outliers] <- A[outliers] + abs(rnorm(10, mean = 5))
 
   m_mse <- nmf(A, 3, loss = "mse", maxit = 50, seed = 42, verbose = FALSE)
-  m_huber <- nmf(A, 3, loss = "huber", huber_delta = 1.0,
-                 maxit = 50, seed = 42, verbose = FALSE)
-  m_mae <- nmf(A, 3, loss = "mae", maxit = 50, seed = 42, verbose = FALSE)
+  m_robust <- nmf(A, 3, robust = TRUE, maxit = 50, seed = 42, verbose = FALSE)
+  m_mae <- nmf(A, 3, robust = "mae", maxit = 50, seed = 42, verbose = FALSE)
 
   # All should converge
   expect_true(is.finite(m_mse@misc$loss))
-  expect_true(is.finite(m_huber@misc$loss))
+  expect_true(is.finite(m_robust@misc$loss))
   expect_true(is.finite(m_mae@misc$loss))
 })
 
-test_that("dense NMF MAE with regularization", {
+test_that("dense NMF robust with regularization", {
   skip_on_cran()
   set.seed(42)
   A <- abs(matrix(rnorm(40 * 30), 40, 30)) + 0.1
 
-  model <- nmf(A, 3, loss = "mae", L1 = c(0.01, 0.01), L2 = c(0.01, 0.01),
+  model <- nmf(A, 3, robust = TRUE, L1 = c(0.01, 0.01), L2 = c(0.01, 0.01),
                maxit = 30, seed = 42, verbose = FALSE)
 
   expect_s4_class(model, "nmf")
@@ -96,12 +90,12 @@ test_that("dense NMF MAE with regularization", {
   expect_true(all(model@w >= 0))
 })
 
-test_that("dense KL NMF with cross-validation", {
+test_that("dense GP NMF with cross-validation", {
   skip_on_cran()
   set.seed(42)
   A <- abs(matrix(rnorm(40 * 30), 40, 30)) + 0.5
 
-  result <- nmf(A, k = 3, test_fraction = 0.1, loss = "kl",
+  result <- nmf(A, k = 3, test_fraction = 0.1, loss = "gp",
                 cv_seed = 1, maxit = 20, seed = 42, verbose = FALSE)
 
   expect_s4_class(result, "nmf")
@@ -148,7 +142,7 @@ test_that("dense Tweedie NMF converges and produces finite loss", {
   A <- abs(matrix(rnorm(50 * 40, 2, 0.5), 50, 40))
   A[A < 1e-8] <- 1e-8
 
-  model <- nmf(A, 3, distribution = "tweedie", tweedie_power = 1.5,
+  model <- nmf(A, 3, loss = "tweedie", tweedie_power = 1.5,
                dispersion = "per_row", maxit = 30, tol = 1e-6, seed = 42, verbose = FALSE)
   expect_s4_class(model, "nmf")
   expect_true(is.finite(model@misc$loss))

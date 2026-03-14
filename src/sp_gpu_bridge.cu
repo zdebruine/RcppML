@@ -18,7 +18,7 @@
 #include <RcppML/core/logging.hpp>
 
 // v2 adapter: CPU decode + GPU upload
-#include "sparsepress/gpu/spgpu_v2_adapter.cuh"
+#include "streampress/gpu/spgpu_v2_adapter.cuh"
 
 extern "C" {
 

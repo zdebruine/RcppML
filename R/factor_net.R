@@ -6,7 +6,7 @@
 #
 # Key concepts:
 #   fn_node     — graph node (input, layer, shared, condition)
-#   fn_config   — per-factor config (regularization, guides)
+#   fn_config   — per-factor config (regularization, targets)
 #   factor_net  — compiled graph ready to fit
 #
 # Execution delegates to the existing nmf()/svd() solvers.
@@ -19,7 +19,7 @@
 #'
 #' Use \code{W()} and \code{H()} inside \code{nmf_layer()} or
 #' \code{svd_layer()} to set factor-specific regularization, constraints,
-#' and guides. Parameters not set inherit from the layer defaults.
+#' and targets. Parameters not set inherit from the layer defaults.
 #'
 #' @param L1 L1 (lasso) penalty. Default 0.
 #' @param L2 L2 (ridge) penalty. Default 0.
@@ -27,9 +27,11 @@
 #' @param angular Orthogonality penalty. Default 0.
 #' @param upper_bound Box constraint upper bound (0 = none). Default 0.
 #' @param nonneg Non-negativity constraint. Default TRUE for NMF, FALSE for SVD.
-#' @param guide An \code{nmf_guide} or list of guides for this factor.
 #' @param graph Sparse graph Laplacian matrix (or NULL).
 #' @param graph_lambda Graph regularization strength. Default 0.
+#' @param target Target matrix for regularization (k x n for H, k x m for W).
+#'   See \code{\link{compute_target}} for constructing targets from labels.
+#' @param target_lambda Target regularization strength. Default 0.
 #' @return An \code{fn_factor_config} object.
 #' @seealso \code{\link{factor_config}}, \code{\link{nmf_layer}}, \code{\link{factor_net}}
 #' @examples
@@ -39,32 +41,33 @@
 #' @export
 W <- function(L1 = NULL, L2 = NULL, L21 = NULL, angular = NULL,
               upper_bound = NULL, nonneg = NULL,
-              guide = NULL, graph = NULL, graph_lambda = NULL) {
+              graph = NULL, graph_lambda = NULL,
+              target = NULL, target_lambda = NULL) {
   .fn_factor_config("W", L1, L2, L21, angular, upper_bound, nonneg,
-                    guide, graph, graph_lambda)
+                    graph, graph_lambda, target, target_lambda)
 }
 
 #' @rdname W
 #' @export
 H <- function(L1 = NULL, L2 = NULL, L21 = NULL, angular = NULL,
               upper_bound = NULL, nonneg = NULL,
-              guide = NULL, graph = NULL, graph_lambda = NULL) {
+              graph = NULL, graph_lambda = NULL,
+              target = NULL, target_lambda = NULL) {
   .fn_factor_config("H", L1, L2, L21, angular, upper_bound, nonneg,
-                    guide, graph, graph_lambda)
+                    graph, graph_lambda, target, target_lambda)
 }
 
 .fn_factor_config <- function(side, L1, L2, L21, angular, upper_bound,
-                              nonneg, guide, graph, graph_lambda) {
-  if (!is.null(guide)) {
-    if (inherits(guide, "nmf_guide")) guide <- list(guide)
-    if (!is.list(guide) || !all(vapply(guide, inherits, logical(1), "nmf_guide")))
-      stop("'guide' must be an nmf_guide object or a list of nmf_guide objects")
-  }
+                              nonneg, graph, graph_lambda,
+                              target, target_lambda) {
+  if (!is.null(target) && !is.matrix(target))
+    stop("'target' must be a numeric matrix or NULL")
   structure(list(
     side = side,
     L1 = L1, L2 = L2, L21 = L21, angular = angular,
     upper_bound = upper_bound, nonneg = nonneg,
-    guide = guide, graph = graph, graph_lambda = graph_lambda
+    graph = graph, graph_lambda = graph_lambda,
+    target = target, target_lambda = target_lambda
   ), class = "fn_factor_config")
 }
 
@@ -80,8 +83,9 @@ H <- function(L1 = NULL, L2 = NULL, L21 = NULL, angular = NULL,
 #'
 #' @param maxit Maximum ALS iterations per layer. Default 100.
 #' @param tol Convergence tolerance. Default 1e-4.
-#' @param loss Loss function: "mse", "mae", "huber", "kl", "gp",
-#'   "nb", "gamma", "inverse_gaussian", "tweedie". Default "mse".
+#' @param loss Loss function: "mse", "gp", "nb", "gamma",
+#'   "inverse_gaussian", "tweedie". Default "mse". For robust (Huber/MAE)
+#'   fitting, use the \code{robust} parameter at the layer level instead.
 #' @param verbose Print per-iteration diagnostics. Default FALSE.
 #' @param seed Random seed. Default NULL (auto).
 #' @param threads Number of CPU threads (0 = all). Default 0.
@@ -96,8 +100,12 @@ H <- function(L1 = NULL, L2 = NULL, L21 = NULL, angular = NULL,
 #'   zeros may appear in the test set. Default FALSE.
 #' @param patience Number of iterations without test-loss improvement
 #'   before early stopping during CV. Default 5.
-#' @param holdout_fraction Deprecated. Use \code{test_fraction} instead.
-#' @param cv_patience Deprecated. Use \code{patience} instead.
+#' @param ... Additional arguments applied network-wide. These are forwarded
+#'   to the underlying \code{\link{nmf}} or \code{\link{svd}} call at fit
+#'   time as lowest-priority defaults (layer-level \code{...} overrides
+#'   these). Supports distribution tuning (\code{dispersion},
+#'   \code{theta_init}, etc.), IRLS control, solver tuning, and more.
+#'   See \code{?nmf} or \code{?svd} for the complete list.
 #' @details
 #' \strong{Unsupported combinations:}
 #' \itemize{
@@ -116,8 +124,8 @@ H <- function(L1 = NULL, L2 = NULL, L21 = NULL, angular = NULL,
 #' @seealso \code{\link{factor_net}}, \code{\link{nmf_layer}}, \code{\link{fit}}
 #' @export
 factor_config <- function(maxit = 100, tol = 1e-4,
-                          loss = c("mse", "mae", "huber", "kl", "gp",
-                                   "nb", "gamma", "inverse_gaussian", "tweedie"),
+                          loss = c("mse", "gp", "nb", "gamma",
+                                   "inverse_gaussian", "tweedie"),
                           verbose = FALSE, seed = NULL, threads = 0,
                           norm = c("L1", "L2", "none"),
                           solver = c("auto", "cholesky", "cd"),
@@ -125,17 +133,7 @@ factor_config <- function(maxit = 100, tol = 1e-4,
                           test_fraction = 0,
                           cv_seed = 0L,
                           mask_zeros = FALSE,
-                          patience = 5L,
-                          holdout_fraction, cv_patience) {
-  # Handle deprecated aliases
-  if (!missing(holdout_fraction)) {
-    .Deprecated("test_fraction", old = "holdout_fraction")
-    if (missing(test_fraction) || test_fraction == 0) test_fraction <- holdout_fraction
-  }
-  if (!missing(cv_patience)) {
-    .Deprecated("patience", old = "cv_patience")
-    if (missing(patience) || patience == 5L) patience <- cv_patience
-  }
+                          patience = 5L, ...) {
   loss <- match.arg(loss)
   norm <- match.arg(norm)
   solver <- match.arg(solver)
@@ -153,7 +151,8 @@ factor_config <- function(maxit = 100, tol = 1e-4,
     test_fraction = as.double(test_fraction),
     cv_seed = as.integer(cv_seed),
     mask_zeros = as.logical(mask_zeros),
-    patience = as.integer(patience)
+    patience = as.integer(patience),
+    dots = list(...)
   ), class = "fn_global_config")
 }
 
@@ -212,63 +211,137 @@ factor_input <- function(data, name = NULL) {
 #' @param L21 Group sparsity penalty. Default 0.
 #' @param angular Orthogonality penalty. Default 0.
 #' @param upper_bound Box constraint. Default 0.
+#' @param mask Masking mode: NULL (none), \code{"zeros"}, \code{"NA"}, or
+#'   a sparse mask matrix. See \code{\link{nmf}} for details.
+#' @param zi Zero-inflation mode: \code{"none"}, \code{"row"}, or \code{"col"}.
+#'   Requires \code{loss = "gp"} or \code{"nb"} in
+#'   \code{factor_config()}. Default \code{"none"}.
+#' @param projective Use projective NMF (W is reused as H). Default FALSE.
+#' @param symmetric Use symmetric NMF (W == H). Default FALSE.
+#' @param robust Robustness control: \code{FALSE} (default, no robustness),
+#'   \code{TRUE} (Huber delta=1.345), \code{"mae"} (near-MAE, delta=1e-4),
+#'   or a positive numeric Huber delta. See \code{\link{nmf}} for details.
 #' @param W Optional \code{W()} config to override W-specific settings.
 #' @param H Optional \code{H()} config to override H-specific settings.
 #' @param name Optional layer name (for results access).
+#' @param ... Additional arguments forwarded to \code{\link{nmf}} at fit
+#'   time. Supports all advanced parameters: distribution tuning
+#'   (\code{dispersion}, \code{theta_init}, etc.), IRLS control
+#'   (\code{irls_max_iter}, \code{irls_tol}), solver tuning
+#'   (\code{cd_tol}, \code{cd_maxit}), streaming (\code{streaming},
+#'   \code{panel_cols}), callbacks (\code{on_iteration}), and more.
+#'   See \code{?nmf} for the complete list.
 #' @return An \code{fn_node} of type "nmf_layer".
 #' @examples
 #' data(aml)
 #' inp <- factor_input(aml)
 #' layer <- nmf_layer(inp, k = 5)
-#' layer
-#' @seealso \code{\link{svd_layer}}, \code{\link{factor_net}}, \code{\link{factor_input}}
+#'
+#' # With zero-inflation and distribution-specific tuning
+#' layer_gp <- nmf_layer(inp, k = 5, zi = "row",
+#'                       dispersion = "per_col", theta_init = 0.5)
+#' @seealso \code{\link{svd_layer}}, \code{\link{factor_net}}, \code{\link{factor_input}},
+#'   \code{\link{nmf}}
 #' @export
 nmf_layer <- function(input, k, L1 = 0, L2 = 0, L21 = 0, angular = 0,
-                      upper_bound = 0, W = NULL, H = NULL, name = NULL) {
+                      upper_bound = 0,
+                      mask = NULL,
+                      zi = c("none", "row", "col"),
+                      projective = FALSE, symmetric = FALSE,
+                      robust = FALSE,
+                      W = NULL, H = NULL, name = NULL, ...) {
   if (!inherits(input, "fn_node"))
     stop("'input' must be an fn_node (from factor_input, nmf_layer, etc.)")
   if (!is.null(W) && !inherits(W, "fn_factor_config"))
     stop("'W' must be created by W()")
   if (!is.null(H) && !inherits(H, "fn_factor_config"))
     stop("'H' must be created by H()")
+  zi <- match.arg(zi)
   structure(list(
     type = "nmf_layer",
     input = input,
     k = as.integer(k),
     layer_defaults = list(L1 = L1, L2 = L2, L21 = L21, angular = angular,
                           upper_bound = upper_bound),
+    mask = mask,
+    zi = zi,
+    projective = projective,
+    symmetric = symmetric,
+    robust = robust,
     W_config = W,
     H_config = H,
-    name = name
+    name = name,
+    dots = list(...)
   ), class = "fn_node")
 }
 
 #' Create an SVD/PCA factorization layer
 #'
 #' Creates an unconstrained (SVD/PCA) factorization layer. No
-#' non-negativity constraint; factors are signed.
+#' non-negativity constraint by default; factors are signed.
 #'
-#' @inheritParams nmf_layer
+#' SVD-specific parameters (\code{center}, \code{scale}, \code{method})
+#' control the SVD algorithm directly. Regularization parameters
+#' and \code{...} are forwarded to \code{\link{svd}} at fit time.
+#'
+#' @param input An \code{fn_node} (input, shared, condition, or another layer).
+#' @param k Factorization rank.
+#' @param L1 L1 penalty (shared by U and V unless overridden). Default 0.
+#' @param L2 L2 penalty. Default 0.
+#' @param L21 Group sparsity penalty. Default 0.
+#' @param angular Orthogonality penalty. Default 0.
+#' @param upper_bound Box constraint. Default 0.
+#' @param center Center columns before factorization (PCA mode). Default FALSE.
+#' @param scale Scale columns to unit variance. Default FALSE.
+#' @param method SVD algorithm: \code{"auto"}, \code{"deflation"},
+#'   \code{"krylov"}, \code{"lanczos"}, \code{"irlba"}, or
+#'   \code{"randomized"}. Default \code{"auto"}.
+#' @param mask Masking mode: NULL (none), \code{"zeros"}, or a sparse
+#'   mask matrix. See \code{\link{svd}} for details.
+#' @param robust Use robust loss. Default FALSE.
+#' @param W Optional \code{W()} config to override U-specific settings.
+#' @param H Optional \code{H()} config to override V-specific settings.
+#' @param name Optional layer name (for results access).
+#' @param ... Additional arguments forwarded to \code{\link{svd}} at fit
+#'   time. Supports: \code{convergence}, \code{cv_seed}, \code{patience},
+#'   \code{k_max}, \code{graph_U}, \code{graph_V}, \code{graph_lambda},
+#'   \code{threads}. See \code{?svd} for the complete list.
 #' @return An \code{fn_node} of type "svd_layer".
-#' @seealso \code{\link{nmf_layer}}, \code{\link{factor_input}}, \code{\link{factor_net}}
+#' @seealso \code{\link{nmf_layer}}, \code{\link{factor_input}},
+#'   \code{\link{factor_net}}, \code{\link{svd}}
 #' @examples
 #' data(aml)
 #' inp <- factor_input(aml)
 #' layer <- svd_layer(inp, k = 5)
+#'
+#' # PCA with centering and scaling
+#' pca_layer <- svd_layer(inp, k = 10, center = TRUE, scale = TRUE)
 #' @export
 svd_layer <- function(input, k, L1 = 0, L2 = 0, L21 = 0, angular = 0,
-                      upper_bound = 0, W = NULL, H = NULL, name = NULL) {
+                      upper_bound = 0,
+                      center = FALSE, scale = FALSE,
+                      method = c("auto", "deflation", "krylov", "lanczos",
+                                 "irlba", "randomized"),
+                      mask = NULL, robust = FALSE,
+                      W = NULL, H = NULL, name = NULL, ...) {
   if (!inherits(input, "fn_node"))
     stop("'input' must be an fn_node")
+  method <- match.arg(method)
   structure(list(
     type = "svd_layer",
     input = input,
     k = as.integer(k),
     layer_defaults = list(L1 = L1, L2 = L2, L21 = L21, angular = angular,
                           upper_bound = upper_bound),
+    center = center,
+    scale = scale,
+    method = method,
+    mask = mask,
+    robust = robust,
     W_config = W,
     H_config = H,
-    name = name
+    name = name,
+    dots = list(...)
   ), class = "fn_node")
 }
 
@@ -536,7 +609,7 @@ print.fn_factor_config <- function(x, ...) {
   for (f in fields) {
     if (!is.null(x[[f]])) cat(sprintf("  %s = %s\n", f, x[[f]]))
   }
-  if (!is.null(x$guide)) cat(sprintf("  guides: %d\n", length(x$guide)))
+  if (!is.null(x$target)) cat(sprintf("  target: [%s]\n", paste(dim(x$target), collapse = "x")))
   invisible(x)
 }
 

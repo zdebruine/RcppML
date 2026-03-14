@@ -8,18 +8,14 @@ nnls(
   w = NULL,
   h = NULL,
   A,
-  warm_start = NULL,
   L1 = c(0, 0),
   L2 = c(0, 0),
-  L21 = c(0, 0),
-  angular = c(0, 0),
   loss = "mse",
-  cd_maxit = 100L,
-  cd_tol = 1e-08,
   upper_bound = c(0, 0),
   nonneg = c(TRUE, TRUE),
   threads = 0,
-  verbose = FALSE
+  verbose = FALSE,
+  ...
 )
 }
 \arguments{
@@ -27,37 +23,23 @@ nnls(
 
 \item{h}{factor model matrix (k x n_samples) for solving W. Set to NULL to solve for H.}
 
-\item{A}{data matrix (n_features x n_samples for w->h, n_samples x n_features for h->w).
-Can be dense (matrix) or sparse (dgCMatrix from Matrix package).}
+\item{A}{data matrix. Can be dense (matrix) or sparse (dgCMatrix).}
 
-\item{warm_start}{optional matrix to initialize the solution. Must match output dimensions
-(k x n_samples for H, n_features x k for W). Can accelerate convergence.}
+\item{L1}{L1/LASSO penalty, length 1 or 2. Range [0, 1).}
 
-\item{L1}{L1/LASSO penalty, length 1 or 2 for c(w_penalty, h_penalty). Range [0, 1).}
+\item{L2}{Ridge penalty, length 1 or 2. Range [0, Inf).}
 
-\item{L2}{Ridge penalty, length 1 or 2 for c(w_penalty, h_penalty). Range [0, Inf).}
+\item{loss}{loss function: \code{"mse"} (default) or others via NMF dispatch.}
 
-\item{L21}{L21 group sparsity penalty, length 1 or 2 for c(w_penalty, h_penalty). Range [0, Inf).
-Drives entire rows/columns toward zero for automatic factor selection.}
+\item{upper_bound}{maximum value in solution, length 1 or 2. 0 = no bound.}
 
-\item{angular}{angular decorrelation penalty, length 1 or 2 for c(w_penalty, h_penalty). Range [0, Inf).
-Encourages orthogonality between factors.}
+\item{nonneg}{non-negativity constraints, length 1 or 2.}
 
-\item{loss}{loss function: \code{"mse"} (default), \code{"gp"}, \code{"nb"}, \code{"gamma"},
-\code{"inverse_gaussian"}, or \code{"tweedie"}. Non-MSE losses use a single IRLS iteration
-via the NMF machinery.}
+\item{threads}{number of threads for OpenMP parallelization (0 = all available).}
 
-\item{cd_maxit}{maximum number of coordinate descent iterations (default 100)}
+\item{verbose}{print progress information.}
 
-\item{cd_tol}{stopping tolerance for coordinate descent (default 1e-8)}
-
-\item{upper_bound}{maximum value in solution, length 1 or 2 for c(w_bound, h_bound). 0 = no bound.}
-
-\item{nonneg}{non-negativity constraints, length 1 or 2 for c(w_constraint, h_constraint)}
-
-\item{threads}{number of threads for OpenMP parallelization (0 = all available)}
-
-\item{verbose}{print progress information}
+\item{...}{advanced parameters. See \strong{Advanced Parameters} section.}
 }
 \value{
 matrix of dimension (k x n_samples) for H or (n_features x k) for W
@@ -68,7 +50,7 @@ Given \eqn{W} and \eqn{A}, find \eqn{H} such that \eqn{||WH - A||^2} is minimize
 Alternatively, given \eqn{H} and \eqn{A}, find \eqn{W} such that \eqn{||WH - A||^2} is minimized.
 }
 \details{
-This function solves NNLS projection problems with full flexibility:
+This function solves NNLS projection problems with full flexibility.
 
 \strong{Projection Modes:}
 \itemize{
@@ -76,44 +58,41 @@ This function solves NNLS projection problems with full flexibility:
 \item \code{h} provided, \code{w = NULL}: Solve for W given H and A (transpose projection)
 \item Exactly one of \code{w} or \code{h} must be NULL
 }
-
-\strong{Normal Equations:}
-\itemize{
-\item For H: \eqn{W'W H = W'A}
-\item For W: \eqn{HH' W' = HA'} (solved as transpose problem)
 }
+\section{Advanced Parameters (via \code{...})}{
 
-The problem is solved by forming the Gram matrix and right-hand side in C++ with
-OpenMP parallelization across samples. Sequential coordinate descent with warm starts
-enables fast convergence.
-
-\strong{Dimension Matching:}
-When dimensions don't match exactly, the function attempts to:
-\enumerate{
-\item Auto-transpose if one orientation matches
-\item Match by rownames/colnames and reorder/subset to the intersection
-\item Error if no valid dimension alignment is possible
-}
-
-\strong{Warm Start:}
-Provide an optional \code{warm_start} matrix to initialize the solution. This can
-dramatically accelerate convergence when solutions are expected to be similar across
-related problems (e.g., incremental updates, time series).
-
-\strong{Penalties:}
-\itemize{
-\item L1 (LASSO): Encourages sparsity by subtracting L1 from the right-hand side
-\item L2 (Ridge): Shrinks solutions by adding L2 to the diagonal of the Gram matrix
-\item Graph Laplacian: \emph{Not yet implemented in nnls. Use nmf() for graph regularization.}
-\item Length-2 vectors \code{c(w_penalty, h_penalty)} control penalties for W and H separately
+\describe{
+\item{\code{L21}}{L2,1 group sparsity penalty, length 1 or 2 (default \code{c(0,0)})}
+\item{\code{angular}}{Angular decorrelation penalty, length 1 or 2 (default \code{c(0,0)})}
+\item{\code{cd_maxit}}{Max coordinate descent iterations (default 100)}
+\item{\code{cd_tol}}{CD stopping tolerance (default 1e-8)}
+\item{\code{warm_start}}{Optional initial solution matrix}
+\item{\code{dispersion}}{Dispersion estimation mode: \code{"per_row"} (default) or \code{"global"}}
+\item{\code{theta_init}}{Initial GP theta (default 0.1)}
+\item{\code{theta_max}}{Maximum GP theta (default 5.0)}
+\item{\code{theta_min}}{Minimum GP theta (default 0.0)}
+\item{\code{nb_size_init}}{Initial NB size parameter (default 10.0)}
+\item{\code{nb_size_max}}{Maximum NB size (default 1e6)}
+\item{\code{nb_size_min}}{Minimum NB size (default 0.01)}
+\item{\code{gamma_phi_init}}{Initial Gamma shape parameter (default 1.0)}
+\item{\code{gamma_phi_max}}{Maximum Gamma shape (default 1e4)}
+\item{\code{gamma_phi_min}}{Minimum Gamma shape (default 1e-6)}
+\item{\code{tweedie_power}}{Tweedie variance power (default 1.5)}
+\item{\code{irls_max_iter}}{Maximum IRLS iterations per solve (default 5)}
+\item{\code{irls_tol}}{IRLS convergence tolerance (default 1e-4)}
 }
 }
-\note{
-\code{nnls()} uses \code{A} for the data matrix (linear algebra
-convention), matching \code{\link{svd}()} and the normal equations
-\eqn{W'WH = W'A}. In contrast, \code{\link{nmf}()} uses \code{data}
-(statistical modeling convention).
+
+\section{Target Regularization}{
+
+When \code{target_H} and \code{target_lambda} are provided (via \code{...}),
+\code{nnls()} routes the solve through a single NMF iteration internally.
+Positive \code{target_lambda} attracts the solution toward \code{target_H}
+(label enrichment).  Negative \code{target_lambda} uses eigenvalue-projected
+adversarial removal (PROJ_ADV) to suppress target-correlated structure
+(batch removal).  See \code{vignette("guided-nmf")} for details.
 }
+
 \examples{
 \donttest{
 # Generate synthetic NMF problem
@@ -126,24 +105,8 @@ A <- w \%*\% h_true + matrix(rnorm(200, 0, 0.1), 20, 10)  # Add noise
 h_recovered <- nnls(w = w, A = A)
 cor(as.vector(h_true), as.vector(h_recovered))
 
-# Project H onto new features to find W (transpose problem)
-w_recovered <- nnls(h = h_true, A = A)
-cor(as.vector(w), as.vector(w_recovered))
-
 # With L1 penalty for sparse H
 h_sparse <- nnls(w = w, A = A, L1 = c(0, 0.1))
-
-# Warm start for faster convergence
-h_init <- matrix(0.5, 5, 10)
-h_warm <- nnls(w = w, A = A, warm_start = h_init)
-
-# Allow negative values (semi-NMF)
-h_unconstrained <- nnls(w = w, A = A, nonneg = c(TRUE, FALSE))
-
-# Dimension matching by names
-rownames(w) <- paste0("gene_", 1:20)
-rownames(A) <- paste0("gene_", 20:1)  # Reversed order
-h_matched <- nnls(w = w, A = A)  # Automatically reorders A by rownames
 }
 }
 \references{

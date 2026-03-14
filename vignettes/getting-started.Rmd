@@ -58,26 +58,26 @@ For GPU support, see the [GPU Acceleration](gpu-acceleration.html) vignette.
 
 ## Quick NMF Demo
 
-Generate a synthetic nonnegative matrix and recover its factors:
+Factor the Hawaiian birds species-count matrix (183 species × 1,183 grid cells) into 10 components:
 
 ```{r nmf-demo}
-sim <- simulateNMF(200, 100, k = 5, noise = 0.3, seed = 42)
-model <- nmf(sim$A, k = 5, seed = 1)
+data(hawaiibirds)
+model <- nmf(hawaiibirds, k = 10, seed = 42, tol = 1e-5, maxit = 100)
 ```
 
 ```{r nmf-summary, echo = FALSE}
 knitr::kable(data.frame(
-  Rows = nrow(sim$A),
-  Columns = ncol(sim$A),
-  Rank = 5,
-  `Reconstruction MSE` = round(evaluate(model, sim$A), 4),
+  Rows = nrow(hawaiibirds),
+  Columns = ncol(hawaiibirds),
+  Rank = 10,
+  `Reconstruction MSE` = format(evaluate(model, hawaiibirds), digits = 3, scientific = TRUE),
   Iterations = model@misc$iter,
   `Runtime (sec)` = round(as.numeric(model@misc$runtime, units = "secs"), 2),
   check.names = FALSE
 ), caption = "NMF model summary")
 ```
 
-With a low-noise signal and the correct rank, NMF recovers the generating factors and achieves near-zero reconstruction error.
+Each of the 10 factors captures a distinct pattern of bird species co-occurrence across Hawaiian survey sites.
 
 ```{r nmf-convergence, echo = FALSE, fig.height = 3.5}
 # Show convergence of a quick NMF run
@@ -89,56 +89,66 @@ track_loss <- function() {
   )
 }
 tracker <- track_loss()
-invisible(nmf(sim$A, k = 5, seed = 1, tol = 1e-6, maxit = 50, on_iteration = tracker$callback))
+invisible(nmf(hawaiibirds, k = 10, seed = 42, tol = 1e-6, maxit = 100, on_iteration = tracker$callback, resource = "cpu"))
 loss_df <- data.frame(Iteration = seq_along(tracker$get()), Loss = tracker$get())
 ggplot(loss_df, aes(x = Iteration, y = Loss)) +
   geom_line(color = "steelblue", linewidth = 0.8) +
+  geom_point(color = "steelblue", size = 1.5) +
   scale_y_log10() +
-  labs(title = "NMF Convergence", x = "Iteration", y = "Reconstruction Loss (log)") +
+  labs(title = "NMF Convergence (Hawaiian Birds, k = 10)",
+       x = "Iteration", y = "Reconstruction Loss (log)") +
   theme_minimal()
 ```
 
 ## Quick SVD Demo
 
-Compute a rank-5 truncated SVD of the AML chromatin-accessibility dataset:
+We can also decompose the same data with SVD, which captures directions of maximum variance rather than additive nonneg parts:
 
 ```{r svd-demo}
-data(aml)
-sv <- svd(aml, k = 5)
+data(hawaiibirds)
+sv <- svd(hawaiibirds, k = 10)
 ```
 
-```{r svd-table, echo = FALSE}
+```{r svd-scree, echo = FALSE, fig.height = 3.5}
 ve <- variance_explained(sv)
-knitr::kable(data.frame(
-  Component = 1:5,
-  `Variance Explained` = paste0(round(ve * 100, 1), "%"),
-  `Cumulative` = paste0(round(cumsum(ve) * 100, 1), "%"),
-  check.names = FALSE
-), caption = "Variance explained by the first 5 components")
-```
-
-```{r svd-scree, echo = FALSE, fig.height = 3}
-ve_df <- data.frame(Component = 1:5, VE = ve * 100)
-ggplot(ve_df, aes(x = Component, y = VE)) +
-  geom_col(fill = "steelblue", width = 0.6) +
-  labs(title = "Scree Plot: AML Chromatin Accessibility", x = "Component", y = "% Variance Explained") +
+ve_df <- data.frame(
+  Component = 1:10,
+  Additional = ve * 100
+)
+ggplot(ve_df, aes(x = Component, y = Additional)) +
+  geom_line(color = "steelblue", linewidth = 0.8) +
+  geom_point(color = "steelblue", size = 2.5) +
+  scale_x_continuous(breaks = 1:10) +
+  labs(title = "Incremental Variance Explained: Hawaiian Birds SVD",
+       x = "Component", y = "Additional % Variance Explained") +
   theme_minimal()
 ```
+
+The first component captures the dominant species-composition gradient, and each subsequent component adds progressively less explanatory power — the hallmark of effective dimensionality reduction.
+
+For PCA (centered and optionally scaled SVD), use the `pca()` convenience wrapper:
+
+```{r pca-demo}
+pc <- pca(hawaiibirds, k = 5, seed = 42)  # center = TRUE by default
+# Equivalent to: svd(hawaiibirds, k = 5, center = TRUE)
+```
+
+PCA centers the data before decomposition, so the first component captures the dominant direction of variation rather than the overall mean level. Use `scale = TRUE` for data where features have different units or widely varying magnitude.
 
 ## Quick Cross-Validation Demo
 
 Use speckled holdout cross-validation to find the best rank for the AML data:
 
 ```{r cv-demo}
-cv <- nmf(aml, k = c(2, 4, 6, 8, 10), test_fraction = 0.2, seed = 42, maxit = 50)
+data(aml)
+cv <- nmf(aml, k = c(2, 4, 6, 8, 10), test_fraction = 0.2, seed = 42)
 ```
 
 ```{r cv-plot, echo = FALSE, fig.height = 3.5}
-plot(cv)
+plot(cv, show_train = TRUE)
 ```
 
-The test loss curve reveals the rank at which the model begins to overfit. The
-minimum identifies the optimal number of factors for this dataset.
+Training loss always decreases with rank, but test loss reveals where the model begins to overfit. The test-loss minimum identifies the optimal number of factors.
 
 ## Built-in Datasets
 
@@ -150,11 +160,11 @@ ds <- data.frame(
               "`olivetti`", "`digits`", "`pbmc3k`"),
   Dimensions = c("824 × 135", "38 × 5,000", "183 × 1,183",
                   "3,867 × 610", "400 × 4,096", "1,797 × 64",
-                  "8,000 × 500"),
+                  "13,714 × 2,638"),
   Type = c("Dense matrix", "Sparse (dgCMatrix)", "Sparse (dgCMatrix)",
            "Sparse (dgCMatrix)", "Sparse (dgCMatrix)", "Sparse (dgCMatrix)",
            "SPZ raw bytes"),
-  Domain = c("Chromatin accessibility (AML)", "Gene expression (leukemia)",
+  Domain = c("DNA methylation (AML)", "Gene expression (leukemia)",
              "Bird species counts", "Movie ratings",
              "Face images (Olivetti)", "Handwritten digit images",
              "Single-cell RNA-seq (PBMCs)"),
@@ -163,9 +173,10 @@ ds <- data.frame(
 knitr::kable(ds, caption = "Shipped datasets")
 ```
 
-The `pbmc3k` dataset is stored as StreamPress-compressed raw bytes (a variance-selected
-subset of the full 13,714 × 2,700 10x Genomics PBMC 3k dataset). Decompress
-it with `st_read()` — see the [StreamPress](streampress.html) vignette.
+The `pbmc3k` dataset is stored as StreamPress-compressed raw bytes containing the full
+**13,714 genes × 2,638 cells** from the 10x Genomics PBMC 3k dataset, with 9 Seurat-annotated
+cell types embedded as column metadata. Decompress it with `st_read()` and access annotations
+via `st_read_var()` — see the [StreamPress](streampress.html) vignette.
 
 ## Where to Go Next
 
@@ -181,11 +192,6 @@ it with `st_read()` — see the [StreamPress](streampress.html) vignette.
 
 - [Clustering, Consensus, and Classification](clustering.html) — Divisive clustering, consensus NMF, and sample classification
 - [Factorization Graphs](factor-graphs.html) — Multi-modal and guided factorization via `factor_net()`
-
-### Applications
-
-- [Image Decomposition](image-decomposition.html) — Learning visual parts from face and digit images
-- [Recommendation Systems](recommendation-systems.html) — Building a movie recommender with sparse NMF
 
 ### Infrastructure
 

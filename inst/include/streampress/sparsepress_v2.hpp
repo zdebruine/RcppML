@@ -656,6 +656,7 @@ inline std::vector<uint8_t> compress_v2(
         // In CSC(Aᵀ), columns are original rows, rows are original columns
         uint32_t t_n = m;  // transpose columns = original rows
         uint32_t t_m = n;  // transpose rows = original columns
+        (void)t_m;  // documented for symmetry with t_n; not referenced below
 
         // COO for transpose
         std::vector<uint32_t> t_p(t_n + 1, 0);
@@ -963,6 +964,10 @@ inline CSCMatrix decompress_v2(
     int num_threads = cfg.num_threads;
     #ifdef _OPENMP
     if (num_threads <= 0) num_threads = omp_get_max_threads();
+    // Clamp to actual chunk count: idle threads beyond n_decode cause race
+    // conditions in repeated calls (e.g., loading many files in a loop).
+    num_threads = std::min(num_threads, static_cast<int>(n_decode));
+    if (num_threads < 1) num_threads = 1;
     #else
     num_threads = 1;
     #endif
@@ -1658,7 +1663,7 @@ inline std::vector<uint8_t> compress_v2(
     const CompressConfig_v2& cfg = {},
     CompressStats_v2* stats_out = nullptr)
 {
-    // Convert to v1 CSCMatrix for now (TODO: native fp32 path)
+    // Convert to v1 CSCMatrix for now (native fp32 path is a future optimization)
     CSCMatrix v1;
     v1.m = mat.m;
     v1.n = mat.n;

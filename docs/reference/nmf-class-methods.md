@@ -46,8 +46,8 @@ x[[i]]
 predict(
   object,
   data,
-  L1 = 0,
-  L2 = 0,
+  L1 = NULL,
+  L2 = NULL,
   mask = NULL,
   upper_bound = NULL,
   threads = 0,
@@ -116,8 +116,10 @@ predict(
 
 - mask:
 
-  dense or sparse matrix of values in `data` to handle as missing.
-  Alternatively, specify "`zeros`" or "`NA`".
+  missing data mask. Accepts: `NULL` (no masking), `"zeros"` (mask
+  zeros), `"NA"` (mask NAs), a dgCMatrix/matrix (custom mask), or
+  `list("zeros", <matrix>)` to mask zeros and use a custom mask
+  simultaneously.
 
 - upper_bound:
 
@@ -211,7 +213,7 @@ mask <- rsparsematrix(1000, 100, density = 0.1)
 A <- (w %*% h_true) * (mask != 0)
 h <- nnls(w = w, A = A)
 cor(as.vector(h_true), as.vector(h))
-#> [1] 0.3120419
+#> [1] 0.3003039
 
 # alternating projections refine solution (like NMF)
 h <- nnls(w = w, A = A)

@@ -66,9 +66,7 @@ namespace primitives {
  * @param nonneg      If true, enforce x ≥ 0
  * @param threads     Number of OpenMP threads
  * @param warm_start  If true, X has previous solution for warm starting
- * @param upper_bound Upper bound on x (0 = disabled)
- * @param cd_abs_tol  Absolute tolerance floor for relative convergence denominator
- */
+ * @param upper_bound Upper bound on x (0 = disabled)\n */
 template<typename SparseMat, typename Scalar>
 inline void fused_rhs_nnls_sparse(
     const SparseMat& A,
@@ -81,8 +79,7 @@ inline void fused_rhs_nnls_sparse(
     bool nonneg,
     int threads,
     bool warm_start,
-    Scalar upper_bound = 0,
-    Scalar cd_abs_tol = Scalar(1e-15))
+    Scalar upper_bound = 0)
 {
     const int k = static_cast<int>(Factor.rows());
     const int n = static_cast<int>(A.cols());
@@ -129,7 +126,7 @@ inline void fused_rhs_nnls_sparse(
                                       Scalar(0),   // L1 already applied to b
                                       Scalar(0),   // L2 already applied to G
                                       nonneg, cd_maxit,
-                                      upper_bound, cd_tol, cd_abs_tol);
+                                      upper_bound, cd_tol);
         }
     }  // end parallel
 }

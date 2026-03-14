@@ -123,7 +123,7 @@ struct InputNode : Node<Scalar> {
 /**
  * @brief NMF layer: factorizes input A ≈ W·diag(d)·H
  *
- * Holds per-factor configuration (regularization, constraints, guides)
+ * Holds per-factor configuration (regularization, constraints, targets)
  * for both W and H, plus the factorization rank k. The input field
  * points to the upstream node in the graph.
  *
@@ -134,8 +134,8 @@ struct NMFLayerNode : Node<Scalar> {
     Node<Scalar>* input = nullptr;   ///< Upstream node
     int k = 0;                        ///< Factorization rank
 
-    FactorConfig<Scalar> W_config;    ///< W-side regularization & guides
-    FactorConfig<Scalar> H_config;    ///< H-side regularization & guides
+    FactorConfig<Scalar> W_config;    ///< W-side regularization & targets
+    FactorConfig<Scalar> H_config;    ///< H-side regularization & targets
 
     NMFLayerNode(Node<Scalar>* in, int rank, const std::string& name = "")
         : Node<Scalar>(NodeType::NMF_LAYER, name),

@@ -60,9 +60,9 @@ auto_nmf_distribution(
 
 A list with:
 
-- best:
+- loss:
 
-  Character string: name of the best distribution
+  Character string: name of the best distribution (loss function)
 
 - comparison:
 
@@ -101,12 +101,17 @@ AIC = \\2 \times \text{NLL} + 2 \times \text{df}\\.
 ## Examples
 
 ``` r
-if (FALSE) { # \dontrun{
+# \donttest{
 library(Matrix)
 set.seed(42)
 A <- abs(rsparsematrix(100, 50, 0.3))
 result <- auto_nmf_distribution(A, k = 5)
 print(result$comparison)
-cat("Best distribution:", result$best, "\n")
-} # }
+#>   distribution      nll  df      aic       bic selected
+#> 1          mse 1791.759 751 5085.518  9075.746     TRUE
+#> 2           gp 3184.812 850 8069.623 12585.860    FALSE
+#> 3           nb 1487.201 850 4674.401  9190.639    FALSE
+cat("Best distribution:", result$loss, "\n")
+#> Best distribution: mse 
+# }
 ```

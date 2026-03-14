@@ -192,10 +192,16 @@ test_that("Regularization works with different loss functions", {
   data <- simulateNMF(60, 50, k = 4, noise = 0.1, dropout = 0.3, seed = 123)
   A <- data$A
   
-  loss_types <- c("mse", "mae", "huber")
+  # Test MSE, robust (Huber), and MAE via the robust parameter
+  configs <- list(
+    list(loss = "mse", robust = FALSE, label = "mse"),
+    list(loss = "mse", robust = TRUE,  label = "huber"),
+    list(loss = "mse", robust = "mae", label = "mae")
+  )
   
-  for (loss in loss_types) {
-    model <- nmf(A, 4, loss = loss, L1 = c(0.05, 0.05), L2 = c(0.05, 0.05), 
+  for (cfg in configs) {
+    model <- nmf(A, 4, loss = cfg$loss, robust = cfg$robust,
+                 L1 = c(0.05, 0.05), L2 = c(0.05, 0.05), 
                  maxit = 100, tol = 1e-6, seed = 456, verbose = FALSE)
     
     # Should converge for all loss types

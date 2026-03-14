@@ -9,10 +9,15 @@ slows I/O for large datasets.
 
 StreamPress (`.spz`) is a columnar compressed format designed
 specifically for sparse matrices. It uses rANS entropy coding with
-delta-encoded indices to achieve 2–20× compression over `.rds` files
-while supporting random column access and streaming reads. For dense
-matrices, StreamPress v3 provides optional FP16, QUANT8, and rANS
-compression codecs.
+delta-encoded indices to achieve 5–10× compression over raw CSC binary
+on typical scRNA-seq count data, and larger gains over `.rds` files.
+Beyond storage savings, SPZ is also faster to read than a raw float32
+CSC binary — even single-threaded — because the dominant cost in loading
+a large sparse matrix is constructing the R/Eigen sparse object from raw
+index and value arrays, not transferring bytes off disk. SPZ
+parallelises that reconstruction step across chunks, while raw CSC must
+be assembled sequentially. For dense matrices, StreamPress v3 provides
+optional FP16, QUANT8, and rANS compression codecs.
 
 ## API Reference
 
@@ -28,10 +33,17 @@ stats <- st_write(x, path,
   delta = TRUE,               # delta prediction for row indices
   value_pred = FALSE,         # value prediction for integer data
   chunk_cols = NULL,          # columns per chunk (NULL = auto from chunk_bytes)
-  chunk_bytes = 64e6,         # target bytes per chunk
+  chunk_bytes = 8e6,          # target bytes per chunk (8 MB default)
   verbose = FALSE             # print compression statistics
 )
 ```
+
+The default `chunk_bytes = 8e6` sets chunk size to ~50 columns for a
+typical 38 k-row scRNA-seq matrix, yielding ~60 chunks per sample file.
+This is the sweet spot for parallel decompression: enough chunks for
+real multi-core speedup, while each chunk is large enough that per-chunk
+overhead is negligible. Use `chunk_bytes = 64e6` (or larger) only if you
+are writing very small matrices where chunk overhead would dominate.
 
 Returns an invisible list with compression statistics: `raw_bytes`,
 `compressed_bytes`, `ratio`, `compress_ms`.
@@ -43,11 +55,18 @@ decompresses a `.spz` file to a `dgCMatrix`:
 
 ``` r
 mat <- st_read(path,
-  cols = NULL,      # column indices to read (NULL = all)
-  reorder = TRUE,   # undo any row permutation
-  threads = 0       # number of threads (0 = all)
+  cols = NULL,       # column indices to read (NULL = all)
+  reorder = TRUE,    # undo any row permutation
+  threads = NULL     # NULL = auto (1 thread for <50 MB, all cores for ≥50 MB)
 )
 ```
+
+`threads = NULL` (the default) automatically selects the thread count
+based on file size. For individual sample files (typically \< 10 MB
+compressed), multi-threading adds overhead without measurable benefit —
+decompression throughput is ~21 MB/s per thread and thread fork/join
+costs dominate. For large concatenated files (≥ 50 MB), all available
+cores are used.
 
 The `cols` parameter enables partial reads — load only the columns you
 need without decompressing the entire file.
@@ -160,9 +179,21 @@ knitr::kable(size_df, align = "lr",
 |:---------------------|----------:|
 | R object (in memory) |    1664.6 |
 | .rds file            |     271.6 |
-| .spz file            |      68.2 |
+| .spz file            |      68.7 |
 
 MovieLens storage: R object vs. .rds vs. .spz
+
+``` r
+size_df$Format <- factor(size_df$Format, levels = rev(size_df$Format))
+ggplot(size_df, aes(x = Format, y = `Size (KB)`, fill = Format)) +
+  geom_col(width = 0.6) +
+  scale_fill_manual(values = c("steelblue", "grey60", "grey80"), guide = "none") +
+  coord_flip() +
+  labs(title = "MovieLens Storage Comparison", x = "", y = "Size (KB)") +
+  theme_minimal()
+```
+
+![](streampress_files/figure-html/sparse-size-plot-1.png)
 
 ``` r
 # Verify values are identical (dimnames may differ since SPZ doesn't store them)
@@ -254,10 +285,10 @@ knitr::kable(prec_results, align = "lrrr",
 
 | Precision | File Size (KB) | Max Abs Error | Lossless |
 |:----------|---------------:|--------------:|---------:|
-| fp64      |           74.0 |      0.000000 |      Yes |
-| fp32      |           68.2 |      0.000000 |      Yes |
-| fp16      |           69.2 |      0.000000 |      Yes |
-| quant8    |           68.7 |      0.007843 |       No |
+| fp64      |           78.6 |      0.000000 |      Yes |
+| fp32      |           68.7 |      0.000000 |      Yes |
+| fp16      |           70.7 |      0.000000 |      Yes |
+| quant8    |           69.7 |      0.007843 |       No |
 
 Precision vs. compression tradeoff (MovieLens ratings)
 
@@ -275,7 +306,7 @@ within CRAN’s tarball size limits.
 
 ``` r
 # Load compressed bytes (not a matrix — raw bytes)
-data(pbmc3k)
+data(pbmc3k, package = "RcppML")
 
 # Write to temp file and inspect
 pbmc3k_file <- tempfile(fileext = ".spz")
@@ -298,14 +329,14 @@ pbmc_df <- data.frame(
 knitr::kable(pbmc_df, align = "lr", caption = "pbmc3k StreamPress file summary")
 ```
 
-| Property          |   Value |
-|:------------------|--------:|
-| Rows (genes)      |   8,000 |
-| Columns (cells)   |     500 |
-| Non-zeros         | 412,180 |
-| Density           |   10.3% |
-| SPZ file size     |  663 KB |
-| Compression ratio |    3.6x |
+| Property          |     Value |
+|:------------------|----------:|
+| Rows (genes)      |    13,714 |
+| Columns (cells)   |     2,638 |
+| Non-zeros         | 2,238,732 |
+| Density           |      6.2% |
+| SPZ file size     |   3837 KB |
+| Compression ratio |      3.4x |
 
 pbmc3k StreamPress file summary
 
@@ -326,7 +357,7 @@ model <- nmf(counts_sub, k = 5, seed = 42, tol = 1e-4, maxit = 50,
              verbose = FALSE)
 cat("NMF complete: k =", ncol(model@w), ", loss =",
     round(model@misc$loss, 2), "\n")
-#> NMF complete: k = 5 , loss = 3287246
+#> NMF complete: k = 5 , loss = 14335408
 ```
 
 ### Example 5: Out-of-Core Streaming NMF (Conceptual)
@@ -346,19 +377,134 @@ factor matrices incrementally, and discards each chunk before loading
 the next. This enables NMF on datasets that are 10–100× larger than
 available RAM.
 
+## When StreamPress Wins
+
+StreamPress is **always** a compression win — roughly 5–10× smaller on
+disk than a raw float32 CSC binary on typical scRNA-seq count data (5%
+density, 38 k genes × 278 k cells benchmark: **5.36× compression**, 828
+MB vs 4,434 MB). More importantly, SPZ is also **faster to read** than
+raw CSC binary, even single-threaded.
+
+### Why SPZ Beats Raw CSC Even at 1 Thread
+
+Reading a large sparse matrix has three costs:
+
+| Step                           |  Raw float32 CSC |                SPZ |
+|:-------------------------------|-----------------:|-------------------:|
+| 1\. Bytes off disk             | 1.0 s (4,434 MB) |     0.2 s (828 MB) |
+| 2\. Decompress / decode        |                — |  92.9 s @ 1 thread |
+| 3\. Sparse object construction |           90.8 s | included in step 2 |
+| **Total @ 1 thread**           |      **116.6 s** |         **93.1 s** |
+
+Benchmarked on a 38,606 × 278,676 matrix (554 M NNZ) using HPC local
+storage at ~4,000 MB/s bandwidth. Raw CSC spends 78% of its time in step
+3 — [`sparseMatrix()`](https://rdrr.io/pkg/Matrix/man/sparseMatrix.html)
+must sort indices, validate structure, and allocate R objects for 554 M
+non-zeros. SPZ’s parallel chunk decoder does the equivalent work faster
+because chunks are independent and require no global sort.
+
+### Parallel Scaling
+
+With 5,465 independent chunks (51 cols/chunk at 38 k rows), SPZ scales
+efficently up to ~32 threads:
+
+| Threads | SPZ total |   vs raw CSC (116.6 s) |
+|--------:|----------:|-----------------------:|
+|       1 |    93.1 s |              **1.25×** |
+|       4 |    38.4 s |              **3.04×** |
+|       8 |    31.0 s |              **3.76×** |
+|      16 |    25.5 s |              **4.57×** |
+|      32 |    22.4 s |              **5.20×** |
+|      40 |    26.9 s | 4.33× *(OMP overhead)* |
+
+The optimal thread count is around 32 for this matrix size; beyond that,
+thread creation and cache contention on a shared node reduce efficiency.
+The 5,465 chunks provide far more parallel work than any reasonable core
+count, so SPZ scaling is limited purely by OMP overhead, not by chunk
+starvation.
+
+### The I/O Bandwidth Picture
+
+For understanding the pure IO vs decode trade-off (relevant when
+comparing to formats with cheap or no reconstruction cost, e.g., a
+pre-built mmap’d binary):
+
+| Component                        | Measured rate            |
+|:---------------------------------|:-------------------------|
+| Single-thread SPZ decode         | ~9 MB/s compressed input |
+| IO bandwidth (hot cache / local) | ~4,000 MB/s              |
+| IO bandwidth (cold NFS)          | ~500 MB/s                |
+
+On cold NFS (500 MB/s), even 4-thread SPZ comfortably beats the
+equivalent raw binary read in total wall-clock time. On hot-cache local
+storage ( 4,000 MB/s), raw IO is bounded by
+[`sparseMatrix()`](https://rdrr.io/pkg/Matrix/man/sparseMatrix.html)
+construction, which SPZ also avoids.
+
+### Summary: When to Use SPZ
+
+| Scenario                                | Recommendation                             |
+|:----------------------------------------|:-------------------------------------------|
+| Any large matrix (≥ 100 k columns)      | **Always use SPZ** — wins at ≥ 1 thread    |
+| Many small sample files (\< 20 MB each) | Parallelise *across* files with `mclapply` |
+| Cold NFS, streaming NMF                 | **Use SPZ** — 5× less data to transfer     |
+| Long-term archive / CRAN distribution   | **Use SPZ** — 5–10× smaller files          |
+
+### Thread Guidance
+
+``` r
+# Default: auto-selects 1 thread for files < 50 MB, all cores for larger files
+mat <- st_read("sample.spz")
+
+# Large file: explicitly use 32 threads for best throughput
+mat <- st_read("large_atlas.spz", threads = 32L)
+
+# Batch-load 100 small samples: parallelise across files, 1 thread each
+# This avoids OMP thread contention and saturates the CPU more efficiently
+library(parallel)
+mats <- mclapply(spz_paths, st_read, threads = 1L, mc.cores = 32L)
+```
+
+For batch loading of many small samples, parallelising **across** files
+(one thread per file, many files concurrently) is more efficient than
+parallelising within each file, because intra-file parallelism offers
+limited speedup when files have few chunks.
+
 ## Key Takeaways
 
-1.  **StreamPress achieves substantial compression** over both R objects
-    and `.rds` files, with near-instantaneous decompression for random
-    column access.
-2.  **Precision modes** offer a clear tradeoff: `fp64` for lossless
+1.  **StreamPress achieves 5–10× compression** over raw float32 CSC
+    binary on typical scRNA-seq count data (5.36× measured on a 38 k ×
+    279 k matrix).
+2.  **SPZ is faster to read than raw CSC binary, even single-threaded.**
+    The dominant cost of loading a large sparse matrix is not disk I/O
+    but sparse object construction (sorting, validation, R/Eigen object
+    allocation for hundreds of millions of non-zeros). SPZ’s parallel
+    chunk decoder performs the equivalent construction in parallel
+    without a global sort step.
+3.  **Parallel scaling is real and substantial.** With
+    `chunk_bytes = 8e6` (the default), a 38 k-row matrix produces ~5,400
+    chunks across 279 k columns — far more than any available core
+    count. Speedup is 5.2× vs raw CSC at 32 threads on the benchmark
+    hardware.
+4.  **Default `chunk_bytes = 8e6`** (8 MB) produces ~50 columns per
+    chunk for typical scRNA-seq matrices. Do not increase this beyond 64
+    MB: too few chunks concentrates work and kills OMP parallelism.
+5.  **`threads = NULL`** (the default) auto-selects 1 thread for files
+    \< 50 MB and all available threads for larger files. For batch
+    loading of many small files, parallelise across files with
+    `mclapply(..., mc.cores = N)` and pass `threads = 1L` to each
+    `st_read` call.
+6.  **Precision modes** offer a clear tradeoff: `fp64` for lossless
     preservation, `fp32`/`fp16` for lossless on integer data, `quant8`
     for maximum compression with controlled error.
-3.  **The pbmc3k shipping pattern** (`raw` bytes in `.rda` → `writeBin`
+7.  **The pbmc3k shipping pattern** (`raw` bytes in `.rda` → `writeBin`
     → `st_read`) enables distributing large datasets within CRAN’s
     tarball size limits.
-4.  **Streaming NMF** from `.spz` files enables analysis of datasets
-    larger than available RAM.
+8.  **Streaming NMF** from `.spz` files enables analysis of datasets
+    larger than available RAM. The streaming path reads chunks of
+    columns, performs NMF updates on each chunk, and discards it before
+    loading the next — peak memory usage is proportional to chunk size,
+    not total matrix size.
 
 *See the [GPU
 Acceleration](https://zdebruine.github.io/RcppML/articles/gpu-acceleration.md)

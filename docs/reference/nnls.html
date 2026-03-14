@@ -55,15 +55,14 @@ Alternatively, given \(H\) and \(A\), find \(W\) such that \(||WH - A||^2\) is m
 <span>  w <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  h <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  <span class="va">A</span>,</span>
-<span>  warm_start <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  L1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span><span class="op">)</span>,</span>
 <span>  L2 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span><span class="op">)</span>,</span>
-<span>  cd_maxit <span class="op">=</span> <span class="fl">100L</span>,</span>
-<span>  cd_tol <span class="op">=</span> <span class="fl">1e-08</span>,</span>
+<span>  loss <span class="op">=</span> <span class="st">"mse"</span>,</span>
 <span>  upper_bound <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span><span class="op">)</span>,</span>
 <span>  nonneg <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="cn">TRUE</span>, <span class="cn">TRUE</span><span class="op">)</span>,</span>
 <span>  threads <span class="op">=</span> <span class="fl">0</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  verbose <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -80,45 +79,39 @@ Alternatively, given \(H\) and \(A\), find \(W\) such that \(||WH - A||^2\) is m
 
 
 <dt id="arg-a">A<a class="anchor" aria-label="anchor" href="#arg-a"></a></dt>
-<dd><p>data matrix (n_features x n_samples for w-&gt;h, n_samples x n_features for h-&gt;w).
-Can be dense (matrix) or sparse (dgCMatrix from Matrix package).</p></dd>
-
-
-<dt id="arg-warm-start">warm_start<a class="anchor" aria-label="anchor" href="#arg-warm-start"></a></dt>
-<dd><p>optional matrix to initialize the solution. Must match output dimensions
-(k x n_samples for H, n_features x k for W). Can accelerate convergence.</p></dd>
+<dd><p>data matrix. Can be dense (matrix) or sparse (dgCMatrix).</p></dd>
 
 
 <dt id="arg-l-">L1<a class="anchor" aria-label="anchor" href="#arg-l-"></a></dt>
-<dd><p>L1/LASSO penalty, length 1 or 2 for c(w_penalty, h_penalty). Range [0, 1).</p></dd>
+<dd><p>L1/LASSO penalty, length 1 or 2. Range [0, 1).</p></dd>
 
 
 <dt id="arg-l-">L2<a class="anchor" aria-label="anchor" href="#arg-l-"></a></dt>
-<dd><p>Ridge penalty, length 1 or 2 for c(w_penalty, h_penalty). Range [0, Inf).</p></dd>
+<dd><p>Ridge penalty, length 1 or 2. Range [0, Inf).</p></dd>
 
 
-<dt id="arg-cd-maxit">cd_maxit<a class="anchor" aria-label="anchor" href="#arg-cd-maxit"></a></dt>
-<dd><p>maximum number of coordinate descent iterations (default 100)</p></dd>
-
-
-<dt id="arg-cd-tol">cd_tol<a class="anchor" aria-label="anchor" href="#arg-cd-tol"></a></dt>
-<dd><p>stopping tolerance for coordinate descent (default 1e-8)</p></dd>
+<dt id="arg-loss">loss<a class="anchor" aria-label="anchor" href="#arg-loss"></a></dt>
+<dd><p>loss function: <code>"mse"</code> (default) or others via NMF dispatch.</p></dd>
 
 
 <dt id="arg-upper-bound">upper_bound<a class="anchor" aria-label="anchor" href="#arg-upper-bound"></a></dt>
-<dd><p>maximum value in solution, length 1 or 2 for c(w_bound, h_bound). 0 = no bound.</p></dd>
+<dd><p>maximum value in solution, length 1 or 2. 0 = no bound.</p></dd>
 
 
 <dt id="arg-nonneg">nonneg<a class="anchor" aria-label="anchor" href="#arg-nonneg"></a></dt>
-<dd><p>non-negativity constraints, length 1 or 2 for c(w_constraint, h_constraint)</p></dd>
+<dd><p>non-negativity constraints, length 1 or 2.</p></dd>
 
 
 <dt id="arg-threads">threads<a class="anchor" aria-label="anchor" href="#arg-threads"></a></dt>
-<dd><p>number of threads for OpenMP parallelization (0 = all available)</p></dd>
+<dd><p>number of threads for OpenMP parallelization (0 = all available).</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
-<dd><p>print progress information</p></dd>
+<dd><p>print progress information.</p></dd>
+
+
+<dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
+<dd><p>advanced parameters. See <strong>Advanced Parameters</strong> section.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -127,34 +120,81 @@ Can be dense (matrix) or sparse (dgCMatrix from Matrix package).</p></dd>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>This function solves NNLS projection problems with full flexibility:</p>
+    <p>This function solves NNLS projection problems with full flexibility.</p>
 <p><strong>Projection Modes:</strong></p><ul><li><p><code>w</code> provided, <code>h = NULL</code>: Solve for H given W and A (standard projection)</p></li>
 <li><p><code>h</code> provided, <code>w = NULL</code>: Solve for W given H and A (transpose projection)</p></li>
 <li><p>Exactly one of <code>w</code> or <code>h</code> must be NULL</p></li>
-</ul><p><strong>Normal Equations:</strong></p><ul><li><p>For H: \(W'W H = W'A\)</p></li>
-<li><p>For W: \(HH' W' = HA'\) (solved as transpose problem)</p></li>
-</ul><p>The problem is solved by forming the Gram matrix and right-hand side in C++ with
-OpenMP parallelization across samples. Sequential coordinate descent with warm starts
-enables fast convergence.</p>
-<p><strong>Dimension Matching:</strong>
-When dimensions don't match exactly, the function attempts to:</p><ol><li><p>Auto-transpose if one orientation matches</p></li>
-<li><p>Match by rownames/colnames and reorder/subset to the intersection</p></li>
-<li><p>Error if no valid dimension alignment is possible</p></li>
-</ol><p><strong>Warm Start:</strong>
-Provide an optional <code>warm_start</code> matrix to initialize the solution. This can
-dramatically accelerate convergence when solutions are expected to be similar across
-related problems (e.g., incremental updates, time series).</p>
-<p><strong>Penalties:</strong></p><ul><li><p>L1 (LASSO): Encourages sparsity by subtracting L1 from the right-hand side</p></li>
-<li><p>L2 (Ridge): Shrinks solutions by adding L2 to the diagonal of the Gram matrix</p></li>
-<li><p>Graph Laplacian: <em>Not yet implemented in nnls. Use nmf() for graph regularization.</em></p></li>
-<li><p>Length-2 vectors <code>c(w_penalty, h_penalty)</code> control penalties for W and H separately</p></li>
 </ul></div>
     <div class="section level2">
-    <h2 id="note">Note<a class="anchor" aria-label="anchor" href="#note"></a></h2>
-    <p><code>nnls()</code> uses <code>A</code> for the data matrix (linear algebra
-convention), matching <code><a href="svd.html">svd()</a></code> and the normal equations
-\(W'WH = W'A\). In contrast, <code><a href="nmf.html">nmf()</a></code> uses <code>data</code>
-(statistical modeling convention).</p>
+    <h2 id="advanced-parameters-via-">Advanced Parameters (via <code>...</code>)<a class="anchor" aria-label="anchor" href="#advanced-parameters-via-"></a></h2>
+
+
+<dl><dt><code>L21</code></dt>
+<dd><p>L2,1 group sparsity penalty, length 1 or 2 (default <code>c(0,0)</code>)</p></dd>
+
+<dt><code>angular</code></dt>
+<dd><p>Angular decorrelation penalty, length 1 or 2 (default <code>c(0,0)</code>)</p></dd>
+
+<dt><code>cd_maxit</code></dt>
+<dd><p>Max coordinate descent iterations (default 100)</p></dd>
+
+<dt><code>cd_tol</code></dt>
+<dd><p>CD stopping tolerance (default 1e-8)</p></dd>
+
+<dt><code>warm_start</code></dt>
+<dd><p>Optional initial solution matrix</p></dd>
+
+<dt><code>dispersion</code></dt>
+<dd><p>Dispersion estimation mode: <code>"per_row"</code> (default) or <code>"global"</code></p></dd>
+
+<dt><code>theta_init</code></dt>
+<dd><p>Initial GP theta (default 0.1)</p></dd>
+
+<dt><code>theta_max</code></dt>
+<dd><p>Maximum GP theta (default 5.0)</p></dd>
+
+<dt><code>theta_min</code></dt>
+<dd><p>Minimum GP theta (default 0.0)</p></dd>
+
+<dt><code>nb_size_init</code></dt>
+<dd><p>Initial NB size parameter (default 10.0)</p></dd>
+
+<dt><code>nb_size_max</code></dt>
+<dd><p>Maximum NB size (default 1e6)</p></dd>
+
+<dt><code>nb_size_min</code></dt>
+<dd><p>Minimum NB size (default 0.01)</p></dd>
+
+<dt><code>gamma_phi_init</code></dt>
+<dd><p>Initial Gamma shape parameter (default 1.0)</p></dd>
+
+<dt><code>gamma_phi_max</code></dt>
+<dd><p>Maximum Gamma shape (default 1e4)</p></dd>
+
+<dt><code>gamma_phi_min</code></dt>
+<dd><p>Minimum Gamma shape (default 1e-6)</p></dd>
+
+<dt><code>tweedie_power</code></dt>
+<dd><p>Tweedie variance power (default 1.5)</p></dd>
+
+<dt><code>irls_max_iter</code></dt>
+<dd><p>Maximum IRLS iterations per solve (default 5)</p></dd>
+
+<dt><code>irls_tol</code></dt>
+<dd><p>IRLS convergence tolerance (default 1e-4)</p></dd>
+
+
+</dl></div>
+    <div class="section level2">
+    <h2 id="target-regularization">Target Regularization<a class="anchor" aria-label="anchor" href="#target-regularization"></a></h2>
+
+
+<p>When <code>target_H</code> and <code>target_lambda</code> are provided (via <code>...</code>),
+<code>nnls()</code> routes the solve through a single NMF iteration internally.
+Positive <code>target_lambda</code> attracts the solution toward <code>target_H</code>
+(label enrichment).  Negative <code>target_lambda</code> uses eigenvalue-projected
+adversarial removal (PROJ_ADV) to suppress target-correlated structure
+(batch removal).  See <code><a href="../articles/guided-nmf.html">vignette("guided-nmf")</a></code> for details.</p>
     </div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>
@@ -163,7 +203,7 @@ convention), matching <code><a href="svd.html">svd()</a></code> and the normal e
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="nmf.html">nmf</a></code>, <code><a href="solve.html">solve</a></code></p></div>
+    <div class="dont-index"><p><code><a href="nmf.html">nmf</a></code></p></div>
     </div>
     <div class="section level2">
     <h2 id="author">Author<a class="anchor" aria-label="anchor" href="#author"></a></h2>
@@ -184,25 +224,8 @@ convention), matching <code><a href="svd.html">svd()</a></code> and the normal e
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">as.vector</a></span><span class="op">(</span><span class="va">h_true</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">as.vector</a></span><span class="op">(</span><span class="va">h_recovered</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.9668001</span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Project H onto new features to find W (transpose problem)</span></span></span>
-<span class="r-in"><span><span class="va">w_recovered</span> <span class="op">&lt;-</span> <span class="fu">nnls</span><span class="op">(</span>h <span class="op">=</span> <span class="va">h_true</span>, A <span class="op">=</span> <span class="va">A</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">as.vector</a></span><span class="op">(</span><span class="va">w</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">as.vector</a></span><span class="op">(</span><span class="va">w_recovered</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.8989978</span>
-<span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># With L1 penalty for sparse H</span></span></span>
 <span class="r-in"><span><span class="va">h_sparse</span> <span class="op">&lt;-</span> <span class="fu">nnls</span><span class="op">(</span>w <span class="op">=</span> <span class="va">w</span>, A <span class="op">=</span> <span class="va">A</span>, L1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.1</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Warm start for faster convergence</span></span></span>
-<span class="r-in"><span><span class="va">h_init</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fl">0.5</span>, <span class="fl">5</span>, <span class="fl">10</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">h_warm</span> <span class="op">&lt;-</span> <span class="fu">nnls</span><span class="op">(</span>w <span class="op">=</span> <span class="va">w</span>, A <span class="op">=</span> <span class="va">A</span>, warm_start <span class="op">=</span> <span class="va">h_init</span><span class="op">)</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Allow negative values (semi-NMF)</span></span></span>
-<span class="r-in"><span><span class="va">h_unconstrained</span> <span class="op">&lt;-</span> <span class="fu">nnls</span><span class="op">(</span>w <span class="op">=</span> <span class="va">w</span>, A <span class="op">=</span> <span class="va">A</span>, nonneg <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="cn">TRUE</span>, <span class="cn">FALSE</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Dimension matching by names</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">w</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"gene_"</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">20</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">A</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"gene_"</span>, <span class="fl">20</span><span class="op">:</span><span class="fl">1</span><span class="op">)</span>  <span class="co"># Reversed order</span></span></span>
-<span class="r-in"><span><span class="va">h_matched</span> <span class="op">&lt;-</span> <span class="fu">nnls</span><span class="op">(</span>w <span class="op">=</span> <span class="va">w</span>, A <span class="op">=</span> <span class="va">A</span><span class="op">)</span>  <span class="co"># Automatically reorders A by rownames</span></span></span>
 <span class="r-in"><span><span class="co"># }</span></span></span>
 </code></pre></div>
     </div>

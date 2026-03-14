@@ -25,6 +25,11 @@ factor_condition(input, Z)
 
 An `fn_node` of type "condition".
 
+## See also
+
+[`nmf_layer`](https://zdebruine.github.io/RcppML/reference/nmf_layer.md),
+[`factor_net`](https://zdebruine.github.io/RcppML/reference/factor_net.md)
+
 ## Examples
 
 ``` r

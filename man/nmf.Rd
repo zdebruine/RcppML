@@ -11,63 +11,16 @@ nmf(
   maxit = 100,
   L1 = c(0, 0),
   L2 = c(0, 0),
-  L21 = c(0, 0),
-  angular = c(0, 0),
   seed = NULL,
   mask = NULL,
-  loss = c("mse", "mae", "huber", "gp", "nb", "gamma", "inverse_gaussian", "tweedie"),
-  huber_delta = 1,
-  dispersion = c("per_row", "per_col", "global", "none"),
-  theta_init = 0.1,
-  theta_max = 5,
-  zi = c("none", "row", "col", "twoway"),
-  zi_em_iters = 1L,
-  theta_min = 0,
-  nb_size_init = 10,
-  nb_size_max = 1e+06,
-  nb_size_min = 0.01,
-  gamma_phi_init = 1,
-  gamma_phi_max = 10000,
-  gamma_phi_min = 1e-06,
-  tweedie_power = 1.5,
-  graph_W = NULL,
-  graph_H = NULL,
-  graph_lambda = c(0, 0),
-  guides = NULL,
-  sort_model = TRUE,
-  mask_zeros = FALSE,
+  loss = c("mse", "gp", "nb", "gamma", "inverse_gaussian", "tweedie"),
   nonneg = c(TRUE, TRUE),
-  upper_bound = c(0, 0),
   test_fraction = 0,
-  patience = 5,
-  cv_k_range = c(2, 50),
-  cv_seed = NULL,
-  track_train_loss = TRUE,
-  threads = 0,
   verbose = FALSE,
-  cd_tol = 1e-08,
-  cd_maxit = 100L,
-  cd_abs_tol = 1e-15,
-  norm = c("L1", "L2", "none"),
-  streaming = "auto",
-  panel_cols = 0L,
-  resource = "auto",
   projective = FALSE,
   symmetric = FALSE,
-  solver = c("auto", "cholesky", "cd"),
-  init = c("random", "lanczos", "irlba"),
-  irls_max_iter = 5L,
-  irls_tol = 1e-04,
+  zi = c("none", "row", "col"),
   robust = FALSE,
-  distribution = NULL,
-  zero_inflation = NULL,
-  distribution_config = list(),
-  zi_config = list(),
-  robust_config = list(),
-  on_iteration = NULL,
-  h_init = NULL,
-  profile = FALSE,
-  dispatch = NULL,
   ...
 )
 }
@@ -85,178 +38,42 @@ Also accepts a file path (character string) which will be auto-loaded based on e
 
 \item{L2}{Ridge penalties greater than zero, single value or array of length two for \code{c(w, h)}}
 
-\item{L21}{Group sparsity (L2,1-norm) penalties, single value or array of length two for \code{c(w, h)}}
+\item{seed}{initialization control. Accepts:
+\code{NULL} for random init, an integer for reproducible random init,
+a matrix (m x k) for custom W initialization, a list of matrices for multi-init,
+or a string: \code{"lanczos"}, \code{"irlba"}, \code{"randomized"}, or \code{"svd"}
+(auto-select) for SVD-based initialization.}
 
-\item{angular}{Angular regularization penalties, single value or array of length two for \code{c(w, h)} (default c(0, 0)).}
+\item{mask}{missing data mask. Accepts:
+\code{NULL} (no masking), \code{"zeros"} (mask zeros), \code{"NA"} (mask NAs),
+a dgCMatrix/matrix (custom mask), or \code{list("zeros", <matrix>)} to mask
+zeros and use a custom mask simultaneously.}
 
-\item{seed}{random seed(s) for initialization and CV. Can be: \code{NULL} for random initialization, a single integer for reproducible initialization, a vector of integers for multiple CV replicates, or a custom W matrix (k x p) for custom initialization.}
-
-\item{mask}{dense or sparse matrix of values in \code{data} to handle as missing. Alternatively, specify "\code{zeros}" or "\code{NA}".}
-
-\item{loss}{loss function: \code{"mse"} (default), \code{"mae"}, \code{"huber"}, \code{"gp"}, or \code{"nb"}.
-Use \code{loss="gp"} with \code{dispersion="none"} for KL divergence (Poisson).
-Use \code{loss="nb"} for Negative Binomial (quadratic variance-mean, standard for scRNA-seq).}
-
-\item{huber_delta}{delta parameter for Huber loss (default 1.0).}
-
-\item{dispersion}{dispersion mode for Generalized Poisson loss: \code{"per_row"} (default, per-feature dispersion),
-\code{"global"} (single shared dispersion), or \code{"none"} (no dispersion estimation;
-theta=0 reduces GP to Poisson/KL divergence).}
-
-\item{theta_init}{initial theta value for GP dispersion (default 0.1).}
-
-\item{theta_max}{maximum allowed theta value (default 5.0). Caps dispersion to prevent instability.}
-
-\item{zi}{zero-inflation mode for ZIGP/ZINB: \code{"none"} (default), \code{"row"} (per-row dropout),
-\code{"col"} (per-column dropout), or \code{"twoway"} (row+column combined). Requires \code{loss="gp"} or \code{loss="nb"}.
-Estimates structural dropout probabilities pi separately from count model.
-Currently CPU-only; not yet supported in cross-validation mode.}
-
-\item{zi_em_iters}{number of EM iterations per NMF iteration for the zero-inflation E-step
-and M-step (default 1). More iterations give more accurate pi estimates per NMF step.}
-
-\item{theta_min}{minimum theta floor (default 0). Set > 0 to prevent theta collapse to zero.}
-
-\item{nb_size_init}{initial NB size (r) parameter for Negative Binomial dispersion (default 10.0).}
-
-\item{nb_size_max}{maximum allowed NB size (default 1e6).}
-
-\item{nb_size_min}{minimum allowed NB size (default 0.01).}
-
-\item{gamma_phi_init}{initial dispersion parameter for Gamma/Inverse Gaussian (default 1.0).}
-
-\item{gamma_phi_max}{maximum allowed Gamma/IG dispersion (default 1e4).}
-
-\item{gamma_phi_min}{minimum allowed Gamma/IG dispersion (default 1e-6).}
-
-\item{tweedie_power}{variance power parameter for Tweedie distribution (default 1.5).
-V(mu) = mu^p. Special cases: p=0 Gaussian, p=1 Poisson, p=2 Gamma, p=3 Inverse Gaussian.
-Can also be set via \code{distribution_config$tweedie_power}.}
-
-\item{graph_W}{sparse graph Laplacian or weighted adjacency matrix (dgCMatrix, m x m) for
-feature (row) graph regularization. Must be square and symmetric. Pass the graph Laplacian
-\eqn{L = D - A} (recommended) or a raw adjacency matrix; RcppML converts to Laplacian
-internally. Controls similarity constraints on W rows.}
-
-\item{graph_H}{sparse graph Laplacian or weighted adjacency matrix (dgCMatrix, n x n) for
-sample (column) graph regularization. Must be square and symmetric.
-Controls similarity constraints on H columns.}
-
-\item{graph_lambda}{regularization strength for graph Laplacian term, single value
-(applied to both W and H graphs) or \code{c(lambda_W, lambda_H)} (default \code{c(0, 0)}).
-Larger values enforce stronger similarity within connected nodes.}
-
-\item{guides}{reserved for future guided/semi-supervised NMF features.}
-
-\item{sort_model}{if \code{TRUE} (default), sort factors by descending diagonal values.}
-
-\item{mask_zeros}{if \code{TRUE}, treat all zero entries as missing (default \code{FALSE}).}
+\item{loss}{loss function: \code{"mse"} (default), \code{"gp"},
+\code{"nb"}, \code{"gamma"}, \code{"inverse_gaussian"}, or \code{"tweedie"}.
+For robust loss (Huber/MAE), use the \code{robust} parameter instead.}
 
 \item{nonneg}{logical vector of length 2 for \code{c(w, h)} specifying non-negativity constraints (default \code{c(TRUE, TRUE)}).}
 
-\item{upper_bound}{upper bound constraints for factor values, single value or c(w_bound, h_bound) (default c(0, 0) = no bound).}
-
 \item{test_fraction}{fraction of entries to hold out for cross-validation (default 0 = disabled).}
-
-\item{patience}{early stopping patience for cross-validation (default 5).}
-
-\item{cv_k_range}{rank range for automatic rank search, c(min, max) (default c(2, 50)).}
-
-\item{cv_seed}{seed(s) for CV holdout pattern.}
-
-\item{track_train_loss}{if \code{TRUE} (default), track training loss history during cross-validation.}
-
-\item{threads}{number of threads for OpenMP parallelization (default 0 = all available)}
 
 \item{verbose}{print progress information during fitting (default FALSE)}
 
-\item{cd_tol}{relative convergence tolerance for coordinate descent NNLS solver (default 1e-8).}
+\item{projective}{if \code{TRUE}, use projective NMF (default \code{FALSE}).}
 
-\item{cd_maxit}{maximum number of coordinate descent iterations in the NNLS solver (default 100).
-Acts as a safety cap; with adaptive CD probing, the effective iteration count is determined
-automatically from a sample of columns (typically 3-10 with warm starts).}
+\item{symmetric}{if \code{TRUE}, use symmetric NMF where H = W^T (default \code{FALSE}).}
 
-\item{cd_abs_tol}{absolute convergence tolerance for coordinate descent (default 1e-15).}
+\item{zi}{zero-inflation mode: \code{"none"} (default), \code{"row"}, or \code{"col"}.
+Requires \code{loss="gp"} or \code{loss="nb"}.}
 
-\item{norm}{normalization type for the scaling diagonal: \code{"L1"} (default), \code{"L2"}, or \code{"none"}.
-Controls how W and H factors are normalized at each iteration and in the final result.}
+\item{robust}{robustness control. \code{FALSE} (default), \code{TRUE} (Huber delta=1.345),
+\code{"mae"} (near-MAE via very small Huber delta), or a positive numeric Huber delta.
+Huber loss is quadratic for small residuals and linear for large ones, controlled by delta.
+\code{TRUE} (delta=1.345) provides moderate outlier robustness.
+A large delta (e.g. 100) approaches standard MSE; a small delta (e.g. 0.01) approaches MAE.
+\code{"mae"} is shorthand for delta=1e-4 (effectively L1 loss).}
 
-\item{streaming}{streaming mode for large matrices: \code{"auto"}, \code{TRUE}, or \code{FALSE}.}
-
-\item{panel_cols}{number of columns per streaming panel (default 0 = auto-detect).}
-
-\item{resource}{compute resource override: \code{"auto"} (default) auto-detects available resources,
-\code{"cpu"} forces CPU, \code{"gpu"} forces GPU. Can also be set via the \code{RCPPML_RESOURCE}
-environment variable (param takes priority over env var).}
-
-\item{projective}{if \code{TRUE}, use projective NMF where \eqn{H = diag(d) \cdot W^T \cdot A} instead of solving for H independently (default \code{FALSE}).
-This constrains the approximation to the column space of W, yielding parts-based representations with
-automatic sparsity in the coefficient matrix.}
-
-\item{symmetric}{if \code{TRUE}, use symmetric NMF where \eqn{H = W^T}, factorizing \eqn{A \approx W \cdot d \cdot W^T} (default \code{FALSE}).
-Appropriate for symmetric matrices such as covariance, correlation, or similarity matrices.
-Only W is solved for; H is set equal to the transpose of W. Data should be a square symmetric matrix.}
-
-\item{solver}{NNLS solver for the alternating least squares subproblem:
-\code{"auto"} (default) selects the best solver for the given rank and hardware —
-CD for k <= 32 on GPU, Cholesky otherwise.
-\code{"cholesky"} (Cholesky factorization + non-negativity clip, fastest for high ranks),
-\code{"cd"} (coordinate descent, exact non-negativity enforcement, best quality at low ranks).}
-
-\item{init}{initialization method: \code{"random"} (default, uniform random),
-\code{"lanczos"} (Lanczos SVD seed with \eqn{W = |U| \sqrt{\Sigma}}, \eqn{H = |V| \sqrt{\Sigma}};
-typically reduces iteration count by 30-50\\% with better initial loss), or \code{"irlba"}
-(Implicitly Restarted Lanczos Bidiagonalization; alternative to Lanczos for high ranks k >= 32).
-SVD-based methods (lanczos/irlba) provide better initialization quality but add overhead;
-use when initialization quality is more important than speed.}
-
-\item{irls_max_iter}{maximum IRLS iterations for robust losses (default 20).}
-
-\item{irls_tol}{convergence tolerance for IRLS weights (default 1e-4).}
-
-\item{robust}{robustness control. \code{FALSE} (default) for no robustness. \code{TRUE} for
-Huber-type robustness with delta=1.345 (95\\% asymptotic efficiency under Gaussian).
-A positive numeric value sets a custom Huber delta. Works with any distribution:
-IRLS weights are decomposed into distribution_weight * robust_huber_modifier.}
-
-\item{distribution}{new unified distribution API. One of: \code{"auto"} (selects via
-score test on a quick baseline fit), \code{"gaussian"} (MSE),
-\code{"poisson"} (GP with dispersion=none), \code{"gp"} (Generalized Poisson),
-\code{"nb"} (Negative Binomial), \code{"gamma"} (Gamma),
-\code{"inverse_gaussian"} (Inverse Gaussian), or \code{"tweedie"} (Tweedie with
-continuous variance power V(mu) = mu^p; set p via \code{tweedie_power} or
-\code{distribution_config$tweedie_power}). When specified, takes precedence
-over the \code{loss} parameter. Use \code{distribution_config} to set distribution-specific
-tuning parameters.}
-
-\item{zero_inflation}{zero-inflation mode (new API): \code{"none"}, \code{"row"}, \code{"col"},
-\code{"twoway"}, or \code{"auto"}. Equivalent to the \code{zi} parameter but preferred
-in the new API. Use \code{zi_config} for additional tuning.}
-
-\item{distribution_config}{named list of distribution-specific overrides. Supported keys:
-\code{dispersion} (dispersion mode), \code{theta_init}/\code{theta_max}/\code{theta_min}
-(GP theta), \code{nb_size_init}/\code{nb_size_max}/\code{nb_size_min} (NB size r),
-\code{gamma_phi_init}/\code{gamma_phi_max}/\code{gamma_phi_min} (Gamma/IG dispersion phi).}
-
-\item{zi_config}{named list of zero-inflation overrides. Supported keys:
-\code{em_iters} (number of EM iterations per NMF step).}
-
-\item{robust_config}{named list of robustness overrides. Supported keys:
-\code{delta} (Huber delta), \code{irls_max_iter}, \code{irls_tol}.}
-
-\item{on_iteration}{optional callback function called after each NMF iteration.
-Receives iteration number and current loss. Return \code{FALSE} to stop early.}
-
-\item{h_init}{optional initial H matrix (k x n) for custom initialization.
-When provided alongside a custom W via \code{seed}, both factors are
-initialized from user-supplied values. Default \code{NULL} (auto-init).}
-
-\item{profile}{if \code{TRUE}, enable per-iteration timing profiling.
-Results stored in \code{misc$profile} of the returned object. Default \code{FALSE}.}
-
-\item{dispatch}{StreamPress dispatch mode for .spz file input. \code{NULL} (default) or \code{"auto"} for automatic dispatch based on available RAM; a string like \code{"inmemory"}, \code{"chunked"}, or \code{"streaming"} to override.}
-
-\item{...}{additional development parameters}
+\item{...}{advanced parameters. See \strong{Advanced Parameters} section.}
 }
 \value{
 When \code{k} is a single integer: an S4 object of class \code{nmf} with slots:
@@ -265,8 +82,7 @@ When \code{k} is a single integer: an S4 object of class \code{nmf} with slots:
 \item{\code{d}}{scaling diagonal vector of length \code{k} (descending order after sorting)}
 \item{\code{h}}{sample factor matrix, \code{k x n}}
 \item{\code{misc}}{list containing \code{tol} (final tolerance), \code{iter} (iteration count),
-\code{loss} (final loss value), \code{loss_type} (loss function used), and \code{runtime} (seconds).
-Cross-validation models also include \code{test_mask}, \code{test_loss}, \code{train_loss}.}
+\code{loss} (final loss value), \code{loss_type} (loss function used), and \code{runtime} (seconds).}
 }
 When \code{k} is a vector: a \code{data.frame} of class \code{nmfCrossValidate} with columns
 \code{k}, \code{rep}, \code{train_loss}, \code{test_loss}, and \code{best_iter}.
@@ -309,9 +125,6 @@ When \code{k} is a vector, the function performs cross-validation to find the op
 The \code{loss} parameter controls the objective function:
 \itemize{
 \item \code{"mse"}: Mean Squared Error (default). Standard Frobenius norm minimization.
-\item \code{"mae"}: Mean Absolute Error. More robust to outliers than MSE.
-\item \code{"huber"}: Huber loss. Quadratic for small errors, linear for large errors.
-Controlled by \code{huber_delta} parameter.
 \item \code{"gp"}: Generalized Poisson. For overdispersed count data (e.g., scRNA-seq).
 Use \code{dispersion} to control per-row or global overdispersion estimation.
 With \code{dispersion="none"}, equivalent to KL divergence (Poisson model).
@@ -326,72 +139,95 @@ set via \code{tweedie_power} (default 1.5). Interpolates between Poisson (p=1),
 Gamma (p=2), and Inverse Gaussian (p=3).
 }
 
+For robust fitting (equivalent to Huber or MAE loss), use the \code{robust} parameter
+instead of a separate loss function. Setting \code{robust = TRUE} applies Huber-weighted
+IRLS with delta=1.345; \code{robust = "mae"} approximates mean absolute error.
+
 Non-MSE losses use Iteratively Reweighted Least Squares (IRLS) which may be slower
-but provides robustness to outliers (MAE, Huber) or better fits for count data (GP, NB)
+but provides better fits for count data (GP, NB)
 and positive continuous data (Gamma, Inverse Gaussian).
-
-Alternatively, use the \code{distribution} parameter for the new unified API, which
-maps distribution names to loss functions and provides \code{distribution_config}
-for fine-grained tuning.
 }
 
-\section{L21 (Group Sparsity) Regularization}{
+\section{Advanced Parameters (via \code{...})}{
 
-L21-norm regularization (also known as group LASSO) encourages entire rows of W or
-columns of H to become zero.
+The following parameters can be passed via \code{...}:
+
+\strong{Regularization:}
+\describe{
+\item{\code{L21}}{Group sparsity penalty, single value or \code{c(w, h)} (default \code{c(0,0)})}
+\item{\code{angular}}{Angular decorrelation penalty, \code{c(w, h)} (default \code{c(0,0)})}
+\item{\code{upper_bound}}{Box constraint on factors, \code{c(w, h)} (default \code{c(0,0)} = no bound)}
+\item{\code{graph_W}, \code{graph_H}}{Sparse graph Laplacian matrices for feature/sample regularization}
+\item{\code{graph_lambda}}{Graph regularization strength, \code{c(w, h)} (default \code{c(0,0)})}
+\item{\code{target_H}}{Target matrix (k x n) for H-side regularization.
+Steers H toward a desired structure during fitting. See \code{\link{compute_target}}.}
+\item{\code{target_lambda}}{Target regularization strength, single value
+or \code{c(w, h)} (default 0). Positive values attract H toward the
+target (label enrichment); negative values use PROJ_ADV
+eigenvalue-projected adversarial removal to suppress
+target-correlated structure (batch removal).
+See \code{vignette("guided-nmf")} for details.}
 }
 
-\section{Graph Regularization}{
+\strong{Distribution Tuning:}
+\describe{
+\item{\code{dispersion}}{Dispersion mode for GP loss: \code{"per_row"}, \code{"per_col"}, \code{"global"}, \code{"none"}}
+\item{\code{theta_init}, \code{theta_max}, \code{theta_min}}{GP theta bounds}
+\item{\code{nb_size_init}, \code{nb_size_max}, \code{nb_size_min}}{NB dispersion bounds}
+\item{\code{gamma_phi_init}, \code{gamma_phi_max}, \code{gamma_phi_min}}{Gamma/IG dispersion bounds}
+\item{\code{tweedie_power}}{Tweedie variance power (default 1.5)}
+\item{\code{irls_max_iter}, \code{irls_tol}}{IRLS convergence parameters}
+}
 
-Graph Laplacian regularization encourages connected nodes in a graph to have similar
-factor representations.
+\strong{Zero-Inflation:}
+\describe{
+\item{\code{zi_em_iters}}{EM iterations per NMF step (default 1)}
+}
+
+\strong{Solver:}
+\describe{
+\item{\code{solver}}{NNLS solver: \code{"auto"}, \code{"cholesky"}, \code{"cd"}}
+\item{\code{cd_tol}}{CD convergence tolerance (default 1e-8)}
+\item{\code{cd_maxit}}{CD max iterations (default 100)}
+\item{\code{h_init}}{Custom initial H matrix}
+}
+
+\strong{Cross-Validation:}
+\describe{
+\item{\code{cv_seed}}{Separate seed(s) for CV holdout pattern}
+\item{\code{patience}}{Early stopping patience (default 5)}
+\item{\code{cv_k_range}}{Auto-rank search range (default \code{c(2, 50)})}
+\item{\code{track_train_loss}}{Track training loss in CV (default TRUE)}
+}
+
+\strong{Resources & Output:}
+\describe{
+\item{\code{threads}}{OpenMP threads (default 0 = all)}
+\item{\code{resource}}{Compute backend: \code{"auto"}, \code{"cpu"}, \code{"gpu"}}
+\item{\code{norm}}{Factor normalization: \code{"L1"}, \code{"L2"}, \code{"none"}}
+\item{\code{sort_model}}{Sort factors by diagonal (default TRUE)}
+}
+
+\strong{Streaming:}
+\describe{
+\item{\code{streaming}}{SPZ streaming mode: \code{"auto"}, \code{TRUE}, \code{FALSE}}
+\item{\code{panel_cols}}{Panel size for streaming (default 0 = auto)}
+\item{\code{dispatch}}{StreamPress dispatch override}
+}
+
+\strong{Callbacks:}
+\describe{
+\item{\code{on_iteration}}{Per-iteration callback function}
+\item{\code{profile}}{Enable timing profiling (default FALSE)}
+}
 }
 
 \section{Compute Resources (CPU vs GPU)}{
 
 By default (\code{resource = "auto"}), RcppML auto-detects available hardware.
-All features are fully supported on CPU (the default backend):
-\itemize{
-\item Standard NMF (sparse and dense)
-\item Cross-validation NMF
-\item All loss functions (MSE, MAE, Huber, KL)
-\item All regularization types (L1, L2, L21, angular, graph)
-\item Upper bound constraints
-\item OpenMP multi-threading
-}
-
-GPU acceleration (when compiled with CUDA support) accelerates:
-\itemize{
-\item Sparse NMF (standard mode)
-\item Dense NMF (standard mode)
-}
+All features are fully supported on CPU (the default backend).
+GPU acceleration (when compiled with CUDA support) accelerates sparse and dense NMF.
 GPU is experimental and falls back to CPU automatically if unavailable.
-Use \code{resource = "gpu"} to force GPU, \code{resource = "cpu"} to force CPU.
-Set \code{verbose = TRUE} to see which backend is selected.
-}
-
-\section{Unsupported Combinations}{
-
-Not all parameter combinations are currently supported. The following will
-produce an error or unexpected results:
-\describe{
-\item{Cholesky + non-MSE loss}{The Cholesky solver (\code{solver="cholesky"})
-does not support IRLS-based losses (GP, NB, Gamma, Inverse Gaussian, Tweedie).
-Use \code{solver="cd"} or \code{solver="auto"} (default) for non-MSE losses.}
-\item{Zero-inflation with non-GP/NB losses}{Zero-inflation (\code{zi} or
-\code{zero_inflation}) is only supported with \code{loss="gp"} and
-\code{loss="nb"}. Using ZI with MSE, Gamma, Inverse Gaussian, or Tweedie
-is unsupported and will produce incorrect results.}
-\item{Zero-inflation "twoway" mode}{The \code{zi="twoway"} mode is currently
-broken on all backends. Use \code{zi="row"} or \code{zi="col"} instead.}
-\item{MAE and Huber losses}{The \code{"mae"} and \code{"huber"} loss functions
-are deprecated. Use the \code{robust} parameter with any distribution instead
-(e.g., \code{robust=TRUE} with \code{distribution="gaussian"}).}
-\item{GPU + dense CV}{GPU cross-validation with dense matrices falls back to
-CPU via sparseView conversion. Native GPU dense CV is not yet implemented.}
-\item{GPU + projective/symmetric CV}{Cross-validation with \code{projective=TRUE}
-or \code{symmetric=TRUE} falls back to CPU on GPU builds.}
-}
 }
 
 \section{Methods}{
@@ -415,21 +251,22 @@ S4 methods available for the \code{nmf} class:
 model <- nmf(Matrix::rsparsematrix(1000, 100, 0.1), k = 10)
 
 # cross-validation to find optimal rank
-library(Matrix)
-A <- rsparsematrix(500, 100, 0.1)
-cv_results <- nmf(A, k = 2:10, cv_seed = 1:3, test_fraction = 0.1)
-plot(cv_results)
-optimal_k <- cv_results$k[which.min(cv_results$test_mse)]
+sim <- simulateNMF(200, 80, k = 5, noise = 3.0, seed = 42)
+cv <- nmf(sim$A, k = 2:10, test_fraction = 0.05, cv_seed = 1:3,
+          tol = 1e-5, maxit = 200)
+plot(cv)
+optimal_k <- cv$k[which.min(cv$test_mse)]
 
 # fit final model with optimal rank
-model <- nmf(A, optimal_k)
+model <- nmf(sim$A, optimal_k)
 }
 }
 \references{
 DeBruine, ZJ, Melcher, K, and Triche, TJ. (2021). "High-performance non-negative matrix factorization for large single-cell data." BioRXiv.
 }
 \seealso{
-\code{\link{predict}}, \code{\link{mse}}, \code{\link{nnls}}, \code{\link{align}}, \code{\link{summary,nmf-method}}
+\code{\link{predict}}, \code{\link{mse}}, \code{\link{nnls}},
+\code{\link{align}}, \code{\link{summary,nmf-method}}
 }
 \author{
 Zach DeBruine

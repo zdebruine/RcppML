@@ -1,6 +1,6 @@
 # Tests for G1-G6 audit fixes
 # G1: CV path Gamma/IG/Tweedie dispersion estimation
-# G3: distribution="auto" with custom power -> Tweedie mapping
+# G3: auto_nmf_distribution() with custom power -> Tweedie mapping
 # G4: Graph NMF Tweedie support
 # G5: Multi-rank CV distribution parameter columns
 # G6: distribution_config$power_param alias
@@ -17,7 +17,7 @@ test_that("G1: Gamma CV returns dispersion vector", {
   set.seed(42)
   A <- matrix(rgamma(60 * 40, shape = 2, rate = 1), 60, 40)
   A[A < 1e-8] <- 1e-8
-  model <- nmf(A, 2, distribution = "gamma", dispersion = "per_row",
+  model <- nmf(A, 2, loss = "gamma", dispersion = "per_row",
                test_fraction = 0.1, maxit = 20, tol = 1e-4, seed = 1,
                verbose = FALSE)
   disp <- model@misc$dispersion
@@ -31,7 +31,7 @@ test_that("G1: Inverse Gaussian CV returns dispersion vector", {
   set.seed(42)
   A <- matrix(rgamma(60 * 40, shape = 2, rate = 1), 60, 40)
   A[A < 1e-8] <- 1e-8
-  model <- nmf(A, 2, distribution = "inverse_gaussian", dispersion = "per_row",
+  model <- nmf(A, 2, loss = "inverse_gaussian", dispersion = "per_row",
                test_fraction = 0.1, maxit = 20, tol = 1e-4, seed = 1,
                verbose = FALSE)
   disp <- model@misc$dispersion
@@ -45,7 +45,7 @@ test_that("G1: Tweedie CV returns dispersion vector", {
   set.seed(42)
   A <- matrix(rgamma(60 * 40, shape = 2, rate = 1), 60, 40)
   A[A < 1e-8] <- 1e-8
-  model <- nmf(A, 2, distribution = "tweedie", tweedie_power = 1.5,
+  model <- nmf(A, 2, loss = "tweedie", tweedie_power = 1.5,
                dispersion = "per_row",
                test_fraction = 0.1, maxit = 20, tol = 1e-4, seed = 1,
                verbose = FALSE)
@@ -60,7 +60,7 @@ test_that("G1: Gamma CV per_col dispersion returns n-length vector", {
   set.seed(42)
   A <- matrix(rgamma(50 * 30, shape = 2, rate = 1), 50, 30)
   A[A < 1e-8] <- 1e-8
-  model <- nmf(A, 2, distribution = "gamma", dispersion = "per_col",
+  model <- nmf(A, 2, loss = "gamma", dispersion = "per_col",
                test_fraction = 0.1, maxit = 20, tol = 1e-4, seed = 1,
                verbose = FALSE)
   disp <- model@misc$dispersion
@@ -74,7 +74,7 @@ test_that("G1: Gamma CV with sparse data returns dispersion", {
   A <- matrix(rgamma(50 * 30, shape = 2, rate = 1), 50, 30)
   A[A < 1e-8] <- 1e-8
   A_sp <- Matrix::Matrix(A, sparse = TRUE)
-  model <- nmf(A_sp, 2, distribution = "gamma", dispersion = "per_row",
+  model <- nmf(A_sp, 2, loss = "gamma", dispersion = "per_row",
                test_fraction = 0.1, maxit = 20, tol = 1e-4, seed = 1,
                verbose = FALSE)
   disp <- model@misc$dispersion
@@ -83,7 +83,7 @@ test_that("G1: Gamma CV with sparse data returns dispersion", {
 })
 
 # ============================================================
-# G3: distribution="auto" maps custom power to Tweedie
+# G3: auto_nmf_distribution() with custom power -> Tweedie
 # ============================================================
 
 test_that("G3: auto-distribution with custom power does not crash", {
@@ -92,9 +92,10 @@ test_that("G3: auto-distribution with custom power does not crash", {
   set.seed(99)
   A <- matrix(rgamma(60 * 40, shape = 0.5, rate = 0.5), 60, 40)
   A[A < 1e-8] <- 1e-8
-  # distribution="auto" runs score_test_distribution which could return
+  # auto_nmf_distribution() runs score_test_distribution which could return
   # a custom power (e.g. "power_1.5"); the fix maps it to "tweedie"
-  model <- nmf(A, 3, distribution = "auto",
+  auto_result <- auto_nmf_distribution(A, k = 3, seed = 42)
+  model <- nmf(A, 3, loss = auto_result$loss,
                maxit = 20, tol = 1e-3, seed = 42, verbose = FALSE)
   expect_s4_class(model, "nmf")
 })
@@ -180,34 +181,28 @@ test_that("G5: multi-rank CV with MSE has NA distribution columns", {
 })
 
 # ============================================================
-# G6: distribution_config$power_param alias
+# G6: tweedie_power via ... (flat parameter, replaces distribution_config)
 # ============================================================
 
-test_that("G6: power_param alias sets tweedie_power", {
+test_that("G6: tweedie_power sets Tweedie power directly", {
   skip_on_cran()
   set.seed(42)
   A <- matrix(rgamma(40 * 25, shape = 2, rate = 1), 40, 25)
   A[A < 1e-8] <- 1e-8
-  # Use power_param instead of tweedie_power
-  model <- nmf(A, 2, distribution = "tweedie",
-               distribution_config = list(power_param = 2.5),
+  model <- nmf(A, 2, loss = "tweedie", tweedie_power = 2.5,
                maxit = 20, tol = 1e-4, seed = 1, verbose = FALSE)
   expect_s4_class(model, "nmf")
 })
 
-test_that("G6: power_param overrides tweedie_power in distribution_config", {
+test_that("G6: different tweedie_power values produce different losses", {
   skip_on_cran()
   set.seed(42)
   A <- matrix(rgamma(40 * 25, shape = 2, rate = 1), 40, 25)
   A[A < 1e-8] <- 1e-8
-  # Both specified; power_param comes after tweedie_power so wins
-  model_alias <- nmf(A, 2, distribution = "tweedie",
-                     distribution_config = list(tweedie_power = 2.0,
-                                                power_param = 2.5),
-                     maxit = 30, tol = 1e-6, seed = 1, verbose = FALSE)
-  model_direct <- nmf(A, 2, distribution = "tweedie",
-                      distribution_config = list(tweedie_power = 2.5),
-                      maxit = 30, tol = 1e-6, seed = 1, verbose = FALSE)
-  # Both should use power 2.5, so losses should match
-  expect_equal(model_alias@misc$loss, model_direct@misc$loss, tolerance = 1e-6)
+  model_p15 <- nmf(A, 2, loss = "tweedie", tweedie_power = 1.5,
+                   maxit = 30, tol = 1e-6, seed = 1, verbose = FALSE)
+  model_p25 <- nmf(A, 2, loss = "tweedie", tweedie_power = 2.5,
+                   maxit = 30, tol = 1e-6, seed = 1, verbose = FALSE)
+  # Different power params -> different losses
+  expect_false(isTRUE(all.equal(model_p15@misc$loss, model_p25@misc$loss)))
 })

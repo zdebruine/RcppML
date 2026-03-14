@@ -32,8 +32,8 @@ An `nmf_guide` object.
 
 ## See also
 
-[`guide_classifier`](https://zdebruine.github.io/RcppML/reference/guide_classifier.md),
 [`guide_external`](https://zdebruine.github.io/RcppML/reference/guide_external.md),
+[`guide_embedding`](https://zdebruine.github.io/RcppML/reference/guide_embedding.md),
 [`nmf`](https://zdebruine.github.io/RcppML/reference/nmf.md)
 
 ## Examples

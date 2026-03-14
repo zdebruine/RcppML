@@ -5,24 +5,26 @@
 
 ## R CMD check results
 
-0 errors | 0 warnings | 2 notes
+0 errors | 2 warnings | 1 note
 
-* NOTE 1 (CRAN incoming feasibility): Package tarball 5.6 MB (slightly
-  above 5 MB guideline). This is due to:
-  - Seven compressed benchmark datasets (3.4 MB installed) used in
+* WARNING 1: `checkbashisms` script not installed. This is a system tool
+  for checking shell scripts; not a package defect.
+
+* WARNING 2: `qpdf` not installed. Used for PDF size reduction checks;
+  all vignettes are HTML-only.
+
+* NOTE 1 (CRAN incoming feasibility): Package tarball ~9 MB. This is
+  due to:
+  - Seven compressed benchmark datasets (6.5 MB installed) used in
     vignettes and examples covering NMF, SVD, clustering, and
-    recommendation systems.
-  - C++ template library headers (2.3 MB installed) for the Eigen-based
+    recommendation systems. The largest is `pbmc3k` (3.7 MB, stored
+    as StreamPress-compressed raw bytes).
+  - C++ template library headers (2.4 MB installed) for the Eigen-based
     NNLS solvers, required at compile time by LinkingTo dependents.
-  - Twelve pre-built vignettes (2.6 MB installed).
-
-* NOTE 2 (Unstated vignette dependencies): Seurat, SeuratData,
-  stxBrain.SeuratData appear in `library()` calls in one vignette
-  (`factor-net-applications.Rmd`). These chunks are `eval`-guarded
-  by `requireNamespace()` checks and will never execute on CRAN.
-  SeuratData and stxBrain.SeuratData are not CRAN packages; they are
-  optional interactive demo dependencies for Seurat integration
-  examples.
+  - Eleven pre-built vignettes.
+  - `SeuratData` is listed in Suggests but is not on CRAN; it is used
+    only in optional `eval = FALSE` vignette examples for Seurat
+    spatial transcriptomics integration.
 
 ## Reverse dependencies
 
@@ -46,12 +48,11 @@ This is a major version update (0.3.7 → 1.0.0). Key changes:
 
 * Complete C++ backend rewrite using Eigen template metaprogramming
 * S4 `nmf` class replacing the previous list output
-* Built-in cross-validation (`nmf(..., cv = TRUE)`)
-* Multiple distribution-based losses (Gaussian, Poisson, Generalized
-  Poisson, Negative Binomial, Gamma, Inverse Gaussian, Tweedie)
+* Built-in cross-validation (`nmf(..., test_fraction = ...)`)
+* Multiple distribution-based losses (Gaussian, Generalized Poisson,
+  Negative Binomial, Gamma, Inverse Gaussian, Tweedie)
 * Optional GPU acceleration via CUDA (gracefully disabled when
   unavailable)
 * SparsePress/StreamPress compressed sparse matrix I/O
 * Factor networks for multi-layer and multi-modal factorization
-* Backward-compatible shims for `project()` → `nnls()` and
-  `crossValidate()` → `nmf(..., cv = TRUE)`
+* Backward-compatible shim for `nnls()` old positional API

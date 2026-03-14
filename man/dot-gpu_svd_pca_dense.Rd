@@ -39,6 +39,9 @@
   irls_tol = 1e-04
 )
 }
+\value{
+A list with components \code{u}, \code{d}, and \code{v}.
+}
 \description{
 GPU SVD/PCA for a base R dense matrix (is.matrix(A) == TRUE).
   For deflation: uses cuBLAS GEMV instead of cuSPARSE SpMV (significantly

@@ -81,7 +81,10 @@ Also accepts a file path (character string) which will be auto-loaded based on e
 
 \item{L2}{a single Ridge penalty greater than zero}
 
-\item{mask}{dense or sparse matrix of values in \code{data} to handle as missing. Alternatively, specify "\code{zeros}" or "\code{NA}".}
+\item{mask}{missing data mask. Accepts:
+\code{NULL} (no masking), \code{"zeros"} (mask zeros), \code{"NA"} (mask NAs),
+a dgCMatrix/matrix (custom mask), or \code{list("zeros", <matrix>)} to mask
+zeros and use a custom mask simultaneously.}
 
 \item{upper_bound}{maximum value permitted in least squares solutions, essentially a bounded-variable least squares problem between 0 and \code{upper_bound}}
 

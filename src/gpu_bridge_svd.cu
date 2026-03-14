@@ -474,47 +474,41 @@ void rcppml_gpu_svd_pca_dense_double(
         FactorNet::SVDResult<double> result;
 
         if (algo == 0) {
-            // Deflation: use true dense GEMV path
+            // Deflation: native cuBLAS GEMV dense path
             result = FactorNet::svd::deflation_svd_gpu_dense<double>(
                 A_data, *m, *n, config);
+        } else if (algo == 2) {
+            // Lanczos: native cuBLAS GEMV dense path
+            result = FactorNet::svd::lanczos_svd_gpu_dense<double>(
+                A_data, *m, *n, config);
+        } else if (algo == 3) {
+            // Randomized: native cuBLAS GEMM dense path
+            result = FactorNet::svd::randomized_svd_gpu_dense<double>(
+                A_data, *m, *n, config);
         } else {
-            // Other algorithms: convert dense → CSC and use sparse path
-            // This is correct but suboptimal for large dense matrices.
-            // TODO: add native dense krylov/lanczos paths.
-            int mn = (*m) * (*n);
-            std::vector<int> col_ptr(*n + 1);
+            // Other algorithms: fast dense→CSC (no zero-scan, direct enumeration)
+            int mm = *m, nn = *n;
+            size_t mn = static_cast<size_t>(mm) * nn;
+            std::vector<int> col_ptr(nn + 1);
             std::vector<int> row_idx(mn);
-            std::vector<double> vals(mn);
-            int nnz = 0;
-            for (int j = 0; j < *n; ++j) {
-                col_ptr[j] = nnz;
-                for (int i = 0; i < *m; ++i) {
-                    double v = A_data[i + static_cast<size_t>(j) * (*m)];
-                    if (v != 0.0) {
-                        row_idx[nnz] = i;
-                        vals[nnz] = v;
-                        ++nnz;
-                    }
-                }
-            }
-            col_ptr[*n] = nnz;
-            int nnz_actual = nnz;
+            for (int j = 0; j <= nn; ++j) col_ptr[j] = j * mm;
+            for (int j = 0; j < nn; ++j)
+                for (int i = 0; i < mm; ++i)
+                    row_idx[static_cast<size_t>(j) * mm + i] = i;
+            // Values = dense matrix in column-major order (no copy needed)
+            int nnz_actual = static_cast<int>(mn);
             switch (algo) {
                 case 1:
                     result = FactorNet::svd::irlba_svd_gpu<double>(
-                        col_ptr.data(), row_idx.data(), vals.data(), *m, *n, nnz_actual, config);
-                    break;
-                case 2:
-                    result = FactorNet::svd::lanczos_svd_gpu<double>(
-                        col_ptr.data(), row_idx.data(), vals.data(), *m, *n, nnz_actual, config);
+                        col_ptr.data(), row_idx.data(), A_data, mm, nn, nnz_actual, config);
                     break;
                 case 3:
                     result = FactorNet::svd::randomized_svd_gpu<double>(
-                        col_ptr.data(), row_idx.data(), vals.data(), *m, *n, nnz_actual, config);
+                        col_ptr.data(), row_idx.data(), A_data, mm, nn, nnz_actual, config);
                     break;
                 case 4:
                     result = FactorNet::svd::krylov_svd_gpu<double>(
-                        col_ptr.data(), row_idx.data(), vals.data(), *m, *n, nnz_actual, config);
+                        col_ptr.data(), row_idx.data(), A_data, mm, nn, nnz_actual, config);
                     break;
                 default:
                     result = FactorNet::svd::deflation_svd_gpu_dense<double>(
@@ -651,46 +645,41 @@ void rcppml_gpu_svd_pca_dense_float(
         FactorNet::SVDResult<float> result;
 
         if (algo == 0) {
-            // Deflation: use true dense GEMV path
+            // Deflation: native cuBLAS GEMV dense path
             result = FactorNet::svd::deflation_svd_gpu_dense<float>(
                 A_f.data(), *m, *n, config);
+        } else if (algo == 2) {
+            // Lanczos: native cuBLAS GEMV dense path
+            result = FactorNet::svd::lanczos_svd_gpu_dense<float>(
+                A_f.data(), *m, *n, config);
+        } else if (algo == 3) {
+            // Randomized: native cuBLAS GEMM dense path
+            result = FactorNet::svd::randomized_svd_gpu_dense<float>(
+                A_f.data(), *m, *n, config);
         } else {
-            // Other algorithms: convert dense → CSC and use sparse path
+            // Other algorithms: fast dense→CSC (no zero-scan, direct enumeration)
             int mm = *m, nn = *n;
-            int total = mm * nn;
+            size_t mn = static_cast<size_t>(mm) * nn;
             std::vector<int> col_ptr(nn + 1);
-            std::vector<int> row_idx(total);
-            std::vector<float> vals(total);
-            int nnz = 0;
-            for (int j = 0; j < nn; ++j) {
-                col_ptr[j] = nnz;
-                for (int i = 0; i < mm; ++i) {
-                    float v = A_f[i + static_cast<size_t>(j) * mm];
-                    if (v != 0.0f) {
-                        row_idx[nnz] = i;
-                        vals[nnz] = v;
-                        ++nnz;
-                    }
-                }
-            }
-            col_ptr[nn] = nnz;
-            int nnz_actual = nnz;
+            std::vector<int> row_idx(mn);
+            for (int j = 0; j <= nn; ++j) col_ptr[j] = j * mm;
+            for (int j = 0; j < nn; ++j)
+                for (int i = 0; i < mm; ++i)
+                    row_idx[static_cast<size_t>(j) * mm + i] = i;
+            // Values = float vector (already converted from double above)
+            int nnz_actual = static_cast<int>(mn);
             switch (algo) {
                 case 1:
                     result = FactorNet::svd::irlba_svd_gpu<float>(
-                        col_ptr.data(), row_idx.data(), vals.data(), mm, nn, nnz_actual, config);
-                    break;
-                case 2:
-                    result = FactorNet::svd::lanczos_svd_gpu<float>(
-                        col_ptr.data(), row_idx.data(), vals.data(), mm, nn, nnz_actual, config);
+                        col_ptr.data(), row_idx.data(), A_f.data(), mm, nn, nnz_actual, config);
                     break;
                 case 3:
                     result = FactorNet::svd::randomized_svd_gpu<float>(
-                        col_ptr.data(), row_idx.data(), vals.data(), mm, nn, nnz_actual, config);
+                        col_ptr.data(), row_idx.data(), A_f.data(), mm, nn, nnz_actual, config);
                     break;
                 case 4:
                     result = FactorNet::svd::krylov_svd_gpu<float>(
-                        col_ptr.data(), row_idx.data(), vals.data(), mm, nn, nnz_actual, config);
+                        col_ptr.data(), row_idx.data(), A_f.data(), mm, nn, nnz_actual, config);
                     break;
                 default:
                     result = FactorNet::svd::deflation_svd_gpu_dense<float>(

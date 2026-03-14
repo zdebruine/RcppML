@@ -57,7 +57,7 @@ If \eqn{T_{NB} > 0.1}, there is substantial overdispersion beyond Poisson,
 suggesting NB may be preferable to GP.
 }
 \examples{
-\dontrun{
+\donttest{
 A <- abs(rsparsematrix(200, 100, 0.3))
 model <- nmf(A, k = 5, loss = "mse")
 diag <- score_test_distribution(A, model)

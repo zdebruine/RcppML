@@ -16,7 +16,7 @@ st_write(
   row_sort = FALSE,
   include_transpose = TRUE,
   chunk_cols = NULL,
-  chunk_bytes = 6.4e+07,
+  chunk_bytes = 8e+06,
   transp_chunk_cols = NULL,
   transp_chunk_bytes = NULL,
   threads = 0L
@@ -52,13 +52,16 @@ Default \code{FALSE}.}
 \code{chunk_bytes}.}
 
 \item{chunk_bytes}{Numeric; target bytes per chunk when \code{chunk_cols}
-is NULL. Default 64 MB.}
+is NULL. Default 8 MB, which yields ~50 columns per chunk for typical
+scRNA-seq matrices (~38 k rows). Smaller chunks create more parallel work
+during reading; larger chunks compress slightly better.}
 
 \item{transp_chunk_cols}{Integer or NULL; columns per transpose chunk.}
 
 \item{transp_chunk_bytes}{Numeric or NULL; target bytes per transpose chunk.}
 
-\item{threads}{Integer; number of threads (0 = all available). Default 0.}
+\item{threads}{Integer; number of threads for parallel compression
+(0 = all available). Default 0.}
 }
 \value{
 Invisibly returns a list with compression statistics.

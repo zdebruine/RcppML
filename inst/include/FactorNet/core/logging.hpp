@@ -85,7 +85,7 @@ enum class LogLevel : int {
 // Backward-compatible SPZ_FPRINTF replacement
 // ============================================================================
 
-// Redefine SPZ_FPRINTF to use the unified system (for sparsepress migration)
+// Redefine SPZ_FPRINTF to use the unified logging system
 #ifdef SPZ_FPRINTF
 #undef SPZ_FPRINTF
 #endif

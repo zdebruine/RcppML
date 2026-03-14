@@ -86,18 +86,18 @@ struct NMFConfig {
     int max_gpus = 0;
 
     // ====================================================================
-    // Per-factor regularization, constraints, and guides
+    // Per-factor regularization, constraints, and targets
     // ====================================================================
 
-    /// W-factor configuration (regularization, constraints, guides)
+    /// W-factor configuration (regularization, constraints, targets)
     FactorConfig<Scalar> W;
 
-    /// H-factor configuration (regularization, constraints, guides)
+    /// H-factor configuration (regularization, constraints, targets)
     FactorConfig<Scalar> H;
 
-    /// True if any guides are configured on either factor
-    bool has_guides() const noexcept {
-        return W.has_guides_active() || H.has_guides_active();
+    /// True if any target regularization is configured on either factor
+    bool has_target() const noexcept {
+        return W.has_target() || H.has_target();
     }
 
     // ====================================================================
@@ -138,10 +138,7 @@ struct NMFConfig {
     /// Inner CD convergence tolerance
     Scalar cd_tol = static_cast<Scalar>(CD_TOL);
 
-    /// Absolute tolerance floor for CD convergence denominator
-    /// The CD check computes |diff / (x[i] + cd_abs_tol)|.
-    /// Default 1e-15 = pure relative. Set to ~1.0 for mixed abs/rel tolerance.
-    Scalar cd_abs_tol = static_cast<Scalar>(CD_ABS_TOL);
+    // cd_abs_tol removed from config — always uses constants::CD_ABS_TOL
 
     // ====================================================================
     // Loss function (IRLS for non-MSE)
@@ -272,6 +269,83 @@ struct NMFConfig {
     /// Whether to compute training loss during CV (if false, only test loss is computed)
     /// Setting to false skips the expensive Gram trick for total loss → faster CV
     bool track_train_loss = true;
+
+    // ====================================================================
+    // GPU-native alignment guide (NNLS regularization toward targets)
+    // Adds λ·M to Gram and λ·M·t to RHS to steer H and/or W toward
+    // externally- or internally-derived targets.
+    // ====================================================================
+
+    struct AlignmentGuideConfig {
+        /// Alignment type (0 = disabled):
+        ///  1  = A20 static per-cell target (M=I, t=H_guided)
+        ///  2  = A21 Mahalanobis target (M=Σ⁻¹, t=H_guided)
+        ///  3  = A22 batch nullspace repulsion (M=VV^T, no target)
+        ///  4  = A23 combined target + nullspace
+        ///  5  = A24 W-side target only
+        ///  6  = A25 dual W+H targets
+        ///  7  = A26 dynamic target update (recompute every N iters)
+        ///  8  = A27 whitened centroid targets
+        ///  9  = A28 annealed regularization (time-varying λ)
+        int type = 0;
+
+        Scalar lambda_H = 0;          ///< H-side regularization strength
+        Scalar lambda_W = 0;          ///< W-side regularization strength
+        Scalar lambda_batch = 0;      ///< Batch nullspace repulsion strength
+        Scalar lambda_c = 0.3;        ///< Classifier guide λ (for target derivation)
+        int update_interval = 10;     ///< Recompute targets every N iters (A26)
+        int warmup_iters = 10;        ///< Iterations before enabling regularization
+
+        /// Annealing schedule (A28): 0=none, 1=cosine, 2=linear, 3=cutoff_50, 4=cutoff_25
+        int anneal_schedule = 0;
+
+        /// Per-sample labels for target computation (0-indexed, -1 = unlabeled)
+        std::vector<int> labels;
+        int n_classes = 0;
+
+        /// Per-sample batch labels for nullspace repulsion (0-indexed)
+        std::vector<int> batch_labels;
+        int n_batches = 0;
+
+        /// Pre-computed H-side target matrix (k × n, column-major)
+        /// If empty, computed internally from OAS-ZCA guided run
+        std::vector<Scalar> h_target;
+
+        /// Pre-computed W-side target matrix (k × m, column-major)
+        std::vector<Scalar> w_target;
+
+        /// Pre-computed precision matrix (k × k, column-major) for A21
+        std::vector<Scalar> precision;
+
+        /// Pre-computed batch subspace matrix (k × k, column-major) for A22/A23
+        std::vector<Scalar> batch_subspace;
+    };
+
+    AlignmentGuideConfig alignment_guide;
+
+    /// True if any alignment guide regularization is active
+    bool has_alignment_guide() const noexcept {
+        return alignment_guide.type > 0;
+    }
+
+    // ====================================================================
+    // Classifier guides (H-side, multi-guide)
+    // Adds λ·I to Gram and λ·centroid to RHS to steer each column of H
+    // toward its class centroid. Supports multiple simultaneous guides.
+    // ====================================================================
+
+    struct ClassifierGuideEntry {
+        std::vector<int> labels;   ///< Per-sample labels (0-indexed, length n)
+        Scalar lambda = 0;        ///< Regularization strength
+        int n_classes = 0;        ///< Number of classes
+    };
+
+    std::vector<ClassifierGuideEntry> classifier_guides_H;
+
+    /// True if any classifier guide is active on H
+    bool has_classifier_guide_H() const noexcept {
+        return !classifier_guides_H.empty();
+    }
 
     // ====================================================================
     // Post-processing

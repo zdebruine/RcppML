@@ -9,10 +9,7 @@
 #include "RcppFunctions_common.h"
 #include "../inst/include/FactorNet/graph/graph_all.hpp"
 #include "../inst/include/FactorNet/nmf/fit_streaming_spz.hpp"
-#include "../inst/include/FactorNet/guides/classifier_guide.hpp"
-#include "../inst/include/FactorNet/guides/external_guide.hpp"
 
-#include <memory>
 #include <string>
 #include <vector>
 #include <map>
@@ -62,7 +59,7 @@ LossConfig<float> parse_loss(const std::string& loss_str, double huber_delta,
     else if (loss_str == "gamma") loss.type = LossType::GAMMA;
     else if (loss_str == "inverse_gaussian") loss.type = LossType::INVGAUSS;
     else if (loss_str == "tweedie") loss.type = LossType::TWEEDIE;
-    else Rcpp::stop("Unknown loss type: '" + loss_str + "' (supported: mse, mae, huber, kl, gp, nb, gamma, inverse_gaussian, tweedie)");
+    else Rcpp::stop("Unknown loss type: '" + loss_str + "' (supported: mse, gp, nb, gamma, inverse_gaussian, tweedie)");
     loss.robust_delta = static_cast<float>(robust_delta);
     return loss;
 }
@@ -229,43 +226,6 @@ Rcpp::List Rcpp_factor_net_fit(Rcpp::List descriptor) {
     }
 
     // -------------------------------------------------------------------
-    // 5. Parse guides (if any)
-    // -------------------------------------------------------------------
-    // Guides are attached to layer factor configs after graph build
-    struct GuideInfo {
-        std::unique_ptr<guides::Guide<float>> guide;
-        int layer_idx;   // 0-based index into layer list
-        std::string side; // "W" or "H"
-    };
-    std::vector<GuideInfo> guide_storage;
-
-    if (descriptor.containsElementNamed("guides") &&
-        !Rf_isNull(descriptor["guides"])) {
-        Rcpp::List glist = Rcpp::as<Rcpp::List>(descriptor["guides"]);
-        for (int gi = 0; gi < glist.size(); ++gi) {
-            Rcpp::List g = Rcpp::as<Rcpp::List>(glist[gi]);
-            std::string gtype = Rcpp::as<std::string>(g["type"]);
-            float glambda = static_cast<float>(Rcpp::as<double>(g["lambda"]));
-            std::string gside = Rcpp::as<std::string>(g["side"]);
-            int layer_idx = Rcpp::as<int>(g["layer_idx"]);  // 0-based
-
-            if (layer_idx < 0 || layer_idx >= static_cast<int>(gdesc.layers.size()))
-                continue;
-
-            if (gtype == "classifier") {
-                auto labels = Rcpp::as<std::vector<int>>(g["labels"]);
-                auto guide = std::make_unique<guides::ClassifierGuide<float>>(labels, glambda);
-                guide_storage.push_back({std::move(guide), layer_idx, gside});
-            } else if (gtype == "external") {
-                Eigen::MatrixXd target_d = Rcpp::as<Eigen::MatrixXd>(g["target"]);
-                Eigen::MatrixXf target_f = target_d.cast<float>();
-                auto guide = std::make_unique<guides::ExternalGuide<float>>(target_f, glambda);
-                guide_storage.push_back({std::move(guide), layer_idx, gside});
-            }
-        }
-    }
-
-    // -------------------------------------------------------------------
     // 5b. Parse W_init if provided (R-generated initialization)
     // -------------------------------------------------------------------
     Eigen::MatrixXf w_init_f;
@@ -282,31 +242,6 @@ Rcpp::List Rcpp_factor_net_fit(Rcpp::List descriptor) {
     // -------------------------------------------------------------------
     auto instance = GraphInstance<float>::build(gdesc);
     auto& graph = instance.graph();
-
-    // Attach parsed guides to the built graph's layer FactorConfig vectors.
-    // graph.layers() is ordered by topological index matching the descriptor.
-    {
-        const auto& layer_nodes = graph.layers();
-        for (auto& gi : guide_storage) {
-            if (gi.layer_idx < 0 ||
-                gi.layer_idx >= static_cast<int>(layer_nodes.size()))
-                continue;
-            Node<float>* node = layer_nodes[gi.layer_idx];
-            if (node->type == NodeType::NMF_LAYER) {
-                auto* ln = static_cast<NMFLayerNode<float>*>(node);
-                if (gi.side == "W")
-                    ln->W_config.guides.push_back(gi.guide.get());
-                else
-                    ln->H_config.guides.push_back(gi.guide.get());
-            } else if (node->type == NodeType::SVD_LAYER) {
-                auto* ln = static_cast<SVDLayerNode<float>*>(node);
-                if (gi.side == "W")
-                    ln->W_config.guides.push_back(gi.guide.get());
-                else
-                    ln->H_config.guides.push_back(gi.guide.get());
-            }
-        }
-    }
 
     GraphResult<float> result;
 

@@ -20,11 +20,7 @@ articles:
     contents:
       - clustering
       - factor-graphs
-
-  - title: "Applications"
-    contents:
-      - image-decomposition
-      - recommendation-systems
+      - guided-nmf
 
   - title: "Infrastructure"
     contents:
@@ -41,18 +37,22 @@ reference:
       - "`summary,nmf-method`"
       - "`biplot,nmf-method`"
       - nnls
-      - reconstruct
+      - compute_target
+      - refine
 
   - title: "Singular Value Decomposition"
     desc: "SVD and PCA functions"
     contents:
       - svd
+      - svd-class
       - pca
-      - variance_explained
 
   - title: "Model Evaluation & Diagnostics"
     desc: "Functions for evaluating and comparing NMF models"
     contents:
+      - assess
+      - as.data.frame.nmf_assessment
+      - print.nmf_assessment
       - evaluate
       - sparsity
       - align
@@ -85,6 +85,7 @@ reference:
     contents:
       - bipartition
       - dclust
+      - plot.dclust
       - bipartiteMatch
 
   - title: "Composable Factorization Graphs"
@@ -103,10 +104,6 @@ reference:
       - W
       - cross_validate_graph
       - predict.factor_net_result
-      - guide_callback
-      - guide_classifier
-      - guide_external
-      - guide_reference
       - training_logger
       - export_log
       - plot.training_logger
@@ -124,7 +121,6 @@ reference:
       - print.fn_classifier_eval
       - summary.factor_net_result
       - summary.fn_classifier_eval
-      - print.nmf_guide
       - print.training_logger
 
   - title: "Simulation"
@@ -157,3 +153,7 @@ reference:
       - movielens
       - olivetti
       - pbmc3k
+
+  - title: "Package"
+    contents:
+      - RcppML-package

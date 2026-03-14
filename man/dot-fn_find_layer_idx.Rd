@@ -6,6 +6,9 @@
 \usage{
 .fn_find_layer_idx(node, layers)
 }
+\value{
+An integer index, or \code{NULL} if not found.
+}
 \description{
 Find the index of a node in the layers list
 }

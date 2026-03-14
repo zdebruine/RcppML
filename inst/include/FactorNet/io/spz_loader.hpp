@@ -19,8 +19,8 @@
 
 #include <FactorNet/io/loader.hpp>
 #include <FactorNet/io/file_reader.hpp>
-#include <sparsepress/sparsepress_v2.hpp>
-#include <sparsepress/format/header_v2.hpp>
+#include <streampress/sparsepress_v2.hpp>
+#include <streampress/format/header_v2.hpp>
 
 #include <Eigen/Sparse>
 #include <vector>
@@ -71,11 +71,11 @@ public:
                 throw std::runtime_error("Failed to read .spz file: " + path);
         } else {
             // Seek-based: read only header
-            if (file_size_ < sparsepress::v2::HEADER_SIZE_V2)
+            if (file_size_ < streampress::v2::HEADER_SIZE_V2)
                 throw std::runtime_error("File too small for v2 header: " + path);
 
-            std::vector<uint8_t> hdr_buf(sparsepress::v2::HEADER_SIZE_V2);
-            reader_->pread(0, hdr_buf.data(), sparsepress::v2::HEADER_SIZE_V2);
+            std::vector<uint8_t> hdr_buf(streampress::v2::HEADER_SIZE_V2);
+            reader_->pread(0, hdr_buf.data(), streampress::v2::HEADER_SIZE_V2);
         }
 
         // Parse v2 header
@@ -85,12 +85,12 @@ public:
 
         if (!in_core_) {
             // Re-read header for parsing (already have it in stack for seek path)
-            hdr_buf_.resize(sparsepress::v2::HEADER_SIZE_V2);
-            reader_->pread(0, hdr_buf_.data(), sparsepress::v2::HEADER_SIZE_V2);
+            hdr_buf_.resize(streampress::v2::HEADER_SIZE_V2);
+            reader_->pread(0, hdr_buf_.data(), streampress::v2::HEADER_SIZE_V2);
             hdr_ptr = hdr_buf_.data();
         }
 
-        header_ = sparsepress::v2::FileHeader_v2::deserialize(hdr_ptr);
+        header_ = streampress::v2::FileHeader_v2::deserialize(hdr_ptr);
         if (header_.version != 2)
             throw std::runtime_error("Not a v2 .spz file: " + path);
 
@@ -100,7 +100,7 @@ public:
 
         // Parse forward chunk descriptors
         fwd_descs_.resize(header_.num_chunks);
-        size_t chunk_idx_bytes = header_.num_chunks * sizeof(sparsepress::v2::ChunkDescriptor_v2);
+        size_t chunk_idx_bytes = header_.num_chunks * sizeof(streampress::v2::ChunkDescriptor_v2);
         if (in_core_) {
             const uint8_t* chunk_idx = file_data_.data() + header_.chunk_index_offset;
             std::memcpy(fwd_descs_.data(), chunk_idx, chunk_idx_bytes);
@@ -112,7 +112,7 @@ public:
 
         // Check and build transpose reader
         if (in_core_) {
-            has_transpose_ = sparsepress::v2::has_transpose(
+            has_transpose_ = streampress::v2::has_transpose(
                 file_data_.data(), file_size_);
             if (require_transpose && !has_transpose_) {
                 throw std::runtime_error(
@@ -120,7 +120,7 @@ public:
                     "Re-compress with: sp_write(x, 'data.spz', include_transpose = TRUE)");
             }
             if (has_transpose_) {
-                t_reader_ = std::make_unique<sparsepress::v2::TransposeChunkReader>(
+                t_reader_ = std::make_unique<streampress::v2::TransposeChunkReader>(
                     file_data_.data(), file_size_);
             }
         } else {
@@ -168,10 +168,10 @@ public:
 
         if (in_core_) {
             // Legacy path: decompress from in-memory buffer
-            sparsepress::v2::DecompressConfig_v2 dcfg;
+            streampress::v2::DecompressConfig_v2 dcfg;
             dcfg.col_start = col_start;
             dcfg.col_end = col_start + nc;
-            auto csc = sparsepress::v2::decompress_v2_typed<Scalar>(
+            auto csc = streampress::v2::decompress_v2_typed<Scalar>(
                 file_data_.data(), file_size_, dcfg);
 
             out.col_start = col_start;
@@ -185,12 +185,12 @@ public:
 
             // Calculate the byte range needed for this chunk
             uint64_t stream_min = header_.data_offset +
-                desc.stream_offset[sparsepress::v2::STREAM_GAPS];
-            uint64_t stream_max = stream_min + desc.stream_size[sparsepress::v2::STREAM_GAPS];
+                desc.stream_offset[streampress::v2::STREAM_GAPS];
+            uint64_t stream_max = stream_min + desc.stream_size[streampress::v2::STREAM_GAPS];
 
             uint64_t val_start = header_.data_offset +
-                desc.stream_offset[sparsepress::v2::STREAM_VALUES];
-            uint64_t val_end = val_start + desc.stream_size[sparsepress::v2::STREAM_VALUES];
+                desc.stream_offset[streampress::v2::STREAM_VALUES];
+            uint64_t val_end = val_start + desc.stream_size[streampress::v2::STREAM_VALUES];
 
             if (val_start < stream_min) stream_min = val_start;
             if (val_end > stream_max) stream_max = val_end;
@@ -214,10 +214,10 @@ public:
             // Read the chunk data at its correct offset
             reader_->pread(chunk_data_start, buf.data() + chunk_data_start, chunk_data_size);
 
-            sparsepress::v2::DecompressConfig_v2 dcfg;
+            streampress::v2::DecompressConfig_v2 dcfg;
             dcfg.col_start = col_start;
             dcfg.col_end = col_start + nc;
-            auto csc = sparsepress::v2::decompress_v2_typed<Scalar>(
+            auto csc = streampress::v2::decompress_v2_typed<Scalar>(
                 buf.data(), total_buf_size, dcfg);
 
             out.col_start = col_start;
@@ -238,7 +238,7 @@ public:
             if (trans_idx_ >= t_reader_->num_chunks()) return false;
 
             const uint32_t tc = trans_idx_;
-            sparsepress::CSCMatrix csc = t_reader_->decompress_chunk(tc);
+            streampress::CSCMatrix csc = t_reader_->decompress_chunk(tc);
             const uint32_t col_start = t_reader_->chunk_col_start(tc);
             const uint32_t nc = t_reader_->chunk_num_cols(tc);
 
@@ -252,7 +252,7 @@ public:
 
             // Seek-based transpose: use the pre-loaded transpose data
             const uint32_t tc = trans_idx_;
-            sparsepress::CSCMatrix csc = t_reader_seek_->decompress_chunk(tc);
+            streampress::CSCMatrix csc = t_reader_seek_->decompress_chunk(tc);
             const uint32_t col_start = t_reader_seek_->chunk_col_start(tc);
             const uint32_t nc = t_reader_seek_->chunk_num_cols(tc);
 
@@ -278,10 +278,10 @@ public:
     size_t file_size() const { return file_size_; }
 
     /// Access to the parsed header
-    const sparsepress::v2::FileHeader_v2& header() const { return header_; }
+    const streampress::v2::FileHeader_v2& header() const { return header_; }
 
     /// Access to forward chunk descriptors
-    const std::vector<sparsepress::v2::ChunkDescriptor_v2>& forward_descs() const {
+    const std::vector<streampress::v2::ChunkDescriptor_v2>& forward_descs() const {
         return fwd_descs_;
     }
 
@@ -301,7 +301,7 @@ private:
         uint64_t trans_start = header_.transpose_offset;
         uint64_t trans_end = (header_.metadata_offset > trans_start)
             ? header_.metadata_offset
-            : file_size_ - sparsepress::v2::FOOTER_SIZE;
+            : file_size_ - streampress::v2::FOOTER_SIZE;
 
         uint64_t trans_section_size = trans_end - trans_start;
 
@@ -317,14 +317,14 @@ private:
             offset += to_read;
         }
 
-        t_reader_seek_ = std::make_unique<sparsepress::v2::TransposeChunkReader>(
+        t_reader_seek_ = std::make_unique<streampress::v2::TransposeChunkReader>(
             trans_buf_.data(), trans_end);
         num_trans_chunks_ = t_reader_seek_->num_chunks();
     }
 
     /// Convert CSCMatrixTyped<Scalar> to Eigen sparse (forward chunks)
     static SpMat csc_typed_to_eigen(
-        const sparsepress::CSCMatrixTyped<Scalar>& csc,
+        const streampress::CSCMatrixTyped<Scalar>& csc,
         uint32_t nrows, uint32_t ncols)
     {
         SpMat mat(nrows, ncols);
@@ -347,7 +347,7 @@ private:
 
     /// Convert CSCMatrix (double) to Eigen sparse (transpose chunks)
     static SpMat csc_to_eigen(
-        const sparsepress::CSCMatrix& csc,
+        const streampress::CSCMatrix& csc,
         uint32_t nrows, uint32_t ncols)
     {
         SpMat mat(nrows, ncols);
@@ -380,8 +380,8 @@ private:
     std::vector<uint8_t> hdr_buf_;
 
     // Shared state
-    sparsepress::v2::FileHeader_v2 header_;
-    std::vector<sparsepress::v2::ChunkDescriptor_v2> fwd_descs_;
+    streampress::v2::FileHeader_v2 header_;
+    std::vector<streampress::v2::ChunkDescriptor_v2> fwd_descs_;
 
     uint32_t m_, n_;
     uint64_t nnz_;
@@ -389,11 +389,11 @@ private:
     bool has_transpose_;
 
     // In-core transpose reader
-    std::unique_ptr<sparsepress::v2::TransposeChunkReader> t_reader_;
+    std::unique_ptr<streampress::v2::TransposeChunkReader> t_reader_;
 
     // Seek-based transpose
     std::vector<uint8_t> trans_buf_;
-    std::unique_ptr<sparsepress::v2::TransposeChunkReader> t_reader_seek_;
+    std::unique_ptr<streampress::v2::TransposeChunkReader> t_reader_seek_;
     uint64_t trans_data_offset_ = 0;
     uint32_t num_trans_chunks_ = 0;
 

@@ -5,65 +5,56 @@
 #' Alternatively, given \eqn{H} and \eqn{A}, find \eqn{W} such that \eqn{||WH - A||^2} is minimized.
 #'
 #' @details
-#' This function solves NNLS projection problems with full flexibility:
+#' This function solves NNLS projection problems with full flexibility.
 #'
 #' **Projection Modes:**
 #' - \code{w} provided, \code{h = NULL}: Solve for H given W and A (standard projection)
 #' - \code{h} provided, \code{w = NULL}: Solve for W given H and A (transpose projection)
 #' - Exactly one of \code{w} or \code{h} must be NULL
 #'
-#' **Normal Equations:**
-#' - For H: \eqn{W'W H = W'A}
-#' - For W: \eqn{HH' W' = HA'} (solved as transpose problem)
-#'
-#' The problem is solved by forming the Gram matrix and right-hand side in C++ with
-#' OpenMP parallelization across samples. Sequential coordinate descent with warm starts
-#' enables fast convergence.
-#'
-#' **Dimension Matching:**
-#' When dimensions don't match exactly, the function attempts to:
-#' 1. Auto-transpose if one orientation matches
-#' 2. Match by rownames/colnames and reorder/subset to the intersection
-#' 3. Error if no valid dimension alignment is possible
-#'
-#' **Warm Start:**
-#' Provide an optional \code{warm_start} matrix to initialize the solution. This can
-#' dramatically accelerate convergence when solutions are expected to be similar across
-#' related problems (e.g., incremental updates, time series).
-#'
-#' **Penalties:**
-#' - L1 (LASSO): Encourages sparsity by subtracting L1 from the right-hand side
-#' - L2 (Ridge): Shrinks solutions by adding L2 to the diagonal of the Gram matrix
-#' - Graph Laplacian: \emph{Not yet implemented in nnls. Use nmf() for graph regularization.}
-#' - Length-2 vectors \code{c(w_penalty, h_penalty)} control penalties for W and H separately
+#' @section Advanced Parameters (via \code{...}):
+#' \describe{
+#'   \item{\code{L21}}{L2,1 group sparsity penalty, length 1 or 2 (default \code{c(0,0)})}
+#'   \item{\code{angular}}{Angular decorrelation penalty, length 1 or 2 (default \code{c(0,0)})}
+#'   \item{\code{cd_maxit}}{Max coordinate descent iterations (default 100)}
+#'   \item{\code{cd_tol}}{CD stopping tolerance (default 1e-8)}
+#'   \item{\code{warm_start}}{Optional initial solution matrix}
+#'   \item{\code{dispersion}}{Dispersion estimation mode: \code{"per_row"} (default) or \code{"global"}}
+#'   \item{\code{theta_init}}{Initial GP theta (default 0.1)}
+#'   \item{\code{theta_max}}{Maximum GP theta (default 5.0)}
+#'   \item{\code{theta_min}}{Minimum GP theta (default 0.0)}
+#'   \item{\code{nb_size_init}}{Initial NB size parameter (default 10.0)}
+#'   \item{\code{nb_size_max}}{Maximum NB size (default 1e6)}
+#'   \item{\code{nb_size_min}}{Minimum NB size (default 0.01)}
+#'   \item{\code{gamma_phi_init}}{Initial Gamma shape parameter (default 1.0)}
+#'   \item{\code{gamma_phi_max}}{Maximum Gamma shape (default 1e4)}
+#'   \item{\code{gamma_phi_min}}{Minimum Gamma shape (default 1e-6)}
+#'   \item{\code{tweedie_power}}{Tweedie variance power (default 1.5)}
+#'   \item{\code{irls_max_iter}}{Maximum IRLS iterations per solve (default 5)}
+#'   \item{\code{irls_tol}}{IRLS convergence tolerance (default 1e-4)}
+#' }
 #'
 #' @param w factor model matrix (n_features x k) for solving H. Set to NULL to solve for W.
 #' @param h factor model matrix (k x n_samples) for solving W. Set to NULL to solve for H.
-#' @param A data matrix (n_features x n_samples for w->h, n_samples x n_features for h->w).
-#'   Can be dense (matrix) or sparse (dgCMatrix from Matrix package).
-#' @param warm_start optional matrix to initialize the solution. Must match output dimensions
-#'   (k x n_samples for H, n_features x k for W). Can accelerate convergence.
-#' @param L1 L1/LASSO penalty, length 1 or 2 for c(w_penalty, h_penalty). Range [0, 1).
-#' @param L2 Ridge penalty, length 1 or 2 for c(w_penalty, h_penalty). Range [0, Inf).
-#' @param L21 L21 group sparsity penalty, length 1 or 2 for c(w_penalty, h_penalty). Range [0, Inf).
-#'   Drives entire rows/columns toward zero for automatic factor selection.
-#' @param angular angular decorrelation penalty, length 1 or 2 for c(w_penalty, h_penalty). Range [0, Inf).
-#'   Encourages orthogonality between factors.
-#' @param loss loss function: \code{"mse"} (default), \code{"gp"}, \code{"nb"}, \code{"gamma"},
-#'   \code{"inverse_gaussian"}, or \code{"tweedie"}. Non-MSE losses use a single IRLS iteration
-#'   via the NMF machinery.
-#' @param cd_maxit maximum number of coordinate descent iterations (default 100)
-#' @param cd_tol stopping tolerance for coordinate descent (default 1e-8)
-#' @param upper_bound maximum value in solution, length 1 or 2 for c(w_bound, h_bound). 0 = no bound.
-#' @param nonneg non-negativity constraints, length 1 or 2 for c(w_constraint, h_constraint)
-#' @param threads number of threads for OpenMP parallelization (0 = all available)
-#' @param verbose print progress information
+#' @param A data matrix. Can be dense (matrix) or sparse (dgCMatrix).
+#' @param L1 L1/LASSO penalty, length 1 or 2. Range [0, 1).
+#' @param L2 Ridge penalty, length 1 or 2. Range [0, Inf).
+#' @param loss loss function: \code{"mse"} (default) or others via NMF dispatch.
+#' @param upper_bound maximum value in solution, length 1 or 2. 0 = no bound.
+#' @param nonneg non-negativity constraints, length 1 or 2.
+#' @param threads number of threads for OpenMP parallelization (0 = all available).
+#' @param verbose print progress information.
+#' @param ... advanced parameters. See \strong{Advanced Parameters} section.
 #' @return matrix of dimension (k x n_samples) for H or (n_features x k) for W
 #'
-#' @note \code{nnls()} uses \code{A} for the data matrix (linear algebra
-#' convention), matching \code{\link{svd}()} and the normal equations
-#' \eqn{W'WH = W'A}. In contrast, \code{\link{nmf}()} uses \code{data}
-#' (statistical modeling convention).
+#' @section Target Regularization:
+#' When \code{target_H} and \code{target_lambda} are provided (via \code{...}),
+#' \code{nnls()} routes the solve through a single NMF iteration internally.
+#' Positive \code{target_lambda} attracts the solution toward \code{target_H}
+#' (label enrichment).  Negative \code{target_lambda} uses eigenvalue-projected
+#' adversarial removal (PROJ_ADV) to suppress target-correlated structure
+#' (batch removal).  See \code{vignette("guided-nmf")} for details.
+#'
 #' @export
 #' @author Zach DeBruine
 #' @seealso \code{\link{nmf}}
@@ -87,33 +78,23 @@
 #' h_recovered <- nnls(w = w, A = A)
 #' cor(as.vector(h_true), as.vector(h_recovered))
 #'
-#' # Project H onto new features to find W (transpose problem)
-#' w_recovered <- nnls(h = h_true, A = A)
-#' cor(as.vector(w), as.vector(w_recovered))
-#' 
 #' # With L1 penalty for sparse H
 #' h_sparse <- nnls(w = w, A = A, L1 = c(0, 0.1))
-#'
-#' # Warm start for faster convergence
-#' h_init <- matrix(0.5, 5, 10)
-#' h_warm <- nnls(w = w, A = A, warm_start = h_init)
-#'
-#' # Allow negative values (semi-NMF)
-#' h_unconstrained <- nnls(w = w, A = A, nonneg = c(TRUE, FALSE))
-#'
-#' # Dimension matching by names
-#' rownames(w) <- paste0("gene_", 1:20)
-#' rownames(A) <- paste0("gene_", 20:1)  # Reversed order
-#' h_matched <- nnls(w = w, A = A)  # Automatically reorders A by rownames
 #' }
 nnls <- function(w = NULL, h = NULL, A, 
-                 warm_start = NULL,
                  L1 = c(0, 0), L2 = c(0, 0),
-                 L21 = c(0, 0), angular = c(0, 0),
                  loss = "mse",
-                 cd_maxit = 100L, cd_tol = 1e-8, 
                  upper_bound = c(0, 0), nonneg = c(TRUE, TRUE),
-                 threads = 0, verbose = FALSE) {
+                 threads = 0, verbose = FALSE,
+                 ...) {
+  
+  # --- Parse advanced parameters from ... ---
+  dots <- .parse_nnls_dots(list(...))
+  L21        <- dots$L21
+  angular    <- dots$angular
+  cd_maxit   <- dots$cd_maxit
+  cd_tol     <- dots$cd_tol
+  warm_start <- dots$warm_start
   
   # === BACKWARD COMPATIBILITY ===
   # Old CRAN 0.3.7 API: nnls(factor_matrix, data_matrix) with 2 positional args
@@ -149,9 +130,12 @@ nnls <- function(w = NULL, h = NULL, A,
   if (length(upper_bound) == 1) upper_bound <- c(upper_bound, upper_bound)
   if (length(nonneg) == 1) nonneg <- c(nonneg, nonneg)
   
-  # === NON-MSE LOSS DISPATCH ===
-  # For non-MSE distributions (IRLS), delegate to a single NMF iteration
-  if (loss != "mse" || any(L21 != 0) || any(angular != 0)) {
+  # === TARGET / NON-MSE LOSS DISPATCH ===
+  # For targets or non-MSE distributions (IRLS), delegate to a single NMF iteration
+  target_H <- dots$target_H
+  target_lambda <- dots$target_lambda
+  has_target <- !is.null(target_H) && any(target_lambda != 0)
+  if (loss != "mse" || any(L21 != 0) || any(angular != 0) || has_target) {
     if (!is.matrix(factor_matrix)) factor_matrix <- as.matrix(factor_matrix)
     if (is.character(A)) {
       data_info <- validate_data(A)
@@ -162,13 +146,41 @@ nnls <- function(w = NULL, h = NULL, A,
       model <- nmf(A, k = ncol(factor_matrix), seed = factor_matrix, maxit = 1,
                    loss = loss, L1 = L1, L2 = L2, L21 = L21, angular = angular,
                    upper_bound = upper_bound, nonneg = nonneg,
-                   threads = threads, verbose = verbose)
+                   threads = threads, verbose = verbose,
+                   target_H = target_H, target_lambda = target_lambda,
+                   dispersion = dots$dispersion,
+                   theta_init = dots$theta_init,
+                   theta_max = dots$theta_max,
+                   theta_min = dots$theta_min,
+                   nb_size_init = dots$nb_size_init,
+                   nb_size_max = dots$nb_size_max,
+                   nb_size_min = dots$nb_size_min,
+                   gamma_phi_init = dots$gamma_phi_init,
+                   gamma_phi_max = dots$gamma_phi_max,
+                   gamma_phi_min = dots$gamma_phi_min,
+                   tweedie_power = dots$tweedie_power,
+                   irls_max_iter = dots$irls_max_iter,
+                   irls_tol = dots$irls_tol)
       return(model@h)
     } else {
       model <- nmf(A, k = nrow(factor_matrix), seed = t(A) %*% t(t(factor_matrix)), maxit = 1,
                    loss = loss, L1 = L1, L2 = L2, L21 = L21, angular = angular,
                    upper_bound = upper_bound, nonneg = nonneg,
-                   threads = threads, verbose = verbose)
+                   threads = threads, verbose = verbose,
+                   target_H = target_H, target_lambda = target_lambda,
+                   dispersion = dots$dispersion,
+                   theta_init = dots$theta_init,
+                   theta_max = dots$theta_max,
+                   theta_min = dots$theta_min,
+                   nb_size_init = dots$nb_size_init,
+                   nb_size_max = dots$nb_size_max,
+                   nb_size_min = dots$nb_size_min,
+                   gamma_phi_init = dots$gamma_phi_init,
+                   gamma_phi_max = dots$gamma_phi_max,
+                   gamma_phi_min = dots$gamma_phi_min,
+                   tweedie_power = dots$tweedie_power,
+                   irls_max_iter = dots$irls_max_iter,
+                   irls_tol = dots$irls_tol)
       return(model@w)
     }
   }

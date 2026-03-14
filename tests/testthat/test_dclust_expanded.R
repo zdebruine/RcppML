@@ -20,7 +20,7 @@ test_that("dclust returns correct structure", {
     expect_true("samples" %in% names(cluster))
     expect_true("center" %in% names(cluster))
     expect_true("size" %in% names(cluster))
-    expect_true(is.numeric(cluster$id))
+    expect_true(is.character(cluster$id))
     expect_true(is.numeric(cluster$samples))
     expect_equal(cluster$size, length(cluster$samples))
   }
@@ -85,14 +85,13 @@ test_that("dclust works with dense matrix input", {
   expect_equal(total_samples, 100)
 })
 
-test_that("dclust cluster IDs are unique integers", {
+test_that("dclust cluster IDs are unique", {
   A <- Matrix::rsparsematrix(50, 200, 0.1)
   m <- dclust(A, min_samples = 10, min_dist = 0, seed = 42)
 
-  ids <- vapply(m, function(x) x$id, numeric(1))
+  ids <- vapply(m, function(x) x$id, character(1))
 
-  # IDs should be unique non-negative integers
-  expect_true(all(ids >= 0))
+  # IDs should be unique
   expect_equal(length(ids), length(unique(ids)))
 })
 

@@ -6,6 +6,9 @@
 \usage{
 .try_gpu_bipartition(data, tol, p, nonneg, verbose)
 }
+\value{
+A list with elements \code{v} and \code{d}, or \code{NULL}.
+}
 \description{
 Try GPU dispatch for bipartition
 }

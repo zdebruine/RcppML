@@ -39,11 +39,7 @@
 #include <FactorNet/core/svd_config.hpp>
 #include <FactorNet/core/svd_result.hpp>
 
-// NMF redirect for constrained SVD (non-negativity, L1/L2, bounds, etc.)
-// When constraints are active, the SVD gateway redirects to NMF fit, which
-// properly solves the constrained matrix factorization problem.
-#include <FactorNet/nmf/fit_cpu.hpp>
-#include <FactorNet/core/resource_tags.hpp>
+
 
 #include <string>
 #include <cstdint>
@@ -127,67 +123,19 @@ inline SVDConvergence parse_svd_convergence(const std::string& s) noexcept {
 }
 
 // ============================================================================
-// svd_config_to_nmf_config  —  build an NMFConfig from a constrained SVDConfig
-// ============================================================================
-
-/**
- * @brief Convert a constrained SVDConfig into an NMFConfig for the redirect path.
- *
- * When SVD is called with regularization/non-negativity constraints, we route
- * to NMF which properly handles the constrained factorization problem.
- * SVD convention: A \u2248 U \u00b7 diag(d) \u00b7 V^T  →  NMF convention: A \u2248 W \u00b7 diag(d) \u00b7 H
- * Mapping: W \u2248 U (m\u00d7k), H \u2248 V^T (k\u00d7n), d (k).
- * Factor correspondence: U \u2192 W,  V \u2192 H^T.
- */
-template<typename Scalar>
-inline FactorNet::NMFConfig<Scalar> svd_config_to_nmf_config(
-    const SVDConfig<Scalar>& svd)
-{
-    FactorNet::NMFConfig<Scalar> nmf;
-    nmf.rank          = svd.k_max;
-    nmf.tol           = svd.tol;
-    nmf.max_iter      = svd.max_iter > 0 ? svd.max_iter : 200;
-    nmf.seed          = svd.seed;
-    nmf.threads       = svd.threads;
-    nmf.verbose       = svd.verbose;
-    // Use SVD init (Lanczos) to seed NMF from the spectral structure
-    nmf.init_mode     = 1;
-    // Constraints: u \u2248 H (columns), v \u2248 W (rows)
-    nmf.H.L1          = svd.L1_u;
-    nmf.H.L2          = svd.L2_u;
-    nmf.H.nonneg      = svd.nonneg_u;
-    nmf.H.upper_bound = svd.upper_bound_u;
-    nmf.H.L21         = svd.L21_u;
-    nmf.H.angular     = svd.angular_u;
-    nmf.W.L1          = svd.L1_v;
-    nmf.W.L2          = svd.L2_v;
-    nmf.W.nonneg      = svd.nonneg_v;
-    nmf.W.upper_bound = svd.upper_bound_v;
-    nmf.W.L21         = svd.L21_v;
-    nmf.W.angular     = svd.angular_v;
-    // Preserve graph regularization pointers (lifetime managed by caller)
-    nmf.H.graph        = svd.graph_u;
-    nmf.H.graph_lambda = svd.graph_u_lambda;
-    nmf.W.graph        = svd.graph_v;
-    nmf.W.graph_lambda = svd.graph_v_lambda;
-    // No norm scaling — preserve SVD scaling structure (d from NMF L2 norm)
-    nmf.norm_type = FactorNet::NormType::L2;
-    return nmf;
-}
-
-// ============================================================================
-// svd_gateway  —  in-memory dispatch (sparse *or* dense A)
-// ============================================================================
 
 /**
  * Dispatch an in-memory SVD/PCA run to the algorithm named by `method`.
  * Valid method strings: "deflation" (default), "randomized", "lanczos",
  * "irlba", "krylov".  Unknown strings fall through to deflation.
  *
- * When any regularization constraint is active (nonneg, L1, L2, bounds,
- * L21, angular, graph), the call is redirected to NMF which properly
- * handles the constrained factorization.  The NMF result is converted
- * back to SVDResult: U = W, d = d, V = H^T.
+ *
+ * Constrained SVD (nonneg, L1, L2, bounds, L21, angular, graph) is handled
+ * natively by "deflation" (rank-1 ALS) and "krylov" (KSPR: Lanczos seed +
+ * Gram-solve-then-project).  The R layer validates that only these two
+ * methods are used with constraints.
+ *
+ * Robust SVD (Huber-weighted IRLS) is only supported by "deflation".
  */
 template<typename MatrixType, typename Scalar>
 inline SVDResult<Scalar> svd_gateway(
@@ -197,25 +145,7 @@ inline SVDResult<Scalar> svd_gateway(
 {
     // Robust SVD requires deflation (only method with IRLS support)
     if (config.is_robust() && method != "deflation") {
-        // Route robust to deflation regardless of requested method
         return deflation_svd<MatrixType, Scalar>(A, config);
-    }
-
-    // Constrained SVD → NMF redirect
-    if (config.has_regularization_u() || config.has_regularization_v()) {
-        auto nmf_config = svd_config_to_nmf_config(config);
-        auto nmf_result = FactorNet::nmf::nmf_fit<FactorNet::primitives::CPU>(
-            A, nmf_config);
-
-        // Convert NMFResult → SVDResult
-        // NMF: A \u2248 W \u00b7 diag(d) \u00b7 H   (W: m\u00d7k, H: k\u00d7n, d: k)
-        // SVD: A \u2248 U \u00b7 diag(d) \u00b7 V^T  (U: m\u00d7k, V: n\u00d7k, d: k)
-        SVDResult<Scalar> svd_result;
-        svd_result.U = nmf_result.W;
-        svd_result.d = nmf_result.d;
-        svd_result.V = nmf_result.H.transpose();  // k\u00d7n → n\u00d7k
-        svd_result.k_selected = nmf_config.rank;
-        return svd_result;
     }
 
     if (method == "randomized")

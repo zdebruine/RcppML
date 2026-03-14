@@ -88,8 +88,7 @@ void nnls_batch(const DenseMatrix<Scalar>& G,
                 bool nonneg = true,
                 int threads = 0,
                 Scalar upper_bound = 0,
-                bool warm_start = false,
-                Scalar cd_abs_tol = static_cast<Scalar>(1e-15));
+                bool warm_start = false);
 
 /**
  * @brief Precompute tr(AᵀA) = ||A||²_F for Gram-trick loss

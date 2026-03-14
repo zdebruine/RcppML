@@ -26,7 +26,7 @@ handwritten digit images have substantial non-zero content.
 
 For NMF, it's recommended to:
 \itemize{
-  \item Normalize pixel values to [0,1] by dividing by 255
+  \item Normalize pixel values to \code{[0,1]} by dividing by 255
   \item Transpose to have pixels as rows, samples as columns
   \item Use a subset for faster experimentation
 }

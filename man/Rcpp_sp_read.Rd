@@ -2,9 +2,9 @@
 % Please edit documentation in R/RcppExports.R
 \name{Rcpp_sp_read}
 \alias{Rcpp_sp_read}
-\title{Read a SparsePress (.spz) file into a dgCMatrix}
+\title{Read a StreamPress (.spz) file into a dgCMatrix}
 \usage{
-Rcpp_sp_read(path, cols = NULL, reorder = TRUE)
+Rcpp_sp_read(path, cols = NULL, reorder = TRUE, threads = 0L)
 }
 \arguments{
 \item{path}{Input file path (.spz)}
@@ -12,11 +12,13 @@ Rcpp_sp_read(path, cols = NULL, reorder = TRUE)
 \item{cols}{Optional integer vector of column indices to read (1-indexed)}
 
 \item{reorder}{Whether to undo row permutation (default TRUE)}
+
+\item{threads}{Number of threads for parallel decompression (0 = all available, default 0)}
 }
 \value{
 A sparse matrix (dgCMatrix)
 }
 \description{
-Read a SparsePress (.spz) file into a dgCMatrix
+Read a StreamPress (.spz) file into a dgCMatrix
 }
 \keyword{internal}

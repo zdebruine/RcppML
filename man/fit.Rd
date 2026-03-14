@@ -30,7 +30,7 @@ networks, this delegates directly to \code{nmf()} for maximum performance.
 Multi-layer networks use R-level alternating least squares.
 }
 \examples{
-\dontrun{
+\donttest{
 library(Matrix)
 X <- rsparsematrix(100, 50, 0.1)
 inp <- factor_input(X, "X")

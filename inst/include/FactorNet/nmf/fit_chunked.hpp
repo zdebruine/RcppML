@@ -541,6 +541,10 @@ FactorNet::NMFResult<Scalar> nmf_chunked(
             n_train_total = static_cast<int64_t>(m) * static_cast<int64_t>(n);
         }
 
+        // ---- Post-NNLS angular decorrelation on H ----
+        if (config.H.angular > 0)
+            features::apply_angular_posthoc(result.H, static_cast<Scalar>(config.H.angular));
+
         // ---- Projective: normalize H and extract d ----
         if (is_projective) {
             variant::extract_scaling(result.H, result.d, config.norm_type);
@@ -714,6 +718,13 @@ FactorNet::NMFResult<Scalar> nmf_chunked(
             }
             result.W = W_T.transpose();
             stream_timer.end();
+        }
+
+        // ---- Post-NNLS angular decorrelation on W ----
+        if (config.W.angular > 0) {
+            MatS W_T_tmp = result.W.transpose();
+            features::apply_angular_posthoc(W_T_tmp, static_cast<Scalar>(config.W.angular));
+            result.W = W_T_tmp.transpose();
         }
 
         // ---- Scale ----

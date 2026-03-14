@@ -65,7 +65,7 @@ f <- tempfile(fileext = ".spz")
 st_write_dense(A, f, include_transpose = TRUE)
 B <- st_read_dense(f)
 max(abs(A - B))
-#> [1] 1.164056e-07
+#> [1] 1.180149e-07
 unlink(f)
 # }
 ```

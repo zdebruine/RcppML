@@ -449,6 +449,7 @@ inline CSCMatrix decompress(const std::vector<uint8_t>& data,
     bool use_delta_pred  = (header.flags & FLAG_DELTA_PREDICTION) != 0;
     bool use_value_pred  = (header.flags & FLAG_VALUE_PREDICTION) != 0;
     bool is_integer      = (header.flags & FLAG_INTEGER_VALUES) != 0;
+    (void)is_integer;  // reserved for future per-type decode paths
     ValueType vtype      = static_cast<ValueType>(header.value_type);
 
     CSCMatrix mat(header.m, header.n, header.nnz);
@@ -468,6 +469,7 @@ inline CSCMatrix decompress(const std::vector<uint8_t>& data,
 
     // Structure k params section
     const uint8_t* struct_k_ptr = ptr;
+    (void)struct_k_ptr;  // pointer used for section boundary; data read via struct_data_ptr
     ptr += header.struct_k_size;
 
     // Structure data section
@@ -653,6 +655,7 @@ inline CSCMatrix decompress(const std::vector<uint8_t>& data,
                               | (static_cast<uint32_t>(vp[1]) << 8)
                               | (static_cast<uint32_t>(vp[2]) << 16)
                               | (static_cast<uint32_t>(vp[3]) << 24);
+            (void)table_sz;  // size embedded in table; deserialize advances vp
             vp += 4;
             RansTable table = RansTable::deserialize(vp);
 

@@ -12,7 +12,7 @@ library(Matrix)
 gpu_ok <- tryCatch(gpu_available(force_recheck = TRUE), error = function(e) FALSE)
 
 # ============================================================================
-# MSE CV — Speckled mask (mask_zeros=TRUE)
+# MSE CV — Speckled mask (mask="zeros")
 # ============================================================================
 test_that("GPU MSE CV speckled matches CPU (test_loss parity)", {
   skip_if(!gpu_ok, "No GPU available")
@@ -21,9 +21,9 @@ test_that("GPU MSE CV speckled matches CPU (test_loss parity)", {
   A <- rsparsematrix(100, 80, density = 0.15)
   A@x <- abs(A@x)
 
-  cpu <- nmf(A, k = 3, test_fraction = 0.1, cv_seed = 42L, mask_zeros = TRUE,
+  cpu <- nmf(A, k = 3, test_fraction = 0.1, cv_seed = 42L, mask = "zeros",
              maxit = 20, tol = 1e-10, seed = 42, resource = "cpu", verbose = FALSE)
-  gpu <- nmf(A, k = 3, test_fraction = 0.1, cv_seed = 42L, mask_zeros = TRUE,
+  gpu <- nmf(A, k = 3, test_fraction = 0.1, cv_seed = 42L, mask = "zeros",
              maxit = 20, tol = 1e-10, seed = 42, resource = "gpu", verbose = FALSE)
 
   expect_s4_class(cpu, "nmf")
@@ -38,7 +38,7 @@ test_that("GPU MSE CV speckled matches CPU (test_loss parity)", {
 })
 
 # ============================================================================
-# MSE CV — Full mask (mask_zeros=FALSE)
+# MSE CV — Full mask (default, no mask)
 # ============================================================================
 test_that("GPU MSE CV full-mask matches CPU (test_loss parity)", {
   skip_if(!gpu_ok, "No GPU available")
@@ -47,9 +47,9 @@ test_that("GPU MSE CV full-mask matches CPU (test_loss parity)", {
   A <- rsparsematrix(100, 80, density = 0.15)
   A@x <- abs(A@x)
 
-  cpu <- nmf(A, k = 3, test_fraction = 0.1, cv_seed = 42L, mask_zeros = FALSE,
+  cpu <- nmf(A, k = 3, test_fraction = 0.1, cv_seed = 42L,
              maxit = 20, tol = 1e-10, seed = 42, resource = "cpu", verbose = FALSE)
-  gpu <- nmf(A, k = 3, test_fraction = 0.1, cv_seed = 42L, mask_zeros = FALSE,
+  gpu <- nmf(A, k = 3, test_fraction = 0.1, cv_seed = 42L,
              maxit = 20, tol = 1e-10, seed = 42, resource = "gpu", verbose = FALSE)
 
   expect_true(is.finite(cpu@misc$test_loss) && cpu@misc$test_loss > 0)
@@ -99,10 +99,10 @@ test_that("GPU GP CV runs and produces valid output", {
   A@x <- abs(A@x)
 
   cpu <- nmf(A, k = 3, loss = "gp", dispersion = "per_row",
-             test_fraction = 0.1, cv_seed = 42L, mask_zeros = TRUE,
+             test_fraction = 0.1, cv_seed = 42L, mask = "zeros",
              maxit = 20, tol = 1e-10, seed = 42, resource = "cpu", verbose = FALSE)
   gpu <- nmf(A, k = 3, loss = "gp", dispersion = "per_row",
-             test_fraction = 0.1, cv_seed = 42L, mask_zeros = TRUE,
+             test_fraction = 0.1, cv_seed = 42L, mask = "zeros",
              maxit = 20, tol = 1e-10, seed = 42, resource = "gpu", verbose = FALSE)
 
   expect_s4_class(cpu, "nmf")
@@ -124,10 +124,10 @@ test_that("GPU NB CV matches CPU (test_loss parity)", {
   A@x <- abs(A@x)
 
   cpu <- nmf(A, k = 3, loss = "nb", dispersion = "per_row",
-             test_fraction = 0.1, cv_seed = 42L, mask_zeros = TRUE,
+             test_fraction = 0.1, cv_seed = 42L, mask = "zeros",
              maxit = 20, tol = 1e-10, seed = 42, resource = "cpu", verbose = FALSE)
   gpu <- nmf(A, k = 3, loss = "nb", dispersion = "per_row",
-             test_fraction = 0.1, cv_seed = 42L, mask_zeros = TRUE,
+             test_fraction = 0.1, cv_seed = 42L, mask = "zeros",
              maxit = 20, tol = 1e-10, seed = 42, resource = "gpu", verbose = FALSE)
 
   expect_true(is.finite(cpu@misc$test_loss))

@@ -1353,7 +1353,8 @@ CVNMFResult nmf_cv_fit_gpu(
                                     delta_G_h, delta_b_h, &B_full_h,
                                     /*W_half=*/nullptr,
                                     d_user_mask->col_ptr.get(),
-                                    d_user_mask->row_indices.get());
+                                    d_user_mask->row_indices.get(),
+                                    config.mask_zeros);
             cholesky_cv_tiled_gpu(ctx, G_full, delta_G_h, B_full_h, delta_b_h,
                                   H, config.H.nonneg);
         } else if (use_mask && use_irls) {
@@ -1386,7 +1387,9 @@ CVNMFResult nmf_cv_fit_gpu(
             compute_cv_deltas_h_gpu(ctx, A, W, k, n,
                                     rng.state(), inv_prob,
                                     delta_G_h, delta_b_h, &B_full_h,
-                                    nullptr);
+                                    nullptr,
+                                    nullptr, nullptr,
+                                    config.mask_zeros);
             cholesky_cv_tiled_gpu(ctx, G_full, delta_G_h, B_full_h, delta_b_h,
                                   H, config.H.nonneg);
         }
@@ -1440,7 +1443,8 @@ CVNMFResult nmf_cv_fit_gpu(
                                     delta_G_w, delta_b_w, &B_full_w,
                                     /*H_half=*/nullptr,
                                     d_user_mask->col_ptr.get(),
-                                    d_user_mask->row_indices.get());
+                                    d_user_mask->row_indices.get(),
+                                    config.mask_zeros);
             cholesky_cv_tiled_gpu(ctx, G_full, delta_G_w, B_full_w, delta_b_w,
                                   W, config.W.nonneg);
         } else if (use_mask && use_irls) {
@@ -1473,7 +1477,9 @@ CVNMFResult nmf_cv_fit_gpu(
             compute_cv_deltas_w_gpu(ctx, At, H, k, m,
                                     rng.state(), inv_prob,
                                     delta_G_w, delta_b_w, &B_full_w,
-                                    nullptr);
+                                    nullptr,
+                                    nullptr, nullptr,
+                                    config.mask_zeros);
             cholesky_cv_tiled_gpu(ctx, G_full, delta_G_w, B_full_w, delta_b_w,
                                   W, config.W.nonneg);
         }

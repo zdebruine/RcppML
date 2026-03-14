@@ -19,6 +19,12 @@ factor_add(...)
 
 An `fn_node` of type "add".
 
+## See also
+
+[`factor_concat`](https://zdebruine.github.io/RcppML/reference/factor_concat.md),
+[`factor_shared`](https://zdebruine.github.io/RcppML/reference/factor_shared.md),
+[`factor_net`](https://zdebruine.github.io/RcppML/reference/factor_net.md)
+
 ## Examples
 
 ``` r

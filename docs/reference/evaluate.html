@@ -53,8 +53,7 @@
 <span>  <span class="va">data</span>,</span>
 <span>  mask <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  missing_only <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  loss <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"mse"</span>, <span class="st">"mae"</span>, <span class="st">"huber"</span>, <span class="st">"gp"</span><span class="op">)</span>,</span>
-<span>  huber_delta <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  loss <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"mse"</span>, <span class="st">"gp"</span><span class="op">)</span>,</span>
 <span>  test_fraction <span class="op">=</span> <span class="fl">0</span>,</span>
 <span>  test_seed <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  eval_set <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"all"</span>, <span class="st">"test"</span>, <span class="st">"train"</span><span class="op">)</span>,</span>
@@ -73,7 +72,7 @@
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
-<dd><p>additional development parameters</p></dd>
+<dd><p>advanced parameters. See <strong>Advanced Parameters</strong> section.</p></dd>
 
 
 <dt id="arg-data">data<a class="anchor" aria-label="anchor" href="#arg-data"></a></dt>
@@ -82,7 +81,10 @@ Also accepts a file path (character string) which will be auto-loaded based on e
 
 
 <dt id="arg-mask">mask<a class="anchor" aria-label="anchor" href="#arg-mask"></a></dt>
-<dd><p>dense or sparse matrix of values in <code>data</code> to handle as missing. Alternatively, specify "<code>zeros</code>" or "<code>NA</code>".</p></dd>
+<dd><p>missing data mask. Accepts:
+<code>NULL</code> (no masking), <code>"zeros"</code> (mask zeros), <code>"NA"</code> (mask NAs),
+a dgCMatrix/matrix (custom mask), or <code>list("zeros", &lt;matrix&gt;)</code> to mask
+zeros and use a custom mask simultaneously.</p></dd>
 
 
 <dt id="arg-missing-only">missing_only<a class="anchor" aria-label="anchor" href="#arg-missing-only"></a></dt>
@@ -90,12 +92,8 @@ Also accepts a file path (character string) which will be auto-loaded based on e
 
 
 <dt id="arg-loss">loss<a class="anchor" aria-label="anchor" href="#arg-loss"></a></dt>
-<dd><p>loss function to use: "mse" (Mean Squared Error, default), "mae" (Mean Absolute Error),
-"huber" (Huber loss), or "kl" (Kullback-Leibler divergence)</p></dd>
-
-
-<dt id="arg-huber-delta">huber_delta<a class="anchor" aria-label="anchor" href="#arg-huber-delta"></a></dt>
-<dd><p>delta parameter for Huber loss (default 1.0), ignored for other loss functions</p></dd>
+<dd><p>loss function to use: "mse" (Mean Squared Error, default) or
+"gp" (Generalized Poisson / KL divergence)</p></dd>
 
 
 <dt id="arg-test-fraction">test_fraction<a class="anchor" aria-label="anchor" href="#arg-test-fraction"></a></dt>
@@ -121,7 +119,7 @@ Only used when test_fraction &gt; 0 or test mask exists in model.</p></dd>
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A single numeric value: the loss (MSE, MAE, Huber, or KL divergence) of the model on the data.</p>
+    <p>A single numeric value: the loss (MSE or GP/KL divergence) of the model on the data.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
@@ -136,8 +134,6 @@ Only used when test_fraction &gt; 0 or test mask exists in model.</p></dd>
 <span class="r-in"><span><span class="va">model</span> <span class="op">&lt;-</span> <span class="fu"><a href="nmf.html">nmf</a></span><span class="op">(</span><span class="va">A</span>, <span class="fl">3</span>, seed <span class="op">=</span> <span class="fl">1</span>, maxit <span class="op">=</span> <span class="fl">50</span>, tol <span class="op">=</span> <span class="fl">1e-4</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu">evaluate</span><span class="op">(</span><span class="va">model</span>, <span class="va">A</span><span class="op">)</span>  <span class="co"># MSE</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.09021044</span>
-<span class="r-in"><span><span class="fu">evaluate</span><span class="op">(</span><span class="va">model</span>, <span class="va">A</span>, loss <span class="op">=</span> <span class="st">"mae"</span><span class="op">)</span>  <span class="co"># MAE</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.08829401</span>
 <span class="r-in"><span><span class="co"># }</span></span></span>
 </code></pre></div>
     </div>

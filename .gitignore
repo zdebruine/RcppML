@@ -7,6 +7,9 @@
 # IDE
 .vscode/
 
+# Manuscript (not part of the R package)
+GuidedNMFManuscript/
+
 # Superseded plans (now archived to docs/dev/)
 /HARDENING_PLAN.md
 /WORKSTREAMS.md
@@ -16,6 +19,7 @@ src/*.o
 src/*.so
 src/*.dll
 inst/lib/*.so
+tests/cpp/*.o
 
 # pkgdown site (auto-generated)
 docs/site/
@@ -63,3 +67,30 @@ benchmarks/**/*.csv
 benchmarks/**/*.spz
 benchmarks/**/cellcensus_*_binary/
 benchmarks/results/overfitting_log.txt
+
+# Development artifacts (not part of package distribution)
+logs/
+rendered_vignettes/
+sandbox/
+NEWS.md.bak
+inst/lib/.nfs*
+
+# tools/ generated outputs (keep scripts, ignore results)
+tools/*.log
+tools/*.rds
+tools/*.png
+tools/*.html
+tools/*_progress.txt
+tools/*_log.txt
+
+# GuidedNMFManuscript generated outputs (keep scripts & reports)
+GuidedNMFManuscript/**/*.log
+GuidedNMFManuscript/**/*.rds
+GuidedNMFManuscript/**/*.csv
+GuidedNMFManuscript/**/results/
+GuidedNMFManuscript/**/plots/
+GuidedNMFManuscript/**/logs/
+GuidedNMFManuscript/**/combined/
+GuidedNMFManuscript/**/tsv2_*/
+GuidedNMFManuscript/dead_code/
+GuidedNMFManuscript/sandbox/

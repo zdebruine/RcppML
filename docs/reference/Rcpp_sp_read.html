@@ -45,7 +45,7 @@
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">Rcpp_sp_read</span><span class="op">(</span><span class="va">path</span>, cols <span class="op">=</span> <span class="cn">NULL</span>, reorder <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">Rcpp_sp_read</span><span class="op">(</span><span class="va">path</span>, cols <span class="op">=</span> <span class="cn">NULL</span>, reorder <span class="op">=</span> <span class="cn">TRUE</span>, threads <span class="op">=</span> <span class="fl">0L</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -62,6 +62,10 @@
 
 <dt id="arg-reorder">reorder<a class="anchor" aria-label="anchor" href="#arg-reorder"></a></dt>
 <dd><p>Whether to undo row permutation (default TRUE)</p></dd>
+
+
+<dt id="arg-threads">threads<a class="anchor" aria-label="anchor" href="#arg-threads"></a></dt>
+<dd><p>Number of threads for parallel decompression (0 = all available, default 0)</p></dd>
 
 </dl></div>
     <div class="section level2">

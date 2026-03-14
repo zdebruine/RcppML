@@ -2,17 +2,17 @@
 % Please edit documentation in R/RcppExports.R
 \name{Rcpp_sp_decompress}
 \alias{Rcpp_sp_decompress}
-\title{Decompress a SparsePress raw vector to a dgCMatrix}
+\title{Decompress a StreamPress raw vector to a dgCMatrix}
 \usage{
 Rcpp_sp_decompress(data)
 }
 \arguments{
-\item{data}{A raw vector containing compressed SparsePress data}
+\item{data}{A raw vector containing compressed StreamPress data}
 }
 \value{
 A sparse matrix (dgCMatrix)
 }
 \description{
-Decompress a SparsePress raw vector to a dgCMatrix
+Decompress a StreamPress raw vector to a dgCMatrix
 }
 \keyword{internal}

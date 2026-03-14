@@ -6,6 +6,9 @@
 \usage{
 .find_gpu_lib()
 }
+\value{
+File path to the GPU shared library, or \code{NULL}.
+}
 \description{
 Find GPU shared library
 }

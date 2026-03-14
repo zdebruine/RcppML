@@ -1,4 +1,4 @@
-# Tests for BUILD tasks: dense ZI paths, dense robust MSE, dense guided NMF
+# Tests for BUILD tasks: dense ZI paths, dense robust MSE, dense seeded NMF
 # These are "planned" features that turned out to already work.
 
 options(RcppML.verbose = FALSE)
@@ -111,7 +111,7 @@ test_that("Dense robust MSE with custom delta works", {
   A <- abs(matrix(rnorm(m * n, 2, 0.5), m, n))
   A[1:5, 1:5] <- A[1:5, 1:5] * 30  # Corner outliers
 
-  model <- nmf(A, k, loss = "mse", robust_delta = 2.0,
+  model <- nmf(A, k, loss = "mse", robust = 2.0,
                maxit = 30, tol = 1e-6, seed = 42, verbose = FALSE)
 
   expect_s4_class(model, "nmf")
@@ -119,10 +119,10 @@ test_that("Dense robust MSE with custom delta works", {
 })
 
 # ============================================================
-# BUILD-GUIDED-DENSE: Dense guided NMF path
+# BUILD-SEEDED-DENSE: Dense seeded NMF path
 # ============================================================
 
-test_that("Guided NMF with dense input recovers seeded factors", {
+test_that("Seeded NMF with dense input recovers seeded factors", {
   skip_on_cran()
   set.seed(42)
   k <- 3
@@ -147,7 +147,7 @@ test_that("Guided NMF with dense input recovers seeded factors", {
   expect_equal(ncol(model@h), 40)
 })
 
-test_that("Guided dense NMF has lower loss than random init", {
+test_that("Seeded dense NMF has lower loss than random init", {
   skip_on_cran()
   set.seed(42)
   k <- 3
@@ -158,9 +158,9 @@ test_that("Guided dense NMF has lower loss than random init", {
   W_seed <- W_true + matrix(rnorm(50 * k, 0, 0.01), 50, k)
   W_seed[W_seed < 0] <- 0
 
-  model_guided <- nmf(A, k, seed = W_seed, maxit = 30, tol = 1e-8, verbose = FALSE)
+  model_seeded <- nmf(A, k, seed = W_seed, maxit = 30, tol = 1e-8, verbose = FALSE)
   model_random <- nmf(A, k, seed = 99, maxit = 30, tol = 1e-8, verbose = FALSE)
 
-  # With near-perfect seed, guided should have lower or equal loss
-  expect_true(model_guided@misc$loss <= model_random@misc$loss * 1.5)
+  # With near-perfect seed, seeded should have lower or equal loss
+  expect_true(model_seeded@misc$loss <= model_random@misc$loss * 1.5)
 })

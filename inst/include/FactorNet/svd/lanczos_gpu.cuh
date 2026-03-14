@@ -790,5 +790,376 @@ SVDResult<Scalar> lanczos_svd_gpu(
         ctx, dual_csr, d_mu, row_means, A_norm_sq);
 }
 
+// ============================================================================
+// Dense-matrix GPU Lanczos: cuBLAS GEMV instead of cuSPARSE SpMV.
+// Zero-copy mapping: Eigen column-major → cudaMemcpy → cuBLAS GEMV.
+// ============================================================================
+
+/**
+ * @brief Dense Lanczos impl — takes a device-resident dense matrix pointer.
+ *
+ * Identical algorithm to lanczos_svd_gpu_impl, but replaces cuSPARSE SpMV
+ * with cuBLAS GEMV for the matrix-vector products. No DualCSR, no cuSPARSE
+ * descriptors, no SpMV buffers — just a single dense matrix on device.
+ *
+ * @param d_A_dense  Device pointer to column-major dense matrix (m × n)
+ * @param m, n       Matrix dimensions
+ * @param config     SVD configuration
+ * @param ctx        Pre-created GPU context (cublas + cusparse handles)
+ * @param d_mu       Device row means (size m if center, else empty)
+ * @param row_means  Host row means (size m if center)
+ * @param A_norm_sq_in  Pre-computed ||A||²_F (adjusted for centering)
+ */
+template<typename Scalar>
+SVDResult<Scalar> lanczos_svd_gpu_dense_impl(
+    const Scalar* d_A_dense,
+    int m, int n,
+    const SVDConfig<Scalar>& config,
+    FactorNet::gpu::GPUContext& ctx,
+    FactorNet::gpu::DeviceMemory<Scalar>& d_mu,
+    const Eigen::Matrix<Scalar, Eigen::Dynamic, 1>& row_means,
+    double A_norm_sq_in)
+{
+    using namespace FactorNet::gpu;
+    using DenseMatrixS = Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>;
+    using DenseVectorS = Eigen::Matrix<Scalar, Eigen::Dynamic, 1>;
+
+    auto t_start = std::chrono::high_resolution_clock::now();
+
+    const int k = config.k_max;
+    const int default_steps = std::max(3 * k, k + 50);
+    const int user_steps = config.max_iter > 0 ? config.max_iter : 0;
+    const int jmax = std::min(std::min(m, n) - 1,
+                              std::max(default_steps, user_steps));
+
+    SVDResult<Scalar> result;
+    result.centered = config.center;
+    result.frobenius_norm_sq = A_norm_sq_in;
+    if (config.center && row_means.size() > 0) result.row_means = row_means;
+
+    const Scalar eps = std::numeric_limits<Scalar>::epsilon() * 100;
+    const Scalar conv_tol = config.tol > 0 ? config.tol : static_cast<Scalar>(1e-10);
+    const int check_interval = 5;
+    const int min_steps_before_check = k + 2;
+    const int BLOCK_SIZE = 256;
+
+    // ------------------------------------------------------------------
+    // Dense matvec output buffers (no cuSPARSE resources needed)
+    // ------------------------------------------------------------------
+    DeviceMemory<Scalar> d_spmv_out_n(n);
+    DeviceMemory<Scalar> d_spmv_out_m(m);
+
+    // ------------------------------------------------------------------
+    // Allocate Lanczos vectors on device
+    // ------------------------------------------------------------------
+    DeviceMemory<Scalar> d_P(static_cast<size_t>(n) * (jmax + 1));
+    DeviceMemory<Scalar> d_Q(static_cast<size_t>(m) * jmax);
+    DeviceMemory<Scalar> d_r(m);
+
+    DeviceMemory<Scalar> d_ones_n;
+    if (config.center) {
+        d_ones_n = DeviceMemory<Scalar>(n);
+        std::vector<Scalar> h_ones(n, Scalar(1));
+        d_ones_n.upload(h_ones.data(), n);
+    }
+    DeviceMemory<Scalar> d_s(n);
+    DeviceMemory<Scalar> d_orth_h(jmax + 1);
+    DeviceMemory<Scalar> d_pca_dot_result(1);
+
+    DenseVectorS alpha_vec(jmax);
+    DenseVectorS beta_vec(jmax + 1);
+    beta_vec(0) = 0;
+
+    DeviceMemory<Scalar> d_alpha_dev(jmax);
+    DeviceMemory<Scalar> d_beta_dev(jmax + 1);
+
+    auto d_P_col = [&](int j) -> Scalar* { return d_P.get() + static_cast<size_t>(j) * n; };
+    auto d_Q_col = [&](int j) -> Scalar* { return d_Q.get() + static_cast<size_t>(j) * m; };
+
+    // ------------------------------------------------------------------
+    // cuBLAS GEMV lambdas (replace cuSPARSE SpMV)
+    // Eigen column-major maps directly to cuBLAS: A is m×n with lda=m.
+    // ------------------------------------------------------------------
+    auto spmv_forward = [&](Scalar* d_v_ptr) {
+        // y = A * x via cuBLAS GEMV (CUBLAS_OP_N)
+        cublasSetPointerMode(ctx.cublas, CUBLAS_POINTER_MODE_HOST);
+        detail::cublas_gemv<Scalar>(ctx.cublas, CUBLAS_OP_N,
+            m, n, Scalar(1), d_A_dense, m,
+            d_v_ptr, Scalar(0), d_spmv_out_m.get());
+
+        if (config.center) {
+            detail::cublas_dot_device<Scalar>(
+                ctx.cublas, n, d_ones_n.get(), d_v_ptr, d_pca_dot_result.get());
+            int blocks = (m + BLOCK_SIZE - 1) / BLOCK_SIZE;
+            detail::subtract_scaled_vector_device_scalar_kernel<<<blocks, BLOCK_SIZE, 0, ctx.stream>>>(
+                d_spmv_out_m.get(), d_mu.get(), m, d_pca_dot_result.get());
+        }
+    };
+
+    auto spmv_transpose = [&](Scalar* d_w_ptr) {
+        // y = A^T * x via cuBLAS GEMV (CUBLAS_OP_T)
+        cublasSetPointerMode(ctx.cublas, CUBLAS_POINTER_MODE_HOST);
+        detail::cublas_gemv<Scalar>(ctx.cublas, CUBLAS_OP_T,
+            m, n, Scalar(1), d_A_dense, m,
+            d_w_ptr, Scalar(0), d_spmv_out_n.get());
+
+        if (config.center) {
+            detail::cublas_dot_device<Scalar>(
+                ctx.cublas, m, d_mu.get(), d_w_ptr, d_pca_dot_result.get());
+            int blocks = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
+            detail::subtract_device_scalar_kernel<<<blocks, BLOCK_SIZE, 0, ctx.stream>>>(
+                d_spmv_out_n.get(), n, d_pca_dot_result.get());
+        }
+    };
+
+    // ------------------------------------------------------------------
+    // Initialize p_0 = random unit vector
+    // ------------------------------------------------------------------
+    {
+        DenseVectorS p0(n);
+        rng::SplitMix64 rng(config.seed == 0 ? 42ULL : static_cast<uint64_t>(config.seed));
+        DenseMatrixS p0_mat(n, 1);
+        rng.fill_uniform(p0_mat.data(), p0_mat.rows(), p0_mat.cols());
+        p0 = p0_mat.col(0);
+        p0.array() -= Scalar(0.5);
+        p0.normalize();
+        CUDA_CHECK(cudaMemcpy(d_P_col(0), p0.data(), n * sizeof(Scalar), cudaMemcpyHostToDevice));
+    }
+
+    if (config.verbose) {
+        FACTORNET_PRINT_IMPL("  GPU Lanczos bidiag (dense): k=%d, jmax=%d, tol=%.1e\n",
+            k, jmax, (double)conv_tol);
+    }
+
+    // ========================================================================
+    // Golub-Kahan-Lanczos bidiagonalization (identical to sparse version)
+    // ========================================================================
+    int j_actual = 0;
+
+    for (int j = 0; j < jmax; ++j) {
+        spmv_forward(d_P_col(j));
+
+        if (j > 0) {
+            int blocks = (m + BLOCK_SIZE - 1) / BLOCK_SIZE;
+            detail::fused_recurrence_device_ptr_kernel<<<blocks, BLOCK_SIZE, 0, ctx.stream>>>(
+                d_r.get(), d_spmv_out_m.get(), d_beta_dev.get() + j, d_Q_col(j - 1), m);
+        } else {
+            detail::cublas_copy<Scalar>(ctx.cublas, m, d_spmv_out_m.get(), d_r.get());
+        }
+
+        if (j > 0) {
+            detail::gpu_orthog<Scalar>(
+                ctx.cublas, d_Q.get(), d_r.get(), m, j, d_orth_h.get());
+        }
+
+        detail::cublas_nrm2_device<Scalar>(
+            ctx.cublas, m, d_r.get(), d_alpha_dev.get() + j);
+
+        {
+            int blocks = (m + BLOCK_SIZE - 1) / BLOCK_SIZE;
+            detail::normalize_copy_kernel<<<blocks, BLOCK_SIZE, 0, ctx.stream>>>(
+                d_Q_col(j), d_r.get(), d_alpha_dev.get() + j, eps, m);
+        }
+
+        spmv_transpose(d_Q_col(j));
+        {
+            int blocks = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
+            detail::fused_recurrence_device_ptr_kernel<<<blocks, BLOCK_SIZE, 0, ctx.stream>>>(
+                d_s.get(), d_spmv_out_n.get(), d_alpha_dev.get() + j, d_P_col(j), n);
+        }
+
+        detail::gpu_orthog<Scalar>(
+            ctx.cublas, d_P.get(), d_s.get(), n, j + 1, d_orth_h.get());
+
+        detail::cublas_nrm2_device<Scalar>(
+            ctx.cublas, n, d_s.get(), d_beta_dev.get() + (j + 1));
+
+        {
+            int blocks = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
+            detail::normalize_copy_kernel<<<blocks, BLOCK_SIZE, 0, ctx.stream>>>(
+                d_P_col(j + 1), d_s.get(), d_beta_dev.get() + (j + 1), eps, n);
+        }
+
+        j_actual = j + 1;
+
+        if (j_actual >= min_steps_before_check &&
+            j_actual % check_interval == 0 &&
+            j_actual < jmax) {
+            ctx.sync();
+            CUDA_CHECK(cudaMemcpy(alpha_vec.data(), d_alpha_dev.get(),
+                j_actual * sizeof(Scalar), cudaMemcpyDeviceToHost));
+            CUDA_CHECK(cudaMemcpy(beta_vec.data() + 1, d_beta_dev.get() + 1,
+                j_actual * sizeof(Scalar), cudaMemcpyDeviceToHost));
+
+            bool had_breakdown = false;
+            for (int jj = 0; jj < j_actual; ++jj) {
+                if (std::abs(alpha_vec(jj)) < eps) {
+                    j_actual = jj;
+                    had_breakdown = true;
+                    if (config.verbose)
+                        FACTORNET_PRINT_IMPL("    Lucky breakdown at step %d\n", jj);
+                    break;
+                }
+            }
+            if (had_breakdown) break;
+
+            DenseMatrixS B_check = DenseMatrixS::Zero(j_actual, j_actual);
+            for (int jj = 0; jj < j_actual; ++jj) {
+                B_check(jj, jj) = alpha_vec(jj);
+                if (jj < j_actual - 1)
+                    B_check(jj, jj + 1) = beta_vec(jj + 1);
+            }
+            Eigen::JacobiSVD<DenseMatrixS> svd_check(B_check, Eigen::ComputeFullU);
+            auto sigmas = svd_check.singularValues();
+            auto U_B = svd_check.matrixU();
+
+            int k_check = std::min(k, j_actual);
+            Scalar beta_last = std::abs(beta_vec(j_actual));
+            bool all_converged = true;
+            for (int i = 0; i < k_check; ++i) {
+                Scalar err = beta_last * std::abs(U_B(j_actual - 1, i));
+                if (err > conv_tol * sigmas(0)) {
+                    all_converged = false;
+                    break;
+                }
+            }
+            if (all_converged) {
+                if (config.verbose)
+                    FACTORNET_PRINT_IMPL("    Early stop at step %d: all %d Ritz values converged\n",
+                        j_actual, k_check);
+                break;
+            }
+        }
+    }
+
+    if (config.verbose)
+        FACTORNET_PRINT_IMPL("    Completed %d Lanczos steps\n", j_actual);
+
+    ctx.sync();
+    if (j_actual > 0) {
+        CUDA_CHECK(cudaMemcpy(alpha_vec.data(), d_alpha_dev.get(),
+            j_actual * sizeof(Scalar), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(beta_vec.data() + 1, d_beta_dev.get() + 1,
+            j_actual * sizeof(Scalar), cudaMemcpyDeviceToHost));
+    }
+
+    // ========================================================================
+    // Build bidiagonal B, SVD on host, final rotation on GPU
+    // ========================================================================
+    DenseMatrixS B = DenseMatrixS::Zero(j_actual, j_actual);
+    for (int j = 0; j < j_actual; ++j) {
+        B(j, j) = alpha_vec(j);
+        if (j < j_actual - 1) B(j, j + 1) = beta_vec(j + 1);
+    }
+
+    Eigen::JacobiSVD<DenseMatrixS> svd_b(B, Eigen::ComputeFullU | Eigen::ComputeFullV);
+
+    int k_actual = std::min(k, j_actual);
+    result.d = svd_b.singularValues().head(k_actual);
+
+    {
+        DenseMatrixS U_B = svd_b.matrixU().leftCols(k_actual);
+        DenseMatrixS V_B = svd_b.matrixV().leftCols(k_actual);
+
+        DeviceMemory<Scalar> d_UB(static_cast<size_t>(j_actual) * k_actual);
+        DeviceMemory<Scalar> d_VB(static_cast<size_t>(j_actual) * k_actual);
+        d_UB.upload(U_B.data(), static_cast<size_t>(j_actual) * k_actual);
+        d_VB.upload(V_B.data(), static_cast<size_t>(j_actual) * k_actual);
+
+        DeviceMemory<Scalar> d_U_final(static_cast<size_t>(m) * k_actual);
+        cublasSetPointerMode(ctx.cublas, CUBLAS_POINTER_MODE_HOST);
+        detail::cublas_gemm<Scalar>(ctx.cublas,
+            CUBLAS_OP_N, CUBLAS_OP_N,
+            m, k_actual, j_actual,
+            Scalar(1), d_Q.get(), m,
+            d_UB.get(), j_actual,
+            Scalar(0), d_U_final.get(), m);
+
+        DeviceMemory<Scalar> d_V_final(static_cast<size_t>(n) * k_actual);
+        detail::cublas_gemm<Scalar>(ctx.cublas,
+            CUBLAS_OP_N, CUBLAS_OP_N,
+            n, k_actual, j_actual,
+            Scalar(1), d_P.get(), n,
+            d_VB.get(), j_actual,
+            Scalar(0), d_V_final.get(), n);
+
+        ctx.sync();
+
+        result.U.resize(m, k_actual);
+        result.V.resize(n, k_actual);
+        d_U_final.download(result.U.data(), static_cast<size_t>(m) * k_actual);
+        d_V_final.download(result.V.data(), static_cast<size_t>(n) * k_actual);
+    }
+
+    result.k_selected = k_actual;
+    result.iters_per_factor.push_back(j_actual);
+
+    if (config.verbose && j_actual > 0) {
+        Scalar resid_bound = std::abs(beta_vec(j_actual));
+        FACTORNET_PRINT_IMPL("    Residual norm (beta_%d) = %.4e\n", j_actual, (double)resid_bound);
+        for (int i = 0; i < std::min(k_actual, 5); ++i) {
+            Scalar err_bound = resid_bound *
+                std::abs(svd_b.matrixU()(j_actual - 1, i));
+            FACTORNET_PRINT_IMPL("    sigma_%d = %.4e  err_bound = %.4e\n",
+                i + 1, (double)result.d(i), (double)err_bound);
+        }
+    }
+
+    // No cuSPARSE cleanup needed — only cuBLAS was used
+
+    auto t_end = std::chrono::high_resolution_clock::now();
+    result.wall_time_ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();
+
+    if (config.verbose) {
+        FACTORNET_PRINT_IMPL("  GPU Lanczos SVD (dense) done: %d steps, %.1f ms\n",
+            j_actual, result.wall_time_ms);
+    }
+
+    return result;
+}
+
+// ============================================================================
+// Public API: dense Lanczos — uploads dense matrix, computes stats, calls impl.
+// ============================================================================
+template<typename Scalar>
+SVDResult<Scalar> lanczos_svd_gpu_dense(
+    const Scalar* h_A,
+    int m, int n,
+    const SVDConfig<Scalar>& config)
+{
+    using namespace FactorNet::gpu;
+    using DenseVectorS = Eigen::Matrix<Scalar, Eigen::Dynamic, 1>;
+
+    GPUContext ctx;
+
+    // Upload dense matrix to device (single cudaMemcpy — zero format conversion)
+    const size_t mn = static_cast<size_t>(m) * n;
+    DeviceMemory<Scalar> d_A_dense(mn);
+    d_A_dense.upload(h_A, mn);
+
+    // Compute row means and Frobenius norm from dense host data
+    DenseVectorS row_means;
+    DeviceMemory<Scalar> d_mu;
+    double A_norm_sq = 0;
+    for (size_t i = 0; i < mn; ++i)
+        A_norm_sq += static_cast<double>(h_A[i]) * static_cast<double>(h_A[i]);
+
+    if (config.center) {
+        row_means.resize(m);
+        row_means.setZero();
+        for (int j = 0; j < n; ++j)
+            for (int i = 0; i < m; ++i)
+                row_means(i) += h_A[i + static_cast<size_t>(j) * m];
+        if (n > 0) row_means /= static_cast<Scalar>(n);
+        A_norm_sq -= static_cast<double>(n) * static_cast<double>(row_means.squaredNorm());
+        d_mu = DeviceMemory<Scalar>(m);
+        d_mu.upload(row_means.data(), m);
+    }
+
+    return lanczos_svd_gpu_dense_impl(
+        d_A_dense.get(), m, n, config,
+        ctx, d_mu, row_means, A_norm_sq);
+}
+
 }  // namespace svd
 }  // namespace FactorNet

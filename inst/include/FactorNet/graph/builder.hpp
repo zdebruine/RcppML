@@ -49,7 +49,7 @@ struct FactorDesc {
     bool nonneg = true;
     Scalar graph_lambda = 0;
     const SparseMatrix<Scalar>* graph = nullptr;
-    // Guides handled separately at Rcpp level
+    // Target regularization handled at Rcpp level
 };
 
 /**

@@ -51,8 +51,7 @@ override these where specified.</p>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">factor_config</span><span class="op">(</span></span>
 <span>  maxit <span class="op">=</span> <span class="fl">100</span>,</span>
 <span>  tol <span class="op">=</span> <span class="fl">1e-04</span>,</span>
-<span>  loss <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"mse"</span>, <span class="st">"mae"</span>, <span class="st">"huber"</span>, <span class="st">"kl"</span>, <span class="st">"gp"</span>, <span class="st">"nb"</span>, <span class="st">"gamma"</span>, <span class="st">"inverse_gaussian"</span>,</span>
-<span>    <span class="st">"tweedie"</span><span class="op">)</span>,</span>
+<span>  loss <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"mse"</span>, <span class="st">"gp"</span>, <span class="st">"nb"</span>, <span class="st">"gamma"</span>, <span class="st">"inverse_gaussian"</span>, <span class="st">"tweedie"</span><span class="op">)</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  seed <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  threads <span class="op">=</span> <span class="fl">0</span>,</span>
@@ -63,8 +62,7 @@ override these where specified.</p>
 <span>  cv_seed <span class="op">=</span> <span class="fl">0L</span>,</span>
 <span>  mask_zeros <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  patience <span class="op">=</span> <span class="fl">5L</span>,</span>
-<span>  <span class="va">holdout_fraction</span>,</span>
-<span>  <span class="va">cv_patience</span></span>
+<span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -81,8 +79,9 @@ override these where specified.</p>
 
 
 <dt id="arg-loss">loss<a class="anchor" aria-label="anchor" href="#arg-loss"></a></dt>
-<dd><p>Loss function: "mse", "mae", "huber", "kl", "gp",
-"nb", "gamma", "inverse_gaussian", "tweedie". Default "mse".</p></dd>
+<dd><p>Loss function: "mse", "gp", "nb", "gamma",
+"inverse_gaussian", "tweedie". Default "mse". For robust (Huber/MAE)
+fitting, use the <code>robust</code> parameter at the layer level instead.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
@@ -129,12 +128,13 @@ zeros may appear in the test set. Default FALSE.</p></dd>
 before early stopping during CV. Default 5.</p></dd>
 
 
-<dt id="arg-holdout-fraction">holdout_fraction<a class="anchor" aria-label="anchor" href="#arg-holdout-fraction"></a></dt>
-<dd><p>Deprecated. Use <code>test_fraction</code> instead.</p></dd>
-
-
-<dt id="arg-cv-patience">cv_patience<a class="anchor" aria-label="anchor" href="#arg-cv-patience"></a></dt>
-<dd><p>Deprecated. Use <code>patience</code> instead.</p></dd>
+<dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
+<dd><p>Additional arguments applied network-wide. These are forwarded
+to the underlying <code><a href="nmf.html">nmf</a></code> or <code><a href="svd.html">svd</a></code> call at fit
+time as lowest-priority defaults (layer-level <code>...</code> overrides
+these). Supports distribution tuning (<code>dispersion</code>,
+<code>theta_init</code>, etc.), IRLS control, solver tuning, and more.
+See <code><a href="nmf.html">?nmf</a></code> or <code><a href="svd.html">?svd</a></code> for the complete list.</p></dd>
 
 </dl></div>
     <div class="section level2">

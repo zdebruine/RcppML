@@ -6,7 +6,7 @@
 
 /**
  * @file core/factor_config.hpp
- * @brief Per-factor configuration for regularization, constraints, and guides
+ * @brief Per-factor configuration for regularization, constraints, and targets
  *
  * FactorConfig<Scalar> collects all parameters that are specific to a
  * single factor matrix (e.g., W or H in standard NMF, or any factor in
@@ -20,17 +20,12 @@
 #pragma once
 
 #include <FactorNet/core/types.hpp>
-#include <vector>
+#include <cmath>
 
 namespace FactorNet {
 
-// Forward-declare Guide so factor_config.hpp doesn't pull in full guide headers
-namespace guides {
-template<typename Scalar> struct Guide;
-}  // namespace guides
-
 /**
- * @brief Per-factor configuration: regularization, constraints, and guides
+ * @brief Per-factor configuration: regularization, constraints, and targets
  *
  * All parameters that may differ between W and H (or between any two
  * factors in a multi-layer network).  Algorithm-level parameters
@@ -82,32 +77,52 @@ struct FactorConfig {
     Scalar graph_lambda = 0;
 
     // ====================================================================
-    // Guides — soft targets that steer factors toward desired structure
+    // Target regularization — soft target that steers factor toward a matrix
+    //
+    // Positive λ (enrichment):
+    //   G.diagonal() += λ;  B += λ * target
+    //   Ridge penalty that attracts factor columns toward target columns.
+    //
+    // Negative λ (PROJ_ADV batch removal):
+    //   G -= |λ| * target_gram  (subtract target covariance structure)
+    //   B += λ * target          (push RHS away from target)
+    //   Eigendecompose G, clip negative eigenvalues to ε = 1e-8.
+    //   Preserves directions orthogonal to target; suppresses
+    //   target-correlated directions via eigenvalue projection.
     // ====================================================================
 
-    /// Guides for this factor (caller owns; applied during update)
-    std::vector<guides::Guide<Scalar>*> guides;
+    /// Target matrix (caller owns; nullptr = disabled).  k × n for H, k × m for W.
+    const DenseMatrix<Scalar>* target = nullptr;
+
+    /// Target regularization strength (positive = enrich, negative = PROJ_ADV removal)
+    Scalar target_lambda = 0;
+
+    /// Pre-computed target Gram: target * target^T / n_cols.  k × k.
+    /// Populated before the NMF iteration loop when target_lambda < 0.
+    DenseMatrix<Scalar> target_gram;
 
     // ====================================================================
     // Queries
     // ====================================================================
 
-    /// True if any Tier-2 features are active (angular, graph, L21)
+    /// True if any Tier-2 features are active (angular, graph, L21, target)
     /// Note: does NOT include upper_bound or nonneg since those are
     /// post-NNLS constraints, not Gram/RHS modifications.
     bool has_tier2_features() const noexcept {
-        return angular > 0 || graph != nullptr || L21 > 0;
+        return angular > 0 || graph != nullptr || L21 > 0
+            || (target != nullptr && target_lambda != 0);
     }
 
     /// True if any regularization beyond L1/L2 is active
     bool has_full_reg() const noexcept {
         return L21 > 0 || angular > 0 || graph != nullptr
-            || upper_bound > 0 || !nonneg;
+            || upper_bound > 0 || !nonneg
+            || (target != nullptr && target_lambda != 0);
     }
 
-    /// True if guides are configured
-    bool has_guides_active() const noexcept {
-        return !guides.empty();
+    /// True if target regularization is configured
+    bool has_target() const noexcept {
+        return target != nullptr && target_lambda != 0;
     }
 
     /// True if any regularization at all is active on this factor

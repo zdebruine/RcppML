@@ -37,11 +37,11 @@
 #'     \item{k}{Number of neighbors used}
 #'   }
 #' @examples
-#' \dontrun{
-#' # After fitting a guided NMF:
-#' res <- fit(net)
-#' H <- t(res$L1$H)  # samples x factors
-#' eval <- classify_embedding(H, labels, test_fraction = 0.2, k = 5)
+#' \donttest{
+#' data(digits)
+#' model <- nmf(digits, 10, maxit = 20, seed = 1, verbose = FALSE)
+#' labels <- attr(digits, "target")
+#' eval <- classify_embedding(model$w, labels, test_fraction = 0.2, k = 5, seed = 42)
 #' print(eval)
 #' }
 #' @seealso \code{\link{classify_logistic}}, \code{\link{classify_rf}}

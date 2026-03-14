@@ -216,7 +216,7 @@ test_that("Unified backend returns resource diagnostics", {
     k_auto_min = 2L, k_auto_max = 50L,
     L1 = c(0, 0), L2 = c(0, 0), L21 = c(0, 0), angular = c(0, 0),
     upper_bound = c(0, 0), graph_lambda = c(0, 0),
-    tol = 1e-4, maxit = 50L, cd_maxit = 10L, cd_tol = 5e-3, cd_abs_tol = 1e-15,
+    tol = 1e-4, maxit = 50L, cd_maxit = 10L, cd_tol = 5e-3,
     threads = 1L, seed = 42L,
     nonneg_w = TRUE, nonneg_h = TRUE,
     sort_model = FALSE, mask_zeros = FALSE,

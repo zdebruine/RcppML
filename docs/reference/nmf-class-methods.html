@@ -85,8 +85,8 @@
 <span><span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span></span>
 <span>  <span class="va">object</span>,</span>
 <span>  <span class="va">data</span>,</span>
-<span>  L1 <span class="op">=</span> <span class="fl">0</span>,</span>
-<span>  L2 <span class="op">=</span> <span class="fl">0</span>,</span>
+<span>  L1 <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  L2 <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  mask <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  upper_bound <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  threads <span class="op">=</span> <span class="fl">0</span>,</span>
@@ -153,7 +153,10 @@ Also accepts a file path (character string) which will be auto-loaded based on e
 
 
 <dt id="arg-mask">mask<a class="anchor" aria-label="anchor" href="#arg-mask"></a></dt>
-<dd><p>dense or sparse matrix of values in <code>data</code> to handle as missing. Alternatively, specify "<code>zeros</code>" or "<code>NA</code>".</p></dd>
+<dd><p>missing data mask. Accepts:
+<code>NULL</code> (no masking), <code>"zeros"</code> (mask zeros), <code>"NA"</code> (mask NAs),
+a dgCMatrix/matrix (custom mask), or <code>list("zeros", &lt;matrix&gt;)</code> to mask
+zeros and use a custom mask simultaneously.</p></dd>
 
 
 <dt id="arg-upper-bound">upper_bound<a class="anchor" aria-label="anchor" href="#arg-upper-bound"></a></dt>
@@ -216,7 +219,7 @@ which is in the form \(ax = b\) where \(a = w^Tw\) \(x = h\) and \(b = wA_j\) fo
 <span class="r-in"><span><span class="va">A</span> <span class="op">&lt;-</span> <span class="op">(</span><span class="va">w</span> <span class="op"><a href="https://rdrr.io/r/base/matmult.html" class="external-link">%*%</a></span> <span class="va">h_true</span><span class="op">)</span> <span class="op">*</span> <span class="op">(</span><span class="va">mask</span> <span class="op">!=</span> <span class="fl">0</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">h</span> <span class="op">&lt;-</span> <span class="fu"><a href="nnls.html">nnls</a></span><span class="op">(</span>w <span class="op">=</span> <span class="va">w</span>, A <span class="op">=</span> <span class="va">A</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">as.vector</a></span><span class="op">(</span><span class="va">h_true</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">as.vector</a></span><span class="op">(</span><span class="va">h</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.3120419</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.3003039</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># alternating projections refine solution (like NMF)</span></span></span>
 <span class="r-in"><span><span class="va">h</span> <span class="op">&lt;-</span> <span class="fu"><a href="nnls.html">nnls</a></span><span class="op">(</span>w <span class="op">=</span> <span class="va">w</span>, A <span class="op">=</span> <span class="va">A</span><span class="op">)</span></span></span>

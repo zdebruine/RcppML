@@ -46,7 +46,7 @@ and factor diagnostics. Provides multiple plot types for comprehensive model ana
 \examples{
 \donttest{
 # Basic loss plot
-model <- nmf(hawaiibirds, k = 10, track_loss_history = TRUE)
+model <- nmf(hawaiibirds, k = 10)
 plot(model)
 
 # Convergence analysis
@@ -56,7 +56,7 @@ plot(model, type = "convergence")
 plot(model, type = "loss", interactive = TRUE)
 
 # Compare multiple runs
-models <- replicate(5, nmf(hawaiibirds, k = 10, track_loss_history = TRUE), simplify = FALSE)
+models <- replicate(5, nmf(hawaiibirds, k = 10), simplify = FALSE)
 plot(models[[1]], type = "sparsity")
 }
 }

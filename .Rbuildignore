@@ -89,3 +89,11 @@
 ^FACTOR_NET_VIGNETTE_PLAN\.md$
 ^cran-comments\.md$
 ^vignettes/figure$
+^GUIDE_EMBEDDING_NOTES\.md$
+^VIGNETTE_UNADDRESSED_CRITIQUES\.md$
+^sandbox$
+^rendered_vignettes$
+^doc$
+^GuidedNMFManuscript$
+^NEWS\.md\.bak$
+^README\.md$

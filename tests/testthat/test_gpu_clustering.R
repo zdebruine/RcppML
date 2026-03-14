@@ -38,7 +38,7 @@ test_that("dclust cluster IDs are unique and zero-indexed", {
 
   ids <- sapply(dc, function(x) x$id)
   expect_true(length(ids) == length(unique(ids)))  # unique IDs
-  expect_true(min(ids) == 0)  # zero-indexed
+  expect_true(all(grepl("^[01]*$", ids)))  # binary path strings
 })
 
 # ── consensus_nmf on GPU ───────────────────────────────────────────

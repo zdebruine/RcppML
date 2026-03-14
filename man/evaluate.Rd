@@ -12,8 +12,7 @@ evaluate(x, ...)
   data,
   mask = NULL,
   missing_only = FALSE,
-  loss = c("mse", "mae", "huber", "gp"),
-  huber_delta = 1,
+  loss = c("mse", "gp"),
   test_fraction = 0,
   test_seed = NULL,
   eval_set = c("all", "test", "train"),
@@ -25,19 +24,20 @@ evaluate(x, ...)
 \arguments{
 \item{x}{fitted model, class \code{nmf}, generally the result of calling \code{nmf}, with models of equal dimensions as \code{data}}
 
-\item{...}{additional development parameters}
+\item{...}{advanced parameters. See \strong{Advanced Parameters} section.}
 
 \item{data}{dense or sparse matrix of features in rows and samples in columns. Prefer \code{matrix} or \code{Matrix::dgCMatrix}, respectively.
 Also accepts a file path (character string) which will be auto-loaded based on extension.}
 
-\item{mask}{dense or sparse matrix of values in \code{data} to handle as missing. Alternatively, specify "\code{zeros}" or "\code{NA}".}
+\item{mask}{missing data mask. Accepts:
+\code{NULL} (no masking), \code{"zeros"} (mask zeros), \code{"NA"} (mask NAs),
+a dgCMatrix/matrix (custom mask), or \code{list("zeros", <matrix>)} to mask
+zeros and use a custom mask simultaneously.}
 
 \item{missing_only}{calculate loss only for missing values specified as a matrix in \code{mask}}
 
-\item{loss}{loss function to use: "mse" (Mean Squared Error, default), "mae" (Mean Absolute Error), 
-"huber" (Huber loss), or "kl" (Kullback-Leibler divergence)}
-
-\item{huber_delta}{delta parameter for Huber loss (default 1.0), ignored for other loss functions}
+\item{loss}{loss function to use: "mse" (Mean Squared Error, default) or
+"gp" (Generalized Poisson / KL divergence)}
 
 \item{test_fraction}{fraction of entries to hold out as test set (default 0 = disabled). When > 0, creates a random mask for test/train split.}
 
@@ -51,7 +51,7 @@ Only used when test_fraction > 0 or test mask exists in model.}
 \item{verbose}{print progress information (default FALSE)}
 }
 \value{
-A single numeric value: the loss (MSE, MAE, Huber, or KL divergence) of the model on the data.
+A single numeric value: the loss (MSE or GP/KL divergence) of the model on the data.
 }
 \description{
 Calculate loss for an NMF model using the specified loss function, accounting for any masking schemes requested during fitting.
@@ -62,7 +62,6 @@ library(Matrix)
 A <- rsparsematrix(100, 50, 0.1)
 model <- nmf(A, 3, seed = 1, maxit = 50, tol = 1e-4)
 evaluate(model, A)  # MSE
-evaluate(model, A, loss = "mae")  # MAE
 }
 }
 \seealso{

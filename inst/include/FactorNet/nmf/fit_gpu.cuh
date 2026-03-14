@@ -71,6 +71,7 @@
 // Shared algorithm variant dispatch and helpers
 #include <FactorNet/nmf/variant_helpers.hpp>
 #include <FactorNet/nmf/gpu_features.cuh>
+#include <FactorNet/nmf/gpu_alignment_guide.cuh>
 
 // IRLS for non-MSE losses
 #include <FactorNet/primitives/cpu/nnls_batch_irls.hpp>    // host-mediated fallback
@@ -97,6 +98,129 @@
 
 namespace FactorNet {
 namespace nmf {
+
+// ========================================================================
+// CUDA kernels for classifier guide (centroid computation + G/B update)
+// ========================================================================
+namespace classifier_guide_gpu {
+
+/// Zero-fill a k×C centroid matrix
+template<typename Scalar>
+__global__ void zero_centroids_kernel(Scalar* centroids, int k, int C) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < k * C) centroids[idx] = Scalar(0);
+}
+
+/// Accumulate factor columns into class centroids: centroids[:, label[j]] += H[:, j]
+/// Uses atomicAdd for concurrent accumulation. k threads per column.
+template<typename Scalar>
+__global__ void accumulate_centroids_kernel(
+    const Scalar* H, const int* labels, Scalar* centroids,
+    int k, int n, int C)
+{
+    // Grid: (k, n) — one thread per (factor_dim, column)
+    int f = blockIdx.x * blockDim.x + threadIdx.x;  // factor index
+    int j = blockIdx.y * blockDim.y + threadIdx.y;  // column index
+    if (f >= k || j >= n) return;
+    int c = labels[j];
+    if (c < 0 || c >= C) return;
+    atomicAdd(&centroids[f + static_cast<size_t>(c) * k], H[f + static_cast<size_t>(j) * k]);
+}
+
+/// Divide centroids by class counts to get averages
+template<typename Scalar>
+__global__ void average_centroids_kernel(
+    Scalar* centroids, const int* counts, int k, int C)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= k * C) return;
+    int c = idx / k;
+    int cnt = counts[c];
+    if (cnt > 0) centroids[idx] /= static_cast<Scalar>(cnt);
+}
+
+/// Build target matrix and add λ * target to B:
+///   B[:, j] += λ * centroids[:, label[j]]   for labeled j
+template<typename Scalar>
+__global__ void apply_classifier_guide_B_kernel(
+    Scalar* B, const Scalar* centroids, const int* labels,
+    Scalar lambda, int k, int n, int C)
+{
+    int f = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    if (f >= k || j >= n) return;
+    int c = labels[j];
+    if (c < 0 || c >= C) return;
+    B[f + static_cast<size_t>(j) * k] += lambda * centroids[f + static_cast<size_t>(c) * k];
+}
+
+/// Add |λ| to diagonal of G (k×k matrix, col-major)
+template<typename Scalar>
+__global__ void apply_classifier_guide_G_kernel(
+    Scalar* G, Scalar abs_lambda, int k)
+{
+    int f = blockIdx.x * blockDim.x + threadIdx.x;
+    if (f < k) G[f + static_cast<size_t>(f) * k] += abs_lambda;
+}
+
+/// Apply classifier guide: compute centroids from H, then modify G and B
+template<typename Scalar>
+inline void apply_classifier_guide(
+    ::FactorNet::gpu::GPUContext& ctx,
+    ::FactorNet::gpu::DenseMatrixGPU<Scalar>& d_G,
+    ::FactorNet::gpu::DenseMatrixGPU<Scalar>& d_B,
+    const ::FactorNet::gpu::DenseMatrixGPU<Scalar>& d_H,
+    ::FactorNet::gpu::DenseMatrixGPU<Scalar>& d_centroids,
+    const ::FactorNet::gpu::DeviceMemory<int>& d_labels,
+    const ::FactorNet::gpu::DeviceMemory<int>& d_counts,
+    Scalar lambda, int k, int n, int C)
+{
+    // 1. Zero centroids
+    {
+        int total = k * C;
+        int threads = 256;
+        int blocks = (total + threads - 1) / threads;
+        zero_centroids_kernel<<<blocks, threads, 0, ctx.stream>>>(
+            d_centroids.data.get(), k, C);
+    }
+
+    // 2. Accumulate columns into centroids
+    {
+        dim3 threads(32, 8);
+        dim3 blocks((k + 31) / 32, (n + 7) / 8);
+        accumulate_centroids_kernel<<<blocks, threads, 0, ctx.stream>>>(
+            d_H.data.get(), d_labels.get(), d_centroids.data.get(), k, n, C);
+    }
+
+    // 3. Average centroids
+    {
+        int total = k * C;
+        int threads = 256;
+        int blocks = (total + threads - 1) / threads;
+        average_centroids_kernel<<<blocks, threads, 0, ctx.stream>>>(
+            d_centroids.data.get(), d_counts.get(), k, C);
+    }
+
+    // 4. Add |λ| to G diagonal
+    {
+        int threads = 256;
+        int blocks = (k + threads - 1) / threads;
+        Scalar abs_lambda = (lambda >= 0) ? lambda : -lambda;
+        apply_classifier_guide_G_kernel<<<blocks, threads, 0, ctx.stream>>>(
+            d_G.data.get(), abs_lambda, k);
+    }
+
+    // 5. Add λ * target to B
+    {
+        dim3 threads(32, 8);
+        dim3 blocks((k + 31) / 32, (n + 7) / 8);
+        apply_classifier_guide_B_kernel<<<blocks, threads, 0, ctx.stream>>>(
+            d_B.data.get(), d_centroids.data.get(), d_labels.get(),
+            lambda, k, n, C);
+    }
+}
+
+}  // namespace classifier_guide_gpu
 
 
 namespace gpu_detail {
@@ -474,6 +598,62 @@ template<typename Scalar>
     // d-scaled W for GPU-side non-MSE loss computation
     DenseMatrixGPU<Scalar> d_W_Td_loss;
     if (config.requires_irls()) d_W_Td_loss = DenseMatrixGPU<Scalar>(k, m);
+
+    // ------------------------------------------------------------------
+    // 4a. Classifier guides (H-side) — device allocations (multi-guide)
+    // ------------------------------------------------------------------
+    const bool has_cguide_H = config.has_classifier_guide_H();
+    const int n_cguides_H = static_cast<int>(config.classifier_guides_H.size());
+
+    // Per-guide device buffers
+    struct CGuideHBuffers {
+        DeviceMemory<int> d_labels;
+        DenseMatrixGPU<Scalar> d_centroids;
+        DeviceMemory<int> d_counts;
+        int n_classes = 0;
+        Scalar lambda = 0;
+    };
+    std::vector<CGuideHBuffers> cguide_H_bufs(n_cguides_H);
+
+    if (has_cguide_H) {
+        for (int gi = 0; gi < n_cguides_H; ++gi) {
+            const auto& entry = config.classifier_guides_H[gi];
+            auto& buf = cguide_H_bufs[gi];
+            buf.n_classes = entry.n_classes;
+            buf.lambda = entry.lambda;
+            buf.d_labels = DeviceMemory<int>(n);
+            buf.d_labels.upload(entry.labels.data(), n);
+            buf.d_centroids = DenseMatrixGPU<Scalar>(k, entry.n_classes);
+            buf.d_counts = DeviceMemory<int>(entry.n_classes);
+            // Compute class counts on host and upload
+            std::vector<int> h_counts(entry.n_classes, 0);
+            for (int j = 0; j < n; ++j) {
+                int c = entry.labels[j];
+                if (c >= 0 && c < entry.n_classes) h_counts[c]++;
+            }
+            buf.d_counts.upload(h_counts.data(), entry.n_classes);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 4a2. Alignment guide — device allocations and pre-computation
+    // ------------------------------------------------------------------
+    const bool has_align = config.has_alignment_guide();
+    alignment_guide_gpu::AlignmentGuideBuffers<Scalar> align_bufs;
+    if (has_align) {
+        alignment_guide_gpu::init_alignment_buffers(ctx, config.alignment_guide,
+                                                    align_bufs, k, n, m);
+        if (config.verbose) {
+            FACTORNET_GPU_LOG(true, "[AlignmentGuide] type=%d lambda_H=%.4f lambda_W=%.4f "
+                "lambda_batch=%.4f warmup=%d anneal=%d\n",
+                config.alignment_guide.type,
+                static_cast<double>(config.alignment_guide.lambda_H),
+                static_cast<double>(config.alignment_guide.lambda_W),
+                static_cast<double>(config.alignment_guide.lambda_batch),
+                config.alignment_guide.warmup_iters,
+                config.alignment_guide.anneal_schedule);
+        }
+    }
 
     // ------------------------------------------------------------------
     // 4b. cuSPARSE SpMM handles for RHS (created once, reused per iter)
@@ -895,6 +1075,37 @@ template<typename Scalar>
                 graph_reg_H.apply(ctx, d_G.data.get(), d_H.data.get(),
                                   d_H.cols, static_cast<Scalar>(config.H.graph_lambda));
             }
+
+            // Classifier guides (H-side): compute centroids from current H,
+            // add |λ| to G diagonal and λ * target to B for each guide
+            if (has_cguide_H) {
+                for (int gi = 0; gi < n_cguides_H; ++gi) {
+                    auto& buf = cguide_H_bufs[gi];
+                    classifier_guide_gpu::apply_classifier_guide(
+                        ctx, d_G, d_B, d_H,
+                        buf.d_centroids, buf.d_labels,
+                        buf.d_counts, buf.lambda,
+                        k, n, buf.n_classes);
+                }
+            }
+
+            // Alignment guide (H-side): add lambda*M to G and lambda*M*t to B
+            if (has_align && iter >= config.alignment_guide.warmup_iters) {
+                Scalar eff_lambda_H = config.alignment_guide.lambda_H;
+                Scalar eff_lambda_batch = config.alignment_guide.lambda_batch;
+                if (config.alignment_guide.anneal_schedule > 0) {
+                    eff_lambda_H = alignment_guide_gpu::anneal_lambda(
+                        eff_lambda_H, iter, config.max_iter,
+                        config.alignment_guide.anneal_schedule);
+                    eff_lambda_batch = alignment_guide_gpu::anneal_lambda(
+                        eff_lambda_batch, iter, config.max_iter,
+                        config.alignment_guide.anneal_schedule);
+                }
+                alignment_guide_gpu::apply_H_alignment(
+                    ctx, d_G, d_B, align_bufs,
+                    eff_lambda_H, eff_lambda_batch, k, n);
+            }
+
             _prof_timer.end(ctx.stream);
 
             // 4. NNLS solve: dispatch by solver_mode
@@ -1097,6 +1308,19 @@ template<typename Scalar>
                 graph_reg_W.apply(ctx, d_G.data.get(), d_W.data.get(),
                                   d_W.cols, static_cast<Scalar>(config.W.graph_lambda));
             }
+
+            // Alignment guide (W-side): add lambda_W*I to G and lambda_W*W_target to B
+            if (has_align && iter >= config.alignment_guide.warmup_iters) {
+                Scalar eff_lambda_W = config.alignment_guide.lambda_W;
+                if (config.alignment_guide.anneal_schedule > 0) {
+                    eff_lambda_W = alignment_guide_gpu::anneal_lambda(
+                        eff_lambda_W, iter, config.max_iter,
+                        config.alignment_guide.anneal_schedule);
+                }
+                alignment_guide_gpu::apply_W_alignment(
+                    ctx, d_G, d_B, align_bufs, eff_lambda_W, k, m);
+            }
+
             _prof_timer.end(ctx.stream);
 
             // 4. NNLS solve: dispatch by solver_mode

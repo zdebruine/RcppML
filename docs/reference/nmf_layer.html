@@ -56,9 +56,15 @@ its input into W * diag(d) * H with non-negativity constraints.</p>
 <span>  L21 <span class="op">=</span> <span class="fl">0</span>,</span>
 <span>  angular <span class="op">=</span> <span class="fl">0</span>,</span>
 <span>  upper_bound <span class="op">=</span> <span class="fl">0</span>,</span>
+<span>  mask <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  zi <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"none"</span>, <span class="st">"row"</span>, <span class="st">"col"</span><span class="op">)</span>,</span>
+<span>  projective <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  symmetric <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  robust <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  W <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  H <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  name <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -94,6 +100,31 @@ its input into W * diag(d) * H with non-negativity constraints.</p>
 <dd><p>Box constraint. Default 0.</p></dd>
 
 
+<dt id="arg-mask">mask<a class="anchor" aria-label="anchor" href="#arg-mask"></a></dt>
+<dd><p>Masking mode: NULL (none), <code>"zeros"</code>, <code>"NA"</code>, or
+a sparse mask matrix. See <code><a href="nmf.html">nmf</a></code> for details.</p></dd>
+
+
+<dt id="arg-zi">zi<a class="anchor" aria-label="anchor" href="#arg-zi"></a></dt>
+<dd><p>Zero-inflation mode: <code>"none"</code>, <code>"row"</code>, or <code>"col"</code>.
+Requires <code>loss = "gp"</code> or <code>"nb"</code> in
+<code><a href="factor_config.html">factor_config()</a></code>. Default <code>"none"</code>.</p></dd>
+
+
+<dt id="arg-projective">projective<a class="anchor" aria-label="anchor" href="#arg-projective"></a></dt>
+<dd><p>Use projective NMF (W is reused as H). Default FALSE.</p></dd>
+
+
+<dt id="arg-symmetric">symmetric<a class="anchor" aria-label="anchor" href="#arg-symmetric"></a></dt>
+<dd><p>Use symmetric NMF (W == H). Default FALSE.</p></dd>
+
+
+<dt id="arg-robust">robust<a class="anchor" aria-label="anchor" href="#arg-robust"></a></dt>
+<dd><p>Robustness control: <code>FALSE</code> (default, no robustness),
+<code>TRUE</code> (Huber delta=1.345), <code>"mae"</code> (near-MAE, delta=1e-4),
+or a positive numeric Huber delta. See <code><a href="nmf.html">nmf</a></code> for details.</p></dd>
+
+
 <dt id="arg-w">W<a class="anchor" aria-label="anchor" href="#arg-w"></a></dt>
 <dd><p>Optional <code><a href="W.html">W()</a></code> config to override W-specific settings.</p></dd>
 
@@ -104,6 +135,16 @@ its input into W * diag(d) * H with non-negativity constraints.</p>
 
 <dt id="arg-name">name<a class="anchor" aria-label="anchor" href="#arg-name"></a></dt>
 <dd><p>Optional layer name (for results access).</p></dd>
+
+
+<dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
+<dd><p>Additional arguments forwarded to <code><a href="nmf.html">nmf</a></code> at fit
+time. Supports all advanced parameters: distribution tuning
+(<code>dispersion</code>, <code>theta_init</code>, etc.), IRLS control
+(<code>irls_max_iter</code>, <code>irls_tol</code>), solver tuning
+(<code>cd_tol</code>, <code>cd_maxit</code>), streaming (<code>streaming</code>,
+<code>panel_cols</code>), callbacks (<code>on_iteration</code>), and more.
+See <code><a href="nmf.html">?nmf</a></code> for the complete list.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -119,7 +160,8 @@ W and H unless overridden by <code><a href="W.html">W()</a></code> or <code><a h
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="svd_layer.html">svd_layer</a></code>, <code><a href="factor_net.html">factor_net</a></code>, <code><a href="factor_input.html">factor_input</a></code></p></div>
+    <div class="dont-index"><p><code><a href="svd_layer.html">svd_layer</a></code>, <code><a href="factor_net.html">factor_net</a></code>, <code><a href="factor_input.html">factor_input</a></code>,
+  <code><a href="nmf.html">nmf</a></code></p></div>
     </div>
 
     <div class="section level2">
@@ -127,8 +169,10 @@ W and H unless overridden by <code><a href="W.html">W()</a></code> or <code><a h
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">aml</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">inp</span> <span class="op">&lt;-</span> <span class="fu"><a href="factor_input.html">factor_input</a></span><span class="op">(</span><span class="va">aml</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">layer</span> <span class="op">&lt;-</span> <span class="fu">nmf_layer</span><span class="op">(</span><span class="va">inp</span>, k <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">layer</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> fn_node: nmf_layer, k=5</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># With zero-inflation and distribution-specific tuning</span></span></span>
+<span class="r-in"><span><span class="va">layer_gp</span> <span class="op">&lt;-</span> <span class="fu">nmf_layer</span><span class="op">(</span><span class="va">inp</span>, k <span class="op">=</span> <span class="fl">5</span>, zi <span class="op">=</span> <span class="st">"row"</span>,</span></span>
+<span class="r-in"><span>                      dispersion <span class="op">=</span> <span class="st">"per_col"</span>, theta_init <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span></span></span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

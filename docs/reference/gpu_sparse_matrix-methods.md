@@ -1,7 +1,7 @@
 # Methods for gpu_sparse_matrix objects
 
 S3 methods for the `gpu_sparse_matrix` class returned by
-[`sp_read_gpu`](https://zdebruine.github.io/RcppML/reference/sp_read_gpu.md).
+[`st_read_gpu`](https://zdebruine.github.io/RcppML/reference/st_read_gpu.md).
 
 ## Usage
 
@@ -49,18 +49,18 @@ ncol(x)
 
 ## See also
 
-[`sp_read_gpu`](https://zdebruine.github.io/RcppML/reference/sp_read_gpu.md),
-[`sp_free_gpu`](https://zdebruine.github.io/RcppML/reference/sp_free_gpu.md)
+[`st_read_gpu`](https://zdebruine.github.io/RcppML/reference/st_read_gpu.md),
+[`st_free_gpu`](https://zdebruine.github.io/RcppML/reference/st_free_gpu.md)
 
 ## Examples
 
 ``` r
 if (FALSE) { # \dontrun{
-gpu_mat <- sp_read_gpu("data.spz")
+gpu_mat <- st_read_gpu("data.spz")
 print(gpu_mat)
 dim(gpu_mat)
 nrow(gpu_mat)
 ncol(gpu_mat)
-sp_free_gpu(gpu_mat)
+st_free_gpu(gpu_mat)
 } # }
 ```

@@ -131,87 +131,69 @@ Acceleration</a> vignette.</p>
 <div class="section level2">
 <h2 id="quick-nmf-demo">Quick NMF Demo<a class="anchor" aria-label="anchor" href="#quick-nmf-demo"></a>
 </h2>
-<p>Generate a synthetic nonnegative matrix and recover its factors:</p>
+<p>Factor the Hawaiian birds species-count matrix (183 species × 1,183
+grid cells) into 10 components:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulateNMF.html">simulateNMF</a></span><span class="op">(</span><span class="fl">200</span>, <span class="fl">100</span>, k <span class="op">=</span> <span class="fl">5</span>, noise <span class="op">=</span> <span class="fl">0.3</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span>
-<span><span class="va">model</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">A</span>, k <span class="op">=</span> <span class="fl">5</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">hawaiibirds</span><span class="op">)</span></span>
+<span><span class="va">model</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">hawaiibirds</span>, k <span class="op">=</span> <span class="fl">10</span>, seed <span class="op">=</span> <span class="fl">42</span>, tol <span class="op">=</span> <span class="fl">1e-5</span>, maxit <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span></code></pre></div>
 <table class="table">
 <caption>NMF model summary</caption>
 <thead><tr class="header">
 <th align="right">Rows</th>
 <th align="right">Columns</th>
 <th align="right">Rank</th>
-<th align="right">Reconstruction MSE</th>
+<th align="left">Reconstruction MSE</th>
 <th align="right">Iterations</th>
 <th align="right">Runtime (sec)</th>
 </tr></thead>
 <tbody><tr class="odd">
-<td align="right">200</td>
+<td align="right">183</td>
+<td align="right">1183</td>
+<td align="right">10</td>
+<td align="left">3.73e-03</td>
 <td align="right">100</td>
-<td align="right">5</td>
-<td align="right">0.0173</td>
-<td align="right">21</td>
-<td align="right">0.24</td>
+<td align="right">0.28</td>
 </tr></tbody>
 </table>
-<p>With a low-noise signal and the correct rank, NMF recovers the
-generating factors and achieves near-zero reconstruction error.</p>
+<p>Each of the 10 factors captures a distinct pattern of bird species
+co-occurrence across Hawaiian survey sites.</p>
+<p><img src="getting-started_files/figure-html/nmf-convergence-1.png" class="r-plt" alt="" width="672"></p>
 </div>
 <div class="section level2">
 <h2 id="quick-svd-demo">Quick SVD Demo<a class="anchor" aria-label="anchor" href="#quick-svd-demo"></a>
 </h2>
-<p>Compute a rank-5 truncated SVD of the AML chromatin-accessibility
-dataset:</p>
+<p>We can also decompose the same data with SVD, which captures
+directions of maximum variance rather than additive nonneg parts:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">aml</span><span class="op">)</span></span>
-<span><span class="va">sv</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/svd.html">svd</a></span><span class="op">(</span><span class="va">aml</span>, k <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span></code></pre></div>
-<table class="table">
-<caption>Variance explained by the first 5 components</caption>
-<thead><tr class="header">
-<th align="right">Component</th>
-<th align="left">Variance Explained</th>
-<th align="left">Cumulative</th>
-</tr></thead>
-<tbody>
-<tr class="odd">
-<td align="right">1</td>
-<td align="left">91.9%</td>
-<td align="left">91.9%</td>
-</tr>
-<tr class="even">
-<td align="right">2</td>
-<td align="left">1.7%</td>
-<td align="left">93.6%</td>
-</tr>
-<tr class="odd">
-<td align="right">3</td>
-<td align="left">0.7%</td>
-<td align="left">94.3%</td>
-</tr>
-<tr class="even">
-<td align="right">4</td>
-<td align="left">0.5%</td>
-<td align="left">94.7%</td>
-</tr>
-<tr class="odd">
-<td align="right">5</td>
-<td align="left">0.3%</td>
-<td align="left">95.1%</td>
-</tr>
-</tbody>
-</table>
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">hawaiibirds</span><span class="op">)</span></span>
+<span><span class="va">sv</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/svd.html">svd</a></span><span class="op">(</span><span class="va">hawaiibirds</span>, k <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span></code></pre></div>
+<p><img src="getting-started_files/figure-html/svd-scree-1.png" class="r-plt" alt="" width="672"></p>
+<p>The first component captures the dominant species-composition
+gradient, and each subsequent component adds progressively less
+explanatory power — the hallmark of effective dimensionality
+reduction.</p>
+<p>For PCA (centered and optionally scaled SVD), use the
+<code><a href="../reference/pca.html">pca()</a></code> convenience wrapper:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">pc</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/pca.html">pca</a></span><span class="op">(</span><span class="va">hawaiibirds</span>, k <span class="op">=</span> <span class="fl">5</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span>  <span class="co"># center = TRUE by default</span></span>
+<span><span class="co"># Equivalent to: svd(hawaiibirds, k = 5, center = TRUE)</span></span></code></pre></div>
+<p>PCA centers the data before decomposition, so the first component
+captures the dominant direction of variation rather than the overall
+mean level. Use <code>scale = TRUE</code> for data where features have
+different units or widely varying magnitude.</p>
 </div>
 <div class="section level2">
 <h2 id="quick-cross-validation-demo">Quick Cross-Validation Demo<a class="anchor" aria-label="anchor" href="#quick-cross-validation-demo"></a>
 </h2>
 <p>Use speckled holdout cross-validation to find the best rank for the
 AML data:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">cv</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">aml</span>, k <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">4</span>, <span class="fl">6</span>, <span class="fl">8</span>, <span class="fl">10</span><span class="op">)</span>, test_fraction <span class="op">=</span> <span class="fl">0.2</span>, seed <span class="op">=</span> <span class="fl">42</span>, maxit <span class="op">=</span> <span class="fl">50</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">aml</span><span class="op">)</span></span>
+<span><span class="va">cv</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">aml</span>, k <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">4</span>, <span class="fl">6</span>, <span class="fl">8</span>, <span class="fl">10</span><span class="op">)</span>, test_fraction <span class="op">=</span> <span class="fl">0.2</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span></code></pre></div>
 <p><img src="getting-started_files/figure-html/cv-plot-1.png" class="r-plt" alt="" width="672"></p>
-<p>The test loss curve reveals the rank at which the model begins to
-overfit. The minimum identifies the optimal number of factors for this
-dataset.</p>
+<p>Training loss always decreases with rank, but test loss reveals where
+the model begins to overfit. The test-loss minimum identifies the
+optimal number of factors.</p>
 </div>
 <div class="section level2">
 <h2 id="built-in-datasets">Built-in Datasets<a class="anchor" aria-label="anchor" href="#built-in-datasets"></a>
@@ -221,9 +203,9 @@ dataset.</p>
 <caption>Shipped datasets</caption>
 <colgroup>
 <col width="18%">
-<col width="16%">
+<col width="19%">
 <col width="25%">
-<col width="40%">
+<col width="36%">
 </colgroup>
 <thead><tr class="header">
 <th align="left">Dataset</th>
@@ -236,7 +218,7 @@ dataset.</p>
 <td align="left"><code>aml</code></td>
 <td align="left">824 × 135</td>
 <td align="left">Dense matrix</td>
-<td align="left">Chromatin accessibility (AML)</td>
+<td align="left">DNA methylation (AML)</td>
 </tr>
 <tr class="even">
 <td align="left"><code>golub</code></td>
@@ -263,21 +245,25 @@ dataset.</p>
 <td align="left">Face images (Olivetti)</td>
 </tr>
 <tr class="even">
-<td align="left"><code>digits_full</code></td>
+<td align="left"><code>digits</code></td>
 <td align="left">1,797 × 64</td>
 <td align="left">Sparse (dgCMatrix)</td>
 <td align="left">Handwritten digit images</td>
 </tr>
 <tr class="odd">
 <td align="left"><code>pbmc3k</code></td>
-<td align="left">8,000 × 500</td>
+<td align="left">13,714 × 2,638</td>
 <td align="left">SPZ raw bytes</td>
 <td align="left">Single-cell RNA-seq (PBMCs)</td>
 </tr>
 </tbody>
 </table>
 <p>The <code>pbmc3k</code> dataset is stored as StreamPress-compressed
-raw bytes. Decompress it with <code><a href="../reference/st_read.html">st_read()</a></code> — see the <a href="streampress.html">StreamPress</a> vignette.</p>
+raw bytes containing the full <strong>13,714 genes × 2,638
+cells</strong> from the 10x Genomics PBMC 3k dataset, with 9
+Seurat-annotated cell types embedded as column metadata. Decompress it
+with <code><a href="../reference/st_read.html">st_read()</a></code> and access annotations via
+<code><a href="../reference/st_read_var.html">st_read_var()</a></code> — see the <a href="streampress.html">StreamPress</a> vignette.</p>
 </div>
 <div class="section level2">
 <h2 id="where-to-go-next">Where to Go Next<a class="anchor" aria-label="anchor" href="#where-to-go-next"></a>
@@ -315,18 +301,6 @@ classification</li>
 <a href="factor-graphs.html">Factorization Graphs</a> — Multi-modal
 and guided factorization via <code><a href="../reference/factor_net.html">factor_net()</a></code>
 </li>
-</ul>
-</div>
-<div class="section level3">
-<h3 id="applications">Applications<a class="anchor" aria-label="anchor" href="#applications"></a>
-</h3>
-<ul>
-<li>
-<a href="image-decomposition.html">Image Decomposition</a> —
-Learning visual parts from face and digit images</li>
-<li>
-<a href="recommendation-systems.html">Recommendation Systems</a> —
-Building a movie recommender with sparse NMF</li>
 </ul>
 </div>
 <div class="section level3">

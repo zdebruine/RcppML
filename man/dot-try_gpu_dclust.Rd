@@ -6,6 +6,9 @@
 \usage{
 .try_gpu_dclust(A, min_samples, min_dist, tol, maxit, nonneg, seed, verbose)
 }
+\value{
+A \code{dclust} object if GPU succeeds, or \code{NULL}.
+}
 \description{
 Try GPU dispatch for divisive clustering
 }

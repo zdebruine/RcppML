@@ -3,7 +3,7 @@
 Accepts a matrix (dense or sparse), or a file path (character string).
 File paths are auto-loaded based on extension:
 
-- `.spz`: SparsePress compressed format
+- `.spz`: StreamPress compressed format
 
 - `.rds`: R serialized object (must contain a matrix)
 

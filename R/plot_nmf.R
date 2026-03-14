@@ -25,7 +25,7 @@ utils::globalVariables(c("k", "type", "mean_loss"))
 #' @examples
 #' \donttest{
 #' # Basic loss plot
-#' model <- nmf(hawaiibirds, k = 10, track_loss_history = TRUE)
+#' model <- nmf(hawaiibirds, k = 10)
 #' plot(model)
 #'
 #' # Convergence analysis
@@ -35,7 +35,7 @@ utils::globalVariables(c("k", "type", "mean_loss"))
 #' plot(model, type = "loss", interactive = TRUE)
 #'
 #' # Compare multiple runs
-#' models <- replicate(5, nmf(hawaiibirds, k = 10, track_loss_history = TRUE), simplify = FALSE)
+#' models <- replicate(5, nmf(hawaiibirds, k = 10), simplify = FALSE)
 #' plot(models[[1]], type = "sparsity")
 #' }
 plot.nmf <- function(x, type = c("loss", "convergence", "regularization", "sparsity"),
@@ -385,7 +385,7 @@ compare_nmf <- function(..., labels = NULL, metric = "loss", smooth = TRUE, span
   df_list <- lapply(seq_along(models), function(i) {
     m <- models[[i]]
     if (is.null(m@misc$loss_history)) {
-      stop(paste("Model", i, "has no loss history. Use track_loss = TRUE"))
+      stop(sprintf("Model %d has no loss history. Use track_loss = TRUE", i))
     }
     history <- m@misc$loss_history
     test_loss <- m@misc$test_loss_history

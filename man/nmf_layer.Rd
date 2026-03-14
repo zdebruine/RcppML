@@ -12,9 +12,15 @@ nmf_layer(
   L21 = 0,
   angular = 0,
   upper_bound = 0,
+  mask = NULL,
+  zi = c("none", "row", "col"),
+  projective = FALSE,
+  symmetric = FALSE,
+  robust = FALSE,
   W = NULL,
   H = NULL,
-  name = NULL
+  name = NULL,
+  ...
 )
 }
 \arguments{
@@ -32,11 +38,34 @@ nmf_layer(
 
 \item{upper_bound}{Box constraint. Default 0.}
 
+\item{mask}{Masking mode: NULL (none), \code{"zeros"}, \code{"NA"}, or
+a sparse mask matrix. See \code{\link{nmf}} for details.}
+
+\item{zi}{Zero-inflation mode: \code{"none"}, \code{"row"}, or \code{"col"}.
+Requires \code{loss = "gp"} or \code{"nb"} in
+\code{factor_config()}. Default \code{"none"}.}
+
+\item{projective}{Use projective NMF (W is reused as H). Default FALSE.}
+
+\item{symmetric}{Use symmetric NMF (W == H). Default FALSE.}
+
+\item{robust}{Robustness control: \code{FALSE} (default, no robustness),
+\code{TRUE} (Huber delta=1.345), \code{"mae"} (near-MAE, delta=1e-4),
+or a positive numeric Huber delta. See \code{\link{nmf}} for details.}
+
 \item{W}{Optional \code{W()} config to override W-specific settings.}
 
 \item{H}{Optional \code{H()} config to override H-specific settings.}
 
 \item{name}{Optional layer name (for results access).}
+
+\item{...}{Additional arguments forwarded to \code{\link{nmf}} at fit
+time. Supports all advanced parameters: distribution tuning
+(\code{dispersion}, \code{theta_init}, etc.), IRLS control
+(\code{irls_max_iter}, \code{irls_tol}), solver tuning
+(\code{cd_tol}, \code{cd_maxit}), streaming (\code{streaming},
+\code{panel_cols}), callbacks (\code{on_iteration}), and more.
+See \code{?nmf} for the complete list.}
 }
 \value{
 An \code{fn_node} of type "nmf_layer".
@@ -56,8 +85,12 @@ W and H unless overridden by \code{W()} or \code{H()}.
 data(aml)
 inp <- factor_input(aml)
 layer <- nmf_layer(inp, k = 5)
-layer
+
+# With zero-inflation and distribution-specific tuning
+layer_gp <- nmf_layer(inp, k = 5, zi = "row",
+                      dispersion = "per_col", theta_init = 0.5)
 }
 \seealso{
-\code{\link{svd_layer}}, \code{\link{factor_net}}, \code{\link{factor_input}}
+\code{\link{svd_layer}}, \code{\link{factor_net}}, \code{\link{factor_input}},
+  \code{\link{nmf}}
 }

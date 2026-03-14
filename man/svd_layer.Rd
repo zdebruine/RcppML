@@ -12,9 +12,15 @@ svd_layer(
   L21 = 0,
   angular = 0,
   upper_bound = 0,
+  center = FALSE,
+  scale = FALSE,
+  method = c("auto", "deflation", "krylov", "lanczos", "irlba", "randomized"),
+  mask = NULL,
+  robust = FALSE,
   W = NULL,
   H = NULL,
-  name = NULL
+  name = NULL,
+  ...
 )
 }
 \arguments{
@@ -22,7 +28,7 @@ svd_layer(
 
 \item{k}{Factorization rank.}
 
-\item{L1}{L1 penalty (shared by W and H unless overridden). Default 0.}
+\item{L1}{L1 penalty (shared by U and V unless overridden). Default 0.}
 
 \item{L2}{L2 penalty. Default 0.}
 
@@ -32,24 +38,51 @@ svd_layer(
 
 \item{upper_bound}{Box constraint. Default 0.}
 
-\item{W}{Optional \code{W()} config to override W-specific settings.}
+\item{center}{Center columns before factorization (PCA mode). Default FALSE.}
 
-\item{H}{Optional \code{H()} config to override H-specific settings.}
+\item{scale}{Scale columns to unit variance. Default FALSE.}
+
+\item{method}{SVD algorithm: \code{"auto"}, \code{"deflation"},
+\code{"krylov"}, \code{"lanczos"}, \code{"irlba"}, or
+\code{"randomized"}. Default \code{"auto"}.}
+
+\item{mask}{Masking mode: NULL (none), \code{"zeros"}, or a sparse
+mask matrix. See \code{\link{svd}} for details.}
+
+\item{robust}{Use robust loss. Default FALSE.}
+
+\item{W}{Optional \code{W()} config to override U-specific settings.}
+
+\item{H}{Optional \code{H()} config to override V-specific settings.}
 
 \item{name}{Optional layer name (for results access).}
+
+\item{...}{Additional arguments forwarded to \code{\link{svd}} at fit
+time. Supports: \code{convergence}, \code{cv_seed}, \code{patience},
+\code{k_max}, \code{graph_U}, \code{graph_V}, \code{graph_lambda},
+\code{threads}. See \code{?svd} for the complete list.}
 }
 \value{
 An \code{fn_node} of type "svd_layer".
 }
 \description{
 Creates an unconstrained (SVD/PCA) factorization layer. No
-non-negativity constraint; factors are signed.
+non-negativity constraint by default; factors are signed.
+}
+\details{
+SVD-specific parameters (\code{center}, \code{scale}, \code{method})
+control the SVD algorithm directly. Regularization parameters
+and \code{...} are forwarded to \code{\link{svd}} at fit time.
 }
 \examples{
 data(aml)
 inp <- factor_input(aml)
 layer <- svd_layer(inp, k = 5)
+
+# PCA with centering and scaling
+pca_layer <- svd_layer(inp, k = 10, center = TRUE, scale = TRUE)
 }
 \seealso{
-\code{\link{nmf_layer}}, \code{\link{factor_input}}, \code{\link{factor_net}}
+\code{\link{nmf_layer}}, \code{\link{factor_input}},
+  \code{\link{factor_net}}, \code{\link{svd}}
 }

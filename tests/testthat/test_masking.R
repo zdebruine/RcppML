@@ -59,7 +59,7 @@ test_that("mask='zeros' works with different loss types", {
   data <- simulateNMF(50, 40, k = 3, noise = 0.1, dropout = 0.6, seed = 123)
   A_sparse <- as(data$A, "dgCMatrix")
   
-  loss_types <- c("mse", "mae", "huber")
+  loss_types <- c("mse")
   
   for (loss in loss_types) {
     model <- nmf(A_sparse, 3, mask = "zeros", loss = loss,

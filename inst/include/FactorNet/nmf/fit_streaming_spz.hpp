@@ -21,7 +21,7 @@
 #include <FactorNet/io/spz_loader.hpp>
 #include <FactorNet/io/dense_spz_loader.hpp>
 #include <FactorNet/nmf/fit_chunked.hpp>
-#include <sparsepress/sparsepress_v3.hpp>
+#include <streampress/sparsepress_v3.hpp>
 
 #ifdef FACTORNET_HAS_GPU
 #include <FactorNet/nmf/fit_chunked_gpu.cuh>
@@ -72,7 +72,7 @@ FactorNet::NMFResult<Scalar> nmf_streaming_spz(
         throw std::runtime_error("File too small: " + path);
     }
     fclose(vf);
-    const uint16_t file_version = sparsepress::v3::detect_version(ver_buf, 8);
+    const uint16_t file_version = streampress::v3::detect_version(ver_buf, 8);
 
     // ---- 1. Create appropriate DataLoader ----
     std::unique_ptr<FactorNet::io::DataLoader<Scalar>> loader_ptr;

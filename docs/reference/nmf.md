@@ -15,63 +15,16 @@ nmf(
   maxit = 100,
   L1 = c(0, 0),
   L2 = c(0, 0),
-  L21 = c(0, 0),
-  angular = c(0, 0),
   seed = NULL,
   mask = NULL,
-  loss = c("mse", "mae", "huber", "gp", "nb", "gamma", "inverse_gaussian", "tweedie"),
-  huber_delta = 1,
-  dispersion = c("per_row", "per_col", "global", "none"),
-  theta_init = 0.1,
-  theta_max = 5,
-  zi = c("none", "row", "col", "twoway"),
-  zi_em_iters = 1L,
-  theta_min = 0,
-  nb_size_init = 10,
-  nb_size_max = 1e+06,
-  nb_size_min = 0.01,
-  gamma_phi_init = 1,
-  gamma_phi_max = 10000,
-  gamma_phi_min = 1e-06,
-  tweedie_power = 1.5,
-  graph_W = NULL,
-  graph_H = NULL,
-  graph_lambda = c(0, 0),
-  guides = NULL,
-  sort_model = TRUE,
-  mask_zeros = FALSE,
+  loss = c("mse", "gp", "nb", "gamma", "inverse_gaussian", "tweedie"),
   nonneg = c(TRUE, TRUE),
-  upper_bound = c(0, 0),
   test_fraction = 0,
-  patience = 5,
-  cv_k_range = c(2, 50),
-  cv_seed = NULL,
-  track_train_loss = TRUE,
-  threads = 0,
   verbose = FALSE,
-  cd_tol = 1e-08,
-  cd_maxit = 100L,
-  cd_abs_tol = 1e-15,
-  norm = c("L1", "L2", "none"),
-  streaming = "auto",
-  panel_cols = 0L,
-  resource = "auto",
   projective = FALSE,
   symmetric = FALSE,
-  solver = c("auto", "cholesky", "cd"),
-  init = c("random", "lanczos", "irlba"),
-  irls_max_iter = 5L,
-  irls_tol = 1e-04,
+  zi = c("none", "row", "col"),
   robust = FALSE,
-  distribution = NULL,
-  zero_inflation = NULL,
-  distribution_config = list(),
-  zi_config = list(),
-  robust_config = list(),
-  on_iteration = NULL,
-  h_init = NULL,
-  profile = FALSE,
-  dispatch = NULL,
   ...
 )
 ```
@@ -108,327 +61,67 @@ nmf(
   Ridge penalties greater than zero, single value or array of length two
   for `c(w, h)`
 
-- L21:
-
-  Group sparsity (L2,1-norm) penalties, single value or array of length
-  two for `c(w, h)`
-
-- angular:
-
-  Angular regularization penalties, single value or array of length two
-  for `c(w, h)` (default c(0, 0)).
-
 - seed:
 
-  random seed(s) for initialization and CV. Can be: `NULL` for random
-  initialization, a single integer for reproducible initialization, a
-  vector of integers for multiple CV replicates, or a custom W matrix (k
-  x p) for custom initialization.
+  initialization control. Accepts: `NULL` for random init, an integer
+  for reproducible random init, a matrix (m x k) for custom W
+  initialization, a list of matrices for multi-init, or a string:
+  `"lanczos"`, `"irlba"`, `"randomized"`, or `"svd"` (auto-select) for
+  SVD-based initialization.
 
 - mask:
 
-  dense or sparse matrix of values in `data` to handle as missing.
-  Alternatively, specify "`zeros`" or "`NA`".
+  missing data mask. Accepts: `NULL` (no masking), `"zeros"` (mask
+  zeros), `"NA"` (mask NAs), a dgCMatrix/matrix (custom mask), or
+  `list("zeros", <matrix>)` to mask zeros and use a custom mask
+  simultaneously.
 
 - loss:
 
-  loss function: `"mse"` (default), `"mae"`, `"huber"`, `"gp"`, or
-  `"nb"`. Use `loss="gp"` with `dispersion="none"` for KL divergence
-  (Poisson). Use `loss="nb"` for Negative Binomial (quadratic
-  variance-mean, standard for scRNA-seq).
-
-- huber_delta:
-
-  delta parameter for Huber loss (default 1.0).
-
-- dispersion:
-
-  dispersion mode for Generalized Poisson loss: `"per_row"` (default,
-  per-feature dispersion), `"global"` (single shared dispersion), or
-  `"none"` (no dispersion estimation; theta=0 reduces GP to Poisson/KL
-  divergence).
-
-- theta_init:
-
-  initial theta value for GP dispersion (default 0.1).
-
-- theta_max:
-
-  maximum allowed theta value (default 5.0). Caps dispersion to prevent
-  instability.
-
-- zi:
-
-  zero-inflation mode for ZIGP/ZINB: `"none"` (default), `"row"`
-  (per-row dropout), `"col"` (per-column dropout), or `"twoway"`
-  (row+column combined). Requires `loss="gp"` or `loss="nb"`. Estimates
-  structural dropout probabilities pi separately from count model.
-  Currently CPU-only; not yet supported in cross-validation mode.
-
-- zi_em_iters:
-
-  number of EM iterations per NMF iteration for the zero-inflation
-  E-step and M-step (default 1). More iterations give more accurate pi
-  estimates per NMF step.
-
-- theta_min:
-
-  minimum theta floor (default 0). Set \> 0 to prevent theta collapse to
-  zero.
-
-- nb_size_init:
-
-  initial NB size (r) parameter for Negative Binomial dispersion
-  (default 10.0).
-
-- nb_size_max:
-
-  maximum allowed NB size (default 1e6).
-
-- nb_size_min:
-
-  minimum allowed NB size (default 0.01).
-
-- gamma_phi_init:
-
-  initial dispersion parameter for Gamma/Inverse Gaussian (default 1.0).
-
-- gamma_phi_max:
-
-  maximum allowed Gamma/IG dispersion (default 1e4).
-
-- gamma_phi_min:
-
-  minimum allowed Gamma/IG dispersion (default 1e-6).
-
-- tweedie_power:
-
-  variance power parameter for Tweedie distribution (default 1.5). V(mu)
-  = mu^p. Special cases: p=0 Gaussian, p=1 Poisson, p=2 Gamma, p=3
-  Inverse Gaussian. Can also be set via
-  `distribution_config$tweedie_power`.
-
-- graph_W:
-
-  sparse graph Laplacian or weighted adjacency matrix (dgCMatrix, m x m)
-  for feature (row) graph regularization. Must be square and symmetric.
-  Pass the graph Laplacian \\L = D - A\\ (recommended) or a raw
-  adjacency matrix; RcppML converts to Laplacian internally. Controls
-  similarity constraints on W rows.
-
-- graph_H:
-
-  sparse graph Laplacian or weighted adjacency matrix (dgCMatrix, n x n)
-  for sample (column) graph regularization. Must be square and
-  symmetric. Controls similarity constraints on H columns.
-
-- graph_lambda:
-
-  regularization strength for graph Laplacian term, single value
-  (applied to both W and H graphs) or `c(lambda_W, lambda_H)` (default
-  `c(0, 0)`). Larger values enforce stronger similarity within connected
-  nodes.
-
-- guides:
-
-  reserved for future guided/semi-supervised NMF features.
-
-- sort_model:
-
-  if `TRUE` (default), sort factors by descending diagonal values.
-
-- mask_zeros:
-
-  if `TRUE`, treat all zero entries as missing (default `FALSE`).
+  loss function: `"mse"` (default), `"gp"`, `"nb"`, `"gamma"`,
+  `"inverse_gaussian"`, or `"tweedie"`. For robust loss (Huber/MAE), use
+  the `robust` parameter instead.
 
 - nonneg:
 
   logical vector of length 2 for `c(w, h)` specifying non-negativity
   constraints (default `c(TRUE, TRUE)`).
 
-- upper_bound:
-
-  upper bound constraints for factor values, single value or c(w_bound,
-  h_bound) (default c(0, 0) = no bound).
-
 - test_fraction:
 
   fraction of entries to hold out for cross-validation (default 0 =
   disabled).
 
-- patience:
-
-  early stopping patience for cross-validation (default 5).
-
-- cv_k_range:
-
-  rank range for automatic rank search, c(min, max) (default c(2, 50)).
-
-- cv_seed:
-
-  seed(s) for CV holdout pattern.
-
-- track_train_loss:
-
-  if `TRUE` (default), track training loss history during
-  cross-validation.
-
-- threads:
-
-  number of threads for OpenMP parallelization (default 0 = all
-  available)
-
 - verbose:
 
   print progress information during fitting (default FALSE)
 
-- cd_tol:
-
-  relative convergence tolerance for coordinate descent NNLS solver
-  (default 1e-8).
-
-- cd_maxit:
-
-  maximum number of coordinate descent iterations in the NNLS solver
-  (default 100). Acts as a safety cap; with adaptive CD probing, the
-  effective iteration count is determined automatically from a sample of
-  columns (typically 3-10 with warm starts).
-
-- cd_abs_tol:
-
-  absolute convergence tolerance for coordinate descent (default 1e-15).
-
-- norm:
-
-  normalization type for the scaling diagonal: `"L1"` (default), `"L2"`,
-  or `"none"`. Controls how W and H factors are normalized at each
-  iteration and in the final result.
-
-- streaming:
-
-  streaming mode for large matrices: `"auto"`, `TRUE`, or `FALSE`.
-
-- panel_cols:
-
-  number of columns per streaming panel (default 0 = auto-detect).
-
-- resource:
-
-  compute resource override: `"auto"` (default) auto-detects available
-  resources, `"cpu"` forces CPU, `"gpu"` forces GPU. Can also be set via
-  the `RCPPML_RESOURCE` environment variable (param takes priority over
-  env var).
-
 - projective:
 
-  if `TRUE`, use projective NMF where \\H = diag(d) \cdot W^T \cdot A\\
-  instead of solving for H independently (default `FALSE`). This
-  constrains the approximation to the column space of W, yielding
-  parts-based representations with automatic sparsity in the coefficient
-  matrix.
+  if `TRUE`, use projective NMF (default `FALSE`).
 
 - symmetric:
 
-  if `TRUE`, use symmetric NMF where \\H = W^T\\, factorizing \\A
-  \approx W \cdot d \cdot W^T\\ (default `FALSE`). Appropriate for
-  symmetric matrices such as covariance, correlation, or similarity
-  matrices. Only W is solved for; H is set equal to the transpose of W.
-  Data should be a square symmetric matrix.
+  if `TRUE`, use symmetric NMF where H = W^T (default `FALSE`).
 
-- solver:
+- zi:
 
-  NNLS solver for the alternating least squares subproblem: `"auto"`
-  (default) selects the best solver for the given rank and hardware — CD
-  for k \<= 32 on GPU, Cholesky otherwise. `"cholesky"` (Cholesky
-  factorization + non-negativity clip, fastest for high ranks), `"cd"`
-  (coordinate descent, exact non-negativity enforcement, best quality at
-  low ranks).
-
-- init:
-
-  initialization method: `"random"` (default, uniform random),
-  `"lanczos"` (Lanczos SVD seed with \\W = \|U\| \sqrt{\Sigma}\\, \\H =
-  \|V\| \sqrt{\Sigma}\\; typically reduces iteration count by 30-50\\
-  (Implicitly Restarted Lanczos Bidiagonalization; alternative to
-  Lanczos for high ranks k \>= 32). SVD-based methods (lanczos/irlba)
-  provide better initialization quality but add overhead; use when
-  initialization quality is more important than speed.
-
-- irls_max_iter:
-
-  maximum IRLS iterations for robust losses (default 20).
-
-- irls_tol:
-
-  convergence tolerance for IRLS weights (default 1e-4).
+  zero-inflation mode: `"none"` (default), `"row"`, or `"col"`. Requires
+  `loss="gp"` or `loss="nb"`.
 
 - robust:
 
-  robustness control. `FALSE` (default) for no robustness. `TRUE` for
-  Huber-type robustness with delta=1.345 (95\\ A positive numeric value
-  sets a custom Huber delta. Works with any distribution: IRLS weights
-  are decomposed into distribution_weight \* robust_huber_modifier.
-
-- distribution:
-
-  new unified distribution API. One of: `"auto"` (selects via score test
-  on a quick baseline fit), `"gaussian"` (MSE), `"poisson"` (GP with
-  dispersion=none), `"gp"` (Generalized Poisson), `"nb"` (Negative
-  Binomial), `"gamma"` (Gamma), `"inverse_gaussian"` (Inverse Gaussian),
-  or `"tweedie"` (Tweedie with continuous variance power V(mu) = mu^p;
-  set p via `tweedie_power` or `distribution_config$tweedie_power`).
-  When specified, takes precedence over the `loss` parameter. Use
-  `distribution_config` to set distribution-specific tuning parameters.
-
-- zero_inflation:
-
-  zero-inflation mode (new API): `"none"`, `"row"`, `"col"`, `"twoway"`,
-  or `"auto"`. Equivalent to the `zi` parameter but preferred in the new
-  API. Use `zi_config` for additional tuning.
-
-- distribution_config:
-
-  named list of distribution-specific overrides. Supported keys:
-  `dispersion` (dispersion mode), `theta_init`/`theta_max`/`theta_min`
-  (GP theta), `nb_size_init`/`nb_size_max`/`nb_size_min` (NB size r),
-  `gamma_phi_init`/`gamma_phi_max`/`gamma_phi_min` (Gamma/IG dispersion
-  phi).
-
-- zi_config:
-
-  named list of zero-inflation overrides. Supported keys: `em_iters`
-  (number of EM iterations per NMF step).
-
-- robust_config:
-
-  named list of robustness overrides. Supported keys: `delta` (Huber
-  delta), `irls_max_iter`, `irls_tol`.
-
-- on_iteration:
-
-  optional callback function called after each NMF iteration. Receives
-  iteration number and current loss. Return `FALSE` to stop early.
-
-- h_init:
-
-  optional initial H matrix (k x n) for custom initialization. When
-  provided alongside a custom W via `seed`, both factors are initialized
-  from user-supplied values. Default `NULL` (auto-init).
-
-- profile:
-
-  if `TRUE`, enable per-iteration timing profiling. Results stored in
-  `misc$profile` of the returned object. Default `FALSE`.
-
-- dispatch:
-
-  StreamPress dispatch mode for .spz file input. `NULL` (default) or
-  `"auto"` for automatic dispatch based on available RAM; a string like
-  `"inmemory"`, `"chunked"`, or `"streaming"` to override.
+  robustness control. `FALSE` (default), `TRUE` (Huber delta=1.345),
+  `"mae"` (near-MAE via very small Huber delta), or a positive numeric
+  Huber delta. Huber loss is quadratic for small residuals and linear
+  for large ones, controlled by delta. `TRUE` (delta=1.345) provides
+  moderate outlier robustness. A large delta (e.g. 100) approaches
+  standard MSE; a small delta (e.g. 0.01) approaches MAE. `"mae"` is
+  shorthand for delta=1e-4 (effectively L1 loss).
 
 - ...:
 
-  additional development parameters
+  advanced parameters. See **Advanced Parameters** section.
 
 ## Value
 
@@ -450,8 +143,7 @@ When `k` is a single integer: an S4 object of class `nmf` with slots:
 
   list containing `tol` (final tolerance), `iter` (iteration count),
   `loss` (final loss value), `loss_type` (loss function used), and
-  `runtime` (seconds). Cross-validation models also include `test_mask`,
-  `test_loss`, `train_loss`.
+  `runtime` (seconds).
 
 When `k` is a vector: a `data.frame` of class `nmfCrossValidate` with
 columns `k`, `rep`, `train_loss`, `test_loss`, and `best_iter`.
@@ -514,11 +206,6 @@ The `loss` parameter controls the objective function:
 - `"mse"`: Mean Squared Error (default). Standard Frobenius norm
   minimization.
 
-- `"mae"`: Mean Absolute Error. More robust to outliers than MSE.
-
-- `"huber"`: Huber loss. Quadratic for small errors, linear for large
-  errors. Controlled by `huber_delta` parameter.
-
 - `"gp"`: Generalized Poisson. For overdispersed count data (e.g.,
   scRNA-seq). Use `dispersion` to control per-row or global
   overdispersion estimation. With `dispersion="none"`, equivalent to KL
@@ -539,90 +226,174 @@ The `loss` parameter controls the objective function:
   p is set via `tweedie_power` (default 1.5). Interpolates between
   Poisson (p=1), Gamma (p=2), and Inverse Gaussian (p=3).
 
+For robust fitting (equivalent to Huber or MAE loss), use the `robust`
+parameter instead of a separate loss function. Setting `robust = TRUE`
+applies Huber-weighted IRLS with delta=1.345; `robust = "mae"`
+approximates mean absolute error.
+
 Non-MSE losses use Iteratively Reweighted Least Squares (IRLS) which may
-be slower but provides robustness to outliers (MAE, Huber) or better
-fits for count data (GP, NB) and positive continuous data (Gamma,
-Inverse Gaussian).
+be slower but provides better fits for count data (GP, NB) and positive
+continuous data (Gamma, Inverse Gaussian).
 
-Alternatively, use the `distribution` parameter for the new unified API,
-which maps distribution names to loss functions and provides
-`distribution_config` for fine-grained tuning.
+## Advanced Parameters (via `...`)
 
-## L21 (Group Sparsity) Regularization
+The following parameters can be passed via `...`:
 
-L21-norm regularization (also known as group LASSO) encourages entire
-rows of W or columns of H to become zero.
+**Regularization:**
 
-## Graph Regularization
+- `L21`:
 
-Graph Laplacian regularization encourages connected nodes in a graph to
-have similar factor representations.
+  Group sparsity penalty, single value or `c(w, h)` (default `c(0,0)`)
+
+- `angular`:
+
+  Angular decorrelation penalty, `c(w, h)` (default `c(0,0)`)
+
+- `upper_bound`:
+
+  Box constraint on factors, `c(w, h)` (default `c(0,0)` = no bound)
+
+- `graph_W`, `graph_H`:
+
+  Sparse graph Laplacian matrices for feature/sample regularization
+
+- `graph_lambda`:
+
+  Graph regularization strength, `c(w, h)` (default `c(0,0)`)
+
+- `target_H`:
+
+  Target matrix (k x n) for H-side regularization. Steers H toward a
+  desired structure during fitting. See
+  [`compute_target`](https://zdebruine.github.io/RcppML/reference/compute_target.md).
+
+- `target_lambda`:
+
+  Target regularization strength, single value or `c(w, h)` (default 0).
+  Positive values attract H toward the target (label enrichment);
+  negative values use PROJ_ADV eigenvalue-projected adversarial removal
+  to suppress target-correlated structure (batch removal). See
+  [`vignette("guided-nmf")`](https://zdebruine.github.io/RcppML/articles/guided-nmf.md)
+  for details.
+
+**Distribution Tuning:**
+
+- `dispersion`:
+
+  Dispersion mode for GP loss: `"per_row"`, `"per_col"`, `"global"`,
+  `"none"`
+
+- `theta_init`, `theta_max`, `theta_min`:
+
+  GP theta bounds
+
+- `nb_size_init`, `nb_size_max`, `nb_size_min`:
+
+  NB dispersion bounds
+
+- `gamma_phi_init`, `gamma_phi_max`, `gamma_phi_min`:
+
+  Gamma/IG dispersion bounds
+
+- `tweedie_power`:
+
+  Tweedie variance power (default 1.5)
+
+- `irls_max_iter`, `irls_tol`:
+
+  IRLS convergence parameters
+
+**Zero-Inflation:**
+
+- `zi_em_iters`:
+
+  EM iterations per NMF step (default 1)
+
+**Solver:**
+
+- `solver`:
+
+  NNLS solver: `"auto"`, `"cholesky"`, `"cd"`
+
+- `cd_tol`:
+
+  CD convergence tolerance (default 1e-8)
+
+- `cd_maxit`:
+
+  CD max iterations (default 100)
+
+- `h_init`:
+
+  Custom initial H matrix
+
+**Cross-Validation:**
+
+- `cv_seed`:
+
+  Separate seed(s) for CV holdout pattern
+
+- `patience`:
+
+  Early stopping patience (default 5)
+
+- `cv_k_range`:
+
+  Auto-rank search range (default `c(2, 50)`)
+
+- `track_train_loss`:
+
+  Track training loss in CV (default TRUE)
+
+**Resources & Output:**
+
+- `threads`:
+
+  OpenMP threads (default 0 = all)
+
+- `resource`:
+
+  Compute backend: `"auto"`, `"cpu"`, `"gpu"`
+
+- `norm`:
+
+  Factor normalization: `"L1"`, `"L2"`, `"none"`
+
+- `sort_model`:
+
+  Sort factors by diagonal (default TRUE)
+
+**Streaming:**
+
+- `streaming`:
+
+  SPZ streaming mode: `"auto"`, `TRUE`, `FALSE`
+
+- `panel_cols`:
+
+  Panel size for streaming (default 0 = auto)
+
+- `dispatch`:
+
+  StreamPress dispatch override
+
+**Callbacks:**
+
+- `on_iteration`:
+
+  Per-iteration callback function
+
+- `profile`:
+
+  Enable timing profiling (default FALSE)
 
 ## Compute Resources (CPU vs GPU)
 
 By default (`resource = "auto"`), RcppML auto-detects available
-hardware. All features are fully supported on CPU (the default backend):
-
-- Standard NMF (sparse and dense)
-
-- Cross-validation NMF
-
-- All loss functions (MSE, MAE, Huber, KL)
-
-- All regularization types (L1, L2, L21, angular, graph)
-
-- Upper bound constraints
-
-- OpenMP multi-threading
-
-GPU acceleration (when compiled with CUDA support) accelerates:
-
-- Sparse NMF (standard mode)
-
-- Dense NMF (standard mode)
-
-GPU is experimental and falls back to CPU automatically if unavailable.
-Use `resource = "gpu"` to force GPU, `resource = "cpu"` to force CPU.
-Set `verbose = TRUE` to see which backend is selected.
-
-## Unsupported Combinations
-
-Not all parameter combinations are currently supported. The following
-will produce an error or unexpected results:
-
-- Cholesky + non-MSE loss:
-
-  The Cholesky solver (`solver="cholesky"`) does not support IRLS-based
-  losses (GP, NB, Gamma, Inverse Gaussian, Tweedie). Use `solver="cd"`
-  or `solver="auto"` (default) for non-MSE losses.
-
-- Zero-inflation with non-GP/NB losses:
-
-  Zero-inflation (`zi` or `zero_inflation`) is only supported with
-  `loss="gp"` and `loss="nb"`. Using ZI with MSE, Gamma, Inverse
-  Gaussian, or Tweedie is unsupported and will produce incorrect
-  results.
-
-- Zero-inflation "twoway" mode:
-
-  The `zi="twoway"` mode is currently broken on all backends. Use
-  `zi="row"` or `zi="col"` instead.
-
-- MAE and Huber losses:
-
-  The `"mae"` and `"huber"` loss functions are deprecated. Use the
-  `robust` parameter with any distribution instead (e.g., `robust=TRUE`
-  with `distribution="gaussian"`).
-
-- GPU + dense CV:
-
-  GPU cross-validation with dense matrices falls back to CPU via
-  sparseView conversion. Native GPU dense CV is not yet implemented.
-
-- GPU + projective/symmetric CV:
-
-  Cross-validation with `projective=TRUE` or `symmetric=TRUE` falls back
-  to CPU on GPU builds.
+hardware. All features are fully supported on CPU (the default backend).
+GPU acceleration (when compiled with CUDA support) accelerates sparse
+and dense NMF. GPU is experimental and falls back to CPU automatically
+if unavailable.
 
 ## Methods
 
@@ -672,14 +443,14 @@ Zach DeBruine
 model <- nmf(Matrix::rsparsematrix(1000, 100, 0.1), k = 10)
 
 # cross-validation to find optimal rank
-library(Matrix)
-A <- rsparsematrix(500, 100, 0.1)
-cv_results <- nmf(A, k = 2:10, cv_seed = 1:3, test_fraction = 0.1)
-plot(cv_results)
+sim <- simulateNMF(200, 80, k = 5, noise = 3.0, seed = 42)
+cv <- nmf(sim$A, k = 2:10, test_fraction = 0.05, cv_seed = 1:3,
+          tol = 1e-5, maxit = 200)
+plot(cv)
 
-optimal_k <- cv_results$k[which.min(cv_results$test_mse)]
+optimal_k <- cv$k[which.min(cv$test_mse)]
 
 # fit final model with optimal rank
-model <- nmf(A, optimal_k)
+model <- nmf(sim$A, optimal_k)
 # }
 ```

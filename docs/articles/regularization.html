@@ -139,8 +139,9 @@ W and H) or a length-2 vector <code>c(w, h)</code> for independent
 control. Zero means no penalty (the default for all).</p>
 <p>Each penalty modifies the NNLS subproblem: L1 subtracts from the RHS
 (soft thresholding), L2 adds to the Gram diagonal (Tikhonov), angular
-adds off-diagonal terms to the Gram (decorrelation), and graph Laplacian
-adds the Laplacian matrix to the Gram (smoothness).</p>
+applies a post-solve projection that subtracts correlated components
+between factors (decorrelation), and graph Laplacian adds the Laplacian
+matrix to the Gram (smoothness).</p>
 </div>
 </div>
 <div class="section level2">
@@ -151,27 +152,38 @@ adds the Laplacian matrix to the Gram (smoothness).</p>
 by alternating NNLS updates. Each penalty extends the per-column
 subproblem:
 <math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><munder><mo>min</mo><mrow><mi>h</mi><mo>≥</mo><mn>0</mn></mrow></munder><mo stretchy="false" form="postfix">∥</mo><mi>G</mi><mi>h</mi><mo>−</mo><mi>b</mi><msup><mo stretchy="false" form="postfix">∥</mo><mn>2</mn></msup><mo>+</mo><msub><mi>λ</mi><mn>1</mn></msub><mo stretchy="false" form="postfix">∥</mo><mi>h</mi><msub><mo stretchy="false" form="postfix">∥</mo><mn>1</mn></msub><mo>+</mo><msub><mi>λ</mi><mn>2</mn></msub><mo stretchy="false" form="postfix">∥</mo><mi>h</mi><msubsup><mo stretchy="false" form="postfix">∥</mo><mn>2</mn><mn>2</mn></msubsup></mrow><annotation encoding="application/x-tex">\min_{h \geq 0} \|Gh - b\|^2 + \lambda_1 \|h\|_1 + \lambda_2 \|h\|^2_2</annotation></semantics></math></p>
+<p>The full penalized NMF objective is:
+<math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ℒ</mi><mo>=</mo><mo stretchy="false" form="postfix">∥</mo><mi>A</mi><mo>−</mo><mi>W</mi><mi>D</mi><mi>H</mi><msubsup><mo stretchy="false" form="postfix">∥</mo><mi>F</mi><mn>2</mn></msubsup><mo>+</mo><msub><mi>λ</mi><mrow><mi>L</mi><mn>1</mn></mrow></msub><munder><mo>∑</mo><mrow><mi>i</mi><mi>j</mi></mrow></munder><mrow><mo stretchy="true" form="prefix">|</mo><msub><mi>W</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo stretchy="true" form="postfix">|</mo></mrow><mo>+</mo><msub><mi>λ</mi><mrow><mi>L</mi><mn>2</mn></mrow></msub><munder><mo>∑</mo><mrow><mi>i</mi><mi>j</mi></mrow></munder><msubsup><mi>W</mi><mrow><mi>i</mi><mi>j</mi></mrow><mn>2</mn></msubsup><mo>+</mo><msub><mi>λ</mi><mtext mathvariant="normal">ang</mtext></msub><munder><mo>∑</mo><mrow><mi>i</mi><mo>&lt;</mo><mi>j</mi></mrow></munder><mo>cos</mo><mrow><mo stretchy="true" form="prefix">(</mo><msub><mi>w</mi><mi>i</mi></msub><mo>,</mo><msub><mi>w</mi><mi>j</mi></msub><mo stretchy="true" form="postfix">)</mo></mrow><mo>+</mo><msub><mi>λ</mi><mi>G</mi></msub><mspace width="0.167em"></mspace><mtext mathvariant="normal">tr</mtext><mrow><mo stretchy="true" form="prefix">(</mo><mi>H</mi><mi>L</mi><msup><mi>H</mi><mi>⊤</mi></msup><mo stretchy="true" form="postfix">)</mo></mrow></mrow><annotation encoding="application/x-tex">\mathcal{L} = \|A - WDH\|_F^2 + \lambda_{L1} \sum_{ij} |W_{ij}| + \lambda_{L2} \sum_{ij} W_{ij}^2 + \lambda_{\text{ang}} \sum_{i &lt; j} \cos(w_i, w_j) + \lambda_G \, \text{tr}(H L H^\top)</annotation></semantics></math></p>
+<p>Each penalty modifies the NNLS subproblem:</p>
 <ul>
 <li>
-<strong>L1 (LASSO)</strong>: Produces element-wise sparsity. Ideal
-when each factor should activate only a subset of features.</li>
+<strong>L1 (LASSO)</strong>:
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>λ</mi><mn>1</mn></msub><mo stretchy="false" form="postfix">∥</mo><mi>h</mi><msub><mo stretchy="false" form="postfix">∥</mo><mn>1</mn></msub></mrow><annotation encoding="application/x-tex">\lambda_1 \|h\|_1</annotation></semantics></math>
+— soft-thresholds the RHS, driving small coefficients to exactly zero.
+Ideal for sparse factors.</li>
 <li>
-<strong>L2 (Ridge)</strong>: Shrinks coefficients smoothly. Prevents
-individual loadings from dominating.</li>
+<strong>L2 (Ridge)</strong>:
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>λ</mi><mn>2</mn></msub><mo stretchy="false" form="postfix">∥</mo><mi>h</mi><msubsup><mo stretchy="false" form="postfix">∥</mo><mn>2</mn><mn>2</mn></msubsup></mrow><annotation encoding="application/x-tex">\lambda_2 \|h\|_2^2</annotation></semantics></math>
+— adds
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>λ</mi><mn>2</mn></msub><mi>I</mi></mrow><annotation encoding="application/x-tex">\lambda_2 I</annotation></semantics></math>
+to the Gram diagonal (Tikhonov regularization). Shrinks coefficients
+smoothly.</li>
 <li>
-<strong>L21 (Group LASSO)</strong>: Zeros entire groups — useful for
-feature selection across factors.</li>
+<strong>L21 (Group LASSO)</strong>:
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>λ</mi><mn>21</mn></msub><msub><mo>∑</mo><mi>g</mi></msub><mo stretchy="false" form="postfix">∥</mo><msub><mi>h</mi><mi>g</mi></msub><msub><mo stretchy="false" form="postfix">∥</mo><mn>2</mn></msub></mrow><annotation encoding="application/x-tex">\lambda_{21} \sum_g \|h_g\|_2</annotation></semantics></math>
+— zeros entire groups (rows/columns). Useful for feature selection.</li>
 <li>
-<strong>Angular</strong>: Penalizes
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>cos</mo><mrow><mo stretchy="true" form="prefix">(</mo><msub><mi>w</mi><mi>i</mi></msub><mo>,</mo><msub><mi>w</mi><mi>j</mi></msub><mo stretchy="true" form="postfix">)</mo></mrow></mrow><annotation encoding="application/x-tex">\cos(w_i, w_j)</annotation></semantics></math>
-between factor pairs, pushing them toward orthogonality.</li>
+<strong>Angular</strong>:
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>λ</mi><mi>a</mi></msub><msub><mo>∑</mo><mrow><mi>i</mi><mo>&lt;</mo><mi>j</mi></mrow></msub><mfrac><mrow><msubsup><mi>w</mi><mi>i</mi><mi>⊤</mi></msubsup><msub><mi>w</mi><mi>j</mi></msub></mrow><mrow><mo stretchy="false" form="postfix">∥</mo><msub><mi>w</mi><mi>i</mi></msub><mo stretchy="false" form="postfix">∥</mo><mo stretchy="false" form="postfix">∥</mo><msub><mi>w</mi><mi>j</mi></msub><mo stretchy="false" form="postfix">∥</mo></mrow></mfrac></mrow><annotation encoding="application/x-tex">\lambda_a \sum_{i&lt;j} \frac{w_i^\top w_j}{\|w_i\|\|w_j\|}</annotation></semantics></math>
+— after the NNLS solve, subtracts correlated components from each factor
+profile, directly pushing overlapping factors apart.</li>
 <li>
-<strong>Graph Laplacian</strong>: Adds
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>λ</mi><mspace width="0.167em"></mspace><mtext mathvariant="normal">tr</mtext><mrow><mo stretchy="true" form="prefix">(</mo><mi>H</mi><mi>L</mi><msup><mi>H</mi><mi>⊤</mi></msup><mo stretchy="true" form="postfix">)</mo></mrow></mrow><annotation encoding="application/x-tex">\lambda \, \text{tr}(H L H^\top)</annotation></semantics></math>
+<strong>Graph Laplacian</strong>:
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>λ</mi><mi>G</mi></msub><mspace width="0.167em"></mspace><mtext mathvariant="normal">tr</mtext><mrow><mo stretchy="true" form="prefix">(</mo><mi>H</mi><mi>L</mi><msup><mi>H</mi><mi>⊤</mi></msup><mo stretchy="true" form="postfix">)</mo></mrow></mrow><annotation encoding="application/x-tex">\lambda_G \, \text{tr}(H L H^\top)</annotation></semantics></math>
 where
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>L</mi><mo>=</mo><mi>D</mi><mo>−</mo><mi>A</mi></mrow><annotation encoding="application/x-tex">L = D - A</annotation></semantics></math>
-is the graph Laplacian. Connected nodes receive similar factor
-values.</li>
+— adds the Laplacian to the Gram, encouraging connected nodes to share
+similar values.</li>
 </ul>
 <table class="table">
 <thead><tr class="header">
@@ -198,7 +210,7 @@ values.</li>
 <tr class="even">
 <td>Decorrelated factors</td>
 <td>angular on W</td>
-<td>0.1–1.0</td>
+<td>0.01–0.5</td>
 </tr>
 <tr class="odd">
 <td>Spatially smooth factors</td>
@@ -217,69 +229,82 @@ values.</li>
 <h2 id="example-1-l1-sparsity-spectrum-on-swimmers">Example 1: L1 Sparsity Spectrum on Swimmers<a class="anchor" aria-label="anchor" href="#example-1-l1-sparsity-spectrum-on-swimmers"></a>
 </h2>
 <p>The swimmer benchmark generates 32×32 images of stick figures with 4
-limbs in 4 positions each (true rank = 16). We fit NMF at four L1 levels
-to see how sparsity affects factor interpretability.</p>
+limbs in 4 positions each (true rank = 16). Here are some example images
+from the dataset:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulateSwimmer.html">simulateSwimmer</a></span><span class="op">(</span><span class="fl">256</span>, style <span class="op">=</span> <span class="st">"gaussian"</span>, seed <span class="op">=</span> <span class="fl">42</span>, return_factors <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="va">A</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">A</span><span class="op">)</span>  <span class="co"># pixels (1024) x images (256)</span></span>
 <span></span>
-<span><span class="va">l1_values</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.1</span>, <span class="fl">0.3</span>, <span class="fl">0.5</span><span class="op">)</span></span>
+<span><span class="co"># Show 8 example swimmer images</span></span>
+<span><span class="va">example_ids</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">256</span>, length.out <span class="op">=</span> <span class="fl">8</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">example_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_along</a></span><span class="op">(</span><span class="va">example_ids</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">idx</span> <span class="op">&lt;-</span> <span class="va">example_ids</span><span class="op">[</span><span class="va">i</span><span class="op">]</span></span>
+<span>  <span class="va">grid</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/expand.grid.html" class="external-link">expand.grid</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">32</span>, y <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">32</span><span class="op">)</span></span>
+<span>  <span class="va">grid</span><span class="op">$</span><span class="va">value</span> <span class="op">&lt;-</span> <span class="va">A</span><span class="op">[</span>, <span class="va">idx</span><span class="op">]</span></span>
+<span>  <span class="va">grid</span><span class="op">$</span><span class="va">image</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"Image "</span>, <span class="va">idx</span><span class="op">)</span></span>
+<span>  <span class="va">grid</span></span>
+<span><span class="op">}</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">example_data</span><span class="op">$</span><span class="va">image</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">example_data</span><span class="op">$</span><span class="va">image</span>, levels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="va">example_data</span><span class="op">$</span><span class="va">image</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">example_data</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">x</span>, y <span class="op">=</span> <span class="va">y</span>, fill <span class="op">=</span> <span class="va">value</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_raster</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">scale_fill_gradient</span><span class="op">(</span>low <span class="op">=</span> <span class="st">"white"</span>, high <span class="op">=</span> <span class="st">"black"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">scale_y_reverse</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">facet_wrap</span><span class="op">(</span><span class="op">~</span> <span class="va">image</span>, nrow <span class="op">=</span> <span class="fl">1</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">coord_equal</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme</span><span class="op">(</span>axis.text <span class="op">=</span> <span class="fu">element_blank</span><span class="op">(</span><span class="op">)</span>, axis.ticks <span class="op">=</span> <span class="fu">element_blank</span><span class="op">(</span><span class="op">)</span>,</span>
+<span>        axis.title <span class="op">=</span> <span class="fu">element_blank</span><span class="op">(</span><span class="op">)</span>, legend.position <span class="op">=</span> <span class="st">"none"</span>,</span>
+<span>        strip.text <span class="op">=</span> <span class="fu">element_text</span><span class="op">(</span>size <span class="op">=</span> <span class="fl">8</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">ggtitle</span><span class="op">(</span><span class="st">"Example swimmer images"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="regularization_files/figure-html/swimmer-examples-1.png" class="r-plt" alt="" width="672"></p>
+<p>We fit NMF at four L1 levels to see how sparsity affects factor
+interpretability. All models share the same random initialization (seed
+= 42).</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">l1_values</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.05</span>, <span class="fl">0.1</span>, <span class="fl">0.5</span><span class="op">)</span></span>
 <span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">l1_values</span>, <span class="kw">function</span><span class="op">(</span><span class="va">l1</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">A</span>, k <span class="op">=</span> <span class="fl">16</span>, L1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">l1</span>, <span class="fl">0</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">42</span>, maxit <span class="op">=</span> <span class="fl">50</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">A</span>, k <span class="op">=</span> <span class="fl">16</span>, L1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">l1</span>, <span class="fl">0</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">42</span>, tol <span class="op">=</span> <span class="fl">1e-5</span>, maxit <span class="op">=</span> <span class="fl">200</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="op">}</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">sparsity_table</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span><span class="va">sparsity_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>  L1 <span class="op">=</span> <span class="va">l1_values</span>,</span>
-<span>  `W Sparsity (% zeros)` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">results</span>, <span class="kw">function</span><span class="op">(</span><span class="va">m</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fl">100</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">m</span><span class="op">@</span><span class="va">w</span> <span class="op">==</span> <span class="fl">0</span><span class="op">)</span>, <span class="fl">1</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>  `Reconstruction MSE` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">results</span>, <span class="kw">function</span><span class="op">(</span><span class="va">m</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="../reference/evaluate.html">evaluate</a></span><span class="op">(</span><span class="va">m</span>, <span class="va">A</span><span class="op">)</span>, <span class="fl">5</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>  check.names <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  Sparsity <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">results</span>, <span class="kw">function</span><span class="op">(</span><span class="va">m</span><span class="op">)</span> <span class="fl">100</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">m</span><span class="op">@</span><span class="va">w</span> <span class="op">==</span> <span class="fl">0</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">sparsity_table</span>, digits <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">1</span>, <span class="fl">5</span><span class="op">)</span>,</span>
-<span>             caption <span class="op">=</span> <span class="st">"L1 sparsity vs. reconstruction tradeoff on the swimmer benchmark"</span><span class="op">)</span></span></code></pre></div>
-<table class="table">
-<caption>L1 sparsity vs. reconstruction tradeoff on the swimmer
-benchmark</caption>
-<thead><tr class="header">
-<th align="right">L1</th>
-<th align="right">W Sparsity (% zeros)</th>
-<th align="right">Reconstruction MSE</th>
-</tr></thead>
-<tbody>
-<tr class="odd">
-<td align="right">0.0</td>
-<td align="right">43.6</td>
-<td align="right">0.04893</td>
-</tr>
-<tr class="even">
-<td align="right">0.1</td>
-<td align="right">89.7</td>
-<td align="right">0.00288</td>
-</tr>
-<tr class="odd">
-<td align="right">0.3</td>
-<td align="right">94.5</td>
-<td align="right">0.02125</td>
-</tr>
-<tr class="even">
-<td align="right">0.5</td>
-<td align="right">96.2</td>
-<td align="right">0.04935</td>
-</tr>
-</tbody>
-</table>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">sparsity_df</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">L1</span>, y <span class="op">=</span> <span class="va">Sparsity</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_line</span><span class="op">(</span>linewidth <span class="op">=</span> <span class="fl">0.8</span><span class="op">)</span> <span class="op">+</span> <span class="fu">geom_point</span><span class="op">(</span>size <span class="op">=</span> <span class="fl">3</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>x <span class="op">=</span> <span class="st">"L1 penalty"</span>, y <span class="op">=</span> <span class="st">"W sparsity (% exact zeros)"</span>,</span>
+<span>       title <span class="op">=</span> <span class="st">"L1 penalty drives factor sparsity"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<p><img src="regularization_files/figure-html/swimmer-l1-spectrum-1.png" class="r-plt" alt="" width="672"></p>
 <p>At L1 = 0 (no penalty), factors are dense and hard to interpret. As
-L1 increases, more coefficients are driven to zero — each factor
+L1 increases, more coefficients are driven to exactly zero — each factor
 isolates a specific limb position. Beyond L1 = 0.5, factors become
 over-sparse and lose structure.</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Show one representative factor at each L1 level</span></span>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Use L1 = 0.1 as reference (all 16 factors alive; L1 = 0 can have dead factors)</span></span>
+<span><span class="va">ref_model</span> <span class="op">&lt;-</span> <span class="va">results</span><span class="op">[[</span><span class="fu"><a href="https://rdrr.io/r/base/which.html" class="external-link">which</a></span><span class="op">(</span><span class="va">l1_values</span> <span class="op">==</span> <span class="fl">0.1</span><span class="op">)</span><span class="op">]</span><span class="op">]</span></span>
+<span></span>
+<span><span class="co"># Select 4 diverse factors (lowest mean off-diagonal cosine similarity)</span></span>
+<span><span class="va">ref_cos</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/cosine.html">cosine</a></span><span class="op">(</span><span class="va">ref_model</span><span class="op">@</span><span class="va">w</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/diag.html" class="external-link">diag</a></span><span class="op">(</span><span class="va">ref_cos</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fl">0</span></span>
+<span><span class="va">ref_mean_sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/colSums-methods.html" class="external-link">colMeans</a></span><span class="op">(</span><span class="va">ref_cos</span><span class="op">)</span></span>
+<span><span class="va">factor_ids</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">ref_mean_sim</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">4</span><span class="op">]</span></span>
+<span></span>
+<span><span class="co"># For each L1 model, find best greedy cosine match to each reference factor</span></span>
 <span><span class="va">plot_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_along</a></span><span class="op">(</span><span class="va">l1_values</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="va">model</span> <span class="op">&lt;-</span> <span class="va">results</span><span class="op">[[</span><span class="va">i</span><span class="op">]</span><span class="op">]</span></span>
-<span>  <span class="co"># Show 4 diverse factors</span></span>
-<span>  <span class="va">factor_ids</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">5</span>, <span class="fl">9</span>, <span class="fl">13</span><span class="op">)</span></span>
+<span>  <span class="va">used</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">integer</a></span><span class="op">(</span><span class="fl">0</span><span class="op">)</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">factor_ids</span>, <span class="kw">function</span><span class="op">(</span><span class="va">fi</span><span class="op">)</span> <span class="op">{</span></span>
-<span>    <span class="kw">if</span> <span class="op">(</span><span class="va">fi</span> <span class="op">&gt;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">model</span><span class="op">@</span><span class="va">w</span><span class="op">)</span><span class="op">)</span> <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="cn">NULL</span><span class="op">)</span></span>
-<span>    <span class="va">vals</span> <span class="op">&lt;-</span> <span class="va">model</span><span class="op">@</span><span class="va">w</span><span class="op">[</span>, <span class="va">fi</span><span class="op">]</span></span>
+<span>    <span class="kw">if</span> <span class="op">(</span><span class="va">l1_values</span><span class="op">[</span><span class="va">i</span><span class="op">]</span> <span class="op">==</span> <span class="fl">0.1</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="va">best</span> <span class="op">&lt;-</span> <span class="va">fi</span>  <span class="co"># reference model: show factor directly</span></span>
+<span>    <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
+<span>      <span class="va">cos_sims</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">as.vector</a></span><span class="op">(</span><span class="fu"><a href="../reference/cosine.html">cosine</a></span><span class="op">(</span><span class="va">ref_model</span><span class="op">@</span><span class="va">w</span><span class="op">[</span>, <span class="va">fi</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span>, <span class="va">model</span><span class="op">@</span><span class="va">w</span><span class="op">)</span><span class="op">)</span></span>
+<span>      <span class="va">cos_sims</span><span class="op">[</span><span class="va">used</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="op">-</span><span class="cn">Inf</span>  <span class="co"># exclude already-matched</span></span>
+<span>      <span class="va">best</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/which.min.html" class="external-link">which.max</a></span><span class="op">(</span><span class="va">cos_sims</span><span class="op">)</span></span>
+<span>    <span class="op">}</span></span>
+<span>    <span class="va">used</span> <span class="op">&lt;&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">used</span>, <span class="va">best</span><span class="op">)</span></span>
+<span>    <span class="va">vals</span> <span class="op">&lt;-</span> <span class="fu">rescale01</span><span class="op">(</span><span class="va">model</span><span class="op">@</span><span class="va">w</span><span class="op">[</span>, <span class="va">best</span><span class="op">]</span><span class="op">)</span></span>
 <span>    <span class="va">grid</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/expand.grid.html" class="external-link">expand.grid</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">32</span>, y <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">32</span><span class="op">)</span></span>
 <span>    <span class="va">grid</span><span class="op">$</span><span class="va">value</span> <span class="op">&lt;-</span> <span class="va">vals</span></span>
 <span>    <span class="va">grid</span><span class="op">$</span><span class="va">factor</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="st">"Factor"</span>, <span class="va">fi</span><span class="op">)</span></span>
@@ -287,198 +312,428 @@ over-sparse and lose structure.</p>
 <span>    <span class="va">grid</span></span>
 <span>  <span class="op">}</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">}</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">plot_data</span><span class="op">$</span><span class="va">L1</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">plot_data</span><span class="op">$</span><span class="va">L1</span>, levels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"L1 = "</span>, <span class="va">l1_values</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">ggplot</span><span class="op">(</span><span class="va">plot_data</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">x</span>, y <span class="op">=</span> <span class="va">y</span>, fill <span class="op">=</span> <span class="va">value</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">geom_raster</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">scale_fill_gradient</span><span class="op">(</span>low <span class="op">=</span> <span class="st">"white"</span>, high <span class="op">=</span> <span class="st">"black"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">scale_y_reverse</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">facet_grid</span><span class="op">(</span><span class="va">L1</span> <span class="op">~</span> <span class="va">factor</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">facet_grid</span><span class="op">(</span><span class="va">factor</span> <span class="op">~</span> <span class="va">L1</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">coord_equal</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">theme</span><span class="op">(</span>axis.text <span class="op">=</span> <span class="fu">element_blank</span><span class="op">(</span><span class="op">)</span>, axis.ticks <span class="op">=</span> <span class="fu">element_blank</span><span class="op">(</span><span class="op">)</span>,</span>
 <span>        axis.title <span class="op">=</span> <span class="fu">element_blank</span><span class="op">(</span><span class="op">)</span>, legend.position <span class="op">=</span> <span class="st">"none"</span>,</span>
 <span>        strip.text <span class="op">=</span> <span class="fu">element_text</span><span class="op">(</span>size <span class="op">=</span> <span class="fl">8</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">ggtitle</span><span class="op">(</span><span class="st">"Swimmer factors at increasing L1 sparsity"</span><span class="op">)</span></span></code></pre></div>
 <p><img src="regularization_files/figure-html/swimmer-l1-figure-1.png" class="r-plt" alt="" width="672"></p>
-<p>The progression is clear: L1 = 0 produces diffuse factors; L1 = 0.3
-yields clean, localized limb positions; L1 = 0.5 begins to
-over-penalize.</p>
+<p>The progression is clear: L1 = 0 produces diffuse factors; L1 = 0.1
+yields clean, localized limb positions; L1 = 0.5 produces the sparsest
+factors.</p>
 </div>
 <div class="section level2">
 <h2 id="example-2-angular-decorrelation-on-face-data">Example 2: Angular Decorrelation on Face Data<a class="anchor" aria-label="anchor" href="#example-2-angular-decorrelation-on-face-data"></a>
 </h2>
-<p>When factors are correlated, they capture overlapping structure.
-Angular regularization penalizes pairwise correlation between factors,
-producing more distinct components.</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">olivetti</span><span class="op">)</span></span>
-<span><span class="va">A_faces</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">olivetti</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">100</span>, <span class="op">]</span><span class="op">)</span>  <span class="co"># 4096 pixels x 100 images</span></span>
-<span></span>
-<span><span class="va">baseline</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">A_faces</span>, k <span class="op">=</span> <span class="fl">10</span>, seed <span class="op">=</span> <span class="fl">42</span>, maxit <span class="op">=</span> <span class="fl">50</span><span class="op">)</span></span>
-<span><span class="va">decorr</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">A_faces</span>, k <span class="op">=</span> <span class="fl">10</span>, angular <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.5</span>, <span class="fl">0</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">42</span>, maxit <span class="op">=</span> <span class="fl">50</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Compute factor correlation matrices</span></span>
-<span><span class="va">cor_base</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">baseline</span><span class="op">@</span><span class="va">w</span><span class="op">)</span></span>
-<span><span class="va">cor_decorr</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="va">decorr</span><span class="op">@</span><span class="va">w</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Mean absolute off-diagonal correlation</span></span>
-<span><span class="va">mean_cor_base</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">cor_base</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/lower.tri.html" class="external-link">upper.tri</a></span><span class="op">(</span><span class="va">cor_base</span><span class="op">)</span><span class="op">]</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">mean_cor_decorr</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">cor_decorr</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/lower.tri.html" class="external-link">upper.tri</a></span><span class="op">(</span><span class="va">cor_decorr</span><span class="op">)</span><span class="op">]</span><span class="op">)</span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">cor_table</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
-<span>  Method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Baseline (no penalty)"</span>, <span class="st">"Angular (0.5)"</span><span class="op">)</span>,</span>
-<span>  `Mean |correlation|` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">mean_cor_base</span>, <span class="va">mean_cor_decorr</span><span class="op">)</span>,</span>
-<span>  `Max |correlation|` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">cor_base</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/lower.tri.html" class="external-link">upper.tri</a></span><span class="op">(</span><span class="va">cor_base</span><span class="op">)</span><span class="op">]</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>                          <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">cor_decorr</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/lower.tri.html" class="external-link">upper.tri</a></span><span class="op">(</span><span class="va">cor_decorr</span><span class="op">)</span><span class="op">]</span><span class="op">)</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>  `Reconstruction MSE` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="../reference/evaluate.html">evaluate</a></span><span class="op">(</span><span class="va">baseline</span>, <span class="va">A_faces</span><span class="op">)</span>,</span>
-<span>                           <span class="fu"><a href="../reference/evaluate.html">evaluate</a></span><span class="op">(</span><span class="va">decorr</span>, <span class="va">A_faces</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>  check.names <span class="op">=</span> <span class="cn">FALSE</span></span>
-<span><span class="op">)</span></span>
-<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">cor_table</span>, digits <span class="op">=</span> <span class="fl">4</span>,</span>
-<span>             caption <span class="op">=</span> <span class="st">"Angular regularization reduces inter-factor correlation"</span><span class="op">)</span></span></code></pre></div>
-<table class="table">
-<caption>Angular regularization reduces inter-factor
-correlation</caption>
-<colgroup>
-<col width="22%">
-<col width="29%">
-<col width="28%">
-<col width="19%">
-</colgroup>
-<thead><tr class="header">
-<th align="left">Method</th>
-<th align="right">Mean |correlation|</th>
-<th align="right">Max |correlation|</th>
-<th align="right">Reconstruction MSE</th>
-</tr></thead>
-<tbody>
-<tr class="odd">
-<td align="left">Baseline (no penalty)</td>
-<td align="right">0.2204</td>
-<td align="right">0.5479</td>
-<td align="right">0.0088</td>
-</tr>
-<tr class="even">
-<td align="left">Angular (0.5)</td>
-<td align="right">NA</td>
-<td align="right">NA</td>
-<td align="right">0.2687</td>
-</tr>
-</tbody>
-</table>
+<p>When factors have high cosine similarity, they capture overlapping
+structure. Angular regularization penalizes pairwise cosine similarity
+between factors, producing more distinct components. Angular acts on
+<strong>W</strong> (factor profiles), decorrelating the directions
+factors occupy in feature space without penalizing the loading matrix
+<strong>H</strong>.</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Build correlation heatmap data for both models</span></span>
-<span><span class="va">make_cor_df</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">cor_mat</span>, <span class="va">label</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="va">n</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">cor_mat</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">olivetti</span><span class="op">)</span></span>
+<span><span class="va">A_faces</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">olivetti</span><span class="op">)</span>  <span class="co"># 4096 pixels x 400 images (40 subjects × 10 poses)</span></span>
+<span></span>
+<span><span class="va">baseline</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">A_faces</span>, k <span class="op">=</span> <span class="fl">20</span>, seed <span class="op">=</span> <span class="fl">42</span>, tol <span class="op">=</span> <span class="fl">1e-5</span>, maxit <span class="op">=</span> <span class="fl">200</span><span class="op">)</span></span>
+<span><span class="va">decorr</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">A_faces</span>, k <span class="op">=</span> <span class="fl">20</span>, angular <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.1</span>, <span class="fl">0</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">42</span>, tol <span class="op">=</span> <span class="fl">1e-5</span>, maxit <span class="op">=</span> <span class="fl">200</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Align decorrelated factors to baseline via bipartite matching on cosine distance</span></span>
+<span><span class="va">decorr</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/align.html">align</a></span><span class="op">(</span><span class="va">decorr</span>, <span class="va">baseline</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Compute factor cosine similarity matrices</span></span>
+<span><span class="va">cos_base</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/cosine.html">cosine</a></span><span class="op">(</span><span class="va">baseline</span><span class="op">@</span><span class="va">w</span><span class="op">)</span></span>
+<span><span class="va">cos_decorr</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/cosine.html">cosine</a></span><span class="op">(</span><span class="va">decorr</span><span class="op">@</span><span class="va">w</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Mean off-diagonal cosine similarity</span></span>
+<span><span class="va">mean_cos_base</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">cos_base</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/lower.tri.html" class="external-link">upper.tri</a></span><span class="op">(</span><span class="va">cos_base</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span>
+<span><span class="va">mean_cos_decorr</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">cos_decorr</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/lower.tri.html" class="external-link">upper.tri</a></span><span class="op">(</span><span class="va">cos_decorr</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">cos_compare</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>  Model <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Baseline"</span>, <span class="st">"Angular (0.1)"</span><span class="op">)</span>, each <span class="op">=</span> <span class="fl">2</span><span class="op">)</span>,</span>
+<span>                 levels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Baseline"</span>, <span class="st">"Angular (0.1)"</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>  Metric <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Mean cosine similarity"</span>, <span class="st">"Reconstruction MSE"</span><span class="op">)</span>, <span class="fl">2</span><span class="op">)</span>,</span>
+<span>  Value <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">mean_cos_base</span>, <span class="fu"><a href="../reference/evaluate.html">evaluate</a></span><span class="op">(</span><span class="va">baseline</span>, <span class="va">A_faces</span><span class="op">)</span>,</span>
+<span>            <span class="va">mean_cos_decorr</span>, <span class="fu"><a href="../reference/evaluate.html">evaluate</a></span><span class="op">(</span><span class="va">decorr</span>, <span class="va">A_faces</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">cos_compare</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">Model</span>, y <span class="op">=</span> <span class="va">Value</span>, fill <span class="op">=</span> <span class="va">Model</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_col</span><span class="op">(</span>width <span class="op">=</span> <span class="fl">0.6</span>, show.legend <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">facet_wrap</span><span class="op">(</span><span class="op">~</span> <span class="va">Metric</span>, scales <span class="op">=</span> <span class="st">"free_y"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>y <span class="op">=</span> <span class="cn">NULL</span>, title <span class="op">=</span> <span class="st">"Angular regularization: cosine similarity and reconstruction cost"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="regularization_files/figure-html/angular-faces-1.png" class="r-plt" alt="" width="672"></p>
+<p>Angular = 0.1 reduces the mean off-diagonal cosine similarity by more
+than half while all 20 factors remain alive and reconstruction cost
+increases modestly. The penalty operates via a post-solve projection
+step that subtracts correlated components from each factor after each
+NNLS update, directly decorrelating factor profiles.</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Build cosine similarity heatmap data for both models (all 20 factors)</span></span>
+<span><span class="va">make_cos_df</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">cos_mat</span>, <span class="va">label</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">n</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">cos_mat</span><span class="op">)</span></span>
 <span>  <span class="va">grid</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/expand.grid.html" class="external-link">expand.grid</a></span><span class="op">(</span>Factor1 <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="va">n</span>, Factor2 <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="va">n</span><span class="op">)</span></span>
-<span>  <span class="va">grid</span><span class="op">$</span><span class="va">correlation</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">as.vector</a></span><span class="op">(</span><span class="va">cor_mat</span><span class="op">)</span></span>
+<span>  <span class="va">grid</span><span class="op">$</span><span class="va">similarity</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">as.vector</a></span><span class="op">(</span><span class="va">cos_mat</span><span class="op">)</span></span>
 <span>  <span class="va">grid</span><span class="op">$</span><span class="va">method</span> <span class="op">&lt;-</span> <span class="va">label</span></span>
 <span>  <span class="va">grid</span></span>
 <span><span class="op">}</span></span>
 <span></span>
 <span><span class="va">heatmap_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span></span>
-<span>  <span class="fu">make_cor_df</span><span class="op">(</span><span class="va">cor_base</span>, <span class="st">"Baseline"</span><span class="op">)</span>,</span>
-<span>  <span class="fu">make_cor_df</span><span class="op">(</span><span class="va">cor_decorr</span>, <span class="st">"Angular (0.5)"</span><span class="op">)</span></span>
+<span>  <span class="fu">make_cos_df</span><span class="op">(</span><span class="va">cos_base</span>, <span class="st">"Baseline"</span><span class="op">)</span>,</span>
+<span>  <span class="fu">make_cos_df</span><span class="op">(</span><span class="va">cos_decorr</span>, <span class="st">"Angular (0.1)"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">heatmap_data</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">Factor1</span>, y <span class="op">=</span> <span class="va">Factor2</span>, fill <span class="op">=</span> <span class="va">correlation</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">heatmap_data</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">Factor1</span>, y <span class="op">=</span> <span class="va">Factor2</span>, fill <span class="op">=</span> <span class="va">similarity</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">geom_raster</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">scale_fill_gradient2</span><span class="op">(</span>low <span class="op">=</span> <span class="st">"#2166ac"</span>, mid <span class="op">=</span> <span class="st">"white"</span>, high <span class="op">=</span> <span class="st">"#b2182b"</span>,</span>
-<span>                       midpoint <span class="op">=</span> <span class="fl">0</span>, limits <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">1</span>, <span class="fl">1</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">scale_fill_viridis_c</span><span class="op">(</span>option <span class="op">=</span> <span class="st">"B"</span>, limits <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span><span class="op">)</span>, oob <span class="op">=</span> <span class="fu">scales</span><span class="fu">::</span><span class="va"><a href="https://scales.r-lib.org/reference/oob.html" class="external-link">squish</a></span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">facet_wrap</span><span class="op">(</span><span class="op">~</span> <span class="va">method</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">theme</span><span class="op">(</span>aspect.ratio <span class="op">=</span> <span class="fl">1</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">labs</span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"Correlation"</span>, title <span class="op">=</span> <span class="st">"Factor correlation: Baseline vs. Angular regularization"</span><span class="op">)</span></span></code></pre></div>
+<span>  <span class="fu">labs</span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"Cosine\nsimilarity"</span>, title <span class="op">=</span> <span class="st">"Factor cosine similarity: Baseline vs. Angular regularization"</span><span class="op">)</span></span></code></pre></div>
 <p><img src="regularization_files/figure-html/angular-heatmap-1.png" class="r-plt" alt="" width="672"></p>
-<p>Angular regularization produces factors that capture more distinct
-facial features, with substantially reduced pairwise correlation. The
-reconstruction cost is modest.</p>
+<p>The baseline heatmap shows substantial off-diagonal similarity — many
+factor pairs share structure. Angular regularization reduces these
+off-diagonal entries, producing more distinct factors without killing
+any.</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Helper to build a face image data.frame with correct orientation</span></span>
+<span><span class="va">face_img_df</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">vals</span>, <span class="va">factor_label</span>, <span class="va">method_label</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">img</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="va">vals</span>, <span class="fl">64</span>, <span class="fl">64</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="va">grid</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/expand.grid.html" class="external-link">expand.grid</a></span><span class="op">(</span>Row <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">64</span>, Col <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">64</span><span class="op">)</span></span>
+<span>  <span class="va">grid</span><span class="op">$</span><span class="va">Value</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">as.vector</a></span><span class="op">(</span><span class="va">img</span><span class="op">)</span></span>
+<span>  <span class="va">grid</span><span class="op">$</span><span class="va">Factor</span> <span class="op">&lt;-</span> <span class="va">factor_label</span></span>
+<span>  <span class="va">grid</span><span class="op">$</span><span class="va">Method</span> <span class="op">&lt;-</span> <span class="va">method_label</span></span>
+<span>  <span class="va">grid</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="co"># Select 5 best-matched factor pairs (highest cosine similarity after alignment)</span></span>
+<span><span class="va">cross_cos</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/cosine.html">cosine</a></span><span class="op">(</span><span class="va">baseline</span><span class="op">@</span><span class="va">w</span>, <span class="va">decorr</span><span class="op">@</span><span class="va">w</span><span class="op">)</span></span>
+<span><span class="va">pair_sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/diag.html" class="external-link">diag</a></span><span class="op">(</span><span class="va">cross_cos</span><span class="op">)</span></span>
+<span><span class="va">best5</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">pair_sim</span>, decreasing <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">5</span><span class="op">]</span></span>
+<span></span>
+<span><span class="va">face_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">best5</span>, <span class="kw">function</span><span class="op">(</span><span class="va">fi</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span></span>
+<span>    <span class="fu">face_img_df</span><span class="op">(</span><span class="fu">rescale01</span><span class="op">(</span><span class="va">baseline</span><span class="op">@</span><span class="va">w</span><span class="op">[</span>, <span class="va">fi</span><span class="op">]</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="st">"Factor"</span>, <span class="va">fi</span><span class="op">)</span>, <span class="st">"Baseline"</span><span class="op">)</span>,</span>
+<span>    <span class="fu">face_img_df</span><span class="op">(</span><span class="fu">rescale01</span><span class="op">(</span><span class="va">decorr</span><span class="op">@</span><span class="va">w</span><span class="op">[</span>, <span class="va">fi</span><span class="op">]</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="st">"Factor"</span>, <span class="va">fi</span><span class="op">)</span>, <span class="st">"Angular (0.1)"</span><span class="op">)</span></span>
+<span>  <span class="op">)</span></span>
+<span><span class="op">}</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">face_data</span><span class="op">$</span><span class="va">Method</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">face_data</span><span class="op">$</span><span class="va">Method</span>, levels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Baseline"</span>, <span class="st">"Angular (0.1)"</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">face_data</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">Col</span>, y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rev.html" class="external-link">rev</a></span><span class="op">(</span><span class="va">Row</span><span class="op">)</span>, fill <span class="op">=</span> <span class="va">Value</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_raster</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">facet_grid</span><span class="op">(</span><span class="va">Method</span> <span class="op">~</span> <span class="va">Factor</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">scale_fill_gradient</span><span class="op">(</span>low <span class="op">=</span> <span class="st">"black"</span>, high <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme</span><span class="op">(</span>axis.text <span class="op">=</span> <span class="fu">element_blank</span><span class="op">(</span><span class="op">)</span>, axis.ticks <span class="op">=</span> <span class="fu">element_blank</span><span class="op">(</span><span class="op">)</span>,</span>
+<span>        axis.title <span class="op">=</span> <span class="fu">element_blank</span><span class="op">(</span><span class="op">)</span>, legend.position <span class="op">=</span> <span class="st">"none"</span>,</span>
+<span>        strip.text <span class="op">=</span> <span class="fu">element_text</span><span class="op">(</span>size <span class="op">=</span> <span class="fl">9</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">ggtitle</span><span class="op">(</span><span class="st">"Best-matched NMF face factors: Baseline vs. Angular"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">coord_equal</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<p><img src="regularization_files/figure-html/angular-faces-images-1.png" class="r-plt" alt="" width="672"></p>
+<p>The five best-matched factor pairs show how angular regularization
+reshapes each factor. At this penalty strength, factors shift noticeably
+— the penalty doesn’t just tweak magnitudes but changes which spatial
+features each factor emphasizes, producing more distinct components.</p>
+<div class="section level3">
+<h3 id="angular-penalty-sweep">Angular Penalty Sweep<a class="anchor" aria-label="anchor" href="#angular-penalty-sweep"></a>
+</h3>
+<p>To choose the angular penalty strength, sweep the parameter and
+monitor the cosine similarity–reconstruction trade-off:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">angular_vals</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.5</span>, by <span class="op">=</span> <span class="fl">0.05</span><span class="op">)</span></span>
+<span><span class="va">sweep_results</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">angular_vals</span>, <span class="kw">function</span><span class="op">(</span><span class="va">a</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">m</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">A_faces</span>, k <span class="op">=</span> <span class="fl">20</span>, angular <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">a</span>, <span class="fl">0</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">42</span>, tol <span class="op">=</span> <span class="fl">1e-5</span>, maxit <span class="op">=</span> <span class="fl">200</span><span class="op">)</span></span>
+<span>  <span class="va">cos_m</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/cosine.html">cosine</a></span><span class="op">(</span><span class="va">m</span><span class="op">@</span><span class="va">w</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>    Angular <span class="op">=</span> <span class="va">a</span>,</span>
+<span>    CosineSim <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">cos_m</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/lower.tri.html" class="external-link">upper.tri</a></span><span class="op">(</span><span class="va">cos_m</span><span class="op">)</span><span class="op">]</span><span class="op">)</span>,</span>
+<span>    MSE <span class="op">=</span> <span class="fu"><a href="../reference/evaluate.html">evaluate</a></span><span class="op">(</span><span class="va">m</span>, <span class="va">A_faces</span><span class="op">)</span>,</span>
+<span>    MaxCos <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">cos_m</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/lower.tri.html" class="external-link">upper.tri</a></span><span class="op">(</span><span class="va">cos_m</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span>
+<span>  <span class="op">)</span></span>
+<span><span class="op">}</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">sweep_long</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>Angular <span class="op">=</span> <span class="va">sweep_results</span><span class="op">$</span><span class="va">Angular</span>,</span>
+<span>             Metric <span class="op">=</span> <span class="st">"Reconstruction MSE"</span>, Value <span class="op">=</span> <span class="va">sweep_results</span><span class="op">$</span><span class="va">MSE</span><span class="op">)</span>,</span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>Angular <span class="op">=</span> <span class="va">sweep_results</span><span class="op">$</span><span class="va">Angular</span>,</span>
+<span>             Metric <span class="op">=</span> <span class="st">"Mean cosine similarity"</span>, Value <span class="op">=</span> <span class="va">sweep_results</span><span class="op">$</span><span class="va">CosineSim</span><span class="op">)</span>,</span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>Angular <span class="op">=</span> <span class="va">sweep_results</span><span class="op">$</span><span class="va">Angular</span>,</span>
+<span>             Metric <span class="op">=</span> <span class="st">"Max cosine similarity"</span>, Value <span class="op">=</span> <span class="va">sweep_results</span><span class="op">$</span><span class="va">MaxCos</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">sweep_long</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">Angular</span>, y <span class="op">=</span> <span class="va">Value</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_line</span><span class="op">(</span>linewidth <span class="op">=</span> <span class="fl">0.8</span><span class="op">)</span> <span class="op">+</span> <span class="fu">geom_point</span><span class="op">(</span>size <span class="op">=</span> <span class="fl">2</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">facet_wrap</span><span class="op">(</span><span class="op">~</span> <span class="va">Metric</span>, scales <span class="op">=</span> <span class="st">"free_y"</span>, ncol <span class="op">=</span> <span class="fl">1</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>x <span class="op">=</span> <span class="st">"Angular penalty strength"</span>, y <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>       title <span class="op">=</span> <span class="st">"Angular penalty sweep (W only, 0\u20130.5)"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<p><img src="regularization_files/figure-html/angular-sweep-1.png" class="r-plt" alt="" width="672"></p>
+<p>The sweep shows a smooth trade-off: both mean and max cosine
+similarity decrease monotonically while all 20 factors remain alive
+across the entire range. Reconstruction cost rises gently — at angular =
+0.1, MSE increases modestly while mean cosine similarity drops by more
+than half. Very mild angular (around 0.02) can even <em>improve</em>
+reconstruction by breaking factor redundancy. This is the hallmark of a
+well-behaved regularizer: predictable, stable, and easy to tune.</p>
+</div>
+<div class="section level3">
+<h3 id="l1-for-parts-based-decomposition">L1 for Parts-Based Decomposition<a class="anchor" aria-label="anchor" href="#l1-for-parts-based-decomposition"></a>
+</h3>
+<p>Angular regularization reduces factor similarity but keeps them dense
+— each factor still activates most pixels. L1 sparsity produces a
+qualitatively different result: <strong>parts</strong> instead of
+<strong>wholes</strong>. With moderate L1, each factor localizes to a
+specific facial feature (eyes, nose, mouth, jaw) rather than capturing a
+full-face template.</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Sweep L1 strengths</span></span>
+<span><span class="va">l1_face_vals</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.05</span>, <span class="fl">0.1</span>, <span class="fl">0.2</span>, <span class="fl">0.3</span><span class="op">)</span></span>
+<span><span class="va">l1_models</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">l1_face_vals</span>, <span class="kw">function</span><span class="op">(</span><span class="va">l1</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">A_faces</span>, k <span class="op">=</span> <span class="fl">20</span>, L1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">l1</span>, <span class="fl">0</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">42</span>, tol <span class="op">=</span> <span class="fl">1e-5</span>, maxit <span class="op">=</span> <span class="fl">200</span><span class="op">)</span></span>
+<span><span class="op">}</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Align all models to baseline via bipartite matching</span></span>
+<span><span class="va">l1_models</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">l1_models</span>, <span class="kw">function</span><span class="op">(</span><span class="va">m</span><span class="op">)</span> <span class="fu"><a href="../reference/align.html">align</a></span><span class="op">(</span><span class="va">m</span>, <span class="va">baseline</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">l1_sweep</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>  L1 <span class="op">=</span> <span class="va">l1_face_vals</span>,</span>
+<span>  MSE <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">l1_models</span>, <span class="kw">function</span><span class="op">(</span><span class="va">m</span><span class="op">)</span> <span class="fu"><a href="../reference/evaluate.html">evaluate</a></span><span class="op">(</span><span class="va">m</span>, <span class="va">A_faces</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>  Sparsity <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">l1_models</span>, <span class="kw">function</span><span class="op">(</span><span class="va">m</span><span class="op">)</span> <span class="fl">100</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">m</span><span class="op">@</span><span class="va">w</span> <span class="op">==</span> <span class="fl">0</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">l1_sweep_long</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>L1 <span class="op">=</span> <span class="va">l1_sweep</span><span class="op">$</span><span class="va">L1</span>, Metric <span class="op">=</span> <span class="st">"Reconstruction MSE"</span>, Value <span class="op">=</span> <span class="va">l1_sweep</span><span class="op">$</span><span class="va">MSE</span><span class="op">)</span>,</span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>L1 <span class="op">=</span> <span class="va">l1_sweep</span><span class="op">$</span><span class="va">L1</span>, Metric <span class="op">=</span> <span class="st">"W sparsity (% zeros)"</span>, Value <span class="op">=</span> <span class="va">l1_sweep</span><span class="op">$</span><span class="va">Sparsity</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">l1_sweep_long</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">L1</span>, y <span class="op">=</span> <span class="va">Value</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_line</span><span class="op">(</span>linewidth <span class="op">=</span> <span class="fl">0.8</span><span class="op">)</span> <span class="op">+</span> <span class="fu">geom_point</span><span class="op">(</span>size <span class="op">=</span> <span class="fl">2.5</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">facet_wrap</span><span class="op">(</span><span class="op">~</span> <span class="va">Metric</span>, scales <span class="op">=</span> <span class="st">"free_y"</span>, ncol <span class="op">=</span> <span class="fl">1</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>x <span class="op">=</span> <span class="st">"L1 penalty strength"</span>, y <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>       title <span class="op">=</span> <span class="st">"L1 sweep on faces: reconstruction vs. sparsity tradeoff"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<p><img src="regularization_files/figure-html/l1-parts-faces-1.png" class="r-plt" alt="" width="672"></p>
+<p>As L1 increases, reconstruction error rises but W becomes
+dramatically sparser. At L1 = 0.3, each factor activates a compact
+facial region rather than the entire face — the signature of parts-based
+decomposition.</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Select 5 diverse baseline factors (lowest mean off-diagonal cosine similarity)</span></span>
+<span><span class="va">baseline_cos</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/cosine.html">cosine</a></span><span class="op">(</span><span class="va">baseline</span><span class="op">@</span><span class="va">w</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/diag.html" class="external-link">diag</a></span><span class="op">(</span><span class="va">baseline_cos</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fl">0</span></span>
+<span><span class="va">mean_sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/colSums-methods.html" class="external-link">colMeans</a></span><span class="op">(</span><span class="va">baseline_cos</span><span class="op">)</span></span>
+<span><span class="va">show_factors</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">mean_sim</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">5</span><span class="op">]</span></span>
+<span></span>
+<span><span class="co"># For each L1 model and each baseline factor, find the MAX cosine match</span></span>
+<span><span class="va">parts_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_along</a></span><span class="op">(</span><span class="va">l1_face_vals</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">li</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">model</span> <span class="op">&lt;-</span> <span class="va">l1_models</span><span class="op">[[</span><span class="va">li</span><span class="op">]</span><span class="op">]</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">show_factors</span>, <span class="kw">function</span><span class="op">(</span><span class="va">fi</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="kw">if</span> <span class="op">(</span><span class="va">li</span> <span class="op">==</span> <span class="fl">1</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="va">best</span> <span class="op">&lt;-</span> <span class="va">fi</span>  <span class="co"># baseline: show the factor itself</span></span>
+<span>    <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
+<span>      <span class="va">cos_sims</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/cosine.html">cosine</a></span><span class="op">(</span><span class="va">baseline</span><span class="op">@</span><span class="va">w</span><span class="op">[</span>, <span class="va">fi</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span>, <span class="va">model</span><span class="op">@</span><span class="va">w</span><span class="op">)</span></span>
+<span>      <span class="va">best</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/which.min.html" class="external-link">which.max</a></span><span class="op">(</span><span class="va">cos_sims</span><span class="op">)</span></span>
+<span>    <span class="op">}</span></span>
+<span>    <span class="fu">face_img_df</span><span class="op">(</span><span class="fu">rescale01</span><span class="op">(</span><span class="va">model</span><span class="op">@</span><span class="va">w</span><span class="op">[</span>, <span class="va">best</span><span class="op">]</span><span class="op">)</span>,</span>
+<span>                <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="st">"Factor"</span>, <span class="va">fi</span><span class="op">)</span>,</span>
+<span>                <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"L1 = "</span>, <span class="va">l1_face_vals</span><span class="op">[</span><span class="va">li</span><span class="op">]</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="op">}</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">}</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">parts_data</span><span class="op">$</span><span class="va">Method</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">parts_data</span><span class="op">$</span><span class="va">Method</span>,</span>
+<span>                            levels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"L1 = "</span>, <span class="va">l1_face_vals</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">parts_data</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">Col</span>, y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rev.html" class="external-link">rev</a></span><span class="op">(</span><span class="va">Row</span><span class="op">)</span>, fill <span class="op">=</span> <span class="va">Value</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_raster</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">facet_grid</span><span class="op">(</span><span class="va">Factor</span> <span class="op">~</span> <span class="va">Method</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">scale_fill_gradient</span><span class="op">(</span>low <span class="op">=</span> <span class="st">"black"</span>, high <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme</span><span class="op">(</span>axis.text <span class="op">=</span> <span class="fu">element_blank</span><span class="op">(</span><span class="op">)</span>, axis.ticks <span class="op">=</span> <span class="fu">element_blank</span><span class="op">(</span><span class="op">)</span>,</span>
+<span>        axis.title <span class="op">=</span> <span class="fu">element_blank</span><span class="op">(</span><span class="op">)</span>, legend.position <span class="op">=</span> <span class="st">"none"</span>,</span>
+<span>        strip.text <span class="op">=</span> <span class="fu">element_text</span><span class="op">(</span>size <span class="op">=</span> <span class="fl">9</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">ggtitle</span><span class="op">(</span><span class="st">"Face factors across L1 penalties"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">coord_equal</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<p><img src="regularization_files/figure-html/l1-parts-images-1.png" class="r-plt" alt="" width="672"></p>
+<p>Each row tracks a baseline factor across L1 strengths by finding the
+maximum cosine-matching factor in each L1 model. At L1 = 0, factors are
+dense “metafaces” that each resemble a blurry composite face. As L1
+increases, each factor localizes to a specific facial region — eyes,
+nose, mouth, or chin. By L1 = 0.3, the result is the classic NMF
+parts-based decomposition.</p>
+</div>
 </div>
 <div class="section level2">
 <h2 id="example-3-graph-laplacian-for-spatial-smoothness">Example 3: Graph Laplacian for Spatial Smoothness<a class="anchor" aria-label="anchor" href="#example-3-graph-laplacian-for-spatial-smoothness"></a>
 </h2>
 <p>When data has spatial or network structure, graph Laplacian
 regularization encourages connected nodes to share similar factor
-values. We build a k-nearest-neighbor graph from the geographic
-coordinates of Hawaiian bird survey grid cells and use it to produce
-spatially coherent community patterns.</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">hawaiibirds</span><span class="op">)</span></span>
-<span><span class="va">meta</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">hawaiibirds</span>, <span class="st">"metadata_h"</span><span class="op">)</span></span>
+values. This is especially useful in <strong>spatial
+transcriptomics</strong>, where tissue spots have known physical
+coordinates but standard NMF is agnostic to their spatial
+arrangement.</p>
+<p>We demonstrate this on the 10X Visium mouse brain dataset from <a href="https://github.com/satijalab/seurat-data" class="external-link">SeuratData</a>. This
+requires the <code>SeuratData</code> and <code>Seurat</code> packages.
+If they are not installed, the code blocks below are silently skipped —
+install <code>SeuratData</code> and <code>stxBrain.SeuratData</code> to
+see the spatial results.</p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">brain</span> <span class="op">&lt;-</span> <span class="fu">SeuratData</span><span class="fu">::</span><span class="fu"><a href="https://satijalab.org/seurat/reference/LoadData.html" class="external-link">LoadData</a></span><span class="op">(</span><span class="st">"stxBrain"</span>, type <span class="op">=</span> <span class="st">"anterior1"</span><span class="op">)</span></span>
+<span><span class="va">brain</span> <span class="op">&lt;-</span> <span class="fu">Seurat</span><span class="fu">::</span><span class="fu"><a href="https://satijalab.org/seurat/reference/NormalizeData.html" class="external-link">NormalizeData</a></span><span class="op">(</span><span class="va">brain</span>, normalization.method <span class="op">=</span> <span class="st">"LogNormalize"</span>,</span>
+<span>                               scale.factor <span class="op">=</span> <span class="fl">1e4</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span><span class="va">coords</span> <span class="op">&lt;-</span> <span class="fu">Seurat</span><span class="fu">::</span><span class="fu"><a href="https://satijalab.github.io/seurat-object/reference/GetTissueCoordinates.html" class="external-link">GetTissueCoordinates</a></span><span class="op">(</span><span class="va">brain</span><span class="op">)</span></span>
+<span><span class="va">A_norm</span> <span class="op">&lt;-</span> <span class="fu">SeuratObject</span><span class="fu">::</span><span class="fu"><a href="https://satijalab.github.io/seurat-object/reference/AssayData.html" class="external-link">GetAssayData</a></span><span class="op">(</span><span class="va">brain</span>, layer <span class="op">=</span> <span class="st">"data"</span><span class="op">)</span></span>
+<span><span class="va">A_brain</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/methods/as.html" class="external-link">as</a></span><span class="op">(</span><span class="va">A_norm</span>, <span class="st">"dgCMatrix"</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Build k-NN adjacency matrix from lat/lng coordinates</span></span>
-<span><span class="va">coords</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">meta</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"lat"</span>, <span class="st">"lng"</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span>
-<span><span class="va">n</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">coords</span><span class="op">)</span></span>
-<span><span class="va">k_nn</span> <span class="op">&lt;-</span> <span class="fl">10</span></span>
-<span></span>
-<span><span class="co"># Compute pairwise distances and find k nearest neighbors</span></span>
-<span><span class="va">dist_mat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/dist.html" class="external-link">dist</a></span><span class="op">(</span><span class="va">coords</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co"># Build 6-nearest-neighbor spatial graph from tissue coordinates</span></span>
+<span><span class="va">xy</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">coords</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"x"</span>, <span class="st">"y"</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span>
+<span><span class="va">n_spots</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">xy</span><span class="op">)</span></span>
+<span><span class="va">k_nn</span> <span class="op">&lt;-</span> <span class="fl">6</span></span>
+<span><span class="va">dist_mat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/dist.html" class="external-link">dist</a></span><span class="op">(</span><span class="va">xy</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">adj</span> <span class="op">&lt;-</span> <span class="fu">Matrix</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/sparseMatrix.html" class="external-link">sparseMatrix</a></span><span class="op">(</span>i <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">integer</a></span><span class="op">(</span><span class="fl">0</span><span class="op">)</span>, j <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">integer</a></span><span class="op">(</span><span class="fl">0</span><span class="op">)</span>, x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">numeric</a></span><span class="op">(</span><span class="fl">0</span><span class="op">)</span>,</span>
-<span>                            dims <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">n</span>, <span class="va">n</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="kw">for</span> <span class="op">(</span><span class="va">i</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">n</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="va">neighbors</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">dist_mat</span><span class="op">[</span><span class="va">i</span>, <span class="op">]</span><span class="op">)</span><span class="op">[</span><span class="fl">2</span><span class="op">:</span><span class="op">(</span><span class="va">k_nn</span> <span class="op">+</span> <span class="fl">1</span><span class="op">)</span><span class="op">]</span>  <span class="co"># exclude self</span></span>
+<span>                            dims <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">n_spots</span>, <span class="va">n_spots</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="kw">for</span> <span class="op">(</span><span class="va">i</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">n_spots</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">neighbors</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">dist_mat</span><span class="op">[</span><span class="va">i</span>, <span class="op">]</span><span class="op">)</span><span class="op">[</span><span class="fl">2</span><span class="op">:</span><span class="op">(</span><span class="va">k_nn</span> <span class="op">+</span> <span class="fl">1</span><span class="op">)</span><span class="op">]</span></span>
 <span>  <span class="va">adj</span><span class="op">[</span><span class="va">i</span>, <span class="va">neighbors</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fl">1</span></span>
-<span>  <span class="va">adj</span><span class="op">[</span><span class="va">neighbors</span>, <span class="va">i</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fl">1</span>  <span class="co"># symmetric</span></span>
+<span>  <span class="va">adj</span><span class="op">[</span><span class="va">neighbors</span>, <span class="va">i</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fl">1</span></span>
 <span><span class="op">}</span></span>
-<span></span>
-<span><span class="co"># Graph Laplacian: L = D - A</span></span>
 <span><span class="va">degree</span> <span class="op">&lt;-</span> <span class="fu">Matrix</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/colSums-methods.html" class="external-link">rowSums</a></span><span class="op">(</span><span class="va">adj</span><span class="op">)</span></span>
 <span><span class="va">laplacian</span> <span class="op">&lt;-</span> <span class="fu">Matrix</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/Diagonal.html" class="external-link">Diagonal</a></span><span class="op">(</span>x <span class="op">=</span> <span class="va">degree</span><span class="op">)</span> <span class="op">-</span> <span class="va">adj</span></span>
 <span><span class="va">laplacian</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/methods/as.html" class="external-link">as</a></span><span class="op">(</span><span class="va">laplacian</span>, <span class="st">"dgCMatrix"</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Fit with and without graph regularization</span></span>
-<span><span class="va">baseline_g</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">hawaiibirds</span>, k <span class="op">=</span> <span class="fl">6</span>, seed <span class="op">=</span> <span class="fl">42</span>, maxit <span class="op">=</span> <span class="fl">50</span><span class="op">)</span></span>
-<span><span class="va">smooth_g</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">hawaiibirds</span>, k <span class="op">=</span> <span class="fl">6</span>, graph_H <span class="op">=</span> <span class="va">laplacian</span>,</span>
-<span>                graph_lambda <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.5</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">42</span>, maxit <span class="op">=</span> <span class="fl">50</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Measure smoothness: mean squared difference between connected H values</span></span>
-<span><span class="va">measure_smoothness</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">model</span>, <span class="va">adj_mat</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="va">H</span> <span class="op">&lt;-</span> <span class="va">model</span><span class="op">@</span><span class="va">h</span></span>
-<span>  <span class="va">ij</span> <span class="op">&lt;-</span> <span class="fu">Matrix</span><span class="fu">::</span><span class="fu">which</span><span class="op">(</span><span class="va">adj_mat</span> <span class="op">!=</span> <span class="fl">0</span>, arr.ind <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span>  <span class="va">ij</span> <span class="op">&lt;-</span> <span class="va">ij</span><span class="op">[</span><span class="va">ij</span><span class="op">[</span>, <span class="fl">1</span><span class="op">]</span> <span class="op">&lt;</span> <span class="va">ij</span><span class="op">[</span>, <span class="fl">2</span><span class="op">]</span>, , drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span>  <span class="co"># upper triangle only</span></span>
-<span>  <span class="va">total</span> <span class="op">&lt;-</span> <span class="fl">0</span></span>
-<span>  <span class="kw">for</span> <span class="op">(</span><span class="va">f</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">H</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>    <span class="va">diffs</span> <span class="op">&lt;-</span> <span class="va">H</span><span class="op">[</span><span class="va">f</span>, <span class="va">ij</span><span class="op">[</span>, <span class="fl">1</span><span class="op">]</span><span class="op">]</span> <span class="op">-</span> <span class="va">H</span><span class="op">[</span><span class="va">f</span>, <span class="va">ij</span><span class="op">[</span>, <span class="fl">2</span><span class="op">]</span><span class="op">]</span></span>
-<span>    <span class="va">total</span> <span class="op">&lt;-</span> <span class="va">total</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">diffs</span><span class="op">^</span><span class="fl">2</span><span class="op">)</span></span>
-<span>  <span class="op">}</span></span>
-<span>  <span class="va">total</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">H</span><span class="op">)</span></span>
+<span><span class="co"># Graph regularization loss: tr(D*H L H'*D) / k, accounting for d-scaling</span></span>
+<span><span class="va">graph_reg_loss</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">model</span>, <span class="va">L</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">model</span><span class="op">@</span><span class="va">h</span><span class="op">)</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">f</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="va">h</span> <span class="op">&lt;-</span> <span class="va">model</span><span class="op">@</span><span class="va">d</span><span class="op">[</span><span class="va">f</span><span class="op">]</span> <span class="op">*</span> <span class="va">model</span><span class="op">@</span><span class="va">h</span><span class="op">[</span><span class="va">f</span>, <span class="op">]</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">h</span><span class="op">)</span> <span class="op"><a href="https://rdrr.io/r/base/matmult.html" class="external-link">%*%</a></span> <span class="va">L</span> <span class="op"><a href="https://rdrr.io/r/base/matmult.html" class="external-link">%*%</a></span> <span class="va">h</span><span class="op">)</span></span>
+<span>  <span class="op">}</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">}</span></span>
 <span></span>
-<span><span class="va">smooth_table</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
-<span>  Method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Baseline (no graph)"</span>, <span class="st">"Graph Laplacian (λ = 0.5)"</span><span class="op">)</span>,</span>
-<span>  `Reconstruction MSE` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="../reference/evaluate.html">evaluate</a></span><span class="op">(</span><span class="va">baseline_g</span>, <span class="va">hawaiibirds</span><span class="op">)</span>,</span>
-<span>                           <span class="fu"><a href="../reference/evaluate.html">evaluate</a></span><span class="op">(</span><span class="va">smooth_g</span>, <span class="va">hawaiibirds</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>  `H Smoothness (mean Δ²)` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu">measure_smoothness</span><span class="op">(</span><span class="va">baseline_g</span>, <span class="va">adj</span><span class="op">)</span>,</span>
-<span>                                <span class="fu">measure_smoothness</span><span class="op">(</span><span class="va">smooth_g</span>, <span class="va">adj</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>  check.names <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span><span class="co"># Sweep lambda: reconstruction vs. smoothness tradeoff</span></span>
+<span><span class="va">k_brain</span> <span class="op">&lt;-</span> <span class="fl">15</span></span>
+<span><span class="va">lambda_vals</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.01</span>, <span class="fl">0.05</span>, <span class="fl">0.1</span>, <span class="fl">0.5</span><span class="op">)</span></span>
+<span><span class="va">graph_models</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">lambda_vals</span>, <span class="kw">function</span><span class="op">(</span><span class="va">lam</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">A_brain</span>, k <span class="op">=</span> <span class="va">k_brain</span>, graph_H <span class="op">=</span> <span class="va">laplacian</span>,</span>
+<span>      graph_lambda <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="va">lam</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">42</span>, tol <span class="op">=</span> <span class="fl">1e-5</span>, maxit <span class="op">=</span> <span class="fl">200</span><span class="op">)</span></span>
+<span><span class="op">}</span><span class="op">)</span></span>
+<span><span class="va">graph_sweep</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>  lambda <span class="op">=</span> <span class="va">lambda_vals</span>,</span>
+<span>  MSE <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">graph_models</span>, <span class="kw">function</span><span class="op">(</span><span class="va">m</span><span class="op">)</span> <span class="fu"><a href="../reference/evaluate.html">evaluate</a></span><span class="op">(</span><span class="va">m</span>, <span class="va">A_brain</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>  graph_loss <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">graph_models</span>, <span class="kw">function</span><span class="op">(</span><span class="va">m</span><span class="op">)</span> <span class="fu">graph_reg_loss</span><span class="op">(</span><span class="va">m</span>, <span class="va">laplacian</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">smooth_table</span>, digits <span class="op">=</span> <span class="fl">5</span>,</span>
-<span>             caption <span class="op">=</span> <span class="st">"Graph-regularized NMF produces spatially smoother factors"</span><span class="op">)</span></span></code></pre></div>
-<table class="table">
-<caption>Graph-regularized NMF produces spatially smoother
-factors</caption>
-<thead><tr class="header">
-<th align="left">Method</th>
-<th align="right">Reconstruction MSE</th>
-<th align="right">H Smoothness (mean Δ²)</th>
-</tr></thead>
-<tbody>
-<tr class="odd">
-<td align="left">Baseline (no graph)</td>
-<td align="right">0.00454</td>
-<td align="right">0</td>
-</tr>
-<tr class="even">
-<td align="left">Graph Laplacian (λ = 0.5)</td>
-<td align="right">0.00456</td>
-<td align="right">0</td>
-</tr>
-</tbody>
-</table>
-<p>Graph-regularized NMF produces spatially coherent community patterns
-— nearby grid cells load similarly on each factor, reflecting the
-geographic structure of bird communities. The smoothness metric
-decreases substantially with only a modest increase in reconstruction
-error.</p>
+<span></span>
+<span><span class="co"># Extract baseline and lambda=0.5 models for comparison</span></span>
+<span><span class="va">baseline_g</span> <span class="op">&lt;-</span> <span class="va">graph_models</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span></span>
+<span><span class="va">smooth_g</span> <span class="op">&lt;-</span> <span class="va">graph_models</span><span class="op">[[</span><span class="fu"><a href="https://rdrr.io/r/base/which.html" class="external-link">which</a></span><span class="op">(</span><span class="va">lambda_vals</span> <span class="op">==</span> <span class="fl">0.5</span><span class="op">)</span><span class="op">]</span><span class="op">]</span></span>
+<span></span>
+<span><span class="co"># Two-panel sweep plot</span></span>
+<span><span class="va">graph_sweep_long</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>lambda <span class="op">=</span> <span class="va">graph_sweep</span><span class="op">$</span><span class="va">lambda</span>, Metric <span class="op">=</span> <span class="st">"Reconstruction MSE"</span>,</span>
+<span>             Value <span class="op">=</span> <span class="va">graph_sweep</span><span class="op">$</span><span class="va">MSE</span><span class="op">)</span>,</span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>lambda <span class="op">=</span> <span class="va">graph_sweep</span><span class="op">$</span><span class="va">lambda</span>, Metric <span class="op">=</span> <span class="st">"Graph loss (tr(HLH')/k)"</span>,</span>
+<span>             Value <span class="op">=</span> <span class="va">graph_sweep</span><span class="op">$</span><span class="va">graph_loss</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span><span class="va">graph_sweep_long</span><span class="op">$</span><span class="va">lambda_f</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">graph_sweep_long</span><span class="op">$</span><span class="va">lambda</span><span class="op">)</span></span>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">graph_sweep_long</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">lambda_f</span>, y <span class="op">=</span> <span class="va">Value</span>, group <span class="op">=</span> <span class="fl">1</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_line</span><span class="op">(</span>linewidth <span class="op">=</span> <span class="fl">0.8</span><span class="op">)</span> <span class="op">+</span> <span class="fu">geom_point</span><span class="op">(</span>size <span class="op">=</span> <span class="fl">2.5</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">facet_wrap</span><span class="op">(</span><span class="op">~</span> <span class="va">Metric</span>, scales <span class="op">=</span> <span class="st">"free_y"</span>, ncol <span class="op">=</span> <span class="fl">1</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/expression.html" class="external-link">expression</a></span><span class="op">(</span><span class="st">"Graph regularization strength ("</span><span class="op">*</span><span class="va">lambda</span><span class="op">*</span><span class="st">")"</span><span class="op">)</span>, y <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>       title <span class="op">=</span> <span class="st">"Graph Laplacian sweep: reconstruction vs. spatial smoothness"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<p><img src="regularization_files/figure-html/graph-laplacian-1.png" class="r-plt" alt="" width="672"></p>
+<p>As λ increases, graph loss decreases (smoother factor loadings) while
+reconstruction error rises — the classic regularization tradeoff.</p>
+<p>The spatial effect of graph regularization is visible as a trajectory
+across λ values. For each baseline factor, we find the maximum
+cosine-matching factor in each regularized model to track how spatial
+patterns evolve with increasing regularization.</p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Trajectory: factors as rows, lambda values as columns</span></span>
+<span><span class="va">traj_lambdas</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.01</span>, <span class="fl">0.05</span>, <span class="fl">0.5</span><span class="op">)</span></span>
+<span><span class="va">traj_models</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">traj_lambdas</span>, <span class="kw">function</span><span class="op">(</span><span class="va">lam</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">idx</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/which.html" class="external-link">which</a></span><span class="op">(</span><span class="va">lambda_vals</span> <span class="op">==</span> <span class="va">lam</span><span class="op">)</span></span>
+<span>  <span class="va">graph_models</span><span class="op">[[</span><span class="va">idx</span><span class="op">]</span><span class="op">]</span></span>
+<span><span class="op">}</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Select 4 diverse baseline factors (lowest mean off-diagonal cosine similarity)</span></span>
+<span><span class="va">base_cos</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/cosine.html">cosine</a></span><span class="op">(</span><span class="va">baseline_g</span><span class="op">@</span><span class="va">w</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/diag.html" class="external-link">diag</a></span><span class="op">(</span><span class="va">base_cos</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fl">0</span></span>
+<span><span class="va">base_mean_sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/colSums-methods.html" class="external-link">colMeans</a></span><span class="op">(</span><span class="va">base_cos</span><span class="op">)</span></span>
+<span><span class="va">show_factors</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">base_mean_sim</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">4</span><span class="op">]</span></span>
+<span></span>
+<span><span class="co"># Build spatial trajectory data using max-cosine matching</span></span>
+<span><span class="va">traj_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_along</a></span><span class="op">(</span><span class="va">traj_lambdas</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">li</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">model</span> <span class="op">&lt;-</span> <span class="va">traj_models</span><span class="op">[[</span><span class="va">li</span><span class="op">]</span><span class="op">]</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">show_factors</span>, <span class="kw">function</span><span class="op">(</span><span class="va">fi</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="kw">if</span> <span class="op">(</span><span class="va">li</span> <span class="op">==</span> <span class="fl">1</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="va">best</span> <span class="op">&lt;-</span> <span class="va">fi</span>  <span class="co"># baseline: show the factor itself</span></span>
+<span>    <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
+<span>      <span class="va">cos_sims</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/cosine.html">cosine</a></span><span class="op">(</span><span class="va">baseline_g</span><span class="op">@</span><span class="va">w</span><span class="op">[</span>, <span class="va">fi</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span>, <span class="va">model</span><span class="op">@</span><span class="va">w</span><span class="op">)</span></span>
+<span>      <span class="va">best</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/which.min.html" class="external-link">which.max</a></span><span class="op">(</span><span class="va">cos_sims</span><span class="op">)</span></span>
+<span>    <span class="op">}</span></span>
+<span>    <span class="va">h_vals</span> <span class="op">&lt;-</span> <span class="fu">rescale01</span><span class="op">(</span><span class="va">model</span><span class="op">@</span><span class="va">h</span><span class="op">[</span><span class="va">best</span>, <span class="op">]</span><span class="op">)</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>      x <span class="op">=</span> <span class="va">xy</span><span class="op">[</span>, <span class="fl">1</span><span class="op">]</span>, y <span class="op">=</span> <span class="va">xy</span><span class="op">[</span>, <span class="fl">2</span><span class="op">]</span>, loading <span class="op">=</span> <span class="va">h_vals</span>,</span>
+<span>      Factor <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="st">"Factor"</span>, <span class="va">fi</span><span class="op">)</span>,</span>
+<span>      Lambda <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"\u03bb = "</span>, <span class="va">traj_lambdas</span><span class="op">[</span><span class="va">li</span><span class="op">]</span><span class="op">)</span></span>
+<span>    <span class="op">)</span></span>
+<span>  <span class="op">}</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">}</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">traj_data</span><span class="op">$</span><span class="va">Lambda</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">traj_data</span><span class="op">$</span><span class="va">Lambda</span>,</span>
+<span>                           levels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"\u03bb = "</span>, <span class="va">traj_lambdas</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">traj_data</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">x</span>, y <span class="op">=</span> <span class="va">y</span>, color <span class="op">=</span> <span class="va">loading</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_point</span><span class="op">(</span>size <span class="op">=</span> <span class="fl">1.0</span>, shape <span class="op">=</span> <span class="fl">16</span>, stroke <span class="op">=</span> <span class="fl">0</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">scale_color_viridis_c</span><span class="op">(</span>option <span class="op">=</span> <span class="st">"inferno"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">facet_grid</span><span class="op">(</span><span class="va">Factor</span> <span class="op">~</span> <span class="va">Lambda</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">coord_fixed</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>color <span class="op">=</span> <span class="st">"Loading"</span>, x <span class="op">=</span> <span class="cn">NULL</span>, y <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>       title <span class="op">=</span> <span class="st">"Spatial factor trajectory across graph regularization strength"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme</span><span class="op">(</span>strip.text <span class="op">=</span> <span class="fu">element_text</span><span class="op">(</span>size <span class="op">=</span> <span class="fl">8</span><span class="op">)</span>,</span>
+<span>        axis.text <span class="op">=</span> <span class="fu">element_blank</span><span class="op">(</span><span class="op">)</span>, axis.ticks <span class="op">=</span> <span class="fu">element_blank</span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p><img src="regularization_files/figure-html/graph-spatial-plot-1.png" class="r-plt" alt="" width="768"></p>
+<p>At λ = 0, factors show spatial patterns that arise purely from gene
+co-expression. As λ increases, the graph Laplacian penalty encourages
+neighboring spots to have similar loadings, producing smoother spatial
+domains with fewer isolated outlier spots.</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Graph Laplacian loss per factor: tr(d*h L h'*d) for each factor</span></span>
+<span><span class="va">graph_loss_per_factor</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">model</span>, <span class="va">L</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">model</span><span class="op">@</span><span class="va">h</span><span class="op">)</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">f</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="va">h</span> <span class="op">&lt;-</span> <span class="va">model</span><span class="op">@</span><span class="va">d</span><span class="op">[</span><span class="va">f</span><span class="op">]</span> <span class="op">*</span> <span class="va">model</span><span class="op">@</span><span class="va">h</span><span class="op">[</span><span class="va">f</span>, <span class="op">]</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">h</span><span class="op">)</span> <span class="op"><a href="https://rdrr.io/r/base/matmult.html" class="external-link">%*%</a></span> <span class="va">L</span> <span class="op"><a href="https://rdrr.io/r/base/matmult.html" class="external-link">%*%</a></span> <span class="va">h</span><span class="op">)</span></span>
+<span>  <span class="op">}</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="va">gl_base</span> <span class="op">&lt;-</span> <span class="fu">graph_loss_per_factor</span><span class="op">(</span><span class="va">baseline_g</span>, <span class="va">laplacian</span><span class="op">)</span></span>
+<span><span class="va">gl_smooth</span> <span class="op">&lt;-</span> <span class="fu">graph_loss_per_factor</span><span class="op">(</span><span class="va">smooth_g</span>, <span class="va">laplacian</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">gl_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>  Model <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="st">"Baseline"</span>, <span class="va">k_brain</span><span class="op">)</span>,</span>
+<span>                   <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="st">"Graph (\u03bb = 0.5)"</span>, <span class="va">k_brain</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>                 levels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Baseline"</span>, <span class="st">"Graph (\u03bb = 0.5)"</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>  GraphLoss <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">gl_base</span>, <span class="va">gl_smooth</span><span class="op">)</span>,</span>
+<span>  Factor <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">k_brain</span><span class="op">)</span>, <span class="fl">2</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">gl_df</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">Model</span>, y <span class="op">=</span> <span class="va">GraphLoss</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_violin</span><span class="op">(</span>width <span class="op">=</span> <span class="fl">0.7</span>, fill <span class="op">=</span> <span class="st">"grey80"</span>, alpha <span class="op">=</span> <span class="fl">0.7</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_jitter</span><span class="op">(</span>width <span class="op">=</span> <span class="fl">0.1</span>, size <span class="op">=</span> <span class="fl">2</span>, alpha <span class="op">=</span> <span class="fl">0.7</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>x <span class="op">=</span> <span class="cn">NULL</span>, y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/expression.html" class="external-link">expression</a></span><span class="op">(</span><span class="st">"Graph Laplacian loss: tr(h L h'"</span><span class="op">*</span><span class="st">")"</span><span class="op">)</span>,</span>
+<span>       title <span class="op">=</span> <span class="st">"Graph regularization reduces spatial roughness"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<p><img src="regularization_files/figure-html/graph-loss-boxplot-1.png" class="r-plt" alt="" width="480"></p>
+<p>The graph Laplacian loss
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext mathvariant="normal">tr</mtext><mrow><mo stretchy="true" form="prefix">(</mo><mi>𝐡</mi><mi>L</mi><msup><mi>𝐡</mi><mi>⊤</mi></msup><mo stretchy="true" form="postfix">)</mo></mrow></mrow><annotation encoding="application/x-tex">\text{tr}(\mathbf{h} L \mathbf{h}^\top)</annotation></semantics></math>
+directly measures how much each factor’s spatial loadings vary between
+neighboring spots. Graph regularization systematically reduces this
+metric across all factors, confirming that the penalty produces factors
+with smoother spatial patterns. This is the metric the optimizer targets
+— its reduction is guaranteed by construction.</p>
 </div>
 <div class="section level2">
 <h2 id="whats-next">What’s Next<a class="anchor" aria-label="anchor" href="#whats-next"></a>
@@ -486,9 +741,6 @@ error.</p>
 <ul>
 <li><em>See the <a href="nmf-fundamentals.html">NMF Fundamentals</a>
 vignette for the core NMF API.</em></li>
-<li><em>See the <a href="image-decomposition.html">Image
-Decomposition</a> vignette for L1 regularization applied to visual parts
-learning.</em></li>
 <li><em>See the <a href="factor-graphs.html">Factor Graphs</a> vignette
 for regularization within composable graph architectures.</em></li>
 </ul>

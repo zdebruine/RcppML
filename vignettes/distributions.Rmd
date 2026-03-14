@@ -105,12 +105,14 @@ The ZI mixture model decomposes each observation as: $P(X=0) = \pi + (1-\pi) \cd
 
 ### Recommended Workflow
 
-When modeling complex data, build up complexity incrementally rather than estimating everything simultaneously:
+When modeling complex data, build up complexity incrementally rather than estimating everything simultaneously. Estimating distribution, dispersion, and zero-inflation together creates identifiability issues — the model may trade off between a more flexible distribution and higher zero-inflation, producing unstable results.
 
-1. **Select distribution**: Use `auto_nmf_distribution()` or `score_test_distribution()` to find the best variance function.
+1. **Select distribution**: Use `auto_nmf_distribution()` or `score_test_distribution()` to find the best variance function. Start with `dispersion = "none"` and `zi = "none"`.
 2. **Diagnose dispersion**: Use `diagnose_dispersion()` to determine whether per-row, per-col, or global dispersion is needed.
 3. **Test for zero-inflation**: Use `diagnose_zero_inflation()` to check for excess zeros.
 4. **Combine**: Fit the final model with the chosen distribution, dispersion mode, and ZI setting.
+
+> **Tip**: The `distribution` parameter (available in `auto_nmf_distribution()`) can be set to `"auto"` for automatic distribution selection. This evaluates multiple candidates and selects the best one by the specified criterion (default: BIC).
 
 ### Information Criteria
 
@@ -148,7 +150,7 @@ comp_display <- data.frame(
 )
 knitr::kable(
   comp_display,
-  caption = paste0("Distribution comparison on hawaiibirds (BIC criterion). Best: ", result$best, ".")
+  caption = paste0("Distribution comparison on hawaiibirds (BIC criterion). Best: ", result$loss, ".")
 )
 ```
 
@@ -161,11 +163,11 @@ ggplot(comp, aes(x = distribution, y = bic, fill = selected)) +
   theme_minimal()
 ```
 
-BIC selects the best-fitting distribution for the Hawaiian bird count data. The BIC-selected distribution best captures the variance-mean relationship in this ecological count data.
+BIC selects the best-fitting distribution for the Hawaiian bird count data. Note that the BIC-preferred distribution may not always be a count-based model: if the variance-mean relationship in the data is closer to constant (Gaussian), BIC will prefer MSE over more complex alternatives. This is informative — it tells you whether the additional complexity of a count-based loss is warranted for your data. Higher BIC values for count distributions indicate that the extra dispersion parameters are not justified by the improvement in fit.
 
 ```{r dispersion-diagnostic}
 # Diagnose dispersion granularity for the best model
-best_model <- result$models[[result$best]]
+best_model <- result$models[[result$loss]]
 disp_diag <- diagnose_dispersion(hawaiibirds, best_model)
 
 disp_df <- data.frame(
@@ -202,7 +204,7 @@ The power with the smallest $|T|$ best matches the observed variance-mean relati
 - **Power 1** (Poisson/GP): variance proportional to mean — appropriate for count data.
 - **Power 2** (Gamma): variance proportional to mean-squared — appropriate for heavy-tailed continuous data.
 
-A negative T-statistic at a given power suggests the model over-estimates variance relative to the data at that power. A positive T-statistic suggests under-estimation. The best power is the one where the T-statistic is closest to zero — the variance assumption matches reality.
+A negative T-statistic at a given power suggests the model over-estimates variance relative to the data at that power — the assumed variance function grows too quickly with the mean. A positive T-statistic suggests under-estimation — the data has more variance than the model predicts. The best power is the one where the T-statistic is closest to zero — the variance assumption matches reality. In practice, small absolute T-statistics (< 0.1) across multiple powers suggest the data's variance-mean relationship is well-behaved and the choice of distribution matters less.
 
 ```{r nb-diagnostic}
 if (!is.null(scores$nb_diagnostic)) {
@@ -220,7 +222,9 @@ if (!is.null(scores$nb_diagnostic)) {
 
 Single-cell RNA-seq data has extreme sparsity with "dropout" zeros beyond what any count distribution predicts. We use `pbmc3k`, a variance-selected subset (8,000 genes × 500 cells) of the full 10x Genomics PBMC 3k dataset.
 
-Dropout is a pervasive artifact of scRNA-seq: low-expression genes often fail to be captured during library preparation, producing excess zeros that no count distribution alone can explain.
+Dropout is a pervasive artifact of scRNA-seq: during library preparation, low-abundance mRNAs are stochastically lost at the capture and reverse-transcription steps. The result is that genes with moderate true expression are frequently observed as zero — not because the cell lacks the transcript, but because the assay failed to detect it. This produces "excess zeros" far beyond what any single count distribution (Poisson, NB, GP) can explain. Capture efficiency also varies across cells, contributing to per-sample zero-inflation.
+
+> **Not all sparse data has excess zeros.** For example, `hawaiibirds` is 97% sparse but `diagnose_zero_inflation()` finds an excess zero rate below 1% — the zeros are well-explained by the count distribution itself. Zero-inflation modeling adds value only when the diagnostic confirms structural excess zeros.
 
 ```{r zi-setup}
 data(pbmc3k, package = "RcppML")
@@ -251,7 +255,7 @@ zi_summary <- data.frame(
 knitr::kable(zi_summary, caption = "Zero-inflation diagnostics on pbmc3k (8,000 genes × 500 cells).")
 ```
 
-```{r zi-refit}
+```{r zi-refit, eval = FALSE}
 if (zi_diag$has_zi && zi_diag$zi_mode != "none") {
   model_zi <- nmf(counts, k = 8, loss = "gp", zi = zi_diag$zi_mode,
                   seed = 42, tol = 1e-3, maxit = 30)

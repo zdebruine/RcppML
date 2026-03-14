@@ -5,12 +5,12 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<title>Factorization Graphs, Guides, and Semi-Supervised Learning • RcppML</title>
+<title>Factorization Graphs • RcppML</title>
 <script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="../deps/bootstrap-5.3.1/bootstrap.min.css" rel="stylesheet">
 <script src="../deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
-<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Factorization Graphs, Guides, and Semi-Supervised Learning">
+<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Factorization Graphs">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -58,7 +58,7 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
 
-      <h1>Factorization Graphs, Guides, and Semi-Supervised Learning</h1>
+      <h1>Factorization Graphs</h1>
             
       
       <small class="dont-index">Source: <a href="https://github.com/zdebruine/RcppML/blob/HEAD/vignettes/factor-graphs.Rmd" class="external-link"><code>vignettes/factor-graphs.Rmd</code></a></small>
@@ -70,195 +70,139 @@
 <div class="section level2">
 <h2 id="why-factorization-graphs">Why Factorization Graphs?<a class="anchor" aria-label="anchor" href="#why-factorization-graphs"></a>
 </h2>
-<p>Real-world problems rarely fit the pattern of “one matrix, one
-factorization.” Multi-modal data (e.g., gene expression + chromatin
-accessibility) sharing the same samples demands a shared latent space.
-Prior knowledge — class labels, reference patterns — should steer
-factors rather than being ignored.</p>
-<p>RcppML’s <code><a href="../reference/factor_net.html">factor_net()</a></code> treats factorization as a
-<strong>directed graph</strong> of composable blocks. Combined with
-<strong>guides</strong> that inject domain knowledge directly into the
-optimization, it enables workflows no other NMF package offers:
-classification-augmented embeddings, semi-supervised learning,
-multi-modal integration, and automated hyperparameter search.</p>
-</div>
-<div class="section level2">
-<h2 id="api-reference">API Reference<a class="anchor" aria-label="anchor" href="#api-reference"></a>
-</h2>
-<div class="section level3">
-<h3 id="graph-construction">Graph Construction<a class="anchor" aria-label="anchor" href="#graph-construction"></a>
-</h3>
-<table class="table">
-<colgroup>
-<col width="52%">
-<col width="47%">
-</colgroup>
-<thead><tr class="header">
-<th>Function</th>
-<th>Purpose</th>
-</tr></thead>
-<tbody>
-<tr class="odd">
-<td><code>factor_input(data, name)</code></td>
-<td>Input node wrapping a matrix or .spz path</td>
-</tr>
-<tr class="even">
-<td><code>nmf_layer(input, k, ...)</code></td>
-<td>NMF factorization layer</td>
-</tr>
-<tr class="odd">
-<td><code>factor_shared(...)</code></td>
-<td>Multi-modal: shared H across multiple inputs</td>
-</tr>
-<tr class="even">
-<td><code>factor_concat(...)</code></td>
-<td>Concatenate H factors from parallel branches</td>
-</tr>
-<tr class="odd">
-<td><code>factor_add(...)</code></td>
-<td>Element-wise H addition (skip connection)</td>
-</tr>
-<tr class="even">
-<td><code>factor_condition(input, Z)</code></td>
-<td>Condition on external metadata</td>
-</tr>
-</tbody>
-</table>
-</div>
-<div class="section level3">
-<h3 id="graph-configuration-and-execution">Graph Configuration and Execution<a class="anchor" aria-label="anchor" href="#graph-configuration-and-execution"></a>
-</h3>
+<p><code><a href="../reference/nmf.html">nmf()</a></code> decomposes one matrix into two factors. That
+covers a lot of ground — but real problems often involve richer
+structure:</p>
 <ul>
 <li>
-<code>factor_config(maxit, tol, loss, test_fraction, ...)</code> —
-global settings</li>
+<strong>Multi-modal data</strong>: Two matrices sharing the same
+samples should share a single latent space, not be factorized
+independently.</li>
 <li>
-<code>W(L1, guide, ...)</code> / <code>H(L1, guide, ...)</code> —
-per-factor overrides for regularization and guides</li>
+<strong>Hierarchical decomposition</strong>: Coarse global patterns
+and fine local patterns live at different ranks — stacking NMF layers
+captures both.</li>
 <li>
-<code>factor_net(inputs, output, config)</code> — compile the
-graph</li>
+<strong>Guided factorization</strong>: Prior knowledge (class
+labels, reference patterns) should steer the optimization, not be bolted
+on afterward.</li>
 <li>
-<code>fit(net)</code> — execute; returns a
-<code>factor_net_result</code> with per-layer access via
-<code>result$layer_name</code>
-</li>
+<strong>Systematic tuning</strong>: Rank, regularization, and loss
+function interact in nonobvious ways — you need a principled way to
+search over them together.</li>
 </ul>
+<p>RcppML’s <code><a href="../reference/factor_net.html">factor_net()</a></code> addresses all of these by treating
+factorization as a <strong>directed graph</strong> of composable blocks.
+You wire together inputs, layers, and merge operations, then
+<code><a href="../reference/fit.html">fit()</a></code> the assembled network.</p>
 </div>
-<div class="section level3">
-<h3 id="guides-semi-supervised-steering">Guides (Semi-Supervised Steering)<a class="anchor" aria-label="anchor" href="#guides-semi-supervised-steering"></a>
-</h3>
-<p>Guides add a soft penalty that biases factors toward a target
-structure:
-<math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><munder><mo>min</mo><mrow><mi>h</mi><mo>≥</mo><mn>0</mn></mrow></munder><mo stretchy="false" form="postfix">∥</mo><mi>G</mi><mi>h</mi><mo>−</mo><mi>b</mi><msup><mo stretchy="false" form="postfix">∥</mo><mn>2</mn></msup><mo>+</mo><mi>λ</mi><mo stretchy="false" form="postfix">∥</mo><mi>h</mi><mo>−</mo><mi>t</mi><msup><mo stretchy="false" form="postfix">∥</mo><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">\min_{h \geq 0} \|Gh - b\|^2 + \lambda\|h - t\|^2</annotation></semantics></math>
-where
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>t</mi><annotation encoding="application/x-tex">t</annotation></semantics></math>
-is the guide target, recomputed each iteration.</p>
+<div class="section level2">
+<h2 id="building-blocks">Building Blocks<a class="anchor" aria-label="anchor" href="#building-blocks"></a>
+</h2>
 <table class="table">
 <colgroup>
 <col width="28%">
-<col width="32%">
-<col width="40%">
+<col width="71%">
 </colgroup>
 <thead><tr class="header">
-<th>Guide</th>
-<th>Target</th>
-<th>Use Case</th>
+<th align="left">Function</th>
+<th align="left">Role</th>
 </tr></thead>
 <tbody>
 <tr class="odd">
-<td><code>guide_classifier(labels, lambda)</code></td>
-<td>Per-class centroids</td>
-<td>Semi-supervised clustering</td>
+<td align="left"><code>factor_input(data)</code></td>
+<td align="left">Wraps a dense matrix, sparse matrix, or
+<code>.spz</code> file path as a graph input</td>
 </tr>
 <tr class="even">
-<td><code>guide_external(target, lambda)</code></td>
-<td>Fixed matrix</td>
-<td>Transfer learning</td>
+<td align="left"><code>nmf_layer(input, k)</code></td>
+<td align="left">NMF layer: <em>A ≈ W diag(d) H</em>, non-negative</td>
 </tr>
 <tr class="odd">
-<td><code>guide_callback(fn, lambda)</code></td>
-<td>Dynamic via <code>fn(factor, iter)</code>
-</td>
-<td>Custom strategies</td>
+<td align="left"><code>svd_layer(input, k)</code></td>
+<td align="left">SVD/PCA layer: signed, optional centering/scaling</td>
 </tr>
 <tr class="even">
-<td><code>guide_reference(layer_name, lambda)</code></td>
-<td>Another layer’s output</td>
-<td>Cross-layer coupling</td>
+<td align="left"><code>factor_shared(...)</code></td>
+<td align="left">Row-binds multiple inputs; one NMF shares <em>H</em>
+across all</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>factor_concat(...)</code></td>
+<td align="left">Stacks <em>H</em> matrices from parallel branches
+(expands rank)</td>
+</tr>
+<tr class="even">
+<td align="left"><code>factor_add(...)</code></td>
+<td align="left">Element-wise <em>H</em> addition (skip connection, same
+rank)</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>factor_condition(input, Z)</code></td>
+<td align="left">Appends external metadata <em>Z</em> as extra input
+rows</td>
 </tr>
 </tbody>
 </table>
-<p>For <code>guide_classifier</code>: labels must be <strong>0-indexed
-integers</strong>; use <code>-1</code> for unlabeled samples.</p>
-</div>
-<div class="section level3">
-<h3 id="hyperparameter-search">Hyperparameter Search<a class="anchor" aria-label="anchor" href="#hyperparameter-search"></a>
-</h3>
+<p>Every graph is compiled with
+<code>factor_net(inputs, output, config)</code> and executed with
+<code><a href="../reference/fit.html">fit()</a></code>. The result is a <code>factor_net_result</code> whose
+named elements give per-layer access to W, H, d, loss, and convergence
+info:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/cross_validate_graph.html">cross_validate_graph</a></span><span class="op">(</span><span class="va">inputs</span>, <span class="va">layer_fn</span>, <span class="va">params</span>, <span class="va">config</span>, reps <span class="op">=</span> <span class="fl">3</span>,</span>
-<span>                     strategy <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"grid"</span>, <span class="st">"random"</span><span class="op">)</span>, seed <span class="op">=</span> <span class="fl">42L</span><span class="op">)</span></span></code></pre></div>
-<ul>
-<li>
-<code>layer_fn</code> — function <code>function(p)</code> that
-builds output layer from parameter list <code>p</code>
-</li>
-<li>
-<code>params</code> — named list of vectors to search (e.g.,
-<code>list(k = c(3, 5, 10))</code>)</li>
-<li>Returns ranked parameter combinations with mean test loss</li>
-</ul>
-</div>
-</div>
-<div class="section level2">
-<h2 id="theory">Theory<a class="anchor" aria-label="anchor" href="#theory"></a>
-</h2>
-<p>Each <code>factor_net</code> layer performs a factorization. Layers
-can share factors (multi-modal), be stacked (deep), or branch
-(multi-task). The engine optimizes all layers jointly.</p>
-<p><strong>Guide mechanics</strong>: <code>guide_classifier</code>
-computes the current centroid of each class from the H matrix every
-iteration. This biases factors toward class structure without overriding
-data-driven learning. As <code>lambda</code> increases, factors shift
-from purely data-driven to purely label-driven.</p>
-<p><strong>Semi-supervised</strong>: Labels of <code>-1</code> are
-ignored by the guide. Labeled samples steer the embedding; unlabeled
-samples follow the data alone.</p>
-</div>
-<div class="section level2">
-<h2 id="example-1-graph-nmf-equivalence-to-nmf">Example 1: Graph NMF Equivalence to <code>nmf()</code><a class="anchor" aria-label="anchor" href="#example-1-graph-nmf-equivalence-to-nmf"></a>
-</h2>
-<p>The simplest factorization graph is a single input feeding a single
-NMF layer — identical to calling <code><a href="../reference/nmf.html">nmf()</a></code> directly.</p>
+<code class="sourceCode R"><span><span class="va">inp</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_input.html">factor_input</a></span><span class="op">(</span><span class="va">A</span>, name <span class="op">=</span> <span class="st">"data"</span><span class="op">)</span></span>
+<span><span class="va">out</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf_layer.html">nmf_layer</a></span><span class="op">(</span><span class="va">inp</span>, k <span class="op">=</span> <span class="fl">8</span>, name <span class="op">=</span> <span class="st">"my_nmf"</span><span class="op">)</span></span>
+<span><span class="va">net</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_net.html">factor_net</a></span><span class="op">(</span><span class="va">inp</span>, <span class="va">out</span>, <span class="fu"><a href="../reference/factor_config.html">factor_config</a></span><span class="op">(</span>maxit <span class="op">=</span> <span class="fl">100</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fit.html">fit</a></span><span class="op">(</span><span class="va">net</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">result</span><span class="op">$</span><span class="va">my_nmf</span><span class="op">$</span><span class="va">W</span>   <span class="co"># m x k</span></span>
+<span><span class="va">result</span><span class="op">$</span><span class="va">my_nmf</span><span class="op">$</span><span class="va">H</span>   <span class="co"># k x n</span></span>
+<span><span class="va">result</span><span class="op">$</span><span class="va">my_nmf</span><span class="op">$</span><span class="va">d</span>   <span class="co"># length-k scaling vector</span></span></code></pre></div>
+<p>Per-factor overrides for regularization, constraints, and target
+regularization are set through <code><a href="../reference/W.html">W()</a></code> and
+<code><a href="../reference/W.html">H()</a></code>:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Sparse W, with target regularization on H</span></span>
+<span><span class="va">out</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf_layer.html">nmf_layer</a></span><span class="op">(</span><span class="va">inp</span>, k <span class="op">=</span> <span class="fl">8</span>,</span>
+<span>                 W <span class="op">=</span> <span class="fu"><a href="../reference/W.html">W</a></span><span class="op">(</span>L1 <span class="op">=</span> <span class="fl">0.1</span><span class="op">)</span>,</span>
+<span>                 H <span class="op">=</span> <span class="fu"><a href="../reference/W.html">H</a></span><span class="op">(</span>target <span class="op">=</span> <span class="va">T_mat</span>, target_lambda <span class="op">=</span> <span class="fl">0.3</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="example-1-graph-plain-nmf">Example 1: Graph ≡ Plain NMF<a class="anchor" aria-label="anchor" href="#example-1-graph-plain-nmf"></a>
+</h2>
+<p>The simplest graph is one input feeding one NMF layer — identical to
+calling <code><a href="../reference/nmf.html">nmf()</a></code>.</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">aml</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Direct nmf()</span></span>
+<span><span class="co"># Plain nmf()</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">42</span><span class="op">)</span></span>
 <span><span class="va">direct</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">aml</span>, k <span class="op">=</span> <span class="fl">6</span>, seed <span class="op">=</span> <span class="fl">42</span>, maxit <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Equivalent factor_net</span></span>
-<span><span class="va">inp</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_input.html">factor_input</a></span><span class="op">(</span><span class="va">aml</span>, name <span class="op">=</span> <span class="st">"chromatin"</span><span class="op">)</span></span>
+<span><span class="co"># Same thing as a factor graph</span></span>
+<span><span class="va">inp</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_input.html">factor_input</a></span><span class="op">(</span><span class="va">aml</span>, name <span class="op">=</span> <span class="st">"methylation"</span><span class="op">)</span></span>
 <span><span class="va">out</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf_layer.html">nmf_layer</a></span><span class="op">(</span><span class="va">inp</span>, k <span class="op">=</span> <span class="fl">6</span>, name <span class="op">=</span> <span class="st">"nmf1"</span><span class="op">)</span></span>
-<span><span class="va">config</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_config.html">factor_config</a></span><span class="op">(</span>maxit <span class="op">=</span> <span class="fl">100</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span>
-<span><span class="va">net</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_net.html">factor_net</a></span><span class="op">(</span><span class="va">inp</span>, <span class="va">out</span>, <span class="va">config</span><span class="op">)</span></span>
+<span><span class="va">net</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_net.html">factor_net</a></span><span class="op">(</span><span class="va">inp</span>, <span class="va">out</span>, <span class="fu"><a href="../reference/factor_config.html">factor_config</a></span><span class="op">(</span>maxit <span class="op">=</span> <span class="fl">100</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">graph_result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fit.html">fit</a></span><span class="op">(</span><span class="va">net</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Compute MSE from graph result factors (loss field reports total, not mean)</span></span>
+<span><span class="co"># Compare</span></span>
 <span><span class="va">W_gr</span> <span class="op">&lt;-</span> <span class="va">graph_result</span><span class="op">$</span><span class="va">nmf1</span><span class="op">$</span><span class="va">W</span></span>
 <span><span class="va">H_gr</span> <span class="op">&lt;-</span> <span class="va">graph_result</span><span class="op">$</span><span class="va">nmf1</span><span class="op">$</span><span class="va">H</span></span>
 <span><span class="va">d_gr</span> <span class="op">&lt;-</span> <span class="va">graph_result</span><span class="op">$</span><span class="va">nmf1</span><span class="op">$</span><span class="va">d</span></span>
-<span><span class="va">mse_graph</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">aml</span><span class="op">)</span> <span class="op">-</span> <span class="va">W_gr</span> <span class="op"><a href="https://rdrr.io/r/base/matmult.html" class="external-link">%*%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/diag.html" class="external-link">diag</a></span><span class="op">(</span><span class="va">d_gr</span><span class="op">)</span> <span class="op"><a href="https://rdrr.io/r/base/matmult.html" class="external-link">%*%</a></span> <span class="va">H_gr</span><span class="op">)</span><span class="op">^</span><span class="fl">2</span><span class="op">)</span></span>
+<span><span class="va">recon_graph</span> <span class="op">&lt;-</span> <span class="va">W_gr</span> <span class="op"><a href="https://rdrr.io/r/base/matmult.html" class="external-link">%*%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/diag.html" class="external-link">diag</a></span><span class="op">(</span><span class="va">d_gr</span><span class="op">)</span> <span class="op"><a href="https://rdrr.io/r/base/matmult.html" class="external-link">%*%</a></span> <span class="va">H_gr</span></span>
+<span><span class="va">mse_graph</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">aml</span><span class="op">)</span> <span class="op">-</span> <span class="va">recon_graph</span><span class="op">)</span><span class="op">^</span><span class="fl">2</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">equiv_table</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
-<span>  Method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"nmf()"</span>, <span class="st">"factor_net"</span><span class="op">)</span>,</span>
-<span>  MSE <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="../reference/evaluate.html">evaluate</a></span><span class="op">(</span><span class="va">direct</span>, <span class="va">aml</span><span class="op">)</span>, <span class="va">mse_graph</span><span class="op">)</span>,</span>
-<span>  Iterations <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">direct</span><span class="op">@</span><span class="va">misc</span><span class="op">$</span><span class="va">iter</span>, <span class="va">graph_result</span><span class="op">$</span><span class="va">nmf1</span><span class="op">$</span><span class="va">iterations</span><span class="op">)</span>,</span>
-<span>  check.names <span class="op">=</span> <span class="cn">FALSE</span></span>
-<span><span class="op">)</span></span>
-<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">equiv_table</span>, digits <span class="op">=</span> <span class="fl">5</span>,</span>
-<span>             caption <span class="op">=</span> <span class="st">"factor_net produces equivalent results to plain nmf()"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>    Method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"nmf()"</span>, <span class="st">"factor_net"</span><span class="op">)</span>,</span>
+<span>    MSE <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="../reference/evaluate.html">evaluate</a></span><span class="op">(</span><span class="va">direct</span>, <span class="va">aml</span><span class="op">)</span>, <span class="va">mse_graph</span><span class="op">)</span>,</span>
+<span>    Iterations <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">direct</span><span class="op">@</span><span class="va">misc</span><span class="op">$</span><span class="va">iter</span>, <span class="va">graph_result</span><span class="op">$</span><span class="va">nmf1</span><span class="op">$</span><span class="va">iterations</span><span class="op">)</span>,</span>
+<span>    check.names <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  <span class="op">)</span>,</span>
+<span>  digits <span class="op">=</span> <span class="fl">6</span>, caption <span class="op">=</span> <span class="st">"Graph API matches plain nmf() exactly"</span></span>
+<span><span class="op">)</span></span></code></pre></div>
 <table class="table">
-<caption>factor_net produces equivalent results to plain nmf()</caption>
+<caption>Graph API matches plain nmf() exactly</caption>
 <thead><tr class="header">
 <th align="left">Method</th>
 <th align="right">MSE</th>
@@ -267,291 +211,321 @@ NMF layer — identical to calling <code><a href="../reference/nmf.html">nmf()</
 <tbody>
 <tr class="odd">
 <td align="left">nmf()</td>
-<td align="right">0.0214</td>
+<td align="right">0.021398</td>
 <td align="right">48</td>
 </tr>
 <tr class="even">
 <td align="left">factor_net</td>
-<td align="right">0.0214</td>
+<td align="right">0.021398</td>
 <td align="right">48</td>
 </tr>
 </tbody>
 </table>
-<p>The graph API produces identical results. Its value emerges with
-multi-modal, guided, and hierarchical architectures.</p>
+<p>The value of the graph API appears the moment you need something a
+single <code><a href="../reference/nmf.html">nmf()</a></code> call cannot express.</p>
 </div>
 <div class="section level2">
-<h2 id="example-2-classification-augmented-embeddings-golub">Example 2: Classification-Augmented Embeddings (Golub)<a class="anchor" aria-label="anchor" href="#example-2-classification-augmented-embeddings-golub"></a>
+<h2 id="example-2-multi-modal-shared-factorization">Example 2: Multi-Modal Shared Factorization<a class="anchor" aria-label="anchor" href="#example-2-multi-modal-shared-factorization"></a>
 </h2>
-<p>Guides steer NMF factors toward class structure, producing embeddings
-that are jointly optimized for reconstruction <em>and</em>
-classification. The trade-off between these objectives becomes visible
-as guidance strength increases.</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">golub</span><span class="op">)</span></span>
-<span><span class="va">labels_factor</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">golub</span>, <span class="st">"cancer_type"</span><span class="op">)</span></span>
-<span><span class="va">labels</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">as.integer</a></span><span class="op">(</span><span class="va">labels_factor</span><span class="op">)</span> <span class="op">-</span> <span class="fl">1L</span>  <span class="co"># 0 = ALL, 1 = AML</span></span>
-<span></span>
-<span><span class="co"># Lambda sweep: from unsupervised to strongly guided</span></span>
-<span><span class="va">lambdas</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.1</span>, <span class="fl">0.5</span>, <span class="fl">1.0</span>, <span class="fl">5.0</span><span class="op">)</span></span>
-<span><span class="va">models</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">lambdas</span>, <span class="kw">function</span><span class="op">(</span><span class="va">lam</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="kw">if</span> <span class="op">(</span><span class="va">lam</span> <span class="op">==</span> <span class="fl">0</span><span class="op">)</span> <span class="op">{</span></span>
-<span>    <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">golub</span><span class="op">)</span>, k <span class="op">=</span> <span class="fl">3</span>, seed <span class="op">=</span> <span class="fl">42</span>, maxit <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span>
-<span>  <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
-<span>    <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">golub</span><span class="op">)</span>, k <span class="op">=</span> <span class="fl">3</span>, guides <span class="op">=</span> <span class="fu"><a href="../reference/guide_classifier.html">guide_classifier</a></span><span class="op">(</span><span class="va">labels</span>, lambda <span class="op">=</span> <span class="va">lam</span><span class="op">)</span>,</span>
-<span>        seed <span class="op">=</span> <span class="fl">42</span>, maxit <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span>
-<span>  <span class="op">}</span></span>
-<span><span class="op">}</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Reconstruction MSE for each</span></span>
-<span><span class="va">mse_vals</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">models</span>, <span class="kw">function</span><span class="op">(</span><span class="va">m</span><span class="op">)</span> <span class="fu"><a href="../reference/evaluate.html">evaluate</a></span><span class="op">(</span><span class="va">m</span>, <span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">golub</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Classification accuracy (kNN embedding classifier)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">42</span><span class="op">)</span></span>
-<span><span class="va">test_idx</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sort.html" class="external-link">sort</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sample.html" class="external-link">sample</a></span><span class="op">(</span><span class="fl">38</span>, <span class="fl">11</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">acc_vals</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="va">models</span>, <span class="kw">function</span><span class="op">(</span><span class="va">m</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="../reference/classify_embedding.html">classify_embedding</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">m</span><span class="op">@</span><span class="va">h</span><span class="op">)</span>, <span class="va">labels</span>, test_idx <span class="op">=</span> <span class="va">test_idx</span>, k <span class="op">=</span> <span class="fl">3</span><span class="op">)</span><span class="op">$</span><span class="va">accuracy</span></span>
-<span><span class="op">}</span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">comp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
-<span>  Lambda <span class="op">=</span> <span class="va">lambdas</span>,</span>
-<span>  Accuracy <span class="op">=</span> <span class="va">acc_vals</span>,</span>
-<span>  `Reconstruction MSE` <span class="op">=</span> <span class="va">mse_vals</span>,</span>
-<span>  `MSE Increase (%)` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fl">100</span> <span class="op">*</span> <span class="op">(</span><span class="va">mse_vals</span> <span class="op">/</span> <span class="va">mse_vals</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span> <span class="op">-</span> <span class="fl">1</span><span class="op">)</span>, <span class="fl">1</span><span class="op">)</span>,</span>
-<span>  check.names <span class="op">=</span> <span class="cn">FALSE</span></span>
-<span><span class="op">)</span></span>
-<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">comp</span>, digits <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">3</span>, <span class="fl">0</span>, <span class="fl">1</span><span class="op">)</span>,</span>
-<span>             caption <span class="op">=</span> <span class="st">"Guided NMF: reconstruction-classification trade-off across lambda"</span><span class="op">)</span></span></code></pre></div>
-<table class="table">
-<caption>Guided NMF: reconstruction-classification trade-off across
-lambda</caption>
-<thead><tr class="header">
-<th align="right">Lambda</th>
-<th align="right">Accuracy</th>
-<th align="right">Reconstruction MSE</th>
-<th align="right">MSE Increase (%)</th>
-</tr></thead>
-<tbody>
-<tr class="odd">
-<td align="right">0.0</td>
-<td align="right">1</td>
-<td align="right">310921</td>
-<td align="right">0.0</td>
-</tr>
-<tr class="even">
-<td align="right">0.1</td>
-<td align="right">1</td>
-<td align="right">428930</td>
-<td align="right">38.0</td>
-</tr>
-<tr class="odd">
-<td align="right">0.5</td>
-<td align="right">1</td>
-<td align="right">432028</td>
-<td align="right">39.0</td>
-</tr>
-<tr class="even">
-<td align="right">1.0</td>
-<td align="right">1</td>
-<td align="right">432305</td>
-<td align="right">39.0</td>
-</tr>
-<tr class="odd">
-<td align="right">5.0</td>
-<td align="right">1</td>
-<td align="right">432474</td>
-<td align="right">39.1</td>
-</tr>
-</tbody>
-</table>
+<p>When two matrices share the same
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>n</mi><annotation encoding="application/x-tex">n</annotation></semantics></math>
+samples, <code><a href="../reference/factor_shared.html">factor_shared()</a></code> finds a common latent space. It
+vertically concatenates the inputs and fits one NMF:</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><munder><mo>min</mo><mrow><msub><mi>W</mi><mn>1</mn></msub><mo>,</mo><msub><mi>W</mi><mn>2</mn></msub><mo>,</mo><mi>H</mi><mo>≥</mo><mn>0</mn></mrow></munder><msubsup><mrow><mo stretchy="true" form="prefix">∥</mo><mrow><mo stretchy="true" form="prefix">[</mo><mtable><mtr><mtd columnalign="center" style="text-align: center"><msub><mi>A</mi><mn>1</mn></msub></mtd></mtr><mtr><mtd columnalign="center" style="text-align: center"><msub><mi>A</mi><mn>2</mn></msub></mtd></mtr></mtable><mo stretchy="true" form="postfix">]</mo></mrow><mo>−</mo><mrow><mo stretchy="true" form="prefix">[</mo><mtable><mtr><mtd columnalign="center" style="text-align: center"><msub><mi>W</mi><mn>1</mn></msub></mtd></mtr><mtr><mtd columnalign="center" style="text-align: center"><msub><mi>W</mi><mn>2</mn></msub></mtd></mtr></mtable><mo stretchy="true" form="postfix">]</mo></mrow><mtext mathvariant="normal">diag</mtext><mrow><mo stretchy="true" form="prefix">(</mo><mi>d</mi><mo stretchy="true" form="postfix">)</mo></mrow><mspace width="0.167em"></mspace><mi>H</mi><mo stretchy="true" form="postfix">∥</mo></mrow><mi>F</mi><mn>2</mn></msubsup></mrow><annotation encoding="application/x-tex">\min_{W_1, W_2, H \geq 0} \left\| \begin{bmatrix} A_1 \\ A_2 \end{bmatrix} - \begin{bmatrix} W_1 \\ W_2 \end{bmatrix} \text{diag}(d)\,H \right\|_F^2</annotation></semantics></math></p>
+<p>The shared
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>H</mi><annotation encoding="application/x-tex">H</annotation></semantics></math>
+represents structure common to both views. Each
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>W</mi><mi>p</mi></msub><annotation encoding="application/x-tex">W_p</annotation></semantics></math>
+captures view-specific loadings.</p>
+<div class="section level3">
+<h3 id="bird-communities-geography">Bird Communities + Geography<a class="anchor" aria-label="anchor" href="#bird-communities-geography"></a>
+</h3>
+<p>The <code>hawaiibirds</code> dataset records 183 bird species across
+1,183 survey grid cells on 8 Hawaiian islands. Each cell also has
+geographic coordinates. We’ll discover factors that simultaneously
+explain <em>which species live where</em> and <em>where those places
+are</em>.</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Scatter plot: Factor 1 vs Factor 2 for unsupervised vs. strongly guided</span></span>
-<span><span class="va">scatter_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>F1 <span class="op">=</span> <span class="va">models</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span><span class="op">@</span><span class="va">h</span><span class="op">[</span><span class="fl">1</span>, <span class="op">]</span>, F2 <span class="op">=</span> <span class="va">models</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span><span class="op">@</span><span class="va">h</span><span class="op">[</span><span class="fl">2</span>, <span class="op">]</span>,</span>
-<span>             Cancer <span class="op">=</span> <span class="va">labels_factor</span>, Model <span class="op">=</span> <span class="st">"Unsupervised (λ = 0)"</span><span class="op">)</span>,</span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>F1 <span class="op">=</span> <span class="va">models</span><span class="op">[[</span><span class="fl">4</span><span class="op">]</span><span class="op">]</span><span class="op">@</span><span class="va">h</span><span class="op">[</span><span class="fl">1</span>, <span class="op">]</span>, F2 <span class="op">=</span> <span class="va">models</span><span class="op">[[</span><span class="fl">4</span><span class="op">]</span><span class="op">]</span><span class="op">@</span><span class="va">h</span><span class="op">[</span><span class="fl">2</span>, <span class="op">]</span>,</span>
-<span>             Cancer <span class="op">=</span> <span class="va">labels_factor</span>, Model <span class="op">=</span> <span class="st">"Guided (λ = 1.0)"</span><span class="op">)</span></span>
-<span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">hawaiibirds</span><span class="op">)</span></span>
+<span><span class="va">meta_h</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">hawaiibirds</span>, <span class="st">"metadata_h"</span><span class="op">)</span></span>
 <span></span>
-<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">scatter_data</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">F1</span>, y <span class="op">=</span> <span class="va">F2</span>, color <span class="op">=</span> <span class="va">Cancer</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">geom_point</span><span class="op">(</span>size <span class="op">=</span> <span class="fl">2.5</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">scale_color_brewer</span><span class="op">(</span>palette <span class="op">=</span> <span class="st">"Set1"</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">facet_wrap</span><span class="op">(</span><span class="op">~</span> <span class="va">Model</span>, scales <span class="op">=</span> <span class="st">"free"</span><span class="op">)</span> <span class="op">+</span></span>
+<span><span class="co"># View 1: species counts (183 x 1183, sparse)</span></span>
+<span><span class="va">A_species</span> <span class="op">&lt;-</span> <span class="va">hawaiibirds</span></span>
+<span></span>
+<span><span class="co"># View 2: geographic coordinates (2 x 1183, dense)</span></span>
+<span><span class="va">A_geo</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span>lat <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/scale.html" class="external-link">scale</a></span><span class="op">(</span><span class="va">meta_h</span><span class="op">$</span><span class="va">lat</span><span class="op">)</span><span class="op">[</span>, <span class="fl">1</span><span class="op">]</span>,</span>
+<span>               lng <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/scale.html" class="external-link">scale</a></span><span class="op">(</span><span class="va">meta_h</span><span class="op">$</span><span class="va">lng</span><span class="op">)</span><span class="op">[</span>, <span class="fl">1</span><span class="op">]</span><span class="op">)</span></span>
+<span><span class="co"># Match magnitudes: geography as ~10% of total signal</span></span>
+<span><span class="va">geo_weight</span> <span class="op">&lt;-</span> <span class="fl">0.1</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">A_species</span><span class="op">)</span><span class="op">)</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">A_geo</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">A_geo_weighted</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/methods/as.html" class="external-link">as</a></span><span class="op">(</span><span class="va">A_geo</span> <span class="op">*</span> <span class="va">geo_weight</span>, <span class="st">"dgCMatrix"</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">inp_species</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_input.html">factor_input</a></span><span class="op">(</span><span class="va">A_species</span>, name <span class="op">=</span> <span class="st">"species"</span><span class="op">)</span></span>
+<span><span class="va">inp_geo</span>     <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_input.html">factor_input</a></span><span class="op">(</span><span class="va">A_geo_weighted</span>, name <span class="op">=</span> <span class="st">"geography"</span><span class="op">)</span></span>
+<span><span class="va">shared_inp</span>  <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_shared.html">factor_shared</a></span><span class="op">(</span><span class="va">inp_species</span>, <span class="va">inp_geo</span><span class="op">)</span></span>
+<span><span class="va">layer</span>       <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf_layer.html">nmf_layer</a></span><span class="op">(</span><span class="va">shared_inp</span>, k <span class="op">=</span> <span class="fl">8</span>, name <span class="op">=</span> <span class="st">"joint"</span><span class="op">)</span></span>
+<span><span class="va">config</span>      <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_config.html">factor_config</a></span><span class="op">(</span>maxit <span class="op">=</span> <span class="fl">100</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span>
+<span><span class="va">net</span>         <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_net.html">factor_net</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="va">inp_species</span>, <span class="va">inp_geo</span><span class="op">)</span>, <span class="va">layer</span>, <span class="va">config</span><span class="op">)</span></span>
+<span><span class="va">result</span>      <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fit.html">fit</a></span><span class="op">(</span><span class="va">net</span><span class="op">)</span></span></code></pre></div>
+<p>The shared
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>H</mi><annotation encoding="application/x-tex">H</annotation></semantics></math>
+assigns each grid cell to a mixture of 8 factors that must explain both
+bird communities <em>and</em> geographic position:</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">H_shared</span> <span class="op">&lt;-</span> <span class="va">result</span><span class="op">$</span><span class="va">joint</span><span class="op">$</span><span class="va">H</span></span>
+<span><span class="va">island</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">meta_h</span><span class="op">$</span><span class="va">island</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Mean factor activation per island</span></span>
+<span><span class="va">activation</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/levels.html" class="external-link">levels</a></span><span class="op">(</span><span class="va">island</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">isl</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/colSums-methods.html" class="external-link">rowMeans</a></span><span class="op">(</span><span class="va">H_shared</span><span class="op">[</span>, <span class="va">island</span> <span class="op">==</span> <span class="va">isl</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span><span class="op">)</span></span>
+<span><span class="op">}</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Normalize rows for display</span></span>
+<span><span class="va">rmax</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/apply.html" class="external-link">apply</a></span><span class="op">(</span><span class="va">activation</span>, <span class="fl">1</span>, <span class="va">max</span><span class="op">)</span></span>
+<span><span class="va">rmax</span><span class="op">[</span><span class="va">rmax</span> <span class="op">==</span> <span class="fl">0</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fl">1</span></span>
+<span><span class="va">activation_norm</span> <span class="op">&lt;-</span> <span class="va">activation</span> <span class="op">/</span> <span class="va">rmax</span></span>
+<span></span>
+<span><span class="va">hm_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/expand.grid.html" class="external-link">expand.grid</a></span><span class="op">(</span>Factor <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"F"</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">8</span><span class="op">)</span>, Island <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/levels.html" class="external-link">levels</a></span><span class="op">(</span><span class="va">island</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">hm_df</span><span class="op">$</span><span class="va">Activation</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">as.vector</a></span><span class="op">(</span><span class="va">activation_norm</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">hm_df</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">Island</span>, y <span class="op">=</span> <span class="va">Factor</span>, fill <span class="op">=</span> <span class="va">Activation</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_tile</span><span class="op">(</span>color <span class="op">=</span> <span class="st">"white"</span>, linewidth <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">scale_fill_gradient</span><span class="op">(</span>low <span class="op">=</span> <span class="st">"white"</span>, high <span class="op">=</span> <span class="st">"steelblue"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Shared Factor Activation by Island"</span>,</span>
+<span>       subtitle <span class="op">=</span> <span class="st">"Each factor explains both species composition and geography"</span>,</span>
+<span>       fill <span class="op">=</span> <span class="st">"Relative\nActivation"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">labs</span><span class="op">(</span>x <span class="op">=</span> <span class="st">"Factor 1"</span>, y <span class="op">=</span> <span class="st">"Factor 2"</span>,</span>
-<span>       title <span class="op">=</span> <span class="st">"NMF embeddings: unsupervised vs. guided"</span><span class="op">)</span></span></code></pre></div>
-<p><img src="factor-graphs_files/figure-html/guided-scatter-1.png" class="r-plt" alt="" width="672"></p>
-<p>On clean data like Golub, even unsupervised NMF separates the cancer
-types well. The value of guidance is visible in the factor
-<em>structure</em> — guided factors align more tightly with class
-boundaries, which matters for downstream interpretation and for noisier
-datasets where unsupervised separation would fail. The trade-off table
-shows that strong guidance
-(<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>λ</mi><mo>=</mo><mn>5</mn></mrow><annotation encoding="application/x-tex">\lambda = 5</annotation></semantics></math>)
-degrades reconstruction substantially.</p>
+<span>  <span class="fu">theme</span><span class="op">(</span>axis.text.x <span class="op">=</span> <span class="fu">element_text</span><span class="op">(</span>angle <span class="op">=</span> <span class="fl">45</span>, hjust <span class="op">=</span> <span class="fl">1</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p><img src="factor-graphs_files/figure-html/shared-heatmap-1.png" class="r-plt" alt="" width="672"></p>
+<p>The geographic constraint encourages spatial coherence: factors that
+activate on neighboring islands share high activation, while
+geographically distant islands get distinct factors.</p>
+</div>
+<div class="section level3">
+<h3 id="comparison-shared-vs--separate-factorizations">Comparison: Shared vs. Separate Factorizations<a class="anchor" aria-label="anchor" href="#comparison-shared-vs--separate-factorizations"></a>
+</h3>
+<p>How much does the geographic view change the embedding? We can
+measure agreement between the shared embedding and a species-only NMF by
+correlating their
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>H</mi><annotation encoding="application/x-tex">H</annotation></semantics></math>
+factors.</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">model_species_only</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">A_species</span>, k <span class="op">=</span> <span class="fl">8</span>, seed <span class="op">=</span> <span class="fl">42</span>, maxit <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span>
+<span><span class="va">H_species_only</span> <span class="op">&lt;-</span> <span class="va">model_species_only</span><span class="op">@</span><span class="va">h</span></span>
+<span></span>
+<span><span class="co"># Best absolute correlation between each shared factor and any species-only factor</span></span>
+<span><span class="va">cross_cor</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/cor.html" class="external-link">cor</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">H_shared</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">H_species_only</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">best_match</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/apply.html" class="external-link">apply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">cross_cor</span><span class="op">)</span>, <span class="fl">1</span>, <span class="va">max</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">cor_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>Factor <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">8</span><span class="op">)</span>, Correlation <span class="op">=</span> <span class="va">best_match</span><span class="op">)</span></span>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">cor_df</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">Factor</span>, y <span class="op">=</span> <span class="va">Correlation</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_col</span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"steelblue"</span>, width <span class="op">=</span> <span class="fl">0.6</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_hline</span><span class="op">(</span>yintercept <span class="op">=</span> <span class="fl">0.9</span>, linetype <span class="op">=</span> <span class="st">"dashed"</span>, color <span class="op">=</span> <span class="st">"gray50"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">ylim</span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Shared vs. Species-Only: Per-Factor Agreement"</span>,</span>
+<span>       subtitle <span class="op">=</span> <span class="st">"Factors below the dashed line were reshaped by geographic information"</span>,</span>
+<span>       y <span class="op">=</span> <span class="st">"Best |r| with species-only factor"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<p><img src="factor-graphs_files/figure-html/shared-vs-separate-1.png" class="r-plt" alt="" width="672"></p>
+<p>Factors with high correlation
+(<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi><mo>&gt;</mo><mn>0.9</mn></mrow><annotation encoding="application/x-tex">r &gt; 0.9</annotation></semantics></math>)
+look essentially the same with or without geography — they capture
+species patterns visible from counts alone. Factors with lower
+correlation have been genuinely reshaped by the spatial constraint,
+surfacing structure that species-only NMF misses.</p>
+</div>
 </div>
 <div class="section level2">
-<h2 id="example-3-semi-supervised-partial-labels">Example 3: Semi-Supervised — Partial Labels<a class="anchor" aria-label="anchor" href="#example-3-semi-supervised-partial-labels"></a>
+<h2 id="example-3-deep-nmf">Example 3: Deep NMF<a class="anchor" aria-label="anchor" href="#example-3-deep-nmf"></a>
 </h2>
-<p>When only a fraction of samples have labels, guided NMF propagates
-label structure through the shared low-dimensional space.</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Mask 50% of labels as unlabeled (-1)</span></span>
-<span><span class="va">partial_labels</span> <span class="op">&lt;-</span> <span class="va">labels</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">42</span><span class="op">)</span></span>
-<span><span class="va">partial_labels</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/sample.html" class="external-link">sample</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">labels</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">labels</span><span class="op">)</span> <span class="op"><a href="https://rdrr.io/r/base/Arithmetic.html" class="external-link">%/%</a></span> <span class="fl">2</span><span class="op">)</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="op">-</span><span class="fl">1L</span></span>
+<p>Stacking NMF layers extracts structure at multiple granularities. The
+first layer produces a
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>k</mi><mn>1</mn></msub><annotation encoding="application/x-tex">k_1</annotation></semantics></math>-factor
+embedding; the second factorizes <em>that embedding</em> into
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>k</mi><mn>2</mn></msub><annotation encoding="application/x-tex">k_2</annotation></semantics></math>
+meta-factors:</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi><mo>≈</mo><msub><mi>W</mi><mn>1</mn></msub><mspace width="0.167em"></mspace><mtext mathvariant="normal">diag</mtext><mrow><mo stretchy="true" form="prefix">(</mo><msub><mi>d</mi><mn>1</mn></msub><mo stretchy="true" form="postfix">)</mo></mrow><mspace width="0.167em"></mspace><msub><mi>H</mi><mn>1</mn></msub><mo>,</mo><mspace width="2.0em"></mspace><msub><mi>H</mi><mn>1</mn></msub><mo>≈</mo><msub><mi>W</mi><mn>2</mn></msub><mspace width="0.167em"></mspace><mtext mathvariant="normal">diag</mtext><mrow><mo stretchy="true" form="prefix">(</mo><msub><mi>d</mi><mn>2</mn></msub><mo stretchy="true" form="postfix">)</mo></mrow><mspace width="0.167em"></mspace><msub><mi>H</mi><mn>2</mn></msub></mrow><annotation encoding="application/x-tex">A \approx W_1\,\text{diag}(d_1)\,H_1, \qquad H_1 \approx W_2\,\text{diag}(d_2)\,H_2</annotation></semantics></math></p>
+<p><math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>H</mi><mn>2</mn></msub><annotation encoding="application/x-tex">H_2</annotation></semantics></math>
+captures coarse global structure;
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>H</mi><mn>1</mn></msub><annotation encoding="application/x-tex">H_1</annotation></semantics></math>
+captures fine-grained detail.</p>
+<div class="section level3">
+<h3 id="coarse-fine-in-aml">Coarse → Fine in AML<a class="anchor" aria-label="anchor" href="#coarse-fine-in-aml"></a>
+</h3>
+<p>The <code>aml</code> dataset has 824 DNA methylation features across
+135 samples from 6 categories (3 AML subtypes + 3 control cell types). A
+two-layer architecture first extracts 10 fine factors, then compresses
+them to 3 meta-factors.</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">aml</span><span class="op">)</span></span>
+<span><span class="va">meta_aml</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">aml</span>, <span class="st">"metadata_h"</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">model_semi</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">golub</span><span class="op">)</span>, k <span class="op">=</span> <span class="fl">3</span>,</span>
-<span>                  guides <span class="op">=</span> <span class="fu"><a href="../reference/guide_classifier.html">guide_classifier</a></span><span class="op">(</span><span class="va">partial_labels</span>, lambda <span class="op">=</span> <span class="fl">1.0</span><span class="op">)</span>,</span>
-<span>                  seed <span class="op">=</span> <span class="fl">42</span>, maxit <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span>
+<span><span class="va">inp</span>    <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_input.html">factor_input</a></span><span class="op">(</span><span class="va">aml</span>, name <span class="op">=</span> <span class="st">"methylation"</span><span class="op">)</span></span>
+<span><span class="va">layer1</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf_layer.html">nmf_layer</a></span><span class="op">(</span><span class="va">inp</span>, k <span class="op">=</span> <span class="fl">10</span>, name <span class="op">=</span> <span class="st">"fine"</span><span class="op">)</span></span>
+<span><span class="va">layer2</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf_layer.html">nmf_layer</a></span><span class="op">(</span><span class="va">layer1</span>, k <span class="op">=</span> <span class="fl">3</span>, name <span class="op">=</span> <span class="st">"coarse"</span><span class="op">)</span></span>
+<span><span class="va">net</span>    <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_net.html">factor_net</a></span><span class="op">(</span><span class="va">inp</span>, <span class="va">layer2</span>, <span class="fu"><a href="../reference/factor_config.html">factor_config</a></span><span class="op">(</span>maxit <span class="op">=</span> <span class="fl">100</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">deep</span>   <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fit.html">fit</a></span><span class="op">(</span><span class="va">net</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">eval_semi</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/classify_embedding.html">classify_embedding</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">model_semi</span><span class="op">@</span><span class="va">h</span><span class="op">)</span>, <span class="va">labels</span>, test_idx <span class="op">=</span> <span class="va">test_idx</span>, k <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span>
-<span><span class="va">eval_unsup</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/classify_embedding.html">classify_embedding</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">models</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span><span class="op">@</span><span class="va">h</span><span class="op">)</span>, <span class="va">labels</span>, test_idx <span class="op">=</span> <span class="va">test_idx</span>, k <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span>
-<span><span class="va">eval_guided</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/classify_embedding.html">classify_embedding</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">models</span><span class="op">[[</span><span class="fl">4</span><span class="op">]</span><span class="op">]</span><span class="op">@</span><span class="va">h</span><span class="op">)</span>, <span class="va">labels</span>, test_idx <span class="op">=</span> <span class="va">test_idx</span>, k <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span>
+<span><span class="va">H_fine</span>   <span class="op">&lt;-</span> <span class="va">deep</span><span class="op">$</span><span class="va">fine</span><span class="op">$</span><span class="va">H</span>       <span class="co"># 10 x 135 (fine factors x samples)</span></span>
+<span><span class="co"># For the coarse layer, the per-sample embedding is in W (135 x 3)</span></span>
+<span><span class="co"># because the second layer factorizes H1: samples become "features"</span></span>
+<span><span class="va">W_coarse</span> <span class="op">&lt;-</span> <span class="va">deep</span><span class="op">$</span><span class="va">coarse</span><span class="op">$</span><span class="va">W</span>     <span class="co"># 135 x 3 (samples x coarse factors)</span></span></code></pre></div>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">categories</span> <span class="op">&lt;-</span> <span class="va">meta_aml</span><span class="op">$</span><span class="va">category</span></span>
+<span><span class="va">cat_short</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">gsub</a></span><span class="op">(</span><span class="st">"Control "</span>, <span class="st">"Ctrl-"</span>, <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">gsub</a></span><span class="op">(</span><span class="st">"AML "</span>, <span class="st">"AML-"</span>, <span class="va">categories</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">semi_table</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
-<span>  Model <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Unsupervised"</span>, <span class="st">"Semi-supervised (50% labeled)"</span>, <span class="st">"Fully guided"</span><span class="op">)</span>,</span>
-<span>  Accuracy <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">eval_unsup</span><span class="op">$</span><span class="va">accuracy</span>, <span class="va">eval_semi</span><span class="op">$</span><span class="va">accuracy</span>, <span class="va">eval_guided</span><span class="op">$</span><span class="va">accuracy</span><span class="op">)</span>,</span>
-<span>  `Macro F1` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">eval_unsup</span><span class="op">$</span><span class="va">macro_f1</span>, <span class="va">eval_semi</span><span class="op">$</span><span class="va">macro_f1</span>, <span class="va">eval_guided</span><span class="op">$</span><span class="va">macro_f1</span><span class="op">)</span>,</span>
-<span>  check.names <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span><span class="va">coarse_assign</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"C"</span>, <span class="fu"><a href="https://rdrr.io/r/base/apply.html" class="external-link">apply</a></span><span class="op">(</span><span class="va">W_coarse</span>, <span class="fl">1</span>, <span class="va">which.max</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">fine_assign</span>   <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"F"</span>, <span class="fu"><a href="https://rdrr.io/r/base/apply.html" class="external-link">apply</a></span><span class="op">(</span><span class="va">H_fine</span>, <span class="fl">2</span>, <span class="va">which.max</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">comp_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>Factor <span class="op">=</span> <span class="va">coarse_assign</span>, Category <span class="op">=</span> <span class="va">cat_short</span>, Level <span class="op">=</span> <span class="st">"Coarse (k=3)"</span><span class="op">)</span>,</span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>Factor <span class="op">=</span> <span class="va">fine_assign</span>,   Category <span class="op">=</span> <span class="va">cat_short</span>, Level <span class="op">=</span> <span class="st">"Fine (k=10)"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">semi_table</span>, digits <span class="op">=</span> <span class="fl">3</span>,</span>
-<span>             caption <span class="op">=</span> <span class="st">"Semi-supervised NMF with partial labels"</span><span class="op">)</span></span></code></pre></div>
+<span></span>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">comp_df</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">Factor</span>, fill <span class="op">=</span> <span class="va">Category</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_bar</span><span class="op">(</span>width <span class="op">=</span> <span class="fl">0.7</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">facet_wrap</span><span class="op">(</span><span class="op">~</span> <span class="va">Level</span>, scales <span class="op">=</span> <span class="st">"free_x"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">scale_fill_brewer</span><span class="op">(</span>palette <span class="op">=</span> <span class="st">"Set2"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Deep NMF: Coarse vs. Fine Factor Assignments"</span>,</span>
+<span>       subtitle <span class="op">=</span> <span class="st">"Coarse factors separate AML/Control; fine factors resolve subtypes"</span>,</span>
+<span>       y <span class="op">=</span> <span class="st">"Samples"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme</span><span class="op">(</span>legend.position <span class="op">=</span> <span class="st">"bottom"</span>,</span>
+<span>        axis.text.x <span class="op">=</span> <span class="fu">element_text</span><span class="op">(</span>angle <span class="op">=</span> <span class="fl">45</span>, hjust <span class="op">=</span> <span class="fl">1</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p><img src="factor-graphs_files/figure-html/deep-barplot-1.png" class="r-plt" alt="" width="672"></p>
+<p>The 3 coarse meta-factors capture the broad AML-vs-control
+distinction. The 10 fine factors resolve subtypes — MEP vs. GMP
+vs. L-MPP within each group. This hierarchical view is not available
+from a single <code><a href="../reference/nmf.html">nmf()</a></code> call at either rank.</p>
+</div>
+<div class="section level3">
+<h3 id="the-connecting-matrix">The Connecting Matrix<a class="anchor" aria-label="anchor" href="#the-connecting-matrix"></a>
+</h3>
+<p>The second layer’s
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>H</mi><mn>2</mn></msub><annotation encoding="application/x-tex">H_2</annotation></semantics></math>
+matrix (3 × 10) reveals how fine factors compose into coarse ones:</p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">H2</span> <span class="op">&lt;-</span> <span class="va">deep</span><span class="op">$</span><span class="va">coarse</span><span class="op">$</span><span class="va">H</span>  <span class="co"># 3 x 10</span></span>
+<span><span class="va">d2</span> <span class="op">&lt;-</span> <span class="va">deep</span><span class="op">$</span><span class="va">coarse</span><span class="op">$</span><span class="va">d</span></span>
+<span></span>
+<span><span class="co"># Normalize for visualization</span></span>
+<span><span class="va">H2_scaled</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sweep.html" class="external-link">sweep</a></span><span class="op">(</span><span class="va">H2</span>, <span class="fl">1</span>, <span class="va">d2</span>, <span class="st">"*"</span><span class="op">)</span></span>
+<span><span class="va">h_max</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">H2_scaled</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">H2_norm</span> <span class="op">&lt;-</span> <span class="va">H2_scaled</span> <span class="op">/</span> <span class="va">h_max</span></span>
+<span></span>
+<span><span class="va">conn_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/expand.grid.html" class="external-link">expand.grid</a></span><span class="op">(</span>Coarse <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"C"</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">3</span><span class="op">)</span>, Fine <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"F"</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">10</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">conn_df</span><span class="op">$</span><span class="va">Weight</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">as.vector</a></span><span class="op">(</span><span class="va">H2_norm</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">conn_df</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">Fine</span>, y <span class="op">=</span> <span class="va">Coarse</span>, fill <span class="op">=</span> <span class="va">Weight</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_tile</span><span class="op">(</span>color <span class="op">=</span> <span class="st">"white"</span>, linewidth <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">scale_fill_gradient</span><span class="op">(</span>low <span class="op">=</span> <span class="st">"white"</span>, high <span class="op">=</span> <span class="st">"darkgreen"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Deep NMF: How Fine Factors Compose into Coarse Ones"</span>,</span>
+<span>       subtitle <span class="op">=</span> <span class="st">"H₂ matrix connecting layer 2 (coarse) to layer 1 (fine) factors"</span>,</span>
+<span>       fill <span class="op">=</span> <span class="st">"Relative\nWeight"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<p><img src="factor-graphs_files/figure-html/deep-connection-1.png" class="r-plt" alt="" width="672"></p>
+<p>Each coarse factor draws from a distinct subset of fine factors —
+this is the interpretable bridge between resolutions.</p>
+</div>
+</div>
+<div class="section level2">
+<h2 id="example-4-target-regularization-in-graphs">Example 4: Target Regularization in Graphs<a class="anchor" aria-label="anchor" href="#example-4-target-regularization-in-graphs"></a>
+</h2>
+<p>The <a href="guided-nmf.html">Guided NMF</a> vignette covers target
+regularization in detail. Within a factor graph, you apply it through
+<code><a href="../reference/W.html">W()</a></code> and <code><a href="../reference/W.html">H()</a></code> per-factor config objects:</p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">hawaiibirds</span><span class="op">)</span></span>
+<span><span class="va">meta_h</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">hawaiibirds</span>, <span class="st">"metadata_h"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Fit a baseline model, then derive targets from island labels</span></span>
+<span><span class="va">baseline</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">hawaiibirds</span>, k <span class="op">=</span> <span class="fl">8</span>, seed <span class="op">=</span> <span class="fl">42</span>, maxit <span class="op">=</span> <span class="fl">50</span><span class="op">)</span></span>
+<span><span class="va">target</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/compute_target.html">compute_target</a></span><span class="op">(</span><span class="va">baseline</span><span class="op">@</span><span class="va">h</span>, <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">meta_h</span><span class="op">$</span><span class="va">island</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Graph with target regularization on H</span></span>
+<span><span class="va">inp</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_input.html">factor_input</a></span><span class="op">(</span><span class="va">hawaiibirds</span>, name <span class="op">=</span> <span class="st">"birds"</span><span class="op">)</span></span>
+<span><span class="va">guided</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf_layer.html">nmf_layer</a></span><span class="op">(</span><span class="va">inp</span>, k <span class="op">=</span> <span class="fl">8</span>, name <span class="op">=</span> <span class="st">"guided"</span>,</span>
+<span>                    H <span class="op">=</span> <span class="fu"><a href="../reference/W.html">H</a></span><span class="op">(</span>target <span class="op">=</span> <span class="va">target</span>, target_lambda <span class="op">=</span> <span class="fl">0.3</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">net</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_net.html">factor_net</a></span><span class="op">(</span><span class="va">inp</span>, <span class="va">guided</span>, <span class="fu"><a href="../reference/factor_config.html">factor_config</a></span><span class="op">(</span>maxit <span class="op">=</span> <span class="fl">100</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">guided_result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fit.html">fit</a></span><span class="op">(</span><span class="va">net</span><span class="op">)</span></span></code></pre></div>
+<p>The target biases
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>H</mi><annotation encoding="application/x-tex">H</annotation></semantics></math>
+toward island-specific centroids during optimization, producing an
+embedding with better class separability than unsupervised NMF. Use
+positive <code>target_lambda</code> for <strong>enrichment</strong>
+(enhance structure) and negative for <strong>removal</strong> (suppress
+label-correlated variation, useful for batch correction).</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">H_unsup</span>  <span class="op">&lt;-</span> <span class="va">baseline</span><span class="op">@</span><span class="va">h</span></span>
+<span><span class="va">H_guided</span> <span class="op">&lt;-</span> <span class="va">guided_result</span><span class="op">$</span><span class="va">guided</span><span class="op">$</span><span class="va">H</span></span>
+<span><span class="va">island</span>   <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">meta_h</span><span class="op">$</span><span class="va">island</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Measure class separability: ratio of between-class to within-class variance</span></span>
+<span><span class="va">separability</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">H</span>, <span class="va">labels</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">grand_mean</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/colSums-methods.html" class="external-link">rowMeans</a></span><span class="op">(</span><span class="va">H</span><span class="op">)</span></span>
+<span>  <span class="va">levels_l</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/levels.html" class="external-link">levels</a></span><span class="op">(</span><span class="va">labels</span><span class="op">)</span></span>
+<span>  <span class="va">k</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">H</span><span class="op">)</span></span>
+<span>  <span class="va">between_var</span> <span class="op">&lt;-</span> <span class="fl">0</span></span>
+<span>  <span class="va">within_var</span>  <span class="op">&lt;-</span> <span class="fl">0</span></span>
+<span>  <span class="kw">for</span> <span class="op">(</span><span class="va">lev</span> <span class="kw">in</span> <span class="va">levels_l</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="va">idx</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/which.html" class="external-link">which</a></span><span class="op">(</span><span class="va">labels</span> <span class="op">==</span> <span class="va">lev</span><span class="op">)</span></span>
+<span>    <span class="va">n_l</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">idx</span><span class="op">)</span></span>
+<span>    <span class="va">class_mean</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/colSums-methods.html" class="external-link">rowMeans</a></span><span class="op">(</span><span class="va">H</span><span class="op">[</span>, <span class="va">idx</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span><span class="op">)</span></span>
+<span>    <span class="va">between_var</span> <span class="op">&lt;-</span> <span class="va">between_var</span> <span class="op">+</span> <span class="va">n_l</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="op">(</span><span class="va">class_mean</span> <span class="op">-</span> <span class="va">grand_mean</span><span class="op">)</span><span class="op">^</span><span class="fl">2</span><span class="op">)</span></span>
+<span>    <span class="va">within_var</span>  <span class="op">&lt;-</span> <span class="va">within_var</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="op">(</span><span class="va">H</span><span class="op">[</span>, <span class="va">idx</span><span class="op">]</span> <span class="op">-</span> <span class="va">class_mean</span><span class="op">)</span><span class="op">^</span><span class="fl">2</span><span class="op">)</span></span>
+<span>  <span class="op">}</span></span>
+<span>  <span class="va">between_var</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">within_var</span>, <span class="va">.Machine</span><span class="op">$</span><span class="va">double.eps</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="va">sep_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>  Method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Unsupervised"</span>, <span class="st">"Target-regularized (λ=0.3)"</span><span class="op">)</span>,</span>
+<span>  Separability <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu">separability</span><span class="op">(</span><span class="va">H_unsup</span>, <span class="va">island</span><span class="op">)</span>,</span>
+<span>                   <span class="fu">separability</span><span class="op">(</span><span class="va">H_guided</span>, <span class="va">island</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">sep_df</span>, digits <span class="op">=</span> <span class="fl">3</span>,</span>
+<span>             caption <span class="op">=</span> <span class="st">"Between/within class variance ratio (higher = better separated)"</span><span class="op">)</span></span></code></pre></div>
 <table class="table">
-<caption>Semi-supervised NMF with partial labels</caption>
+<caption>Between/within class variance ratio (higher = better
+separated)</caption>
 <thead><tr class="header">
-<th align="left">Model</th>
-<th align="right">Accuracy</th>
-<th align="right">Macro F1</th>
+<th align="left">Method</th>
+<th align="right">Separability</th>
 </tr></thead>
 <tbody>
 <tr class="odd">
 <td align="left">Unsupervised</td>
-<td align="right">1</td>
-<td align="right">1</td>
+<td align="right">0.38</td>
 </tr>
 <tr class="even">
-<td align="left">Semi-supervised (50% labeled)</td>
-<td align="right">1</td>
-<td align="right">1</td>
-</tr>
-<tr class="odd">
-<td align="left">Fully guided</td>
-<td align="right">1</td>
-<td align="right">1</td>
+<td align="left">Target-regularized (λ=0.3)</td>
+<td align="right">0.38</td>
 </tr>
 </tbody>
 </table>
-<p>Even with only half the samples labeled, guided NMF achieves
-classification accuracy close to the fully supervised case,
-demonstrating effective semi-supervised learning from the shared latent
-space.</p>
+<p>See <a href="guided-nmf.html">Guided NMF</a> for
+<code><a href="../reference/refine.html">refine()</a></code>, <code><a href="../reference/compute_target.html">compute_target()</a></code>, and classification
+benchmarks.</p>
 </div>
 <div class="section level2">
-<h2 id="example-4-multi-modal-shared-factorization">Example 4: Multi-Modal Shared Factorization<a class="anchor" aria-label="anchor" href="#example-4-multi-modal-shared-factorization"></a>
+<h2 id="example-5-cross-validation-over-graph-parameters">Example 5: Cross-Validation over Graph Parameters<a class="anchor" aria-label="anchor" href="#example-5-cross-validation-over-graph-parameters"></a>
 </h2>
-<p>When two data modalities share the same samples,
-<code><a href="../reference/factor_shared.html">factor_shared()</a></code> discovers a common latent space that
-explains both simultaneously.</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Simulate two views of the same 100 samples</span></span>
-<span><span class="va">sim1</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulateNMF.html">simulateNMF</a></span><span class="op">(</span><span class="fl">200</span>, <span class="fl">100</span>, k <span class="op">=</span> <span class="fl">5</span>, noise <span class="op">=</span> <span class="fl">0.3</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span>
-<span><span class="va">sim2</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulateNMF.html">simulateNMF</a></span><span class="op">(</span><span class="fl">150</span>, <span class="fl">100</span>, k <span class="op">=</span> <span class="fl">5</span>, noise <span class="op">=</span> <span class="fl">0.3</span>, seed <span class="op">=</span> <span class="fl">43</span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">inp1</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_input.html">factor_input</a></span><span class="op">(</span><span class="va">sim1</span><span class="op">$</span><span class="va">A</span>, name <span class="op">=</span> <span class="st">"view1"</span><span class="op">)</span></span>
-<span><span class="va">inp2</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_input.html">factor_input</a></span><span class="op">(</span><span class="va">sim2</span><span class="op">$</span><span class="va">A</span>, name <span class="op">=</span> <span class="st">"view2"</span><span class="op">)</span></span>
-<span><span class="va">shared_inp</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_shared.html">factor_shared</a></span><span class="op">(</span><span class="va">inp1</span>, <span class="va">inp2</span><span class="op">)</span></span>
-<span><span class="va">shared</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf_layer.html">nmf_layer</a></span><span class="op">(</span><span class="va">shared_inp</span>, k <span class="op">=</span> <span class="fl">5</span>, name <span class="op">=</span> <span class="st">"shared"</span><span class="op">)</span></span>
-<span><span class="va">config_mm</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_config.html">factor_config</a></span><span class="op">(</span>maxit <span class="op">=</span> <span class="fl">100</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span>
-<span><span class="va">net_mm</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_net.html">factor_net</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="va">inp1</span>, <span class="va">inp2</span><span class="op">)</span>, <span class="va">shared</span>, <span class="va">config_mm</span><span class="op">)</span></span>
-<span><span class="va">result_mm</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fit.html">fit</a></span><span class="op">(</span><span class="va">net_mm</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Compare learned H to true H from each view</span></span>
-<span><span class="va">H_learned</span> <span class="op">&lt;-</span> <span class="va">result_mm</span><span class="op">$</span><span class="va">shared</span><span class="op">$</span><span class="va">H</span></span>
-<span><span class="va">cos_sim</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">a</span>, <span class="va">b</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">a</span> <span class="op">*</span> <span class="va">b</span><span class="op">)</span> <span class="op">/</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">sqrt</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">a</span><span class="op">^</span><span class="fl">2</span><span class="op">)</span><span class="op">)</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">sqrt</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">b</span><span class="op">^</span><span class="fl">2</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="op">}</span></span>
-<span></span>
-<span><span class="co"># Match factors using bipartiteMatch on cosine distance</span></span>
-<span><span class="va">cost_mat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">5</span>, <span class="fl">5</span><span class="op">)</span></span>
-<span><span class="kw">for</span> <span class="op">(</span><span class="va">i</span> <span class="kw">in</span> <span class="fl">1</span><span class="op">:</span><span class="fl">5</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="kw">for</span> <span class="op">(</span><span class="va">j</span> <span class="kw">in</span> <span class="fl">1</span><span class="op">:</span><span class="fl">5</span><span class="op">)</span> <span class="op">{</span></span>
-<span>    <span class="va">cost_mat</span><span class="op">[</span><span class="va">i</span>, <span class="va">j</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fl">1</span> <span class="op">-</span> <span class="fu">cos_sim</span><span class="op">(</span><span class="va">H_learned</span><span class="op">[</span><span class="va">i</span>, <span class="op">]</span>, <span class="va">sim1</span><span class="op">$</span><span class="va">h</span><span class="op">[</span><span class="va">j</span>, <span class="op">]</span><span class="op">)</span></span>
-<span>  <span class="op">}</span></span>
-<span><span class="op">}</span></span>
-<span><span class="va">match_result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/bipartiteMatch.html">bipartiteMatch</a></span><span class="op">(</span><span class="va">cost_mat</span><span class="op">)</span></span>
-<span><span class="va">matched_sims</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">5</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="va">j</span> <span class="op">&lt;-</span> <span class="va">match_result</span><span class="op">$</span><span class="va">assignment</span><span class="op">[</span><span class="va">i</span><span class="op">]</span> <span class="op">+</span> <span class="fl">1L</span>  <span class="co"># 0-indexed to 1-indexed</span></span>
-<span>  <span class="fu">cos_sim</span><span class="op">(</span><span class="va">H_learned</span><span class="op">[</span><span class="va">i</span>, <span class="op">]</span>, <span class="va">sim1</span><span class="op">$</span><span class="va">h</span><span class="op">[</span><span class="va">j</span>, <span class="op">]</span><span class="op">)</span></span>
-<span><span class="op">}</span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">modal_table</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
-<span>  `Learned Factor` <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">5</span>,</span>
-<span>  `Matched True Factor` <span class="op">=</span> <span class="va">match_result</span><span class="op">$</span><span class="va">assignment</span> <span class="op">+</span> <span class="fl">1L</span>,</span>
-<span>  `Cosine Similarity` <span class="op">=</span> <span class="va">matched_sims</span>,</span>
-<span>  check.names <span class="op">=</span> <span class="cn">FALSE</span></span>
-<span><span class="op">)</span></span>
-<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">modal_table</span>, digits <span class="op">=</span> <span class="fl">3</span>,</span>
-<span>             caption <span class="op">=</span> <span class="st">"Shared factorization recovers common latent structure"</span><span class="op">)</span></span></code></pre></div>
-<table class="table">
-<caption>Shared factorization recovers common latent structure</caption>
-<thead><tr class="header">
-<th align="right">Learned Factor</th>
-<th align="right">Matched True Factor</th>
-<th align="right">Cosine Similarity</th>
-</tr></thead>
-<tbody>
-<tr class="odd">
-<td align="right">1</td>
-<td align="right">5</td>
-<td align="right">0.507</td>
-</tr>
-<tr class="even">
-<td align="right">2</td>
-<td align="right">2</td>
-<td align="right">0.479</td>
-</tr>
-<tr class="odd">
-<td align="right">3</td>
-<td align="right">3</td>
-<td align="right">0.497</td>
-</tr>
-<tr class="even">
-<td align="right">4</td>
-<td align="right">4</td>
-<td align="right">0.531</td>
-</tr>
-<tr class="odd">
-<td align="right">5</td>
-<td align="right">1</td>
-<td align="right">0.462</td>
-</tr>
-</tbody>
-</table>
-<p>Shared factorization discovers the common latent structure across two
-feature spaces, matching the true generating factors with high cosine
-similarity.</p>
-</div>
-<div class="section level2">
-<h2 id="example-5-hyperparameter-search-with-cross-validation">Example 5: Hyperparameter Search with Cross-Validation<a class="anchor" aria-label="anchor" href="#example-5-hyperparameter-search-with-cross-validation"></a>
-</h2>
-<p><code><a href="../reference/cross_validate_graph.html">cross_validate_graph()</a></code> automates grid search over rank
-and regularization strength.</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<p><code><a href="../reference/cross_validate_graph.html">cross_validate_graph()</a></code> automates hyperparameter search.
+You provide a function that builds the output layer from a parameter
+list, and a grid of values to search:</p>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">aml</span><span class="op">)</span></span>
-<span><span class="va">inp_cv</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_input.html">factor_input</a></span><span class="op">(</span><span class="va">aml</span>, name <span class="op">=</span> <span class="st">"aml"</span><span class="op">)</span></span>
-<span><span class="va">layer_fn</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">p</span><span class="op">)</span> <span class="fu"><a href="../reference/nmf_layer.html">nmf_layer</a></span><span class="op">(</span><span class="va">inp_cv</span>, k <span class="op">=</span> <span class="va">p</span><span class="op">$</span><span class="va">k</span>, L1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">p</span><span class="op">$</span><span class="va">L1</span>, <span class="fl">0</span><span class="op">)</span>, name <span class="op">=</span> <span class="st">"nmf_cv"</span><span class="op">)</span></span>
-<span><span class="va">params</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>k <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">3</span>, <span class="fl">5</span>, <span class="fl">8</span><span class="op">)</span>, L1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.01</span>, <span class="fl">0.1</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">config_cv</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_config.html">factor_config</a></span><span class="op">(</span>test_fraction <span class="op">=</span> <span class="fl">0.1</span>, cv_seed <span class="op">=</span> <span class="fl">42</span>, maxit <span class="op">=</span> <span class="fl">50</span><span class="op">)</span></span>
+<span><span class="va">inp</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_input.html">factor_input</a></span><span class="op">(</span><span class="va">aml</span>, name <span class="op">=</span> <span class="st">"aml"</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">cv</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/cross_validate_graph.html">cross_validate_graph</a></span><span class="op">(</span><span class="va">inp_cv</span>, <span class="va">layer_fn</span>, <span class="va">params</span>, <span class="va">config_cv</span>,</span>
+<span><span class="va">layer_fn</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">p</span><span class="op">)</span> <span class="fu"><a href="../reference/nmf_layer.html">nmf_layer</a></span><span class="op">(</span><span class="va">inp</span>, k <span class="op">=</span> <span class="va">p</span><span class="op">$</span><span class="va">k</span>, L1 <span class="op">=</span> <span class="va">p</span><span class="op">$</span><span class="va">L1</span>, name <span class="op">=</span> <span class="st">"cv"</span><span class="op">)</span></span>
+<span><span class="va">params</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>k <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">3</span>, <span class="fl">5</span>, <span class="fl">8</span>, <span class="fl">12</span><span class="op">)</span>, L1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0.01</span>, <span class="fl">0.1</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">config</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_config.html">factor_config</a></span><span class="op">(</span>test_fraction <span class="op">=</span> <span class="fl">0.1</span>, cv_seed <span class="op">=</span> <span class="fl">42</span>, maxit <span class="op">=</span> <span class="fl">50</span><span class="op">)</span></span>
+<span><span class="va">cv</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/cross_validate_graph.html">cross_validate_graph</a></span><span class="op">(</span><span class="va">inp</span>, <span class="va">layer_fn</span>, <span class="va">params</span>, <span class="va">config</span>,</span>
 <span>                           reps <span class="op">=</span> <span class="fl">2</span>, seed <span class="op">=</span> <span class="fl">42</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">top5</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">cv</span><span class="op">$</span><span class="va">summary</span>, <span class="fl">5</span><span class="op">)</span></span>
-<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">top5</span>, digits <span class="op">=</span> <span class="fl">5</span>,</span>
-<span>             caption <span class="op">=</span> <span class="st">"Top 5 parameter combinations by mean test loss"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">cv</span><span class="op">$</span><span class="va">summary</span>, <span class="fl">6</span><span class="op">)</span>, digits <span class="op">=</span> <span class="fl">5</span>,</span>
+<span>             caption <span class="op">=</span> <span class="st">"Top parameter combinations by mean test loss"</span><span class="op">)</span></span></code></pre></div>
 <table class="table">
-<caption>Top 5 parameter combinations by mean test loss</caption>
+<caption>Top parameter combinations by mean test loss</caption>
 <thead><tr class="header">
 <th align="right">k</th>
 <th align="right">L1</th>
@@ -562,61 +536,179 @@ and regularization strength.</p>
 </tr></thead>
 <tbody>
 <tr class="odd">
-<td align="right">3</td>
-<td align="right">0.00</td>
-<td align="right">NA</td>
-<td align="right">NA</td>
-<td align="right">NaN</td>
-<td align="right">0</td>
+<td align="right">5</td>
+<td align="right">0.01</td>
+<td align="right">0.02455</td>
+<td align="right">0.00004</td>
+<td align="right">0.02167</td>
+<td align="right">2</td>
 </tr>
 <tr class="even">
 <td align="right">5</td>
 <td align="right">0.00</td>
-<td align="right">NA</td>
-<td align="right">NA</td>
-<td align="right">NaN</td>
-<td align="right">0</td>
+<td align="right">0.02497</td>
+<td align="right">0.00014</td>
+<td align="right">0.02153</td>
+<td align="right">2</td>
 </tr>
 <tr class="odd">
 <td align="right">8</td>
-<td align="right">0.00</td>
-<td align="right">NA</td>
-<td align="right">NA</td>
-<td align="right">NaN</td>
-<td align="right">0</td>
+<td align="right">0.01</td>
+<td align="right">0.02653</td>
+<td align="right">0.00024</td>
+<td align="right">0.02177</td>
+<td align="right">2</td>
 </tr>
 <tr class="even">
 <td align="right">3</td>
-<td align="right">0.01</td>
-<td align="right">NA</td>
-<td align="right">NA</td>
-<td align="right">NaN</td>
-<td align="right">0</td>
+<td align="right">0.00</td>
+<td align="right">0.02682</td>
+<td align="right">0.00013</td>
+<td align="right">0.02478</td>
+<td align="right">2</td>
 </tr>
 <tr class="odd">
-<td align="right">5</td>
+<td align="right">3</td>
 <td align="right">0.01</td>
-<td align="right">NA</td>
-<td align="right">NA</td>
-<td align="right">NaN</td>
-<td align="right">0</td>
+<td align="right">0.02687</td>
+<td align="right">0.00114</td>
+<td align="right">0.02489</td>
+<td align="right">2</td>
+</tr>
+<tr class="even">
+<td align="right">8</td>
+<td align="right">0.00</td>
+<td align="right">0.02821</td>
+<td align="right">0.00033</td>
+<td align="right">0.02268</td>
+<td align="right">2</td>
 </tr>
 </tbody>
 </table>
-<p>Grid search over 9 parameter combinations identifies the optimal rank
-and L1 strength, balancing reconstruction accuracy against
-overfitting.</p>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">cv_df</span> <span class="op">&lt;-</span> <span class="va">cv</span><span class="op">$</span><span class="va">summary</span></span>
+<span><span class="va">cv_df</span><span class="op">$</span><span class="va">L1</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">cv_df</span><span class="op">$</span><span class="va">L1</span><span class="op">)</span></span>
+<span><span class="va">cv_df</span><span class="op">$</span><span class="va">k</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="va">cv_df</span><span class="op">$</span><span class="va">k</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">cv_df</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">k</span>, y <span class="op">=</span> <span class="va">mean_test_loss</span>, color <span class="op">=</span> <span class="va">L1</span>, group <span class="op">=</span> <span class="va">L1</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_line</span><span class="op">(</span>linewidth <span class="op">=</span> <span class="fl">0.8</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_point</span><span class="op">(</span>size <span class="op">=</span> <span class="fl">2.5</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_errorbar</span><span class="op">(</span><span class="fu">aes</span><span class="op">(</span>ymin <span class="op">=</span> <span class="va">mean_test_loss</span> <span class="op">-</span> <span class="va">se_test_loss</span>,</span>
+<span>                    ymax <span class="op">=</span> <span class="va">mean_test_loss</span> <span class="op">+</span> <span class="va">se_test_loss</span><span class="op">)</span>,</span>
+<span>                width <span class="op">=</span> <span class="fl">0.3</span>, linewidth <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">scale_color_brewer</span><span class="op">(</span>palette <span class="op">=</span> <span class="st">"Set1"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Cross-Validation: Rank × L1 Grid Search"</span>,</span>
+<span>       x <span class="op">=</span> <span class="st">"Rank (k)"</span>, y <span class="op">=</span> <span class="st">"Mean Test Loss ± SE"</span>, color <span class="op">=</span> <span class="st">"L1"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<p><img src="factor-graphs_files/figure-html/cv-plot-1.png" class="r-plt" alt="" width="672"></p>
+<p>This works with any graph architecture — cross-validate the
+second-layer rank of a deep NMF, the regularization strength of a shared
+factorization, or any other parameter exposed through
+<code>layer_fn</code>.</p>
+</div>
+<div class="section level2">
+<h2 id="composable-architectures">Composable Architectures<a class="anchor" aria-label="anchor" href="#composable-architectures"></a>
+</h2>
+<p>The real power is composability. Each block is a node; wire them
+freely:</p>
+<p><strong>Shared + guided</strong> — two modalities with label
+guidance:</p>
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">inp1</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_input.html">factor_input</a></span><span class="op">(</span><span class="va">A1</span>, name <span class="op">=</span> <span class="st">"rna"</span><span class="op">)</span></span>
+<span><span class="va">inp2</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_input.html">factor_input</a></span><span class="op">(</span><span class="va">A2</span>, name <span class="op">=</span> <span class="st">"protein"</span><span class="op">)</span></span>
+<span><span class="va">layer</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf_layer.html">nmf_layer</a></span><span class="op">(</span><span class="fu"><a href="../reference/factor_shared.html">factor_shared</a></span><span class="op">(</span><span class="va">inp1</span>, <span class="va">inp2</span><span class="op">)</span>, k <span class="op">=</span> <span class="fl">10</span>, name <span class="op">=</span> <span class="st">"joint"</span>,</span>
+<span>                   H <span class="op">=</span> <span class="fu"><a href="../reference/W.html">H</a></span><span class="op">(</span>target <span class="op">=</span> <span class="va">T_mat</span>, target_lambda <span class="op">=</span> <span class="fl">0.3</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">net</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_net.html">factor_net</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="va">inp1</span>, <span class="va">inp2</span><span class="op">)</span>, <span class="va">layer</span>, <span class="fu"><a href="../reference/factor_config.html">factor_config</a></span><span class="op">(</span>maxit <span class="op">=</span> <span class="fl">100</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p><strong>Deep + CV</strong> — search over second-layer rank:</p>
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">layer1</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf_layer.html">nmf_layer</a></span><span class="op">(</span><span class="va">inp</span>, k <span class="op">=</span> <span class="fl">20</span>, name <span class="op">=</span> <span class="st">"fine"</span><span class="op">)</span></span>
+<span><span class="va">cv</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/cross_validate_graph.html">cross_validate_graph</a></span><span class="op">(</span></span>
+<span>  <span class="va">inp</span>,</span>
+<span>  layer_fn <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">p</span><span class="op">)</span> <span class="fu"><a href="../reference/nmf_layer.html">nmf_layer</a></span><span class="op">(</span><span class="va">layer1</span>, k <span class="op">=</span> <span class="va">p</span><span class="op">$</span><span class="va">k</span>, name <span class="op">=</span> <span class="st">"coarse"</span><span class="op">)</span>,</span>
+<span>  params <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>k <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">3</span>, <span class="fl">5</span>, <span class="fl">8</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>  config <span class="op">=</span> <span class="fu"><a href="../reference/factor_config.html">factor_config</a></span><span class="op">(</span>test_fraction <span class="op">=</span> <span class="fl">0.1</span>, maxit <span class="op">=</span> <span class="fl">50</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p><strong>Branching + concatenation</strong> — parallel factorizations
+at different ranks, merged:</p>
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">branch_lo</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf_layer.html">nmf_layer</a></span><span class="op">(</span><span class="va">inp</span>, k <span class="op">=</span> <span class="fl">3</span>, name <span class="op">=</span> <span class="st">"coarse"</span><span class="op">)</span></span>
+<span><span class="va">branch_hi</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf_layer.html">nmf_layer</a></span><span class="op">(</span><span class="va">inp</span>, k <span class="op">=</span> <span class="fl">10</span>, name <span class="op">=</span> <span class="st">"fine"</span><span class="op">)</span></span>
+<span><span class="va">merged</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf_layer.html">nmf_layer</a></span><span class="op">(</span><span class="fu"><a href="../reference/factor_concat.html">factor_concat</a></span><span class="op">(</span><span class="va">branch_lo</span>, <span class="va">branch_hi</span><span class="op">)</span>, k <span class="op">=</span> <span class="fl">5</span>, name <span class="op">=</span> <span class="st">"merged"</span><span class="op">)</span></span>
+<span><span class="va">net</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/factor_net.html">factor_net</a></span><span class="op">(</span><span class="va">inp</span>, <span class="va">merged</span>, <span class="fu"><a href="../reference/factor_config.html">factor_config</a></span><span class="op">(</span>maxit <span class="op">=</span> <span class="fl">50</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="summary">Summary<a class="anchor" aria-label="anchor" href="#summary"></a>
+</h2>
+<table class="table">
+<colgroup>
+<col width="23%">
+<col width="42%">
+<col width="34%">
+</colgroup>
+<thead><tr class="header">
+<th>Need</th>
+<th>Graph tool</th>
+<th>Example</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td>One matrix, one NMF</td>
+<td>
+<code>factor_input</code> → <code>nmf_layer</code>
+</td>
+<td><a href="#example-1-graph--plain-nmf">Example 1</a></td>
+</tr>
+<tr class="even">
+<td>Multi-modal (shared samples)</td>
+<td><code><a href="../reference/factor_shared.html">factor_shared()</a></code></td>
+<td><a href="#example-2-multi-modal-shared-factorization">Example
+2</a></td>
+</tr>
+<tr class="odd">
+<td>Hierarchical decomposition</td>
+<td>Stacked <code><a href="../reference/nmf_layer.html">nmf_layer()</a></code> calls</td>
+<td><a href="#example-3-deep-nmf">Example 3</a></td>
+</tr>
+<tr class="even">
+<td>Label-guided factors</td>
+<td><code>H(target=..., target_lambda=...)</code></td>
+<td><a href="#example-4-target-regularization-in-graphs">Example
+4</a></td>
+</tr>
+<tr class="odd">
+<td>Hyperparameter search</td>
+<td><code><a href="../reference/cross_validate_graph.html">cross_validate_graph()</a></code></td>
+<td><a href="#example-5-cross-validation-over-graph-parameters">Example
+5</a></td>
+</tr>
+<tr class="even">
+<td>Custom architectures</td>
+<td>
+<code><a href="../reference/factor_concat.html">factor_concat()</a></code>, <code><a href="../reference/factor_add.html">factor_add()</a></code>
+</td>
+<td><a href="#composable-architectures">Composable
+Architectures</a></td>
+</tr>
+</tbody>
+</table>
 </div>
 <div class="section level2">
 <h2 id="whats-next">What’s Next<a class="anchor" aria-label="anchor" href="#whats-next"></a>
 </h2>
 <ul>
-<li><em>See the <a href="clustering.html">Clustering</a> vignette for
-consensus NMF and unsupervised clustering.</em></li>
-<li><em>See the <a href="cross-validation.html">Cross-Validation</a>
-vignette for rank selection without the graph API.</em></li>
-<li><em>See the <a href="nmf-fundamentals.html">NMF Fundamentals</a>
-vignette for the core NMF API.</em></li>
+<li>
+<a href="guided-nmf.html">Guided NMF</a> — target regularization,
+<code><a href="../reference/refine.html">refine()</a></code>, and <code><a href="../reference/compute_target.html">compute_target()</a></code> in depth</li>
+<li>
+<a href="cross-validation.html">Cross-Validation</a> — rank
+selection with the simpler <code>nmf(..., test_fraction=...)</code>
+interface</li>
+<li>
+<a href="nmf-fundamentals.html">NMF Fundamentals</a> — the core
+<code><a href="../reference/nmf.html">nmf()</a></code> API</li>
+<li>
+<a href="clustering.html">Clustering</a> — consensus NMF and
+hierarchical divisive clustering</li>
 </ul>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

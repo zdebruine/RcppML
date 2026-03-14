@@ -21,11 +21,11 @@ Description: High-performance non-negative matrix factorization (NMF),
     described in DeBruine, Melcher, and Triche (2021)
     <doi:10.1101/2021.09.01.458620>.
 Depends:
-    R (>= 3.5.0)
+    R (>= 4.1.0),
+    Matrix
 License: GPL (>= 3)
 Imports:
     Rcpp,
-    Matrix,
     methods,
     stats,
     utils
@@ -38,12 +38,19 @@ Suggests:
     hdf5r,
     jsonlite,
     knitr,
+    pheatmap,
     randomForest,
+    RColorBrewer,
     rmarkdown,
     patchwork,
     plotly,
     scales,
-    testthat (>= 3.0.0)
+    Seurat,
+    SeuratData,
+    SeuratObject,
+    testthat (>= 3.0.0),
+    uwot,
+    viridis
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 LazyData: true

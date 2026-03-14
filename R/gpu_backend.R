@@ -144,6 +144,7 @@ gpu_info <- function() {
 }
 
 #' Find GPU shared library
+#' @return File path to the GPU shared library, or \code{NULL}.
 #' @keywords internal
 .find_gpu_lib <- function() {
   # Search order:
@@ -209,9 +210,13 @@ gpu_info <- function() {
   H <- matrix(runif(k * n), k, n)
   d <- rep(1.0, k)
 
-  # Map loss string to integer: MSE=0, MAE=1, HUBER=2, KL=3
-  loss_type_int <- match(tolower(loss), c("mse", "mae", "huber", "kl")) - 1L
-  if (is.na(loss_type_int)) loss_type_int <- 0L
+  # Map loss string to integer: MSE=0, KL=3, GP=3
+  loss_type_int <- switch(tolower(loss),
+    "mse" = 0L,
+    "gp" = 3L,
+    "kl" = 3L,
+    0L  # default to MSE
+  )
 
   # Map norm string to integer: L1=0, L2=1, none=2
   norm_type_int <- match(tolower(norm), c("l1", "l2", "none")) - 1L
@@ -426,6 +431,7 @@ gpu_info <- function() {
 #' @description GPU SVD/PCA for a base R dense matrix (is.matrix(A) == TRUE).
 #'   For deflation: uses cuBLAS GEMV instead of cuSPARSE SpMV (significantly
 #'   faster for dense input). For other algorithms: converts to CSC internally.
+#' @return A list with components \code{u}, \code{d}, and \code{v}.
 #' @keywords internal
 .gpu_svd_pca_dense <- function(A, k_max, tol, max_iter, center, verbose, seed,
                                 threads, L1_u, L1_v, L2_u, L2_v,

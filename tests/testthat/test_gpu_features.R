@@ -426,7 +426,7 @@ test_that("GPU supports semi-NMF (unconstrained W)", {
 # GPU Non-MSE Loss Tests (IRLS)
 # ============================================================================
 
-test_that("GPU supports MAE loss via host-mediated IRLS", {
+test_that("GPU supports robust='mae' via host-mediated IRLS", {
   skip_if_no_gpu()
 
   m <- load_pbmc3k_matrix()
@@ -439,7 +439,7 @@ test_that("GPU supports MAE loss via host-mediated IRLS", {
   on.exit(options(RcppML.gpu = "auto"), add = TRUE)
 
   result <- tryCatch(
-    nmf(A, k = k, loss = "mae", maxit = maxit, tol = tol,
+    nmf(A, k = k, robust = "mae", maxit = maxit, tol = tol,
         seed = seed, verbose = FALSE),
     error = function(e) {
       skip(paste("GPU MAE loss not supported:", e$message))
@@ -461,7 +461,7 @@ test_that("GPU supports MAE loss via host-mediated IRLS", {
   }
 })
 
-test_that("GPU supports Huber loss via host-mediated IRLS", {
+test_that("GPU supports robust=TRUE (Huber) via host-mediated IRLS", {
   skip_if_no_gpu()
 
   m <- load_pbmc3k_matrix()
@@ -474,7 +474,7 @@ test_that("GPU supports Huber loss via host-mediated IRLS", {
   on.exit(options(RcppML.gpu = "auto"), add = TRUE)
 
   result <- tryCatch(
-    nmf(A, k = k, loss = "huber", huber_delta = 1.0, maxit = maxit, tol = tol,
+    nmf(A, k = k, robust = TRUE, maxit = maxit, tol = tol,
         seed = seed, verbose = FALSE),
     error = function(e) {
       skip(paste("GPU Huber loss not supported:", e$message))
@@ -493,7 +493,7 @@ test_that("GPU supports Huber loss via host-mediated IRLS", {
   }
 })
 
-test_that("GPU Semi-NMF with MAE loss works together", {
+test_that("GPU Semi-NMF with robust='mae' works together", {
   skip_if_no_gpu()
 
   m <- load_pbmc3k_matrix()
@@ -506,7 +506,7 @@ test_that("GPU Semi-NMF with MAE loss works together", {
   on.exit(options(RcppML.gpu = "auto"), add = TRUE)
 
   result <- tryCatch(
-    nmf(A, k = k, loss = "mae", nonneg = c(FALSE, TRUE), maxit = maxit,
+    nmf(A, k = k, robust = "mae", nonneg = c(FALSE, TRUE), maxit = maxit,
         tol = tol, seed = seed, verbose = FALSE),
     error = function(e) {
       skip(paste("GPU Semi-NMF + MAE not supported:", e$message))
@@ -684,16 +684,16 @@ test_that("GPU scale=none loss within 5% of CPU", {
 
 # ── Mask Parity Tests (P2) ─────────────────────────────────────────
 
-test_that("GPU mask_zeros=TRUE loss within 5% of CPU", {
+test_that("GPU mask='zeros' loss within 5% of CPU", {
   skip_if_no_gpu()
 
   m <- load_pbmc3k_matrix()
   A <- m[1:300, 1:150]
   A <- as(A, "dgCMatrix")
 
-  cpu <- nmf(A, k = 5, mask_zeros = TRUE, maxit = 20, tol = 1e-10,
+  cpu <- nmf(A, k = 5, mask = "zeros", maxit = 20, tol = 1e-10,
              seed = 42, resource = "cpu", verbose = FALSE)
-  gpu <- nmf(A, k = 5, mask_zeros = TRUE, maxit = 20, tol = 1e-10,
+  gpu <- nmf(A, k = 5, mask = "zeros", maxit = 20, tol = 1e-10,
              seed = 42, resource = "gpu", verbose = FALSE)
 
   rel <- abs(cpu@misc$loss - gpu@misc$loss) / max(abs(cpu@misc$loss), 1e-16)
@@ -701,16 +701,16 @@ test_that("GPU mask_zeros=TRUE loss within 5% of CPU", {
     label = sprintf("Mask zeros parity: rel=%.4f (tol=0.10)", rel))
 })
 
-test_that("GPU mask_zeros=FALSE (default) loss within 5% of CPU", {
+test_that("GPU default mask loss within 5% of CPU", {
   skip_if_no_gpu()
 
   m <- load_pbmc3k_matrix()
   A <- m[1:300, 1:150]
   A <- as(A, "dgCMatrix")
 
-  cpu <- nmf(A, k = 5, mask_zeros = FALSE, maxit = 20, tol = 1e-10,
+  cpu <- nmf(A, k = 5, maxit = 20, tol = 1e-10,
              seed = 42, resource = "cpu", verbose = FALSE)
-  gpu <- nmf(A, k = 5, mask_zeros = FALSE, maxit = 20, tol = 1e-10,
+  gpu <- nmf(A, k = 5, maxit = 20, tol = 1e-10,
              seed = 42, resource = "gpu", verbose = FALSE)
 
   rel <- abs(cpu@misc$loss - gpu@misc$loss) / max(abs(cpu@misc$loss), 1e-16)

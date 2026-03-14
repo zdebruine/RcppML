@@ -33,58 +33,56 @@ simulate_count_data <- function(m = 60, n = 40, k = 2, seed = 42) {
 }
 
 # ============================================================
-# distribution= parameter mapping
+# loss= parameter mapping (formerly distribution=)
 # ============================================================
 
-test_that("distribution='gaussian' maps to MSE loss", {
+test_that("loss='mse' runs (formerly distribution='gaussian')", {
   skip_on_cran()
   sim <- simulate_gamma_data(m = 30, n = 20, k = 2)
-  model <- nmf(sim$A, 2, distribution = "gaussian",
+  model <- nmf(sim$A, 2, loss = "mse",
                maxit = 10, tol = 1e-4, seed = 1, verbose = FALSE)
   expect_s4_class(model, "nmf")
 })
 
-test_that("distribution='poisson' maps to GP with dispersion=none", {
+test_that("loss='gp' with dispersion='none' (formerly distribution='poisson')", {
   skip_on_cran()
   sim <- simulate_count_data(m = 30, n = 20, k = 2)
-  model <- nmf(sim$A, 2, distribution = "poisson",
+  model <- nmf(sim$A, 2, loss = "gp", dispersion = "none",
                maxit = 10, tol = 1e-4, seed = 1, verbose = FALSE)
   expect_s4_class(model, "nmf")
 })
 
-test_that("distribution='gp' runs with dispersion estimation", {
+test_that("loss='gp' runs with dispersion estimation", {
   skip_on_cran()
   sim <- simulate_count_data(m = 30, n = 20, k = 2)
-  model <- nmf(sim$A, 2, distribution = "gp",
-               distribution_config = list(dispersion = "per_row"),
+  model <- nmf(sim$A, 2, loss = "gp", dispersion = "per_row",
                maxit = 10, tol = 1e-4, seed = 1, verbose = FALSE)
   expect_s4_class(model, "nmf")
   expect_true(!is.null(model@misc$theta))
 })
 
-test_that("distribution='nb' runs with dispersion estimation", {
+test_that("loss='nb' runs with dispersion estimation", {
   skip_on_cran()
   sim <- simulate_count_data(m = 30, n = 20, k = 2)
-  model <- nmf(sim$A, 2, distribution = "nb",
-               distribution_config = list(dispersion = "per_row"),
+  model <- nmf(sim$A, 2, loss = "nb", dispersion = "per_row",
                maxit = 15, tol = 1e-4, seed = 1, verbose = FALSE)
   expect_s4_class(model, "nmf")
   # NB size parameter stored in theta slot
   expect_true(!is.null(model@misc$theta))
 })
 
-test_that("distribution='gamma' runs on positive data", {
+test_that("loss='gamma' runs on positive data", {
   skip_on_cran()
   sim <- simulate_gamma_data(m = 30, n = 20, k = 2)
-  model <- nmf(sim$A, 2, distribution = "gamma",
+  model <- nmf(sim$A, 2, loss = "gamma",
                maxit = 15, tol = 1e-4, seed = 1, verbose = FALSE)
   expect_s4_class(model, "nmf")
 })
 
-test_that("distribution='inverse_gaussian' runs on positive data", {
+test_that("loss='inverse_gaussian' runs on positive data", {
   skip_on_cran()
   sim <- simulate_gamma_data(m = 30, n = 20, k = 2)
-  model <- nmf(sim$A, 2, distribution = "inverse_gaussian",
+  model <- nmf(sim$A, 2, loss = "inverse_gaussian",
                maxit = 15, tol = 1e-4, seed = 1, verbose = FALSE)
   expect_s4_class(model, "nmf")
 })
@@ -220,28 +218,28 @@ test_that("Inverse Gaussian loss decreases overall", {
 # Robust + Distribution Composition
 # ============================================================
 
-test_that("robust=TRUE works with distribution='gamma'", {
+test_that("robust=TRUE works with loss='gamma'", {
   skip_on_cran()
   sim <- simulate_gamma_data(m = 30, n = 20, k = 2)
-  model <- nmf(sim$A, 2, distribution = "gamma", robust = TRUE,
+  model <- nmf(sim$A, 2, loss = "gamma", robust = TRUE,
                maxit = 15, tol = 1e-4, seed = 1, verbose = FALSE)
   expect_s4_class(model, "nmf")
 })
 
-test_that("robust=TRUE works with distribution='gp'", {
+test_that("robust=TRUE works with loss='gp'", {
   skip_on_cran()
   sim <- simulate_count_data(m = 30, n = 20, k = 2)
-  model <- nmf(sim$A, 2, distribution = "gp", robust = TRUE,
-               distribution_config = list(dispersion = "per_row"),
+  model <- nmf(sim$A, 2, loss = "gp", robust = TRUE,
+               dispersion = "per_row",
                maxit = 15, tol = 1e-4, seed = 1, verbose = FALSE)
   expect_s4_class(model, "nmf")
 })
 
-test_that("robust=TRUE works with distribution='nb'", {
+test_that("robust=TRUE works with loss='nb'", {
   skip_on_cran()
   sim <- simulate_count_data(m = 30, n = 20, k = 2)
-  model <- nmf(sim$A, 2, distribution = "nb", robust = TRUE,
-               distribution_config = list(dispersion = "per_row"),
+  model <- nmf(sim$A, 2, loss = "nb", robust = TRUE,
+               dispersion = "per_row",
                maxit = 15, tol = 1e-4, seed = 1, verbose = FALSE)
   expect_s4_class(model, "nmf")
 })
@@ -249,43 +247,41 @@ test_that("robust=TRUE works with distribution='nb'", {
 test_that("robust with custom delta works with gamma", {
   skip_on_cran()
   sim <- simulate_gamma_data(m = 30, n = 20, k = 2)
-  model <- nmf(sim$A, 2, distribution = "gamma", robust = 2.0,
+  model <- nmf(sim$A, 2, loss = "gamma", robust = 2.0,
                maxit = 15, tol = 1e-4, seed = 1, verbose = FALSE)
   expect_s4_class(model, "nmf")
 })
 
-test_that("robust=TRUE with distribution='inverse_gaussian'", {
+test_that("robust=TRUE with loss='inverse_gaussian'", {
   skip_on_cran()
   sim <- simulate_gamma_data(m = 30, n = 20, k = 2)
-  model <- nmf(sim$A, 2, distribution = "inverse_gaussian", robust = TRUE,
+  model <- nmf(sim$A, 2, loss = "inverse_gaussian", robust = TRUE,
                maxit = 15, tol = 1e-4, seed = 1, verbose = FALSE)
   expect_s4_class(model, "nmf")
 })
 
 # ============================================================
-# distribution_config overrides
+# distribution_config overrides (now flat params in ...)
 # ============================================================
 
-test_that("distribution_config overrides dispersion mode for gamma", {
+test_that("dispersion='per_col' overrides default for gamma", {
   skip_on_cran()
   sim <- simulate_gamma_data(m = 40, n = 30, k = 2)
-  model <- nmf(sim$A, 2, distribution = "gamma",
-               distribution_config = list(dispersion = "per_col"),
+  model <- nmf(sim$A, 2, loss = "gamma",
+               dispersion = "per_col",
                maxit = 15, tol = 1e-4, seed = 1, verbose = FALSE)
   disp <- model@misc$dispersion
   expect_true(!is.null(disp))
   expect_equal(length(disp), ncol(sim$A))
 })
 
-test_that("distribution_config overrides gamma_phi_init", {
+test_that("gamma_phi_init override works", {
   skip_on_cran()
   sim <- simulate_gamma_data(m = 30, n = 20, k = 2)
   # Custom initial phi = 2.0
-  model <- nmf(sim$A, 2, distribution = "gamma",
-               distribution_config = list(
-                 dispersion = "per_row",
-                 gamma_phi_init = 2.0
-               ),
+  model <- nmf(sim$A, 2, loss = "gamma",
+               dispersion = "per_row",
+               gamma_phi_init = 2.0,
                maxit = 15, tol = 1e-4, seed = 1, verbose = FALSE)
   expect_s4_class(model, "nmf")
 })
@@ -333,13 +329,14 @@ test_that("score_test_distribution with custom powers", {
 # Edge Cases
 # ============================================================
 
-test_that("warning when both distribution and loss are specified", {
+test_that("unknown parameters in ... are rejected", {
   skip_on_cran()
   sim <- simulate_gamma_data(m = 20, n = 15, k = 2)
-  expect_warning(
-    nmf(sim$A, 2, distribution = "gamma", loss = "gp",
+  expect_error(
+    nmf(sim$A, 2, loss = "gamma",
+        bogus_param = 42,
         maxit = 5, tol = 1e-4, seed = 1, verbose = FALSE),
-    "distribution.*takes precedence"
+    "Unknown parameter"
   )
 })
 
@@ -362,40 +359,37 @@ test_that("Gamma NMF with high rank", {
 })
 
 # ============================================================================
-# distribution="auto" and zero_inflation="auto"
+# auto_nmf_distribution() and diagnose_zero_inflation() as standalone functions
 # ============================================================================
 
-test_that("distribution='auto' selects a valid distribution", {
+test_that("auto_nmf_distribution() selects a valid distribution", {
   skip_on_cran()
   sim <- simulate_gamma_data(m = 60, n = 40, k = 3)
-  model <- nmf(sim$A, 3, distribution = "auto",
+  result <- auto_nmf_distribution(sim$A, k = 3, maxit = 30, tol = 1e-4,
+                                  seed = 42, verbose = FALSE)
+  expect_true(is.character(result$loss))
+  expect_true(result$loss %in% c("mse", "gp", "nb", "gamma", "inverse_gaussian", "tweedie"))
+  # Run NMF with the selected loss
+  model <- nmf(sim$A, 3, loss = result$loss,
                maxit = 30, tol = 1e-4, seed = 42, verbose = FALSE)
   expect_s4_class(model, "nmf")
-  # Should have run to completion with some distribution
   expect_true(nrow(model@w) == 60)
 })
 
-test_that("distribution='auto' verbose message includes selection", {
-  skip_on_cran()
-  sim <- simulate_gamma_data(m = 40, n = 30, k = 2)
-  expect_message(
-    nmf(sim$A, 2, distribution = "auto", maxit = 20, tol = 1e-3,
-        seed = 42, verbose = TRUE),
-    "distribution='auto': selected"
-  )
-})
-
-test_that("distribution='auto' with sparse matrix", {
+test_that("auto_nmf_distribution() works with sparse matrix", {
   skip_on_cran()
   set.seed(42)
   A <- Matrix::rsparsematrix(50, 30, density = 0.3)
   A@x <- abs(A@x)  # make non-negative
-  model <- nmf(A, 3, distribution = "auto",
+  result <- auto_nmf_distribution(A, k = 3, maxit = 20, tol = 1e-3,
+                                  seed = 1, verbose = FALSE)
+  expect_true(is.character(result$loss))
+  model <- nmf(A, 3, loss = result$loss,
                maxit = 20, tol = 1e-3, seed = 1, verbose = FALSE)
   expect_s4_class(model, "nmf")
 })
 
-test_that("zero_inflation='auto' selects a valid zi mode", {
+test_that("diagnose_zero_inflation() selects a valid zi mode", {
   skip_on_cran()
   # Create data with some zero inflation
   set.seed(42)
@@ -408,23 +402,17 @@ test_that("zero_inflation='auto' selects a valid zi mode", {
   A[zi_mask == 1] <- 0
   A <- as(A, "dgCMatrix")
 
-  model <- nmf(A, 3, zero_inflation = "auto",
-               maxit = 20, tol = 1e-3, seed = 1, verbose = FALSE)
-  expect_s4_class(model, "nmf")
+  # First fit a baseline model
+  model <- nmf(A, 3, maxit = 20, tol = 1e-3, seed = 1, verbose = FALSE)
+  zi_result <- diagnose_zero_inflation(A, model)
+  expect_true(zi_result$zi %in% c("none", "row", "col"))
+  # Run NMF with the selected zi mode
+  model2 <- nmf(A, 3, zi = zi_result$zi, loss = "gp",
+                maxit = 20, tol = 1e-3, seed = 1, verbose = FALSE)
+  expect_s4_class(model2, "nmf")
 })
 
-test_that("zero_inflation='auto' verbose message includes selection", {
-  skip_on_cran()
-  set.seed(42)
-  A <- matrix(abs(rnorm(40 * 25, mean = 2)), 40, 25)
-  expect_message(
-    nmf(A, 3, zero_inflation = "auto", maxit = 15, tol = 1e-3,
-        seed = 1, verbose = TRUE),
-    "zero_inflation='auto': selected"
-  )
-})
-
-test_that("distribution='auto' + zero_inflation='auto' together", {
+test_that("auto_nmf_distribution() + diagnose_zero_inflation() together", {
   skip_on_cran()
   set.seed(42)
   W <- matrix(runif(50 * 3), 50, 3)
@@ -433,7 +421,15 @@ test_that("distribution='auto' + zero_inflation='auto' together", {
   A <- matrix(rpois(50 * 30, lambda = mu), 50, 30)
   A <- as(A, "dgCMatrix")
 
-  model <- nmf(A, 3, distribution = "auto", zero_inflation = "auto",
+  # Select distribution automatically
+  dist_result <- auto_nmf_distribution(A, k = 3, maxit = 20, tol = 1e-3,
+                                       seed = 1, verbose = FALSE)
+  # First fit with auto-selected distribution, then diagnose ZI
+  model_base <- nmf(A, 3, loss = dist_result$loss,
+                    maxit = 20, tol = 1e-3, seed = 1, verbose = FALSE)
+  zi_result <- diagnose_zero_inflation(A, model_base)
+  
+  model <- nmf(A, 3, loss = dist_result$loss, zi = zi_result$zi,
                maxit = 20, tol = 1e-3, seed = 1, verbose = FALSE)
   expect_s4_class(model, "nmf")
 })
@@ -445,7 +441,7 @@ test_that("distribution='auto' + zero_inflation='auto' together", {
 test_that("Tweedie NMF runs with default power (1.5)", {
   skip_on_cran()
   sim <- simulate_gamma_data(m = 50, n = 30, k = 3)
-  model <- nmf(sim$A, 3, distribution = "tweedie",
+  model <- nmf(sim$A, 3, loss = "tweedie",
                maxit = 30, tol = 1e-4, seed = 42, verbose = FALSE)
   expect_s4_class(model, "nmf")
 })
@@ -453,9 +449,9 @@ test_that("Tweedie NMF runs with default power (1.5)", {
 test_that("Tweedie NMF with power=2 matches Gamma", {
   skip_on_cran()
   sim <- simulate_gamma_data(m = 40, n = 25, k = 2)
-  model_tw <- nmf(sim$A, 2, distribution = "tweedie", tweedie_power = 2.0,
+  model_tw <- nmf(sim$A, 2, loss = "tweedie", tweedie_power = 2.0,
                   maxit = 40, tol = 1e-6, seed = 1, verbose = FALSE)
-  model_gm <- nmf(sim$A, 2, distribution = "gamma",
+  model_gm <- nmf(sim$A, 2, loss = "gamma",
                   maxit = 40, tol = 1e-6, seed = 1, verbose = FALSE)
   expect_s4_class(model_tw, "nmf")
   expect_s4_class(model_gm, "nmf")
@@ -466,9 +462,9 @@ test_that("Tweedie NMF with power=2 matches Gamma", {
 test_that("Tweedie NMF with power=3 matches InvGaussian", {
   skip_on_cran()
   sim <- simulate_gamma_data(m = 40, n = 25, k = 2)
-  model_tw <- nmf(sim$A, 2, distribution = "tweedie", tweedie_power = 3.0,
+  model_tw <- nmf(sim$A, 2, loss = "tweedie", tweedie_power = 3.0,
                   maxit = 40, tol = 1e-6, seed = 1, verbose = FALSE)
-  model_ig <- nmf(sim$A, 2, distribution = "inverse_gaussian",
+  model_ig <- nmf(sim$A, 2, loss = "inverse_gaussian",
                   maxit = 40, tol = 1e-6, seed = 1, verbose = FALSE)
   expect_s4_class(model_tw, "nmf")
   expect_s4_class(model_ig, "nmf")
@@ -476,11 +472,11 @@ test_that("Tweedie NMF with power=3 matches InvGaussian", {
   expect_equal(model_tw@misc$loss, model_ig@misc$loss, tolerance = 0.01)
 })
 
-test_that("Tweedie power configurable via distribution_config", {
+test_that("Tweedie power configurable via tweedie_power in ...", {
   skip_on_cran()
   sim <- simulate_gamma_data(m = 40, n = 25, k = 2)
-  model <- nmf(sim$A, 2, distribution = "tweedie",
-               distribution_config = list(tweedie_power = 2.5),
+  model <- nmf(sim$A, 2, loss = "tweedie",
+               tweedie_power = 2.5,
                maxit = 30, tol = 1e-4, seed = 1, verbose = FALSE)
   expect_s4_class(model, "nmf")
 })
@@ -488,7 +484,7 @@ test_that("Tweedie power configurable via distribution_config", {
 test_that("Tweedie NMF with robust modifier", {
   skip_on_cran()
   sim <- simulate_gamma_data(m = 40, n = 25, k = 2)
-  model <- nmf(sim$A, 2, distribution = "tweedie", tweedie_power = 1.8,
+  model <- nmf(sim$A, 2, loss = "tweedie", tweedie_power = 1.8,
                robust = TRUE, maxit = 30, tol = 1e-4, seed = 1, verbose = FALSE)
   expect_s4_class(model, "nmf")
 })
@@ -568,7 +564,7 @@ test_that("Inverse Gaussian loss decreases monotonically iteration by iteration"
 test_that("Tweedie loss decreases monotonically iteration by iteration", {
   skip_on_cran()
   sim <- simulate_gamma_data(m = 60, n = 40, k = 2)
-  model <- nmf(sim$A, 2, distribution = "tweedie", tweedie_power = 1.5,
+  model <- nmf(sim$A, 2, loss = "tweedie", tweedie_power = 1.5,
                dispersion = "per_row", maxit = 50, tol = 0, seed = 123, verbose = FALSE)
   lh <- model@misc$loss_history
   expect_true(length(lh) >= 10)

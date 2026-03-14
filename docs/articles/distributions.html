@@ -248,6 +248,44 @@ converges to the maximum likelihood estimate for the chosen
 distribution.</p>
 </div>
 <div class="section level3">
+<h3 id="dispersion">Dispersion<a class="anchor" aria-label="anchor" href="#dispersion"></a>
+</h3>
+<p>Dispersion controls how much the observed variance deviates from the
+base variance function. For Negative Binomial, the dispersion parameter
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>θ</mi><annotation encoding="application/x-tex">\theta</annotation></semantics></math>
+controls overdispersion:
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>V</mi><mrow><mo stretchy="true" form="prefix">(</mo><mi>μ</mi><mo stretchy="true" form="postfix">)</mo></mrow><mo>=</mo><mi>μ</mi><mo>+</mo><msup><mi>μ</mi><mn>2</mn></msup><mi>/</mi><mi>θ</mi></mrow><annotation encoding="application/x-tex">V(\mu) = \mu + \mu^2/\theta</annotation></semantics></math>.
+For Generalized Poisson,
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>ϕ</mi><annotation encoding="application/x-tex">\phi</annotation></semantics></math>
+controls extra-Poisson variation.</p>
+<p>The three dispersion modes control granularity:</p>
+<ul>
+<li>
+<strong><code>per_row</code></strong> (default): Each feature (row)
+gets its own dispersion
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mi>i</mi></msub><annotation encoding="application/x-tex">\phi_i</annotation></semantics></math>.
+Appropriate when features have different noise levels — e.g.,
+highly-expressed genes have different variance structure than
+lowly-expressed genes.</li>
+<li>
+<strong><code>per_col</code></strong>: Each sample (column) gets its
+own dispersion
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϕ</mi><mi>j</mi></msub><annotation encoding="application/x-tex">\phi_j</annotation></semantics></math>.
+Appropriate when samples have different quality — e.g., cells with
+different sequencing depth or capture efficiency.</li>
+<li>
+<strong><code>global</code></strong>: A single scalar dispersion
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>ϕ</mi><annotation encoding="application/x-tex">\phi</annotation></semantics></math>
+for the entire matrix. Appropriate for homogeneous data where all
+features and samples have similar noise characteristics.</li>
+</ul>
+<p><strong>Guidance</strong>: For gene expression data,
+<code>per_row</code> is typically best (genes vary enormously in
+expression level and noise). For batch-variable data,
+<code>per_col</code> captures sample-level quality differences. Use
+<code><a href="../reference/diagnose_dispersion.html">diagnose_dispersion()</a></code> to choose empirically.</p>
+</div>
+<div class="section level3">
 <h3 id="zero-inflation-1">Zero-Inflation<a class="anchor" aria-label="anchor" href="#zero-inflation-1"></a>
 </h3>
 <p>The ZI mixture model decomposes each observation as:
@@ -257,6 +295,67 @@ probabilities
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>π</mi><annotation encoding="application/x-tex">\pi</annotation></semantics></math>
 and updating NMF factors — capturing dropout or structural zeros that
 the base distribution cannot explain.</p>
+</div>
+<div class="section level3">
+<h3 id="recommended-workflow">Recommended Workflow<a class="anchor" aria-label="anchor" href="#recommended-workflow"></a>
+</h3>
+<p>When modeling complex data, build up complexity incrementally rather
+than estimating everything simultaneously. Estimating distribution,
+dispersion, and zero-inflation together creates identifiability issues —
+the model may trade off between a more flexible distribution and higher
+zero-inflation, producing unstable results.</p>
+<ol style="list-style-type: decimal">
+<li>
+<strong>Select distribution</strong>: Use
+<code><a href="../reference/auto_nmf_distribution.html">auto_nmf_distribution()</a></code> or
+<code><a href="../reference/score_test_distribution.html">score_test_distribution()</a></code> to find the best variance
+function. Start with <code>dispersion = "none"</code> and
+<code>zi = "none"</code>.</li>
+<li>
+<strong>Diagnose dispersion</strong>: Use
+<code><a href="../reference/diagnose_dispersion.html">diagnose_dispersion()</a></code> to determine whether per-row,
+per-col, or global dispersion is needed.</li>
+<li>
+<strong>Test for zero-inflation</strong>: Use
+<code><a href="../reference/diagnose_zero_inflation.html">diagnose_zero_inflation()</a></code> to check for excess zeros.</li>
+<li>
+<strong>Combine</strong>: Fit the final model with the chosen
+distribution, dispersion mode, and ZI setting.</li>
+</ol>
+<blockquote>
+<p><strong>Tip</strong>: The <code>distribution</code> parameter
+(available in <code><a href="../reference/auto_nmf_distribution.html">auto_nmf_distribution()</a></code>) can be set to
+<code>"auto"</code> for automatic distribution selection. This evaluates
+multiple candidates and selects the best one by the specified criterion
+(default: BIC).</p>
+</blockquote>
+</div>
+<div class="section level3">
+<h3 id="information-criteria">Information Criteria<a class="anchor" aria-label="anchor" href="#information-criteria"></a>
+</h3>
+<p>Distribution comparison uses standard model selection criteria:</p>
+<ul>
+<li>
+<strong>NLL</strong> (Negative Log-Likelihood): The negative
+log-likelihood of the data under the fitted model. Lower = better
+fit.</li>
+<li>
+<strong>AIC</strong> (Akaike Information Criterion):
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext mathvariant="normal">AIC</mtext><mo>=</mo><mn>2</mn><mo>⋅</mo><mtext mathvariant="normal">NLL</mtext><mo>+</mo><mn>2</mn><mi>k</mi></mrow><annotation encoding="application/x-tex">\text{AIC} = 2 \cdot \text{NLL} + 2k</annotation></semantics></math>,
+where
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>k</mi><annotation encoding="application/x-tex">k</annotation></semantics></math>
+is the number of parameters. Penalizes model complexity lightly.</li>
+<li>
+<strong>BIC</strong> (Bayesian Information Criterion):
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext mathvariant="normal">BIC</mtext><mo>=</mo><mn>2</mn><mo>⋅</mo><mtext mathvariant="normal">NLL</mtext><mo>+</mo><mi>k</mi><mo>log</mo><mrow><mo stretchy="true" form="prefix">(</mo><mi>N</mi><mo stretchy="true" form="postfix">)</mo></mrow></mrow><annotation encoding="application/x-tex">\text{BIC} = 2 \cdot \text{NLL} + k \log(N)</annotation></semantics></math>,
+where
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>N</mi><annotation encoding="application/x-tex">N</annotation></semantics></math>
+is the number of observations. Penalizes complexity more strongly than
+AIC, preferring simpler models. <strong>BIC is generally
+preferred</strong> for distribution selection.</li>
+</ul>
+<p>Note: NLL and AIC/BIC values can be negative — this reflects the
+scale of the log-likelihood, not an error.</p>
 </div>
 </div>
 <div class="section level2">
@@ -286,7 +385,7 @@ Gaussian assumptions are inappropriate.</p>
 <span><span class="op">)</span></span>
 <span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span></span>
 <span>  <span class="va">comp_display</span>,</span>
-<span>  caption <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"Distribution comparison on hawaiibirds (BIC criterion). Best: "</span>, <span class="va">result</span><span class="op">$</span><span class="va">best</span>, <span class="st">"."</span><span class="op">)</span></span>
+<span>  caption <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"Distribution comparison on hawaiibirds (BIC criterion). Best: "</span>, <span class="va">result</span><span class="op">$</span><span class="va">loss</span>, <span class="st">"."</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <table class="table">
 <caption>Distribution comparison on hawaiibirds (BIC criterion). Best:
@@ -304,7 +403,7 @@ mse.</caption>
 <td align="left">mse</td>
 <td align="right">-11136.2</td>
 <td align="right">10929</td>
-<td align="right">-414.5</td>
+<td align="right">-414.4</td>
 <td align="right">90687.0</td>
 <td align="left">***</td>
 </tr>
@@ -334,10 +433,50 @@ mse.</caption>
 <span>       x <span class="op">=</span> <span class="st">"Distribution"</span>, y <span class="op">=</span> <span class="st">"BIC (lower is better)"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p><img src="distributions_files/figure-html/auto-selection-plot-1.png" class="r-plt" alt="" width="672"></p>
-<p>BIC selects a count-based distribution over MSE, confirming that bird
-count data has mean-dependent variance. The Gaussian assumption
-underestimates variance at high-count sites, inflating the effective
-number of parameters needed for a good fit.</p>
+<p>BIC selects the best-fitting distribution for the Hawaiian bird count
+data. Note that the BIC-preferred distribution may not always be a
+count-based model: if the variance-mean relationship in the data is
+closer to constant (Gaussian), BIC will prefer MSE over more complex
+alternatives. This is informative — it tells you whether the additional
+complexity of a count-based loss is warranted for your data. Higher BIC
+values for count distributions indicate that the extra dispersion
+parameters are not justified by the improvement in fit.</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Diagnose dispersion granularity for the best model</span></span>
+<span><span class="va">best_model</span> <span class="op">&lt;-</span> <span class="va">result</span><span class="op">$</span><span class="va">models</span><span class="op">[[</span><span class="va">result</span><span class="op">$</span><span class="va">loss</span><span class="op">]</span><span class="op">]</span></span>
+<span><span class="va">disp_diag</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/diagnose_dispersion.html">diagnose_dispersion</a></span><span class="op">(</span><span class="va">hawaiibirds</span>, <span class="va">best_model</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">disp_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>  Property <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Recommended mode"</span>, <span class="st">"Global φ"</span>, <span class="st">"Row CV"</span>, <span class="st">"Col CV"</span><span class="op">)</span>,</span>
+<span>  Value <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">disp_diag</span><span class="op">$</span><span class="va">mode</span>, <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">disp_diag</span><span class="op">$</span><span class="va">global_phi</span>, <span class="fl">4</span><span class="op">)</span>,</span>
+<span>            <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">disp_diag</span><span class="op">$</span><span class="va">row_cv</span>, <span class="fl">4</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">disp_diag</span><span class="op">$</span><span class="va">col_cv</span>, <span class="fl">4</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">disp_df</span>, caption <span class="op">=</span> <span class="st">"Dispersion diagnostics for hawaiibirds"</span><span class="op">)</span></span></code></pre></div>
+<table class="table">
+<caption>Dispersion diagnostics for hawaiibirds</caption>
+<thead><tr class="header">
+<th align="left">Property</th>
+<th align="left">Value</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td align="left">Recommended mode</td>
+<td align="left">per_row</td>
+</tr>
+<tr class="even">
+<td align="left">Global φ</td>
+<td align="left">4e-04</td>
+</tr>
+<tr class="odd">
+<td align="left">Row CV</td>
+<td align="left">1.9884</td>
+</tr>
+<tr class="even">
+<td align="left">Col CV</td>
+<td align="left">0.867</td>
+</tr>
+</tbody>
+</table>
 </div>
 <div class="section level3">
 <h3 id="example-2-score-test-diagnostics">Example 2: Score Test Diagnostics<a class="anchor" aria-label="anchor" href="#example-2-score-test-diagnostics"></a>
@@ -345,10 +484,10 @@ number of parameters needed for a good fit.</p>
 <p>The score test evaluates the variance-power family without refitting
 — a fast diagnostic to determine which distribution matches the data’s
 variance structure.</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">model_base</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">hawaiibirds</span>, k <span class="op">=</span> <span class="fl">8</span>, seed <span class="op">=</span> <span class="fl">42</span>, tol <span class="op">=</span> <span class="fl">1e-3</span>, maxit <span class="op">=</span> <span class="fl">30</span><span class="op">)</span></span>
 <span><span class="va">scores</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/score_test_distribution.html">score_test_distribution</a></span><span class="op">(</span><span class="va">hawaiibirds</span>, <span class="va">model_base</span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">score_df</span> <span class="op">&lt;-</span> <span class="va">scores</span><span class="op">$</span><span class="va">scores</span></span>
 <span><span class="va">score_df</span><span class="op">$</span><span class="va">T_stat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">score_df</span><span class="op">$</span><span class="va">T_stat</span>, <span class="fl">4</span><span class="op">)</span></span>
 <span><span class="va">score_df</span><span class="op">$</span><span class="va">abs_T</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">score_df</span><span class="op">$</span><span class="va">abs_T</span>, <span class="fl">4</span><span class="op">)</span></span>
@@ -394,12 +533,32 @@ variance structure.</p>
 </table>
 <p>The power with the smallest
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="true" form="prefix">|</mo><mi>T</mi><mo stretchy="true" form="postfix">|</mo></mrow><annotation encoding="application/x-tex">|T|</annotation></semantics></math>
-best matches the observed variance-mean relationship. A power near 1
-(Poisson/GP family) indicates mean-proportional variance, while power 2
-(Gamma) indicates variance growing as mean-squared. For the bird count
-data, the score test confirms which variance function best characterizes
-the data’s noise structure.</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+best matches the observed variance-mean relationship. The score test
+evaluates the variance power family
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>V</mi><mrow><mo stretchy="true" form="prefix">(</mo><mi>μ</mi><mo stretchy="true" form="postfix">)</mo></mrow><mo>=</mo><msup><mi>μ</mi><mi>p</mi></msup></mrow><annotation encoding="application/x-tex">V(\mu) = \mu^p</annotation></semantics></math>:</p>
+<ul>
+<li>
+<strong>Power 0</strong> (Gaussian): constant variance — if rejected
+(large
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="true" form="prefix">|</mo><mi>T</mi><mo stretchy="true" form="postfix">|</mo></mrow><annotation encoding="application/x-tex">|T|</annotation></semantics></math>),
+the data has heteroscedastic noise.</li>
+<li>
+<strong>Power 1</strong> (Poisson/GP): variance proportional to mean
+— appropriate for count data.</li>
+<li>
+<strong>Power 2</strong> (Gamma): variance proportional to
+mean-squared — appropriate for heavy-tailed continuous data.</li>
+</ul>
+<p>A negative T-statistic at a given power suggests the model
+over-estimates variance relative to the data at that power — the assumed
+variance function grows too quickly with the mean. A positive
+T-statistic suggests under-estimation — the data has more variance than
+the model predicts. The best power is the one where the T-statistic is
+closest to zero — the variance assumption matches reality. In practice,
+small absolute T-statistics (&lt; 0.1) across multiple powers suggest
+the data’s variance-mean relationship is well-behaved and the choice of
+distribution matters less.</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">scores</span><span class="op">$</span><span class="va">nb_diagnostic</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="va">nb_msg</span> <span class="op">&lt;-</span> <span class="kw">if</span> <span class="op">(</span><span class="va">scores</span><span class="op">$</span><span class="va">nb_diagnostic</span><span class="op">$</span><span class="va">overdispersed</span><span class="op">)</span> <span class="op">{</span></span>
 <span>    <span class="st">"Substantial overdispersion detected (T_NB &gt; 0.1). NB or GP may be preferable to Poisson."</span></span>
@@ -413,23 +572,39 @@ the data’s noise structure.</p>
 </h3>
 <p>Single-cell RNA-seq data has extreme sparsity with “dropout” zeros
 beyond what any count distribution predicts. We use <code>pbmc3k</code>,
-a representative subset (8,000 genes × 500 cells) stored as compressed
-SPZ raw bytes.</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">pbmc3k</span><span class="op">)</span></span>
+a variance-selected subset (8,000 genes × 500 cells) of the full 10x
+Genomics PBMC 3k dataset.</p>
+<p>Dropout is a pervasive artifact of scRNA-seq: during library
+preparation, low-abundance mRNAs are stochastically lost at the capture
+and reverse-transcription steps. The result is that genes with moderate
+true expression are frequently observed as zero — not because the cell
+lacks the transcript, but because the assay failed to detect it. This
+produces “excess zeros” far beyond what any single count distribution
+(Poisson, NB, GP) can explain. Capture efficiency also varies across
+cells, contributing to per-sample zero-inflation.</p>
+<blockquote>
+<p><strong>Not all sparse data has excess zeros.</strong> For example,
+<code>hawaiibirds</code> is 97% sparse but
+<code><a href="../reference/diagnose_zero_inflation.html">diagnose_zero_inflation()</a></code> finds an excess zero rate below
+1% — the zeros are well-explained by the count distribution itself.
+Zero-inflation modeling adds value only when the diagnostic confirms
+structural excess zeros.</p>
+</blockquote>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">pbmc3k</span>, package <span class="op">=</span> <span class="st">"RcppML"</span><span class="op">)</span></span>
 <span><span class="va">tmp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempfile</a></span><span class="op">(</span>fileext <span class="op">=</span> <span class="st">".spz"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/readBin.html" class="external-link">writeBin</a></span><span class="op">(</span><span class="va">pbmc3k</span>, <span class="va">tmp</span><span class="op">)</span></span>
 <span><span class="va">counts</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/st_read.html">st_read</a></span><span class="op">(</span><span class="va">tmp</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Subset for speed: 500 genes × 500 cells</span></span>
-<span><span class="va">counts_sub</span> <span class="op">&lt;-</span> <span class="va">counts</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="fl">500</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">counts</span><span class="op">)</span><span class="op">)</span>, <span class="fl">1</span><span class="op">:</span><span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="fl">500</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">counts</span><span class="op">)</span><span class="op">)</span><span class="op">]</span></span>
-<span><span class="va">sparsity_pct</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fl">100</span> <span class="op">*</span> <span class="op">(</span><span class="fl">1</span> <span class="op">-</span> <span class="fu">Matrix</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/nnzero-methods.html" class="external-link">nnzero</a></span><span class="op">(</span><span class="va">counts_sub</span><span class="op">)</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/prod.html" class="external-link">prod</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">counts_sub</span><span class="op">)</span><span class="op">)</span><span class="op">)</span>, <span class="fl">1</span><span class="op">)</span></span></code></pre></div>
-<p>The subset has 89.5% zeros — far more than any single count
+<span><span class="va">sparsity_pct</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fl">100</span> <span class="op">*</span> <span class="op">(</span><span class="fl">1</span> <span class="op">-</span> <span class="fu">Matrix</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/nnzero-methods.html" class="external-link">nnzero</a></span><span class="op">(</span><span class="va">counts</span><span class="op">)</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/prod.html" class="external-link">prod</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">counts</span><span class="op">)</span><span class="op">)</span><span class="op">)</span>, <span class="fl">1</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Dimensions:"</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">counts</span><span class="op">)</span>, <span class="st">"×"</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">counts</span><span class="op">)</span>, <span class="st">"\n"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Dimensions: 13714 × 2638</span></span></code></pre></div>
+<p>The dataset has 93.8% zeros — far more than any single count
 distribution can explain.</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">model_gp</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">counts_sub</span>, k <span class="op">=</span> <span class="fl">8</span>, loss <span class="op">=</span> <span class="st">"gp"</span>, seed <span class="op">=</span> <span class="fl">42</span>, tol <span class="op">=</span> <span class="fl">1e-3</span>, maxit <span class="op">=</span> <span class="fl">30</span><span class="op">)</span></span>
-<span><span class="va">zi_diag</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/diagnose_zero_inflation.html">diagnose_zero_inflation</a></span><span class="op">(</span><span class="va">counts_sub</span>, <span class="va">model_gp</span><span class="op">)</span></span></code></pre></div>
 <div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">model_gp</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">counts</span>, k <span class="op">=</span> <span class="fl">8</span>, loss <span class="op">=</span> <span class="st">"gp"</span>, seed <span class="op">=</span> <span class="fl">42</span>, tol <span class="op">=</span> <span class="fl">1e-3</span>, maxit <span class="op">=</span> <span class="fl">30</span><span class="op">)</span></span>
+<span><span class="va">zi_diag</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/diagnose_zero_inflation.html">diagnose_zero_inflation</a></span><span class="op">(</span><span class="va">counts</span>, <span class="va">model_gp</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">zi_summary</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>  Metric <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Excess Zero Rate"</span>, <span class="st">"Zero-Inflation Detected"</span>, <span class="st">"Recommended ZI Mode"</span><span class="op">)</span>,</span>
 <span>  Value <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
@@ -438,9 +613,10 @@ distribution can explain.</p>
 <span>    <span class="va">zi_diag</span><span class="op">$</span><span class="va">zi_mode</span></span>
 <span>  <span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">zi_summary</span>, caption <span class="op">=</span> <span class="st">"Zero-inflation diagnostics on pbmc3k subset."</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">zi_summary</span>, caption <span class="op">=</span> <span class="st">"Zero-inflation diagnostics on pbmc3k (8,000 genes × 500 cells)."</span><span class="op">)</span></span></code></pre></div>
 <table class="table">
-<caption>Zero-inflation diagnostics on pbmc3k subset.</caption>
+<caption>Zero-inflation diagnostics on pbmc3k (8,000 genes × 500
+cells).</caption>
 <thead><tr class="header">
 <th align="left">Metric</th>
 <th align="left">Value</th>
@@ -448,7 +624,7 @@ distribution can explain.</p>
 <tbody>
 <tr class="odd">
 <td align="left">Excess Zero Rate</td>
-<td align="left">0.2049</td>
+<td align="left">0.2287</td>
 </tr>
 <tr class="even">
 <td align="left">Zero-Inflation Detected</td>
@@ -460,13 +636,13 @@ distribution can explain.</p>
 </tr>
 </tbody>
 </table>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="va">zi_diag</span><span class="op">$</span><span class="va">has_zi</span> <span class="op">&amp;&amp;</span> <span class="va">zi_diag</span><span class="op">$</span><span class="va">zi_mode</span> <span class="op">!=</span> <span class="st">"none"</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="va">model_zi</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">counts_sub</span>, k <span class="op">=</span> <span class="fl">8</span>, loss <span class="op">=</span> <span class="st">"gp"</span>, zi <span class="op">=</span> <span class="va">zi_diag</span><span class="op">$</span><span class="va">zi_mode</span>,</span>
+<span>  <span class="va">model_zi</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">counts</span>, k <span class="op">=</span> <span class="fl">8</span>, loss <span class="op">=</span> <span class="st">"gp"</span>, zi <span class="op">=</span> <span class="va">zi_diag</span><span class="op">$</span><span class="va">zi_mode</span>,</span>
 <span>                  seed <span class="op">=</span> <span class="fl">42</span>, tol <span class="op">=</span> <span class="fl">1e-3</span>, maxit <span class="op">=</span> <span class="fl">30</span><span class="op">)</span></span>
 <span>  </span>
-<span>  <span class="va">loss_gp</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/evaluate.html">evaluate</a></span><span class="op">(</span><span class="va">model_gp</span>, <span class="va">counts_sub</span>, loss <span class="op">=</span> <span class="st">"mse"</span><span class="op">)</span></span>
-<span>  <span class="va">loss_zi</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/evaluate.html">evaluate</a></span><span class="op">(</span><span class="va">model_zi</span>, <span class="va">counts_sub</span>, loss <span class="op">=</span> <span class="st">"mse"</span><span class="op">)</span></span>
+<span>  <span class="va">loss_gp</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/evaluate.html">evaluate</a></span><span class="op">(</span><span class="va">model_gp</span>, <span class="va">counts</span>, loss <span class="op">=</span> <span class="st">"mse"</span><span class="op">)</span></span>
+<span>  <span class="va">loss_zi</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/evaluate.html">evaluate</a></span><span class="op">(</span><span class="va">model_zi</span>, <span class="va">counts</span>, loss <span class="op">=</span> <span class="st">"mse"</span><span class="op">)</span></span>
 <span>  <span class="va">improvement</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fl">100</span> <span class="op">*</span> <span class="op">(</span><span class="fl">1</span> <span class="op">-</span> <span class="va">loss_zi</span> <span class="op">/</span> <span class="va">loss_gp</span><span class="op">)</span>, <span class="fl">1</span><span class="op">)</span></span>
 <span>  </span>
 <span>  <span class="va">loss_comp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
@@ -476,26 +652,6 @@ distribution can explain.</p>
 <span>  <span class="op">)</span></span>
 <span>  <span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">loss_comp</span>, caption <span class="op">=</span> <span class="st">"Reconstruction error: GP vs. GP with zero-inflation."</span><span class="op">)</span></span>
 <span><span class="op">}</span></span></code></pre></div>
-<table class="table">
-<caption>Reconstruction error: GP vs. GP with zero-inflation.</caption>
-<thead><tr class="header">
-<th align="left">Model</th>
-<th align="right">MSE</th>
-</tr></thead>
-<tbody>
-<tr class="odd">
-<td align="left">GP</td>
-<td align="right">0.7554</td>
-</tr>
-<tr class="even">
-<td align="left">GP + ZI (col)</td>
-<td align="right">0.6758</td>
-</tr>
-</tbody>
-</table>
-<p>Adding col-wise zero-inflation reduces reconstruction error by 10.5%,
-confirming that the excess zeros in single-cell data are structural
-(gene dropout) rather than sampling noise.</p>
 </div>
 </div>
 <div class="section level2">

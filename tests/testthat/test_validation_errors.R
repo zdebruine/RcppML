@@ -101,8 +101,8 @@ test_that("nonneg must be logical", {
 # ============================================================================
 
 test_that("mask must be a matrix, 'zeros', 'NA', or NULL", {
-  expect_error(nmf(A_dense, 3, mask = "foo"), "must be a matrix")
-  expect_error(nmf(A_dense, 3, mask = "random"), "must be a matrix")
+  expect_error(nmf(A_dense, 3, mask = "foo"), "must be NULL")
+  expect_error(nmf(A_dense, 3, mask = "random"), "must be NULL")
 })
 
 # ============================================================================

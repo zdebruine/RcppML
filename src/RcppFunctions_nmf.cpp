@@ -8,10 +8,6 @@
 #include "../inst/include/FactorNet/nmf/fit.hpp"
 #include "../inst/include/FactorNet/nmf/fit_streaming_spz.hpp"
 #include "../inst/include/FactorNet/nmf/rank_cv.hpp"
-#include "../inst/include/FactorNet/guides/classifier_guide.hpp"
-#include "../inst/include/FactorNet/guides/external_guide.hpp"
-
-#include <memory>
 
 using namespace FactorNet::nmf;
 using FactorNet::tiny_num;
@@ -31,7 +27,6 @@ FactorNet::NMFConfig<Scalar> build_config_from_params(
     int threads, bool nonneg_w, bool nonneg_h,
     const std::vector<double>& upper_bound,
     int cd_maxit, double cd_tol,
-    double cd_abs_tol,
     double holdout_fraction, unsigned int cv_seed,
     int cv_patience, bool mask_zeros,
     bool track_loss_history, bool sort_model,
@@ -79,7 +74,6 @@ FactorNet::NMFConfig<Scalar> build_config_from_params(
     // NNLS solver
     config.cd_max_iter = cd_maxit > 0 ? cd_maxit : 10;
     config.cd_tol = static_cast<Scalar>(cd_tol > 0 ? cd_tol : 1e-8);
-    config.cd_abs_tol = static_cast<Scalar>(cd_abs_tol > 0 ? cd_abs_tol : 1e-15);
     
     // Cross-validation
     config.holdout_fraction = static_cast<Scalar>(holdout_fraction);
@@ -207,8 +201,8 @@ Rcpp::List Rcpp_nmf_rank_cv(SEXP A_sexp,
                             double tol = 1e-4,
                             unsigned int maxit = 100,
                             bool verbose = false,
-                            const std::vector<double> L1 = std::vector<double>(),
-                            const std::vector<double> L2 = std::vector<double>(),
+                            Rcpp::Nullable<Rcpp::NumericVector> L1 = R_NilValue,
+                            Rcpp::Nullable<Rcpp::NumericVector> L2 = R_NilValue,
                             unsigned int threads = 0) {
     
     // Build NMFConfig<float>
@@ -221,8 +215,8 @@ Rcpp::List Rcpp_nmf_rank_cv(SEXP A_sexp,
     config.threads = static_cast<int>(threads);
     config.track_loss_history = true;
     config.solver_mode = 2;  // hierarchical_cholesky (match R default)
-    if (L1.size() >= 1) { config.W.L1 = static_cast<float>(L1[0]); config.H.L1 = static_cast<float>(L1[0]); }
-    if (L2.size() >= 1) { config.W.L2 = static_cast<float>(L2[0]); config.H.L2 = static_cast<float>(L2[0]); }
+    if (L1.isNotNull()) { Rcpp::NumericVector v(L1); if (v.size() >= 1) { config.W.L1 = static_cast<float>(v[0]); config.H.L1 = static_cast<float>(v[0]); } }
+    if (L2.isNotNull()) { Rcpp::NumericVector v(L2); if (v.size() >= 1) { config.W.L2 = static_cast<float>(v[0]); config.H.L2 = static_cast<float>(v[0]); } }
     
     // Dispatch: sparse or dense, always cast to float
     RankSearchResult<float> result;
@@ -276,7 +270,6 @@ Rcpp::List Rcpp_nmf_full(
     int maxit,
     int cd_maxit,
     double cd_tol,
-    double cd_abs_tol,
     int threads,
     unsigned int seed,
     bool nonneg_w,
@@ -319,7 +312,8 @@ Rcpp::List Rcpp_nmf_full(
     double robust_delta = 0.0,
     double tweedie_power = 1.5,
     SEXP on_iteration_r = R_NilValue,
-    SEXP guides_list = R_NilValue,
+    Rcpp::Nullable<Eigen::MatrixXd> target_H_sexp = R_NilValue,
+    Rcpp::Nullable<Rcpp::NumericVector> target_lambda = R_NilValue,
     bool enable_profiling = false)
 {
     // --- Extract graphs with degree vectors ---
@@ -359,7 +353,7 @@ Rcpp::List Rcpp_nmf_full(
         k_vec[0], tol, maxit, verbose,
         L1, L2, L21, angular, threads,
         nonneg_w, nonneg_h, upper_bound,
-        cd_maxit, cd_tol, cd_abs_tol,
+        cd_maxit, cd_tol,
         holdout_fraction,
         cv_seeds.empty() ? 0u : cv_seeds[0],
         cv_patience, mask_zeros,
@@ -435,32 +429,21 @@ Rcpp::List Rcpp_nmf_full(
     }
 
 
-    // --- Parse guides from R list ---
-    std::vector<std::unique_ptr<FactorNet::guides::Guide<float>>> guide_storage;
-    if (!Rf_isNull(guides_list)) {
-        Rcpp::List glist(guides_list);
-        for (int gi = 0; gi < glist.size(); gi++) {
-            Rcpp::List g = Rcpp::as<Rcpp::List>(glist[gi]);
-            std::string gtype = Rcpp::as<std::string>(g["type"]);
-            float glambda = static_cast<float>(Rcpp::as<double>(g["lambda"]));
-            std::string gside = Rcpp::as<std::string>(g["side"]);
-
-            if (gtype == "classifier") {
-                std::vector<int> labels = Rcpp::as<std::vector<int>>(g["labels"]);
-                auto guide = std::make_unique<FactorNet::guides::ClassifierGuide<float>>(labels, glambda);
-                if (gside == "W") fconfig.W.guides.push_back(guide.get());
-                else              fconfig.H.guides.push_back(guide.get());
-                guide_storage.push_back(std::move(guide));
-            } else if (gtype == "external") {
-                Eigen::MatrixXd target_d = Rcpp::as<Eigen::MatrixXd>(g["target"]);
-                Eigen::MatrixXf target_f = target_d.cast<float>();
-                auto guide = std::make_unique<FactorNet::guides::ExternalGuide<float>>(target_f, glambda);
-                if (gside == "W") fconfig.W.guides.push_back(guide.get());
-                else              fconfig.H.guides.push_back(guide.get());
-                guide_storage.push_back(std::move(guide));
-            }
-        }
+    // --- Parse target regularization ---
+    Eigen::MatrixXf target_H_f;
+    if (target_H_sexp.isNotNull()) {
+        Eigen::MatrixXd target_H_d = Rcpp::as<Eigen::MatrixXd>(target_H_sexp);
+        target_H_f = target_H_d.cast<float>();
+        fconfig.H.target = &target_H_f;
     }
+    if (target_lambda.isNotNull()) {
+        Rcpp::NumericVector tl(target_lambda);
+        if (tl.size() > 0)
+            fconfig.W.target_lambda = static_cast<float>(tl[0]);
+        if (tl.size() > 1)
+            fconfig.H.target_lambda = static_cast<float>(tl[1]);
+    }
+
     if (is_sparse) {
         auto A_mapped = mapSparseMatrix(Rcpp::S4(A_sexp));
         Eigen::SparseMatrix<float> A_f = A_mapped.cast<float>();

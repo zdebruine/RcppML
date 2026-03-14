@@ -65,6 +65,9 @@ using nmf_unified_double_fn_t = void(*)(
     double*, double*,                         // robust_delta, tweedie_power
     // Dispersion output
     double*, int*,                            // out_theta, out_theta_len
+    // Classifier guides (H-side, multi-guide)
+    const int*, const int*,                   // guide_H_labels_flat, guide_H_ns
+    const double*, const int*, int*,          // guide_H_lambdas, guide_H_ncs, guide_H_count
     // Standard outputs
     int*, int*, double*,                      // out_iter, out_converged, out_loss
     int*,                                     // out_status
@@ -281,6 +284,25 @@ NMFResult<Scalar> bridge_nmf_sparse(
     std::vector<double> theta_buf(m, 0.0);
     int out_theta_len = 0;
 
+    // --- Pack classifier guides (H-side) ---
+    std::vector<int> guide_labels_flat;
+    std::vector<int> guide_ns;
+    std::vector<double> guide_lambdas;
+    std::vector<int> guide_ncs;
+    int guide_count = static_cast<int>(config.classifier_guides_H.size());
+    for (const auto& g : config.classifier_guides_H) {
+        guide_labels_flat.insert(guide_labels_flat.end(),
+                                 g.labels.begin(), g.labels.end());
+        guide_ns.push_back(static_cast<int>(g.labels.size()));
+        guide_lambdas.push_back(static_cast<double>(g.lambda));
+        guide_ncs.push_back(g.n_classes);
+    }
+    // Ensure non-null pointers for the bridge call
+    if (guide_labels_flat.empty()) guide_labels_flat.push_back(0);
+    if (guide_ns.empty()) guide_ns.push_back(0);
+    if (guide_lambdas.empty()) guide_lambdas.push_back(0.0);
+    if (guide_ncs.empty()) guide_ncs.push_back(0);
+
     // --- Mutable copies of dimensions (bridge takes int*) ---
     int m_mut = m, n_mut = n, nnz_mut = nnz, k_mut = k;
 
@@ -312,6 +334,8 @@ NMFResult<Scalar> bridge_nmf_sparse(
         &gamma_phi_init_d, &gamma_phi_max_d, &gamma_phi_min_d,
         &robust_delta_d, &tweedie_power_d,
         theta_buf.data(), &out_theta_len,
+        guide_labels_flat.data(), guide_ns.data(),
+        guide_lambdas.data(), guide_ncs.data(), &guide_count,
         &out_iter, &out_converged, &out_loss,
         &out_status,
         &out_tol

@@ -2,28 +2,13 @@
 
 ## Breaking Changes
 
-### Removed Deprecated Functions
-- `solve()`: Use `nnls()` instead
+### Removed Functions
 - `project()`: Use `predict()` for NMF objects, or `nnls()` for raw matrix projection
 - `crossValidate()`: Use `nmf()` with `test_fraction` and a vector of ranks
-- `sp_write()`, `sp_read()`, `sp_info()`, `sp_write_dense()`, `sp_read_dense()`: Use `st_write()`, `st_read()`, `st_info()`, `st_write_dense()`, `st_read_dense()` instead
-- `sp_read_gpu()`, `sp_free_gpu()`: Use `st_read_gpu()`, `st_free_gpu()` instead
-- `svd_pca()`, `sparse_pca()`, `nn_pca()`: Use `svd()` with appropriate parameters
-
-### Renamed Classes
-- The `svd_pca` S4 class is now `svd`. All methods (`predict`, `reconstruct`, `variance_explained`, `[`, `head`, `show`, `dim`) updated accordingly.
-
-### Renamed Datasets
-- `digits_full` is now `digits`
+- `lnmf()`: Discontinued
 
 ### Renamed Parameters
-- `ortho` → `angular` (decorrelation penalty)
-- `precision` → `fp32` (boolean flag)
-- `cv_fraction` → `test_fraction`
-
-### Removed Parameters
-- `reps`: Use vector of seeds for multiple runs: `seed = c(1, 2, 3)`
-- `use_dense_mode`, `cv_folds`, `cv_test_fraction`, `cv_fraction`, `cv_init`, `cv_tolerance`, `cv_max_k`, `cv_k_init`, `sparse_mode`
+- `mask_zeros = TRUE` → `mask = "zeros"`
 
 ## New Features
 
@@ -34,9 +19,9 @@ NMF now supports six distribution-appropriate loss functions via Iteratively Rew
 - Zero-inflation models (`zi = "row"` or `zi = "col"`) for ZINB and ZIGP
 
 ### StreamPress I/O (`.spz` Format)
-- Renamed from SparsePress to StreamPress throughout the package
 - Column-oriented binary format with 10–20× compression via rANS entropy coding
 - Streaming NMF directly from `.spz` files for datasets larger than RAM
+- `st_write()`, `st_read()`, `st_info()` for reading and writing `.spz` files
 - Embedded obs/var metadata tables via `st_read_obs()` and `st_read_var()`
 - GPU-direct reading with `st_read_gpu()` for zero-copy GPU NMF
 
@@ -55,9 +40,21 @@ NMF now supports six distribution-appropriate loss functions via Iteratively Rew
 
 ### Cross-Validation Improvements
 - Speckled holdout masks for principled rank selection
+- `mask_zeros` parameter for recommendation data (only non-zero entries held out)
 - Automatic rank search with `k = "auto"`
 - Multiple replicates via `cv_seed` vector
-- Early stopping with configurable patience
+- Early stopping with configurable `patience`
+
+### SVD and PCA
+- `svd()` for truncated SVD with five methods: deflation, Krylov, Lanczos, IRLBA, randomized
+- `pca()` convenience wrapper (centered and optionally scaled SVD)
+- Constrained PCA: non-negative (`nonneg = TRUE`), sparse (`L1`), and combined
+- `variance_explained()` for scree plots
+- `predict()` for SVD objects (out-of-sample projection)
+
+### Projective and Symmetric NMF
+- `projective = TRUE`: H is computed as $W^T A$ instead of solved independently, producing more orthogonal factors
+- `symmetric = TRUE`: For symmetric matrices, enforces $H = W^T$
 
 ### Enhanced NNLS Solver
 - `nnls()` now supports `loss`, `L21`, and `angular` parameters (parity with `nmf()`)
@@ -65,23 +62,27 @@ NMF now supports six distribution-appropriate loss functions via Iteratively Rew
 - `predict()` for NMF objects now uses the config (L1, L2, upper_bound) stored during fitting
 
 ### Additional Regularization
+- L1 / L2 penalties with separate values for W and H
 - L21 group sparsity for automatic factor selection
-- Angular decorrelation penalty
+- Angular decorrelation penalty (replaces `ortho`)
+- Upper bound constraints on factor values
 - Graph Laplacian regularization for spatial/network smoothness
-- Huber-type robust NMF (less sensitive to outliers)
 
-### SVD/PCA Enhancements
-- Five SVD methods: deflation, Krylov, Lanczos, IRLBA, randomized
-- Constrained PCA: non-negative, sparse, and combined
-- Auto-rank selection for SVD
-- `predict()` for SVD objects (out-of-sample projection)
+### New Datasets
+- `golub`: Leukemia gene expression (38 × 5,000 sparse)
+- `olivetti`: Olivetti face images (400 × 4,096 sparse)
+- `digits`: Handwritten digit images (1,797 × 64 dense)
+- `pbmc3k`: PBMC 3k scRNA-seq with cell type annotations (13,714 × 2,638, StreamPress compressed)
 
 ### Other
-- Multiple random initializations with best-model selection via `seed = c(...)` 
+- Multiple random initializations with best-model selection via `seed = c(...)`
 - Automatic NA detection and masking
-- S4 class system (migrated from S3) with backward-compatible `$` accessor
-- Consensus clustering via `consensus_nmf()`
-- Divisive clustering via `dclust()` and `bipartition()`
+- `consensus_nmf()` for robust factorizations across multiple random starts
+
+## Enhancements
+- S4 class system with backward-compatible `$` accessor (migrated from implicit S4)
+- `on_iteration` callback for custom per-iteration logging
+- Lanczos and IRLBA initialization for faster NMF convergence
 
 ## Internal Changes
 - Unified NMF configuration into `NMFConfig` struct
@@ -89,4 +90,3 @@ NMF now supports six distribution-appropriate loss functions via Iteratively Rew
 - `DataAccessor<MatrixType>` template for unified sparse/dense dispatch
 - Consolidated header structure and eliminated code duplication
 - OpenMP parallelization with proper reduction clauses
-- Optimization flags: `-O3`, `-mtune=generic`, `-funroll-loops`

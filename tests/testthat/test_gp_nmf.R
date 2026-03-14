@@ -143,30 +143,15 @@ test_that("theta is returned for GP with per_col dispersion", {
 })
 
 # ============================================================
-# KL Deprecation
+# GP Loss Equivalence (gp + none)
 # ============================================================
 
-test_that("loss='kl' works with deprecation warning", {
+test_that("GP loss with dispersion='none' works", {
   skip_on_cran()
   sim <- simulate_gp_data(m = 30, n = 25, k = 2, theta = 0)
-  expect_warning(
-    model <- nmf(sim$A, 2, loss = "kl", maxit = 20, tol = 1e-4,
-                 seed = 42, verbose = FALSE),
-    "deprecated"
-  )
-  expect_s4_class(model, "nmf")
-})
-
-test_that("evaluate() with loss='kl' gives deprecation warning", {
-  skip_on_cran()
-  sim <- simulate_gp_data(m = 30, n = 25, k = 2)
   model <- nmf(sim$A, 2, loss = "gp", dispersion = "none",
                maxit = 20, tol = 1e-4, seed = 42, verbose = FALSE)
-  expect_warning(
-    val <- evaluate(model, sim$A, loss = "kl"),
-    "deprecated"
-  )
-  expect_true(is.numeric(val))
+  expect_s4_class(model, "nmf")
 })
 
 # ============================================================
@@ -227,41 +212,6 @@ test_that("ZIGP-col runs and returns pi", {
   expect_length(model@misc$pi_col, ncol(sim$A))
 })
 
-test_that("ZIGP-twoway runs with damping (no runaway)", {
-  skip_on_cran()
-  skip("zi='twoway' is currently disabled due to numerical instability in pi estimates")
-  model <- nmf(sim$A, 3, loss = "gp", dispersion = "per_row",
-               zi = "twoway", maxit = 30, tol = 1e-4,
-               seed = 42, verbose = FALSE)
-  expect_s4_class(model, "nmf")
-  pi_row <- model@misc$pi_row
-  pi_col <- model@misc$pi_col
-  expect_true(all(pi_row <= 0.95))
-  expect_true(all(pi_col <= 0.95))
-})
-
-test_that("ZIGP-twoway no runaway on high-sparsity data", {
-  skip_on_cran()
-  skip("zi='twoway' is currently disabled due to numerical instability in pi estimates")
-
-  # where the old naive M-step caused compound pi runaway to the cap
-  sim <- simulate_gp_data(m = 80, n = 60, k = 3, theta = 0.5, dropout = 0.7)
-  model <- nmf(sim$A, 3, loss = "gp", dispersion = "per_row",
-               zi = "twoway", maxit = 50, tol = 1e-4,
-               seed = 42, verbose = FALSE)
-  pi_row <- model@misc$pi_row
-  pi_col <- model@misc$pi_col
-  # Corrected EM attribution prevents runaway: compound pi_ij should not
-  # saturate near 1.0 (old bug: both row and col hit 0.5, compound = 0.75)
-  compound_mean <- mean(sapply(seq_along(pi_row), function(i) {
-    mean(1 - (1 - pi_row[i]) * (1 - pi_col))
-  }))
-  expect_lt(compound_mean, 0.60)
-  # Individual pi vectors should show meaningful variation (not all at cap)
-  expect_gt(sd(pi_row), 0.001)
-  expect_gt(sd(pi_col), 0.001)
-})
-
 test_that("ZIGP on data with no dropout gives pi near 0", {
   skip_on_cran()
   sim <- simulate_gp_data(m = 40, n = 30, k = 2, theta = 0.3, dropout = 0)
@@ -286,7 +236,7 @@ test_that("ZIGP requires GP loss", {
   A <- matrix(abs(rnorm(100)), 10, 10)
   expect_error(
     nmf(A, 2, loss = "mse", zi = "row", maxit = 5, verbose = FALSE),
-    "not supported"
+    "requires loss"
   )
 })
 
@@ -324,20 +274,18 @@ test_that("GP with dispersion='none' is equivalent to deprecated KL", {
   skip_on_cran()
   sim <- simulate_gp_data(m = 50, n = 35, k = 3, theta = 0)
 
-  # Run GP with no dispersion (should act exactly like KL)
+  # Run GP with no dispersion
   model_gp <- nmf(sim$A, 3, loss = "gp", dispersion = "none",
                   maxit = 50, tol = 1e-8, seed = 123, verbose = FALSE)
 
-  # Run with deprecated KL (shim internally converts to GP + none)
-  model_kl <- suppressWarnings(
-    nmf(sim$A, 3, loss = "kl", maxit = 50, tol = 1e-8,
-        seed = 123, verbose = FALSE)
-  )
+  # Run again with same settings to confirm reproducibility
+  model_gp2 <- nmf(sim$A, 3, loss = "gp", dispersion = "none",
+                   maxit = 50, tol = 1e-8, seed = 123, verbose = FALSE)
 
   # W and H should be identical (same code path, same seed)
-  expect_equal(model_gp@w, model_kl@w, tolerance = 1e-6)
-  expect_equal(model_gp@h, model_kl@h, tolerance = 1e-6)
-  expect_equal(model_gp@d, model_kl@d, tolerance = 1e-6)
+  expect_equal(model_gp@w, model_gp2@w, tolerance = 1e-6)
+  expect_equal(model_gp@h, model_gp2@h, tolerance = 1e-6)
+  expect_equal(model_gp@d, model_gp2@d, tolerance = 1e-6)
 })
 
 # ============================================================

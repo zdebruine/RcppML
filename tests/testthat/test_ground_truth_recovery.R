@@ -213,14 +213,19 @@ test_that("Recovery with different loss functions", {
                                       dropout = 0.3, seed = 123)
   A <- data$A
   
-  loss_types <- c("mse", "mae", "huber")
+  # Test MSE, robust (Huber), and MAE via the robust parameter
+  configs <- list(
+    list(loss = "mse", robust = FALSE, label = "mse"),
+    list(loss = "mse", robust = TRUE,  label = "huber"),
+    list(loss = "mse", robust = "mae", label = "mae")
+  )
   
-  for (loss in loss_types) {
+  for (cfg in configs) {
     # Multi-restart: best of 3 seeds
     best_cor <- -1
     for (s in c(456, 789, 101)) {
-      model <- nmf(A, 4, loss = loss, maxit = 200, tol = 1e-6, 
-                   seed = s, verbose = FALSE)
+      model <- nmf(A, 4, loss = cfg$loss, robust = cfg$robust, maxit = 200,
+                   tol = 1e-6, seed = s, verbose = FALSE)
       aligned <- align_nmf_factors(model$w, model$h, data$w, data$h)
       mean_cor_s <- mean(c(aligned$mean_W_cor, aligned$mean_H_cor))
       if (mean_cor_s > best_cor) best_cor <- mean_cor_s
@@ -228,7 +233,7 @@ test_that("Recovery with different loss functions", {
     
     # All loss types should achieve positive correlation
     expect_gt(best_cor, 0.15,
-              label = sprintf("loss=%s: best_cor=%.3f should be > 0.15", loss, best_cor))
+              label = sprintf("%s: best_cor=%.3f should be > 0.15", cfg$label, best_cor))
   }
 })
 

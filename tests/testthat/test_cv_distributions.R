@@ -27,7 +27,7 @@ test_that("Dense MSE CV speckled returns valid test loss", {
 test_that("Dense MSE CV full mask returns valid test loss", {
   skip_on_cran()
   A <- make_pos_data(40, 30, seed = 42)
-  model <- nmf(A, 3, loss = "mse", test_fraction = 0.1, mask_zeros = FALSE,
+  model <- nmf(A, 3, loss = "mse", test_fraction = 0.1,
                maxit = 30, tol = 1e-4, seed = 42, verbose = FALSE)
   expect_s4_class(model, "nmf")
   expect_true(model@misc$test_loss > 0)
@@ -47,7 +47,7 @@ test_that("GP CV full mask returns valid test loss", {
   A <- Matrix::Matrix(matrix(rpois(m * n, lambda = pmax(mu, 0.01) * 5), m, n), sparse = TRUE)
 
   model <- nmf(A, k, loss = "gp", dispersion = "per_row",
-               test_fraction = 0.1, mask_zeros = FALSE,
+               test_fraction = 0.1,
                maxit = 30, tol = 1e-4, seed = 42, verbose = FALSE)
   expect_s4_class(model, "nmf")
   expect_true(is.finite(model@misc$test_loss))
@@ -83,7 +83,7 @@ test_that("NB CV full mask returns valid test loss", {
   A <- Matrix::Matrix(matrix(rnbinom(m * n, size = 5, mu = mu), m, n), sparse = TRUE)
 
   model <- nmf(A, k, loss = "nb", dispersion = "per_row",
-               test_fraction = 0.1, mask_zeros = FALSE,
+               test_fraction = 0.1,
                maxit = 30, tol = 1e-4, seed = 42, verbose = FALSE)
   expect_s4_class(model, "nmf")
   expect_true(is.finite(model@misc$test_loss))
@@ -130,7 +130,7 @@ test_that("Tweedie CV speckled returns valid test loss", {
   A <- make_pos_data(50, 35, seed = 42)
   A_sp <- Matrix::Matrix(A, sparse = TRUE)
 
-  model <- nmf(A_sp, 2, distribution = "tweedie", tweedie_power = 1.5,
+  model <- nmf(A_sp, 2, loss = "tweedie", tweedie_power = 1.5,
                dispersion = "per_row", test_fraction = 0.1,
                maxit = 30, tol = 1e-4, seed = 42, verbose = FALSE)
   expect_s4_class(model, "nmf")
@@ -194,7 +194,7 @@ test_that("Dense Tweedie CV returns valid test loss", {
   skip_on_cran()
   A <- make_pos_data(40, 30, seed = 42)
 
-  model <- nmf(A, 2, distribution = "tweedie", tweedie_power = 1.5,
+  model <- nmf(A, 2, loss = "tweedie", tweedie_power = 1.5,
                dispersion = "per_row", test_fraction = 0.1,
                maxit = 30, tol = 1e-4, seed = 42, verbose = FALSE)
   expect_s4_class(model, "nmf")

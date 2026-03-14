@@ -91,24 +91,17 @@
 
         <dt>
 
-          <code><a href="solve.html">solve()</a></code>
+          <code><a href="compute_target.html">compute_target()</a></code>
 
         </dt>
-        <dd>Solve a linear system with coordinate descent</dd>
+        <dd>Compute a Target Matrix for Guided NMF</dd>
 
         <dt>
 
-          <code><a href="project.html">project()</a></code>
+          <code><a href="refine.html">refine()</a></code>
 
         </dt>
-        <dd>Project model onto data (DEPRECATED)</dd>
-
-        <dt>
-
-          <code><a href="svd_pca-class.html">`[`(<i>&lt;svd_pca&gt;</i>,<i>&lt;ANY&gt;</i>,<i>&lt;ANY&gt;</i>,<i>&lt;ANY&gt;</i>)</a></code> <code><a href="svd_pca-class.html">head(<i>&lt;svd_pca&gt;</i>)</a></code> <code><a href="svd_pca-class.html">show(<i>&lt;svd_pca&gt;</i>)</a></code> <code><a href="svd_pca-class.html">dim(<i>&lt;svd_pca&gt;</i>)</a></code> <code><a href="svd_pca-class.html">reconstruct()</a></code> <code><a href="svd_pca-class.html">predict(<i>&lt;svd_pca&gt;</i>)</a></code> <code><a href="svd_pca-class.html">variance_explained()</a></code>
-
-        </dt>
-        <dd>svd_pca S4 Class</dd>
+        <dd>Refine an NMF Model Using Label-Guided Correction</dd>
       </dl></div><div class="section level2">
       <h2 id="singular-value-decomposition">Singular Value Decomposition<a class="anchor" aria-label="anchor" href="#singular-value-decomposition"></a></h2>
 
@@ -121,10 +114,17 @@
 
       <dl><dt>
 
-          <code><a href="svd.html">svd()</a></code> <code><a href="svd.html">sparse_pca()</a></code> <code><a href="svd.html">nn_pca()</a></code> <code><a href="svd.html">svd_pca()</a></code>
+          <code><a href="svd.html">svd()</a></code>
 
         </dt>
         <dd>Truncated SVD / PCA with constraints and regularization</dd>
+
+        <dt>
+
+          <code><a href="svd-class.html">`[`(<i>&lt;svd&gt;</i>,<i>&lt;ANY&gt;</i>,<i>&lt;ANY&gt;</i>,<i>&lt;ANY&gt;</i>)</a></code> <code><a href="svd-class.html">head(<i>&lt;svd&gt;</i>)</a></code> <code><a href="svd-class.html">show(<i>&lt;svd&gt;</i>)</a></code> <code><a href="svd-class.html">dim(<i>&lt;svd&gt;</i>)</a></code> <code><a href="svd-class.html">reconstruct()</a></code> <code><a href="svd-class.html">predict(<i>&lt;svd&gt;</i>)</a></code> <code><a href="svd-class.html">variance_explained()</a></code>
+
+        </dt>
+        <dd>svd S4 Class</dd>
 
         <dt>
 
@@ -132,13 +132,6 @@
 
         </dt>
         <dd>PCA (centered SVD)</dd>
-
-        <dt>
-
-          <code><a href="svd_pca-class.html">`[`(<i>&lt;svd_pca&gt;</i>,<i>&lt;ANY&gt;</i>,<i>&lt;ANY&gt;</i>,<i>&lt;ANY&gt;</i>)</a></code> <code><a href="svd_pca-class.html">head(<i>&lt;svd_pca&gt;</i>)</a></code> <code><a href="svd_pca-class.html">show(<i>&lt;svd_pca&gt;</i>)</a></code> <code><a href="svd_pca-class.html">dim(<i>&lt;svd_pca&gt;</i>)</a></code> <code><a href="svd_pca-class.html">reconstruct()</a></code> <code><a href="svd_pca-class.html">predict(<i>&lt;svd_pca&gt;</i>)</a></code> <code><a href="svd_pca-class.html">variance_explained()</a></code>
-
-        </dt>
-        <dd>svd_pca S4 Class</dd>
       </dl></div><div class="section level2">
       <h2 id="model-evaluation-diagnostics">Model Evaluation &amp; Diagnostics<a class="anchor" aria-label="anchor" href="#model-evaluation-diagnostics"></a></h2>
 
@@ -150,6 +143,27 @@
 
 
       <dl><dt>
+
+          <code><a href="assess.html">assess()</a></code>
+
+        </dt>
+        <dd>Assess Embedding Quality</dd>
+
+        <dt>
+
+          <code><a href="as.data.frame.nmf_assessment.html">as.data.frame(<i>&lt;nmf_assessment&gt;</i>)</a></code>
+
+        </dt>
+        <dd>Convert assessment results to a one-row data frame</dd>
+
+        <dt>
+
+          <code><a href="print.nmf_assessment.html">print(<i>&lt;nmf_assessment&gt;</i>)</a></code>
+
+        </dt>
+        <dd>Print method for nmf_assessment objects</dd>
+
+        <dt>
 
           <code><a href="evaluate.html">evaluate()</a></code>
 
@@ -299,6 +313,13 @@
 
         <dt>
 
+          <code><a href="plot.dclust.html">plot(<i>&lt;dclust&gt;</i>)</a></code>
+
+        </dt>
+        <dd>Plot divisive clustering hierarchy</dd>
+
+        <dt>
+
           <code><a href="bipartiteMatch.html">bipartiteMatch()</a></code>
 
         </dt>
@@ -403,34 +424,6 @@
 
         </dt>
         <dd>Project new data through a trained factor network</dd>
-
-        <dt>
-
-          <code><a href="guide_callback.html">guide_callback()</a></code>
-
-        </dt>
-        <dd>Create a callback guide</dd>
-
-        <dt>
-
-          <code><a href="guide_classifier.html">guide_classifier()</a></code>
-
-        </dt>
-        <dd>Create a classifier guide</dd>
-
-        <dt>
-
-          <code><a href="guide_external.html">guide_external()</a></code>
-
-        </dt>
-        <dd>Create an external target guide</dd>
-
-        <dt>
-
-          <code><a href="guide_reference.html">guide_reference()</a></code>
-
-        </dt>
-        <dd>Create a reference guide</dd>
 
         <dt>
 
@@ -553,13 +546,6 @@
 
         <dt>
 
-          <code><a href="print.nmf_guide.html">print(<i>&lt;nmf_guide&gt;</i>)</a></code>
-
-        </dt>
-        <dd>Print an nmf_guide</dd>
-
-        <dt>
-
           <code><a href="print.training_logger.html">print(<i>&lt;training_logger&gt;</i>)</a></code>
 
         </dt>
@@ -587,46 +573,6 @@
 
         </dt>
         <dd>Simulate Swimmer Dataset</dd>
-      </dl></div><div class="section level2">
-      <h2 id="random-number-generation">Random Number Generation<a class="anchor" aria-label="anchor" href="#random-number-generation"></a></h2>
-
-      <div class="section-desc"><p>Fast RNG utilities</p></div>
-
-      <dl></dl></div><div class="section level2">
-
-
-
-
-      <dl></dl></div><div class="section level2">
-      <h2 id="sparsepress-i-o">SparsePress I/O<a class="anchor" aria-label="anchor" href="#sparsepress-i-o"></a></h2>
-
-      <div class="section-desc"><p>High-performance sparse matrix compression format</p></div>
-
-      <dl></dl></div><div class="section level2">
-
-
-
-
-      <dl><dt>
-
-          <code><a href="sp_free_gpu.html">sp_free_gpu()</a></code>
-
-        </dt>
-        <dd>Free GPU-Resident Sparse Matrix</dd>
-
-        <dt>
-
-          <code><a href="sp_read_gpu.html">sp_read_gpu()</a></code>
-
-        </dt>
-        <dd>Read SparsePress File Directly to GPU Memory</dd>
-
-        <dt>
-
-          <code><a href="sparsepress-deprecated.html">sp_write()</a></code> <code><a href="sparsepress-deprecated.html">sp_read()</a></code> <code><a href="sparsepress-deprecated.html">sp_read_transpose()</a></code> <code><a href="sparsepress-deprecated.html">sp_info()</a></code> <code><a href="sparsepress-deprecated.html">sp_compress()</a></code> <code><a href="sparsepress-deprecated.html">sp_decompress()</a></code> <code><a href="sparsepress-deprecated.html">sp_write_dense()</a></code> <code><a href="sparsepress-deprecated.html">sp_read_dense()</a></code> <code><a href="sparsepress-deprecated.html">sp_convert()</a></code>
-
-        </dt>
-        <dd>SparsePress I/O (Deprecated)</dd>
       </dl></div><div class="section level2">
       <h2 id="streampress-i-o">StreamPress I/O<a class="anchor" aria-label="anchor" href="#streampress-i-o"></a></h2>
 
@@ -667,6 +613,13 @@
 
         <dt>
 
+          <code><a href="st_free_gpu.html">st_free_gpu()</a></code>
+
+        </dt>
+        <dd>Free GPU-Resident Sparse Matrix</dd>
+
+        <dt>
+
           <code><a href="st_info.html">st_info()</a></code>
 
         </dt>
@@ -699,6 +652,13 @@
 
         </dt>
         <dd>Read a Dense Matrix from StreamPress v3 Format</dd>
+
+        <dt>
+
+          <code><a href="st_read_gpu.html">st_read_gpu()</a></code>
+
+        </dt>
+        <dd>Read StreamPress File Directly to GPU Memory</dd>
 
         <dt>
 
@@ -818,10 +778,10 @@
 
         <dt>
 
-          <code><a href="digits_full.html">digits_full</a></code>
+          <code><a href="digits.html">digits</a></code>
 
         </dt>
-        <dd>MNIST Full Digits Dataset</dd>
+        <dd>MNIST Digits Dataset</dd>
 
         <dt>
 
@@ -857,6 +817,22 @@
 
         </dt>
         <dd>PBMC 3k Single-Cell RNA-seq Dataset (StreamPress Compressed)</dd>
+      </dl></div><div class="section level2">
+      <h2 id="package">Package<a class="anchor" aria-label="anchor" href="#package"></a></h2>
+
+
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="RcppML-package.html">RcppML</a></code> <code><a href="RcppML-package.html">RcppML-package</a></code>
+
+        </dt>
+        <dd>RcppML: Fast Non-Negative Matrix Factorization and Divisive Clustering</dd>
       </dl></div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>

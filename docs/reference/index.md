@@ -29,43 +29,38 @@ Core NMF functions and model class
   : Biplot for NMF factors
 - [`nnls()`](https://zdebruine.github.io/RcppML/reference/nnls.md) :
   Non-negative Least Squares Projection
-- [`solve()`](https://zdebruine.github.io/RcppML/reference/solve.md) :
-  Solve a linear system with coordinate descent
-- [`project()`](https://zdebruine.github.io/RcppML/reference/project.md)
-  : Project model onto data (DEPRECATED)
-- [`` `[`( ``*`<svd_pca>`*`,`*`<ANY>`*`,`*`<ANY>`*`,`*`<ANY>`*`)`](https://zdebruine.github.io/RcppML/reference/svd_pca-class.md)
-  [`head(`*`<svd_pca>`*`)`](https://zdebruine.github.io/RcppML/reference/svd_pca-class.md)
-  [`show(`*`<svd_pca>`*`)`](https://zdebruine.github.io/RcppML/reference/svd_pca-class.md)
-  [`dim(`*`<svd_pca>`*`)`](https://zdebruine.github.io/RcppML/reference/svd_pca-class.md)
-  [`reconstruct()`](https://zdebruine.github.io/RcppML/reference/svd_pca-class.md)
-  [`predict(`*`<svd_pca>`*`)`](https://zdebruine.github.io/RcppML/reference/svd_pca-class.md)
-  [`variance_explained()`](https://zdebruine.github.io/RcppML/reference/svd_pca-class.md)
-  : svd_pca S4 Class
+- [`compute_target()`](https://zdebruine.github.io/RcppML/reference/compute_target.md)
+  : Compute a Target Matrix for Guided NMF
+- [`refine()`](https://zdebruine.github.io/RcppML/reference/refine.md) :
+  Refine an NMF Model Using Label-Guided Correction
 
 ## Singular Value Decomposition
 
 SVD and PCA functions
 
-- [`svd()`](https://zdebruine.github.io/RcppML/reference/svd.md)
-  [`sparse_pca()`](https://zdebruine.github.io/RcppML/reference/svd.md)
-  [`nn_pca()`](https://zdebruine.github.io/RcppML/reference/svd.md)
-  [`svd_pca()`](https://zdebruine.github.io/RcppML/reference/svd.md) :
+- [`svd()`](https://zdebruine.github.io/RcppML/reference/svd.md) :
   Truncated SVD / PCA with constraints and regularization
+- [`` `[`( ``*`<svd>`*`,`*`<ANY>`*`,`*`<ANY>`*`,`*`<ANY>`*`)`](https://zdebruine.github.io/RcppML/reference/svd-class.md)
+  [`head(`*`<svd>`*`)`](https://zdebruine.github.io/RcppML/reference/svd-class.md)
+  [`show(`*`<svd>`*`)`](https://zdebruine.github.io/RcppML/reference/svd-class.md)
+  [`dim(`*`<svd>`*`)`](https://zdebruine.github.io/RcppML/reference/svd-class.md)
+  [`reconstruct()`](https://zdebruine.github.io/RcppML/reference/svd-class.md)
+  [`predict(`*`<svd>`*`)`](https://zdebruine.github.io/RcppML/reference/svd-class.md)
+  [`variance_explained()`](https://zdebruine.github.io/RcppML/reference/svd-class.md)
+  : svd S4 Class
 - [`pca()`](https://zdebruine.github.io/RcppML/reference/pca.md) : PCA
   (centered SVD)
-- [`` `[`( ``*`<svd_pca>`*`,`*`<ANY>`*`,`*`<ANY>`*`,`*`<ANY>`*`)`](https://zdebruine.github.io/RcppML/reference/svd_pca-class.md)
-  [`head(`*`<svd_pca>`*`)`](https://zdebruine.github.io/RcppML/reference/svd_pca-class.md)
-  [`show(`*`<svd_pca>`*`)`](https://zdebruine.github.io/RcppML/reference/svd_pca-class.md)
-  [`dim(`*`<svd_pca>`*`)`](https://zdebruine.github.io/RcppML/reference/svd_pca-class.md)
-  [`reconstruct()`](https://zdebruine.github.io/RcppML/reference/svd_pca-class.md)
-  [`predict(`*`<svd_pca>`*`)`](https://zdebruine.github.io/RcppML/reference/svd_pca-class.md)
-  [`variance_explained()`](https://zdebruine.github.io/RcppML/reference/svd_pca-class.md)
-  : svd_pca S4 Class
 
 ## Model Evaluation & Diagnostics
 
 Functions for evaluating and comparing NMF models
 
+- [`assess()`](https://zdebruine.github.io/RcppML/reference/assess.md) :
+  Assess Embedding Quality
+- [`as.data.frame(`*`<nmf_assessment>`*`)`](https://zdebruine.github.io/RcppML/reference/as.data.frame.nmf_assessment.md)
+  : Convert assessment results to a one-row data frame
+- [`print(`*`<nmf_assessment>`*`)`](https://zdebruine.github.io/RcppML/reference/print.nmf_assessment.md)
+  : Print method for nmf_assessment objects
 - [`evaluate()`](https://zdebruine.github.io/RcppML/reference/evaluate.md)
   : Evaluate an NMF model
 - [`sparsity()`](https://zdebruine.github.io/RcppML/reference/sparsity.md)
@@ -118,6 +113,8 @@ NMF-based clustering algorithms
   : Bipartition a sample set
 - [`dclust()`](https://zdebruine.github.io/RcppML/reference/dclust.md) :
   Divisive clustering
+- [`plot(`*`<dclust>`*`)`](https://zdebruine.github.io/RcppML/reference/plot.dclust.md)
+  : Plot divisive clustering hierarchy
 - [`bipartiteMatch()`](https://zdebruine.github.io/RcppML/reference/bipartiteMatch.md)
   : Bipartite graph matching
 
@@ -152,14 +149,6 @@ Build complex factorization pipelines with factor_net
   : Cross-validate a factorization network
 - [`predict(`*`<factor_net_result>`*`)`](https://zdebruine.github.io/RcppML/reference/predict.factor_net_result.md)
   : Project new data through a trained factor network
-- [`guide_callback()`](https://zdebruine.github.io/RcppML/reference/guide_callback.md)
-  : Create a callback guide
-- [`guide_classifier()`](https://zdebruine.github.io/RcppML/reference/guide_classifier.md)
-  : Create a classifier guide
-- [`guide_external()`](https://zdebruine.github.io/RcppML/reference/guide_external.md)
-  : Create an external target guide
-- [`guide_reference()`](https://zdebruine.github.io/RcppML/reference/guide_reference.md)
-  : Create a reference guide
 - [`training_logger()`](https://zdebruine.github.io/RcppML/reference/training_logger.md)
   : Create a training logger for factor network fitting
 - [`export_log()`](https://zdebruine.github.io/RcppML/reference/export_log.md)
@@ -194,8 +183,6 @@ Build complex factorization pipelines with factor_net
   : Summarize a factor_net_result
 - [`summary(`*`<fn_classifier_eval>`*`)`](https://zdebruine.github.io/RcppML/reference/summary.fn_classifier_eval.md)
   : Summarize a classifier evaluation result
-- [`print(`*`<nmf_guide>`*`)`](https://zdebruine.github.io/RcppML/reference/print.nmf_guide.md)
-  : Print an nmf_guide
 - [`print(`*`<training_logger>`*`)`](https://zdebruine.github.io/RcppML/reference/print.training_logger.md)
   : Print a training log
 
@@ -207,29 +194,6 @@ Functions for generating synthetic data
   : Simulate an NMF dataset
 - [`simulateSwimmer()`](https://zdebruine.github.io/RcppML/reference/simulateSwimmer.md)
   : Simulate Swimmer Dataset
-
-## Random Number Generation
-
-Fast RNG utilities
-
-## SparsePress I/O
-
-High-performance sparse matrix compression format
-
-- [`sp_free_gpu()`](https://zdebruine.github.io/RcppML/reference/sp_free_gpu.md)
-  : Free GPU-Resident Sparse Matrix
-- [`sp_read_gpu()`](https://zdebruine.github.io/RcppML/reference/sp_read_gpu.md)
-  : Read SparsePress File Directly to GPU Memory
-- [`sp_write()`](https://zdebruine.github.io/RcppML/reference/sparsepress-deprecated.md)
-  [`sp_read()`](https://zdebruine.github.io/RcppML/reference/sparsepress-deprecated.md)
-  [`sp_read_transpose()`](https://zdebruine.github.io/RcppML/reference/sparsepress-deprecated.md)
-  [`sp_info()`](https://zdebruine.github.io/RcppML/reference/sparsepress-deprecated.md)
-  [`sp_compress()`](https://zdebruine.github.io/RcppML/reference/sparsepress-deprecated.md)
-  [`sp_decompress()`](https://zdebruine.github.io/RcppML/reference/sparsepress-deprecated.md)
-  [`sp_write_dense()`](https://zdebruine.github.io/RcppML/reference/sparsepress-deprecated.md)
-  [`sp_read_dense()`](https://zdebruine.github.io/RcppML/reference/sparsepress-deprecated.md)
-  [`sp_convert()`](https://zdebruine.github.io/RcppML/reference/sparsepress-deprecated.md)
-  : SparsePress I/O (Deprecated)
 
 ## StreamPress I/O
 
@@ -243,6 +207,8 @@ Streaming sparse matrix format (.spz)
   : Slice Columns Matching Variable Metadata Filter
 - [`st_filter_rows()`](https://zdebruine.github.io/RcppML/reference/st_filter_rows.md)
   : Slice Rows Matching Observation Metadata Filter
+- [`st_free_gpu()`](https://zdebruine.github.io/RcppML/reference/st_free_gpu.md)
+  : Free GPU-Resident Sparse Matrix
 - [`st_info()`](https://zdebruine.github.io/RcppML/reference/st_info.md)
   : Get metadata from a StreamPress file
 - [`st_map_chunks()`](https://zdebruine.github.io/RcppML/reference/st_map_chunks.md)
@@ -253,6 +219,8 @@ Streaming sparse matrix format (.spz)
   : Read a StreamPress file into a dgCMatrix
 - [`st_read_dense()`](https://zdebruine.github.io/RcppML/reference/st_read_dense.md)
   : Read a Dense Matrix from StreamPress v3 Format
+- [`st_read_gpu()`](https://zdebruine.github.io/RcppML/reference/st_read_gpu.md)
+  : Read StreamPress File Directly to GPU Memory
 - [`st_read_obs()`](https://zdebruine.github.io/RcppML/reference/st_read_obs.md)
   : Read Observation (Row) Metadata from a StreamPress File
 - [`st_read_var()`](https://zdebruine.github.io/RcppML/reference/st_read_var.md)
@@ -294,8 +262,8 @@ Built-in datasets for examples and benchmarks
 
 - [`aml`](https://zdebruine.github.io/RcppML/reference/aml.md) : Acute
   Myelogenous Leukemia (AML) Dataset
-- [`digits_full`](https://zdebruine.github.io/RcppML/reference/digits_full.md)
-  : MNIST Full Digits Dataset
+- [`digits`](https://zdebruine.github.io/RcppML/reference/digits.md) :
+  MNIST Digits Dataset
 - [`golub`](https://zdebruine.github.io/RcppML/reference/golub.md) :
   Golub ALL-AML Dataset (Brunet et al. 2004)
 - [`hawaiibirds`](https://zdebruine.github.io/RcppML/reference/hawaiibirds.md)
@@ -306,3 +274,10 @@ Built-in datasets for examples and benchmarks
   : Olivetti Faces Dataset
 - [`pbmc3k`](https://zdebruine.github.io/RcppML/reference/pbmc3k.md) :
   PBMC 3k Single-Cell RNA-seq Dataset (StreamPress Compressed)
+
+## Package
+
+- [`RcppML`](https://zdebruine.github.io/RcppML/reference/RcppML-package.md)
+  [`RcppML-package`](https://zdebruine.github.io/RcppML/reference/RcppML-package.md)
+  : RcppML: Fast Non-Negative Matrix Factorization and Divisive
+  Clustering

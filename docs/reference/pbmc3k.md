@@ -1,9 +1,8 @@
 # PBMC 3k Single-Cell RNA-seq Dataset (StreamPress Compressed)
 
-A representative subset of the 10x Genomics PBMC 3k single-cell RNA-seq
-dataset, shipped as StreamPress-compressed raw bytes to meet CRAN
-tarball size limits. Contains the 8,000 most variable genes across 500
-cells.
+The full 10x Genomics PBMC 3k single-cell RNA-seq dataset with Seurat
+cell type annotations, shipped as StreamPress-compressed raw bytes.
+Contains 13,714 genes across 2,638 cells with 9 annotated cell types.
 
 ## Usage
 
@@ -21,21 +20,29 @@ the sparse matrix, write the bytes to a temporary file and read with
       tmp <- tempfile(fileext = ".spz")
       writeBin(pbmc3k, tmp)
       counts <- st_read(tmp)
-      # counts is a dgCMatrix: 8,000 genes x 500 cells
+      # counts is a dgCMatrix: 13,714 genes x 2,638 cells
+      
+
+Cell type annotations are embedded in the .spz file as column (var)
+metadata:
+
+      cell_types <- st_read_var(tmp)$cell_type
+      table(cell_types)
       
 
 ## Source
 
-10x Genomics PBMC 3k dataset, filtered, processed, and subsetted for
-size.
+10x Genomics PBMC 3k dataset, processed with Seurat
+(SeuratData::pbmc3k.final).
 
 ## Details
 
-The underlying matrix is a `dgCMatrix` with 8,000 rows (genes) and 500
-columns (cells), containing 412,180 non-zero entries (integer UMI
-counts). Genes were selected by variance from the full 13,714-gene
-panel. The data was compressed with StreamPress, which is lossless for
-integer count data.
+The underlying matrix is a `dgCMatrix` with 13,714 rows (genes) and
+2,638 columns (cells), containing 2,238,732 non-zero entries (integer
+UMI counts). Cell type annotations (9 types: Naive CD4 T, Memory CD4 T,
+CD14+ Mono, B, CD8 T, FCGR3A+ Mono, NK, DC, Platelet) were obtained from
+the Seurat `pbmc3k.final` reference object via the SeuratData package
+and stored as StreamPress column metadata.
 
 This dataset is commonly used for demonstrating single-cell analysis
 workflows including distribution-aware NMF and zero-inflation
@@ -52,7 +59,16 @@ data(pbmc3k)
 tmp <- tempfile(fileext = ".spz")
 writeBin(pbmc3k, tmp)
 counts <- st_read(tmp)
-dim(counts)  # 8000 x 500
-#> [1] 8000  500
+dim(counts)  # 13714 x 2638
+#> [1] 13714  2638
+
+# Access cell type annotations
+cell_types <- st_read_var(tmp)$cell_type
+table(cell_types)
+#> cell_types
+#> Memory CD4 T            B   CD14+ Mono           NK        CD8 T  Naive CD4 T 
+#>          483          344          480          155          271          697 
+#> FCGR3A+ Mono           DC     Platelet 
+#>          162           32           14 
 # }
 ```

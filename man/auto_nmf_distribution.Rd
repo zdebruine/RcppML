@@ -36,7 +36,7 @@ Default: \code{c("mse", "gp", "nb")}}
 \value{
 A list with:
 \describe{
-  \item{best}{Character string: name of the best distribution}
+  \item{loss}{Character string: name of the best distribution (loss function)}
   \item{comparison}{Data frame with distribution, nll, df, aic, bic, selected}
   \item{models}{Named list of fitted nmf objects}
 }
@@ -64,13 +64,13 @@ the number of observations (nonzeros for sparse, all entries for dense).
 AIC = \eqn{2 \times \text{NLL} + 2 \times \text{df}}.
 }
 \examples{
-\dontrun{
+\donttest{
 library(Matrix)
 set.seed(42)
 A <- abs(rsparsematrix(100, 50, 0.3))
 result <- auto_nmf_distribution(A, k = 5)
 print(result$comparison)
-cat("Best distribution:", result$best, "\n")
+cat("Best distribution:", result$loss, "\n")
 }
 
 }

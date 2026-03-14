@@ -93,12 +93,10 @@ makes factors comparable and ordered by importance.</p>
 </h3>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">data</span>, <span class="va">k</span>, tol <span class="op">=</span> <span class="fl">1e-4</span>, maxit <span class="op">=</span> <span class="fl">100</span>, seed <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>    init <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"random"</span>, <span class="st">"lanczos"</span>, <span class="st">"irlba"</span><span class="op">)</span>,</span>
-<span>    norm <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"L1"</span>, <span class="st">"L2"</span>, <span class="st">"none"</span><span class="op">)</span>,</span>
 <span>    L1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span><span class="op">)</span>, L2 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span><span class="op">)</span>,</span>
-<span>    sort_model <span class="op">=</span> <span class="cn">TRUE</span>, nonneg <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="cn">TRUE</span>, <span class="cn">TRUE</span><span class="op">)</span>,</span>
-<span>    loss <span class="op">=</span> <span class="st">"mse"</span>, threads <span class="op">=</span> <span class="fl">0</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>    on_iteration <span class="op">=</span> <span class="cn">NULL</span>, <span class="va">...</span><span class="op">)</span></span></code></pre></div>
+<span>    mask <span class="op">=</span> <span class="cn">NULL</span>, loss <span class="op">=</span> <span class="st">"mse"</span>,</span>
+<span>    nonneg <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="cn">TRUE</span>, <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>    verbose <span class="op">=</span> <span class="cn">FALSE</span>, <span class="va">...</span><span class="op">)</span></span></code></pre></div>
 <p>Key parameters:</p>
 <table class="table">
 <colgroup>
@@ -140,45 +138,69 @@ makes factors comparable and ordered by importance.</p>
 </tr>
 <tr class="odd">
 <td><code>seed</code></td>
-<td>integer</td>
+<td>int/matrix/string</td>
 <td>NULL</td>
-<td>Random seed for reproducibility</td>
+<td>Random seed, init matrix, or method (“lanczos”, “irlba”)</td>
 </tr>
 <tr class="even">
-<td><code>init</code></td>
-<td>character</td>
-<td>“random”</td>
-<td>Initialization method</td>
+<td><code>mask</code></td>
+<td>NULL/“zeros”/dgCMatrix</td>
+<td>NULL</td>
+<td>Observation mask for fitting</td>
 </tr>
 <tr class="odd">
-<td><code>norm</code></td>
+<td><code>loss</code></td>
 <td>character</td>
+<td>“mse”</td>
+<td>Loss function: “mse” or distribution-based (see
+<code><a href="../reference/nmf.html">?nmf</a></code>)</td>
+</tr>
+<tr class="even">
+<td><code>nonneg</code></td>
+<td>logical(2)</td>
+<td>c(TRUE, TRUE)</td>
+<td>Non-negativity constraints on W and H</td>
+</tr>
+</tbody>
+</table>
+<p>Advanced parameters passed via <code>...</code>:</p>
+<table style="width:100%;" class="table">
+<colgroup>
+<col width="33%">
+<col width="27%">
+<col width="39%">
+</colgroup>
+<thead><tr class="header">
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code>norm</code></td>
 <td>“L1”</td>
-<td>Factor normalization method</td>
+<td>Factor normalization: “L1”, “L2”, or “none”</td>
 </tr>
 <tr class="even">
 <td><code>sort_model</code></td>
-<td>logical</td>
 <td>TRUE</td>
 <td>Sort factors by decreasing
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>d</mi><annotation encoding="application/x-tex">d</annotation></semantics></math>
 </td>
 </tr>
 <tr class="odd">
-<td><code>nonneg</code></td>
-<td>logical(2)</td>
-<td>c(TRUE, TRUE)</td>
-<td>Non-negativity constraints on W and H</td>
+<td><code>threads</code></td>
+<td>0</td>
+<td>Number of OpenMP threads (0 = auto)</td>
 </tr>
 <tr class="even">
 <td><code>on_iteration</code></td>
-<td>function</td>
 <td>NULL</td>
 <td>Callback receiving (iter, train_loss, test_loss)</td>
 </tr>
 </tbody>
 </table>
-<p>Initialization options:</p>
+<p>Initialization options (passed via <code>seed</code>):</p>
 <table class="table">
 <colgroup>
 <col width="38%">
@@ -190,7 +212,8 @@ makes factors comparable and ordered by importance.</p>
 </tr></thead>
 <tbody>
 <tr class="odd">
-<td><code>"random"</code></td>
+<td>
+<code>NULL</code> or integer</td>
 <td>Random nonneg initialization (default). May need more iterations to
 converge.</td>
 </tr>
@@ -201,8 +224,12 @@ faster.</td>
 </tr>
 <tr class="odd">
 <td><code>"irlba"</code></td>
-<td>SVD-based warm start via IRLBA. Similar to Lanczos with different
-convergence properties.</td>
+<td>SVD-based warm start via IRLBA. Memory-efficient for large sparse
+matrices.</td>
+</tr>
+<tr class="even">
+<td>matrix</td>
+<td>User-supplied W initialization matrix.</td>
 </tr>
 </tbody>
 </table>
@@ -234,6 +261,15 @@ is all ones.</td>
 </tr>
 </tbody>
 </table>
+<blockquote>
+<p><strong>Normalization and regularization interaction</strong>: L1
+regularization is applied <em>after</em> normalization at each
+iteration. With <code>norm = "L1"</code>, factor columns are rescaled to
+sum to 1 before L1 soft-thresholding. This means the effective penalty
+depends on the normalization mode; the same L1 value produces different
+sparsity levels under L1 vs. L2 normalization. Start with
+<code>norm = "L1"</code> (default) when using L1 regularization.</p>
+</blockquote>
 </div>
 <div class="section level3">
 <h3 id="factor-extraction-and-inspection">Factor Extraction and Inspection<a class="anchor" aria-label="anchor" href="#factor-extraction-and-inspection"></a>
@@ -242,17 +278,20 @@ is all ones.</td>
 <code>nmf</code> with slots accessed via <code>$</code>:</p>
 <ul>
 <li>
-<code>model$w</code> —
+<code>model@w</code> or <code>model$w</code> —
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi><mo>×</mo><mi>k</mi></mrow><annotation encoding="application/x-tex">m \times k</annotation></semantics></math>
 feature loading matrix (W)</li>
 <li>
-<code>model$h</code> —
+<code>model@h</code> or <code>model$h</code> —
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mo>×</mo><mi>n</mi></mrow><annotation encoding="application/x-tex">k \times n</annotation></semantics></math>
 sample embedding matrix (H)</li>
 <li>
-<code>model$d</code> —
+<code>model@d</code> or <code>model$d</code> —
 length-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>k</mi><annotation encoding="application/x-tex">k</annotation></semantics></math>
 diagonal scaling vector</li>
+<li>
+<code>model@misc</code> — metadata list (iterations, runtime, loss,
+etc.)</li>
 <li>
 <code>dim(model)</code> — returns <code>c(m, n, k)</code>
 </li>
@@ -263,6 +302,9 @@ factors</li>
 <li>
 <code>model[i]</code> — subset to specific factor indices</li>
 </ul>
+<p>The canonical S4 accessor is <code>@</code> (e.g.,
+<code>model@w</code>). The <code>$</code> shorthand also works due to
+method dispatch.</p>
 </div>
 <div class="section level3">
 <h3 id="reconstruction-and-loss">Reconstruction and Loss<a class="anchor" aria-label="anchor" href="#reconstruction-and-loss"></a>
@@ -273,8 +315,10 @@ factors</li>
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>W</mi><mo>⋅</mo><mtext mathvariant="normal">diag</mtext><mrow><mo stretchy="true" form="prefix">(</mo><mi>d</mi><mo stretchy="true" form="postfix">)</mo></mrow><mo>⋅</mo><mi>H</mi></mrow><annotation encoding="application/x-tex">W \cdot \text{diag}(d) \cdot H</annotation></semantics></math>
 (dense matrix)</li>
 <li>
-<code>evaluate(model, data)</code> — reconstruction loss (MSE by
-default)</li>
+<code>evaluate(model, data)</code> — reconstruction loss
+(<strong>defaults to MSE</strong> regardless of what loss was used for
+fitting; specify <code>evaluate(model, data, loss = "gp")</code> to
+compute loss with the same distribution used for fitting)</li>
 <li>
 <code>mse(model$w, model$d, model$h, data)</code> — standalone MSE
 computation</li>
@@ -366,6 +410,99 @@ optima. Always set <code>seed</code> for reproducibility. For robust
 factorizations across multiple random starts, use
 <code><a href="../reference/consensus_nmf.html">consensus_nmf()</a></code> (see the <a href="clustering.html">Clustering</a> vignette).</p>
 </div>
+<div class="section level3">
+<h3 id="projective-nmf">Projective NMF<a class="anchor" aria-label="anchor" href="#projective-nmf"></a>
+</h3>
+<p>In standard NMF, both W and H are solved independently in alternating
+updates. <strong>Projective NMF</strong> adds a structural constraint:
+instead of solving for H, it is computed as a linear projection of the
+data through W:</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>H</mi><mo>=</mo><mtext mathvariant="normal">diag</mtext><mrow><mo stretchy="true" form="prefix">(</mo><mi>d</mi><mo stretchy="true" form="postfix">)</mo></mrow><mo>⋅</mo><msup><mi>W</mi><mi>T</mi></msup><mo>⋅</mo><mi>A</mi></mrow><annotation encoding="application/x-tex">H = \text{diag}(d) \cdot W^T \cdot A</annotation></semantics></math></p>
+<p>This means H is entirely determined by W — there are no free
+parameters in H. Enable it with <code>projective = TRUE</code>:</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">model</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">data</span>, k <span class="op">=</span> <span class="fl">6</span>, projective <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<p><strong>Why use projective NMF?</strong></p>
+<ul>
+<li>
+<strong>More orthogonal features</strong>: The projection constraint
+forces W columns to be nearly orthogonal, because the only way to
+minimize reconstruction error when
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>H</mi><mo>=</mo><msup><mi>W</mi><mi>T</mi></msup><mi>A</mi></mrow><annotation encoding="application/x-tex">H = W^T A</annotation></semantics></math>
+is for the columns of W to capture non-overlapping parts of the
+data.</li>
+<li>
+<strong>Fewer degrees of freedom</strong>: Since H is determined by
+W, the model has roughly half as many free parameters, acting as an
+implicit regularizer.</li>
+<li>
+<strong>Unique H for a given W</strong>: Eliminates one source of
+non-uniqueness in the factorization.</li>
+</ul>
+<p>The tradeoff is higher reconstruction error — the model is more
+constrained, so it cannot fit the data as closely. Projective NMF is
+most useful when you want clearly separable, non-overlapping factors for
+interpretability rather than minimum reconstruction error.</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">aml</span><span class="op">)</span></span>
+<span><span class="va">m_std</span>  <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">aml</span>, k <span class="op">=</span> <span class="fl">6</span>, seed <span class="op">=</span> <span class="fl">42</span>, tol <span class="op">=</span> <span class="fl">1e-5</span><span class="op">)</span></span>
+<span><span class="va">m_proj</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">aml</span>, k <span class="op">=</span> <span class="fl">6</span>, seed <span class="op">=</span> <span class="fl">42</span>, tol <span class="op">=</span> <span class="fl">1e-5</span>, projective <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Orthogonality: mean absolute off-diagonal cosine between W columns</span></span>
+<span><span class="co"># (lower = more orthogonal)</span></span>
+<span><span class="va">ortho_metric</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">mat</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">cs</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/cosine.html">cosine</a></span><span class="op">(</span><span class="va">mat</span>, <span class="va">mat</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/diag.html" class="external-link">diag</a></span><span class="op">(</span><span class="va">cs</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fl">0</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">cs</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>  Mode <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Standard"</span>, <span class="st">"Projective"</span><span class="op">)</span>,</span>
+<span>  `W orthogonality` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu">ortho_metric</span><span class="op">(</span><span class="va">m_std</span><span class="op">@</span><span class="va">w</span><span class="op">)</span>, <span class="fu">ortho_metric</span><span class="op">(</span><span class="va">m_proj</span><span class="op">@</span><span class="va">w</span><span class="op">)</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span>,</span>
+<span>  `W mean sparsity` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="fu"><a href="../reference/sparsity.html">sparsity</a></span><span class="op">(</span><span class="va">m_std</span><span class="op">)</span><span class="op">$</span><span class="va">sparsity</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">6</span><span class="op">]</span><span class="op">)</span>,</span>
+<span>                               <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="fu"><a href="../reference/sparsity.html">sparsity</a></span><span class="op">(</span><span class="va">m_proj</span><span class="op">)</span><span class="op">$</span><span class="va">sparsity</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">6</span><span class="op">]</span><span class="op">)</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span>,</span>
+<span>  `Reconstruction MSE` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/format.html" class="external-link">format</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="../reference/evaluate.html">evaluate</a></span><span class="op">(</span><span class="va">m_std</span>, <span class="va">aml</span><span class="op">)</span>, <span class="fu"><a href="../reference/evaluate.html">evaluate</a></span><span class="op">(</span><span class="va">m_proj</span>, <span class="va">aml</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>                                 digits <span class="op">=</span> <span class="fl">3</span>, scientific <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>  check.names <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span><span class="op">)</span>, caption <span class="op">=</span> <span class="st">"Standard vs. projective NMF on AML data (k = 6). Lower W orthogonality = more independent factors."</span><span class="op">)</span></span></code></pre></div>
+<table class="table">
+<caption>Standard vs. projective NMF on AML data (k = 6). Lower W
+orthogonality = more independent factors.</caption>
+<thead><tr class="header">
+<th align="left">Mode</th>
+<th align="right">W orthogonality</th>
+<th align="right">W mean sparsity</th>
+<th align="left">Reconstruction MSE</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td align="left">Standard</td>
+<td align="right">0.583</td>
+<td align="right">0.082</td>
+<td align="left">2.15e-02</td>
+</tr>
+<tr class="even">
+<td align="left">Projective</td>
+<td align="right">0.188</td>
+<td align="right">0.454</td>
+<td align="left">4.13e-01</td>
+</tr>
+</tbody>
+</table>
+<p>Projective NMF yields W columns that are substantially more
+orthogonal (lower off-diagonal cosine), making each factor correspond to
+a more distinct set of features. This comes at the cost of
+reconstruction fidelity — the projection constraint prevents the model
+from fitting the data as tightly.</p>
+<blockquote>
+<p><strong>Note</strong>: <code>projective = TRUE</code> and
+<code>symmetric = TRUE</code> cannot be combined. For symmetric matrices
+(<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi><mo>=</mo><msup><mi>A</mi><mi>T</mi></msup></mrow><annotation encoding="application/x-tex">A = A^T</annotation></semantics></math>),
+symmetric NMF enforces
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>H</mi><mo>=</mo><msup><mi>W</mi><mi>T</mi></msup></mrow><annotation encoding="application/x-tex">H = W^T</annotation></semantics></math>
+directly.</p>
+</blockquote>
+</div>
 </div>
 <div class="section level2">
 <h2 id="worked-examples">Worked Examples<a class="anchor" aria-label="anchor" href="#worked-examples"></a>
@@ -375,14 +512,14 @@ factorizations across multiple random starts, use
 </h3>
 <p>We generate a synthetic matrix with 5 true factors and test whether
 NMF can recover them.</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulateNMF.html">simulateNMF</a></span><span class="op">(</span><span class="fl">300</span>, <span class="fl">150</span>, k <span class="op">=</span> <span class="fl">5</span>, noise <span class="op">=</span> <span class="fl">0.3</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simulateNMF.html">simulateNMF</a></span><span class="op">(</span><span class="fl">200</span>, <span class="fl">80</span>, k <span class="op">=</span> <span class="fl">5</span>, noise <span class="op">=</span> <span class="fl">3.0</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span>
 <span><span class="va">model</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">A</span>, k <span class="op">=</span> <span class="fl">5</span>, seed <span class="op">=</span> <span class="fl">1</span>, tol <span class="op">=</span> <span class="fl">1e-5</span>, maxit <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span></code></pre></div>
 <p>To compare learned factors with ground truth, we compute cosine
 similarity between each pair of W columns. The
 <code><a href="../reference/bipartiteMatch.html">bipartiteMatch()</a></code> function finds the optimal one-to-one
 assignment (note: it returns 0-indexed assignments):</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sim_cos</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/cosine.html">cosine</a></span><span class="op">(</span><span class="va">model</span><span class="op">$</span><span class="va">w</span>, <span class="va">sim</span><span class="op">$</span><span class="va">w</span><span class="op">)</span></span>
 <span><span class="va">match_result</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/bipartiteMatch.html">bipartiteMatch</a></span><span class="op">(</span><span class="fl">1</span> <span class="op">-</span> <span class="va">sim_cos</span> <span class="op">+</span> <span class="fl">1e-10</span><span class="op">)</span></span>
 <span><span class="va">assignment</span> <span class="op">&lt;-</span> <span class="va">match_result</span><span class="op">$</span><span class="va">assignment</span> <span class="op">+</span> <span class="fl">1L</span>  <span class="co"># convert to 1-indexed</span></span>
@@ -409,32 +546,54 @@ columns.</caption>
 <tbody>
 <tr class="odd">
 <td align="right">1</td>
-<td align="right">0.4601</td>
+<td align="right">0.9040</td>
 </tr>
 <tr class="even">
 <td align="right">2</td>
-<td align="right">0.6176</td>
+<td align="right">0.9207</td>
 </tr>
 <tr class="odd">
 <td align="right">3</td>
-<td align="right">0.5977</td>
+<td align="right">0.9178</td>
 </tr>
 <tr class="even">
 <td align="right">4</td>
-<td align="right">0.4186</td>
+<td align="right">0.9327</td>
 </tr>
 <tr class="odd">
 <td align="right">5</td>
-<td align="right">0.4234</td>
+<td align="right">0.9271</td>
 </tr>
 </tbody>
 </table>
-<p>NMF recovers the 5 planted factors with high cosine similarity
-despite 30% Gaussian noise.</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Prepare data for side-by-side comparison</span></span>
-<span><span class="va">true_w</span> <span class="op">&lt;-</span> <span class="va">sim</span><span class="op">$</span><span class="va">w</span><span class="op">[</span>, <span class="va">assignment</span><span class="op">]</span></span>
+<p>Factor recovery quality depends on the signal-to-noise ratio, matrix
+size, and the degree of overlap between true factors. Here we use
+<code>noise = 3.0</code>, meaning the noise amplitude is three times the
+signal — a challenging setting. Despite this, NMF recovers all five
+factors with high cosine similarity, demonstrating robustness to
+additive noise.</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Align learned W to true W using bipartite matching</span></span>
 <span><span class="va">learned_w</span> <span class="op">&lt;-</span> <span class="va">model</span><span class="op">$</span><span class="va">w</span></span>
+<span></span>
+<span><span class="co"># Compute noisy W: least-squares projection of A onto true H (shows noise corruption)</span></span>
+<span><span class="va">noisy_w</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">A</span> <span class="op"><a href="https://rdrr.io/r/base/matmult.html" class="external-link">%*%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">h</span><span class="op">)</span> <span class="op"><a href="https://rdrr.io/r/base/matmult.html" class="external-link">%*%</a></span> <span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/solve-methods.html" class="external-link">solve</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">h</span> <span class="op"><a href="https://rdrr.io/r/base/matmult.html" class="external-link">%*%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">h</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">noisy_w</span> <span class="op">&lt;-</span> <span class="va">noisy_w</span><span class="op">[</span>, <span class="va">assignment</span><span class="op">]</span></span>
+<span></span>
+<span><span class="co"># L1-normalize columns so both heatmaps share the same [0, 1] scale</span></span>
+<span><span class="va">l1_norm</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">mat</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/sweep.html" class="external-link">sweep</a></span><span class="op">(</span><span class="va">mat</span>, <span class="fl">2</span>, <span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/colSums-methods.html" class="external-link">colSums</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">mat</span><span class="op">)</span><span class="op">)</span>, <span class="st">"/"</span><span class="op">)</span></span>
+<span><span class="va">noisy_w</span>   <span class="op">&lt;-</span> <span class="fu">l1_norm</span><span class="op">(</span><span class="va">noisy_w</span><span class="op">)</span></span>
+<span><span class="va">learned_w</span> <span class="op">&lt;-</span> <span class="fu">l1_norm</span><span class="op">(</span><span class="va">learned_w</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Hierarchical clustering on the combined matrix for consistent row/col order</span></span>
+<span><span class="va">combined_w</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span><span class="va">noisy_w</span>, <span class="va">learned_w</span><span class="op">)</span></span>
+<span><span class="va">row_hc</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/hclust.html" class="external-link">hclust</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/dist.html" class="external-link">dist</a></span><span class="op">(</span><span class="va">combined_w</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">row_ord</span> <span class="op">&lt;-</span> <span class="va">row_hc</span><span class="op">$</span><span class="va">order</span></span>
+<span><span class="va">col_hc</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/hclust.html" class="external-link">hclust</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/dist.html" class="external-link">dist</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">noisy_w</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">col_ord</span> <span class="op">&lt;-</span> <span class="va">col_hc</span><span class="op">$</span><span class="va">order</span></span>
+<span></span>
+<span><span class="va">noisy_w</span> <span class="op">&lt;-</span> <span class="va">noisy_w</span><span class="op">[</span><span class="va">row_ord</span>, <span class="va">col_ord</span><span class="op">]</span></span>
+<span><span class="va">learned_w</span> <span class="op">&lt;-</span> <span class="va">learned_w</span><span class="op">[</span><span class="va">row_ord</span>, <span class="va">col_ord</span><span class="op">]</span></span>
 <span></span>
 <span><span class="co"># Build long-format data for ggplot</span></span>
 <span><span class="va">make_heatmap_df</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">mat</span>, <span class="va">label</span><span class="op">)</span> <span class="op">{</span></span>
@@ -444,277 +603,255 @@ despite 30% Gaussian noise.</p>
 <span>  <span class="va">df</span></span>
 <span><span class="op">}</span></span>
 <span><span class="va">hm_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span></span>
-<span>  <span class="fu">make_heatmap_df</span><span class="op">(</span><span class="va">true_w</span>, <span class="st">"True W"</span><span class="op">)</span>,</span>
-<span>  <span class="fu">make_heatmap_df</span><span class="op">(</span><span class="va">learned_w</span>, <span class="st">"Learned W"</span><span class="op">)</span></span>
+<span>  <span class="fu">make_heatmap_df</span><span class="op">(</span><span class="va">noisy_w</span>, <span class="st">"W from Noisy Data"</span><span class="op">)</span>,</span>
+<span>  <span class="fu">make_heatmap_df</span><span class="op">(</span><span class="va">learned_w</span>, <span class="st">"NMF Learned W"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="va">hm_df</span><span class="op">$</span><span class="va">Source</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">hm_df</span><span class="op">$</span><span class="va">Source</span>, levels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"True W"</span>, <span class="st">"Learned W"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">hm_df</span><span class="op">$</span><span class="va">Source</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">hm_df</span><span class="op">$</span><span class="va">Source</span>, levels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"W from Noisy Data"</span>, <span class="st">"NMF Learned W"</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">ggplot</span><span class="op">(</span><span class="va">hm_df</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">Factor</span>, y <span class="op">=</span> <span class="va">Feature</span>, fill <span class="op">=</span> <span class="va">Value</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">geom_raster</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">facet_wrap</span><span class="op">(</span><span class="op">~</span><span class="va">Source</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">scale_fill_viridis_c</span><span class="op">(</span>option <span class="op">=</span> <span class="st">"inferno"</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">labs</span><span class="op">(</span>title <span class="op">=</span> <span class="st">"True vs. Learned Feature Loadings (W)"</span>, x <span class="op">=</span> <span class="st">"Factor"</span>, y <span class="op">=</span> <span class="st">"Feature"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Noisy Input vs. NMF Recovery"</span>,</span>
+<span>       subtitle <span class="op">=</span> <span class="st">"Columns L1-normalized; NMF denoises the factor loadings"</span>,</span>
+<span>       x <span class="op">=</span> <span class="st">"Factor"</span>, y <span class="op">=</span> <span class="st">"Feature"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">theme</span><span class="op">(</span>axis.text.y <span class="op">=</span> <span class="fu">element_blank</span><span class="op">(</span><span class="op">)</span>, axis.ticks.y <span class="op">=</span> <span class="fu">element_blank</span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<p><img src="nmf-fundamentals_files/figure-html/synthetic-heatmap-1.png" class="r-plt" alt="" width="672"></p>
-<p>The learned W matrix closely mirrors the true factor structure: each
-factor activates a distinct subset of features, and the pattern
-correspondence is clear despite noise.</p>
-</div>
-<div class="section level3">
-<h3 id="example-2-gene-expression-factor-interpretation-aml-data">Example 2: Gene Expression Factor Interpretation (AML Data)<a class="anchor" aria-label="anchor" href="#example-2-gene-expression-factor-interpretation-aml-data"></a>
-</h3>
-<p>The <code>aml</code> dataset contains 824 genomic regions × 135
-samples from Acute Myeloid Leukemia ATAC-seq data. Sample subtypes are
-stored in <code>attr(aml, "metadata_h")$category</code>.</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">aml</span><span class="op">)</span></span>
-<span><span class="va">meta</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">aml</span>, <span class="st">"metadata_h"</span><span class="op">)</span></span>
-<span><span class="va">model_aml</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">aml</span>, k <span class="op">=</span> <span class="fl">6</span>, seed <span class="op">=</span> <span class="fl">42</span>, tol <span class="op">=</span> <span class="fl">1e-5</span><span class="op">)</span></span></code></pre></div>
-<p>We identify the top features per factor — the genomic regions with
-the highest loadings:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">top_n</span> <span class="op">&lt;-</span> <span class="fl">5</span></span>
-<span><span class="va">top_features</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">6</span>, <span class="kw">function</span><span class="op">(</span><span class="va">f</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="va">w_col</span> <span class="op">&lt;-</span> <span class="va">model_aml</span><span class="op">$</span><span class="va">w</span><span class="op">[</span>, <span class="va">f</span><span class="op">]</span></span>
-<span>  <span class="va">idx</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">w_col</span>, decreasing <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="va">top_n</span><span class="op">]</span></span>
+<span>  <span class="fu">theme</span><span class="op">(</span>aspect.ratio <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>        axis.text.y <span class="op">=</span> <span class="fu">element_blank</span><span class="op">(</span><span class="op">)</span>, axis.ticks.y <span class="op">=</span> <span class="fu">element_blank</span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p><img src="nmf-fundamentals_files/figure-html/synthetic-heatmap-1.png" class="r-plt" alt="" width="768"></p>
+<p>The left panel shows the factor loadings recovered by projecting the
+noisy data matrix onto the true H — the noise substantially degrades the
+block structure. The right panel shows NMF’s learned W, where
+block-diagonal structure is clearly recovered. NMF acts as a denoiser:
+by jointly optimizing W and H, it separates signal from noise more
+effectively than direct projection.</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Per-factor scatter plots: noisy vs. learned W column values</span></span>
+<span><span class="va">scatter_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">5</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
-<span>    Factor <span class="op">=</span> <span class="va">f</span>,</span>
-<span>    Rank <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="va">top_n</span>,</span>
-<span>    Feature <span class="op">=</span> <span class="va">idx</span>,</span>
-<span>    Loading <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">w_col</span><span class="op">[</span><span class="va">idx</span><span class="op">]</span>, <span class="fl">4</span><span class="op">)</span></span>
+<span>    Noisy <span class="op">=</span> <span class="va">noisy_w</span><span class="op">[</span>, <span class="va">i</span><span class="op">]</span>,</span>
+<span>    Learned <span class="op">=</span> <span class="va">learned_w</span><span class="op">[</span>, <span class="va">i</span><span class="op">]</span>,</span>
+<span>    Factor <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"Factor "</span>, <span class="va">i</span>, <span class="st">" (cos="</span>, <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">per_factor_cos</span><span class="op">[</span><span class="va">i</span><span class="op">]</span>, <span class="fl">2</span><span class="op">)</span>, <span class="st">")"</span><span class="op">)</span></span>
 <span>  <span class="op">)</span></span>
 <span><span class="op">}</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
-<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span></span>
-<span>  <span class="va">top_features</span>,</span>
-<span>  caption <span class="op">=</span> <span class="st">"Top 5 features (highest W loadings) per factor."</span>,</span>
-<span>  row.names <span class="op">=</span> <span class="cn">FALSE</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<table class="table">
-<caption>Top 5 features (highest W loadings) per factor.</caption>
-<thead><tr class="header">
-<th align="right">Factor</th>
-<th align="right">Rank</th>
-<th align="right">Feature</th>
-<th align="right">Loading</th>
-</tr></thead>
-<tbody>
-<tr class="odd">
-<td align="right">1</td>
-<td align="right">1</td>
-<td align="right">804</td>
-<td align="right">0.0030</td>
-</tr>
-<tr class="even">
-<td align="right">1</td>
-<td align="right">2</td>
-<td align="right">181</td>
-<td align="right">0.0029</td>
-</tr>
-<tr class="odd">
-<td align="right">1</td>
-<td align="right">3</td>
-<td align="right">689</td>
-<td align="right">0.0029</td>
-</tr>
-<tr class="even">
-<td align="right">1</td>
-<td align="right">4</td>
-<td align="right">489</td>
-<td align="right">0.0028</td>
-</tr>
-<tr class="odd">
-<td align="right">1</td>
-<td align="right">5</td>
-<td align="right">580</td>
-<td align="right">0.0028</td>
-</tr>
-<tr class="even">
-<td align="right">2</td>
-<td align="right">1</td>
-<td align="right">606</td>
-<td align="right">0.0024</td>
-</tr>
-<tr class="odd">
-<td align="right">2</td>
-<td align="right">2</td>
-<td align="right">701</td>
-<td align="right">0.0024</td>
-</tr>
-<tr class="even">
-<td align="right">2</td>
-<td align="right">3</td>
-<td align="right">56</td>
-<td align="right">0.0024</td>
-</tr>
-<tr class="odd">
-<td align="right">2</td>
-<td align="right">4</td>
-<td align="right">627</td>
-<td align="right">0.0023</td>
-</tr>
-<tr class="even">
-<td align="right">2</td>
-<td align="right">5</td>
-<td align="right">426</td>
-<td align="right">0.0023</td>
-</tr>
-<tr class="odd">
-<td align="right">3</td>
-<td align="right">1</td>
-<td align="right">279</td>
-<td align="right">0.0032</td>
-</tr>
-<tr class="even">
-<td align="right">3</td>
-<td align="right">2</td>
-<td align="right">644</td>
-<td align="right">0.0029</td>
-</tr>
-<tr class="odd">
-<td align="right">3</td>
-<td align="right">3</td>
-<td align="right">420</td>
-<td align="right">0.0028</td>
-</tr>
-<tr class="even">
-<td align="right">3</td>
-<td align="right">4</td>
-<td align="right">173</td>
-<td align="right">0.0028</td>
-</tr>
-<tr class="odd">
-<td align="right">3</td>
-<td align="right">5</td>
-<td align="right">211</td>
-<td align="right">0.0028</td>
-</tr>
-<tr class="even">
-<td align="right">4</td>
-<td align="right">1</td>
-<td align="right">736</td>
-<td align="right">0.0028</td>
-</tr>
-<tr class="odd">
-<td align="right">4</td>
-<td align="right">2</td>
-<td align="right">56</td>
-<td align="right">0.0026</td>
-</tr>
-<tr class="even">
-<td align="right">4</td>
-<td align="right">3</td>
-<td align="right">498</td>
-<td align="right">0.0026</td>
-</tr>
-<tr class="odd">
-<td align="right">4</td>
-<td align="right">4</td>
-<td align="right">441</td>
-<td align="right">0.0025</td>
-</tr>
-<tr class="even">
-<td align="right">4</td>
-<td align="right">5</td>
-<td align="right">130</td>
-<td align="right">0.0024</td>
-</tr>
-<tr class="odd">
-<td align="right">5</td>
-<td align="right">1</td>
-<td align="right">713</td>
-<td align="right">0.0056</td>
-</tr>
-<tr class="even">
-<td align="right">5</td>
-<td align="right">2</td>
-<td align="right">140</td>
-<td align="right">0.0054</td>
-</tr>
-<tr class="odd">
-<td align="right">5</td>
-<td align="right">3</td>
-<td align="right">478</td>
-<td align="right">0.0053</td>
-</tr>
-<tr class="even">
-<td align="right">5</td>
-<td align="right">4</td>
-<td align="right">176</td>
-<td align="right">0.0052</td>
-</tr>
-<tr class="odd">
-<td align="right">5</td>
-<td align="right">5</td>
-<td align="right">180</td>
-<td align="right">0.0052</td>
-</tr>
-<tr class="even">
-<td align="right">6</td>
-<td align="right">1</td>
-<td align="right">390</td>
-<td align="right">0.0057</td>
-</tr>
-<tr class="odd">
-<td align="right">6</td>
-<td align="right">2</td>
-<td align="right">568</td>
-<td align="right">0.0052</td>
-</tr>
-<tr class="even">
-<td align="right">6</td>
-<td align="right">3</td>
-<td align="right">577</td>
-<td align="right">0.0051</td>
-</tr>
-<tr class="odd">
-<td align="right">6</td>
-<td align="right">4</td>
-<td align="right">160</td>
-<td align="right">0.0048</td>
-</tr>
-<tr class="even">
-<td align="right">6</td>
-<td align="right">5</td>
-<td align="right">763</td>
-<td align="right">0.0047</td>
-</tr>
-</tbody>
-</table>
-<p>Now we visualize the H matrix (sample embeddings) with columns
-grouped by AML subtype:</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">subtypes</span> <span class="op">&lt;-</span> <span class="va">meta</span><span class="op">$</span><span class="va">category</span></span>
-<span><span class="va">col_order</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">subtypes</span><span class="op">)</span></span>
-<span><span class="va">h_ordered</span> <span class="op">&lt;-</span> <span class="va">model_aml</span><span class="op">$</span><span class="va">h</span><span class="op">[</span>, <span class="va">col_order</span><span class="op">]</span></span>
-<span><span class="va">subtypes_ordered</span> <span class="op">&lt;-</span> <span class="va">subtypes</span><span class="op">[</span><span class="va">col_order</span><span class="op">]</span></span>
-<span></span>
-<span><span class="va">h_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/expand.grid.html" class="external-link">expand.grid</a></span><span class="op">(</span>Factor <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">h_ordered</span><span class="op">)</span><span class="op">)</span>, Sample <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">h_ordered</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">h_df</span><span class="op">$</span><span class="va">Weight</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">as.vector</a></span><span class="op">(</span><span class="va">h_ordered</span><span class="op">)</span></span>
-<span><span class="va">h_df</span><span class="op">$</span><span class="va">Subtype</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="va">subtypes_ordered</span>, each <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">h_ordered</span><span class="op">)</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">h_df</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">Sample</span>, y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">Factor</span><span class="op">)</span>, fill <span class="op">=</span> <span class="va">Weight</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">geom_raster</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">scale_fill_viridis_c</span><span class="op">(</span>option <span class="op">=</span> <span class="st">"magma"</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">labs</span><span class="op">(</span></span>
-<span>    title <span class="op">=</span> <span class="st">"NMF Sample Embeddings (H) by AML Subtype"</span>,</span>
-<span>    x <span class="op">=</span> <span class="st">"Samples (grouped by subtype)"</span>, y <span class="op">=</span> <span class="st">"Factor"</span></span>
-<span>  <span class="op">)</span> <span class="op">+</span></span>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">scatter_df</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">Noisy</span>, y <span class="op">=</span> <span class="va">Learned</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_point</span><span class="op">(</span>alpha <span class="op">=</span> <span class="fl">0.3</span>, size <span class="op">=</span> <span class="fl">0.8</span>, color <span class="op">=</span> <span class="st">"steelblue"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_abline</span><span class="op">(</span>slope <span class="op">=</span> <span class="fl">1</span>, intercept <span class="op">=</span> <span class="fl">0</span>, linetype <span class="op">=</span> <span class="st">"dashed"</span>, color <span class="op">=</span> <span class="st">"red"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">facet_wrap</span><span class="op">(</span><span class="op">~</span> <span class="va">Factor</span>, nrow <span class="op">=</span> <span class="fl">2</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">coord_fixed</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Per-Factor Comparison: Noisy Input vs. NMF Learned W"</span>,</span>
+<span>       x <span class="op">=</span> <span class="st">"Noisy W loading"</span>, y <span class="op">=</span> <span class="st">"NMF W loading"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">theme</span><span class="op">(</span>axis.text.x <span class="op">=</span> <span class="fu">element_blank</span><span class="op">(</span><span class="op">)</span>, axis.ticks.x <span class="op">=</span> <span class="fu">element_blank</span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<p><img src="nmf-fundamentals_files/figure-html/aml-heatmap-1.png" class="r-plt" alt="" width="672"></p>
-<p>The H heatmap reveals clear subtype structure: certain factors
-activate preferentially within specific AML subtypes, indicating that
-NMF captures biologically meaningful programs from the chromatin
-accessibility data.</p>
+<span>  <span class="fu">theme</span><span class="op">(</span>strip.text <span class="op">=</span> <span class="fu">element_text</span><span class="op">(</span>size <span class="op">=</span> <span class="fl">8</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p><img src="nmf-fundamentals_files/figure-html/scatter-per-factor-1.png" class="r-plt" alt="" width="864"></p>
+<p>The scatter plots compare noisy input loadings (x-axis) to
+NMF-recovered loadings (y-axis) for each factor. NMF sharpens the
+loadings — points are pulled toward the axes, reflecting the
+non-negativity constraint’s tendency to suppress noise and produce
+sparser, more interpretable factors. The cosine similarity in each panel
+title measures agreement with the true (clean) factors.</p>
 </div>
 <div class="section level3">
-<h3 id="example-3-convergence-and-initialization-comparison">Example 3: Convergence and Initialization Comparison<a class="anchor" aria-label="anchor" href="#example-3-convergence-and-initialization-comparison"></a>
+<h3 id="example-2-choosing-rank-with-cross-validation">Example 2: Choosing Rank with Cross-Validation<a class="anchor" aria-label="anchor" href="#example-2-choosing-rank-with-cross-validation"></a>
+</h3>
+<p>In Example 1, we knew the true rank
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mo>=</mo><mn>5</mn></mrow><annotation encoding="application/x-tex">k = 5</annotation></semantics></math>
+because we generated the data. In practice, the correct rank is unknown.
+<strong>Cross-validation</strong> provides a principled answer: hold out
+a random fraction of matrix entries, fit NMF on the remainder, and
+measure prediction error on the held-out set. The rank that minimizes
+test error is the best choice.</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">cv</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">A</span>, k <span class="op">=</span> <span class="fl">2</span><span class="op">:</span><span class="fl">15</span>, test_fraction <span class="op">=</span> <span class="fl">0.05</span>, cv_seed <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">3</span>,</span>
+<span>          tol <span class="op">=</span> <span class="fl">1e-5</span>, maxit <span class="op">=</span> <span class="fl">200</span><span class="op">)</span></span>
+<span><span class="va">agg</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/aggregate.html" class="external-link">aggregate</a></span><span class="op">(</span><span class="va">test_mse</span> <span class="op">~</span> <span class="va">k</span>, data <span class="op">=</span> <span class="va">cv</span>, FUN <span class="op">=</span> <span class="va">mean</span><span class="op">)</span></span>
+<span><span class="va">best_k</span> <span class="op">&lt;-</span> <span class="va">agg</span><span class="op">$</span><span class="va">k</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/which.min.html" class="external-link">which.min</a></span><span class="op">(</span><span class="va">agg</span><span class="op">$</span><span class="va">test_mse</span><span class="op">)</span><span class="op">]</span></span></code></pre></div>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">cv</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_vline</span><span class="op">(</span>xintercept <span class="op">=</span> <span class="va">best_k</span>, linetype <span class="op">=</span> <span class="st">"dashed"</span>, alpha <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">annotate</span><span class="op">(</span><span class="st">"text"</span>, x <span class="op">=</span> <span class="va">best_k</span> <span class="op">+</span> <span class="fl">0.3</span>, y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">agg</span><span class="op">$</span><span class="va">test_mse</span><span class="op">)</span> <span class="op">*</span> <span class="fl">0.98</span>,</span>
+<span>           label <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="st">"optimal k ="</span>, <span class="va">best_k</span><span class="op">)</span>, hjust <span class="op">=</span> <span class="fl">0</span>, size <span class="op">=</span> <span class="fl">3.5</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span></span>
+<span>    title <span class="op">=</span> <span class="st">"Cross-Validation for Rank Selection"</span>,</span>
+<span>    subtitle <span class="op">=</span> <span class="st">"Test MSE identifies the correct rank; training MSE always decreases"</span></span>
+<span>  <span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<p><img src="nmf-fundamentals_files/figure-html/cv-rank-plot-1.png" class="r-plt" alt="" width="672"></p>
+<p>The plot reveals the classic <strong>bias–variance
+tradeoff</strong>:</p>
+<ul>
+<li>
+<strong>Underfitting</strong>
+(<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mo>&lt;</mo><mn>5</mn></mrow><annotation encoding="application/x-tex">k &lt; 5</annotation></semantics></math>):
+Both training and test MSE are high. The model lacks capacity to capture
+all five true factors, so it cannot represent the data’s structure and
+performs poorly on both seen and unseen entries.</li>
+<li>
+<strong>Optimal rank</strong>
+(<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mo>=</mo><mn>5</mn></mrow><annotation encoding="application/x-tex">k = 5</annotation></semantics></math>):
+Test MSE reaches its minimum. The model has exactly enough factors to
+capture the true structure without fitting noise.</li>
+<li>
+<strong>Overfitting</strong>
+(<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mo>&gt;</mo><mn>5</mn></mrow><annotation encoding="application/x-tex">k &gt; 5</annotation></semantics></math>):
+Training MSE continues to decrease — the model fits the training entries
+ever more closely — but test MSE <em>increases</em>. Extra factors fit
+noise in the training set that does not generalize to held-out
+entries.</li>
+</ul>
+<blockquote>
+<p><strong>How it works:</strong>
+<code>nmf(data, k = 1:15, test_fraction = 0.2)</code> randomly masks 20%
+of matrix entries before fitting. At each iteration the model is trained
+only on the visible 80%; the masked entries are predicted from the
+current
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>W</mi><mo>⋅</mo><mtext mathvariant="normal">diag</mtext><mrow><mo stretchy="true" form="prefix">(</mo><mi>d</mi><mo stretchy="true" form="postfix">)</mo></mrow><mo>⋅</mo><mi>H</mi></mrow><annotation encoding="application/x-tex">W \cdot \text{diag}(d) \cdot H</annotation></semantics></math>
+and scored against their true values. The rank with the lowest test MSE
+is selected.</p>
+</blockquote>
+<div class="section level4">
+<h4 id="per-iteration-convergence-underfitting-vs--overfitting">Per-Iteration Convergence: Underfitting vs. Overfitting<a class="anchor" aria-label="anchor" href="#per-iteration-convergence-underfitting-vs--overfitting"></a>
+</h4>
+<p>The cross-rank plot above shows <em>which</em>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>k</mi><annotation encoding="application/x-tex">k</annotation></semantics></math>
+is best. Now we look <em>inside</em> individual fits to see how training
+and test loss evolve iteration by iteration. This reveals the dynamics
+of overfitting in real time.</p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">iter_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">5</span>, <span class="fl">15</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">k</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">m</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">sim</span><span class="op">$</span><span class="va">A</span>, k <span class="op">=</span> <span class="va">k</span>, seed <span class="op">=</span> <span class="fl">1</span>, tol <span class="op">=</span> <span class="fl">1e-10</span>, maxit <span class="op">=</span> <span class="fl">100</span>, test_fraction <span class="op">=</span> <span class="fl">0.05</span>, resource <span class="op">=</span> <span class="st">"cpu"</span><span class="op">)</span></span>
+<span>  <span class="va">n</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">m</span><span class="op">@</span><span class="va">misc</span><span class="op">$</span><span class="va">loss_history</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>    Iteration <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="va">n</span>, <span class="fl">2</span><span class="op">)</span>,</span>
+<span>    MSE <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">m</span><span class="op">@</span><span class="va">misc</span><span class="op">$</span><span class="va">loss_history</span>, <span class="va">m</span><span class="op">@</span><span class="va">misc</span><span class="op">$</span><span class="va">test_loss_history</span><span class="op">)</span>,</span>
+<span>    Set <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Train"</span>, <span class="st">"Test"</span><span class="op">)</span>, each <span class="op">=</span> <span class="va">n</span><span class="op">)</span>,</span>
+<span>    Rank <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"k = "</span>, <span class="va">k</span><span class="op">)</span>, levels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"k = "</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">5</span>, <span class="fl">15</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="op">)</span></span>
+<span><span class="op">}</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu">ggplot</span><span class="op">(</span><span class="va">iter_data</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">Iteration</span>, y <span class="op">=</span> <span class="va">MSE</span>, color <span class="op">=</span> <span class="va">Set</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_line</span><span class="op">(</span>linewidth <span class="op">=</span> <span class="fl">0.8</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">facet_wrap</span><span class="op">(</span><span class="op">~</span> <span class="va">Rank</span>, scales <span class="op">=</span> <span class="st">"free_x"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">scale_color_manual</span><span class="op">(</span>values <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Train"</span> <span class="op">=</span> <span class="st">"#377EB8"</span>, <span class="st">"Test"</span> <span class="op">=</span> <span class="st">"#E41A1C"</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">scale_y_continuous</span><span class="op">(</span>labels <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"%.1e"</span>, <span class="va">x</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span></span>
+<span>    title <span class="op">=</span> <span class="st">"Per-Iteration Loss: Underfitting, Optimal, and Overfitting"</span>,</span>
+<span>    x <span class="op">=</span> <span class="st">"Iteration"</span>, y <span class="op">=</span> <span class="st">"MSE"</span>, color <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  <span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme</span><span class="op">(</span>strip.text <span class="op">=</span> <span class="fu">element_text</span><span class="op">(</span>face <span class="op">=</span> <span class="st">"bold"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p><img src="nmf-fundamentals_files/figure-html/cv-convergence-plot-1.png" class="r-plt" alt="" width="960"></p>
+<p>Three distinct behaviors emerge:</p>
+<ul>
+<li>
+<strong>k = 2 (underfitting):</strong> Both training and test loss
+decrease smoothly and converge together. However, they plateau at a
+level well above the optimal test error — the model simply cannot
+represent all five factors with only two components.</li>
+<li>
+<strong>k = 5 (optimal):</strong> Both losses decrease rapidly and
+converge near the lowest achievable test error. Training and test losses
+track each other closely, indicating the model generalizes well.</li>
+<li>
+<strong>k = 15 (overfitting):</strong> Training loss continues to
+fall, but test loss reaches a minimum early and then <em>increases</em>
+as the model iterates further. The excess factors memorize training-set
+noise at the expense of held-out prediction.</li>
+</ul>
+<p>The combination of the cross-rank plot (which
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>k</mi><annotation encoding="application/x-tex">k</annotation></semantics></math>
+to choose) and the per-iteration traces (why that choice matters)
+provides a complete picture of rank selection in NMF.</p>
+</div>
+</div>
+<div class="section level3">
+<h3 id="example-3-methylation-factor-interpretation-aml-data">Example 3: Methylation Factor Interpretation (AML Data)<a class="anchor" aria-label="anchor" href="#example-3-methylation-factor-interpretation-aml-data"></a>
+</h3>
+<p>The <code>aml</code> dataset contains 824 differentially methylated
+regions (DMRs) × 135 samples from an Acute Myeloid Leukemia study.
+Features are genomic coordinate ranges (e.g.,
+<code>chr1:847816-848609</code>) representing CpG-dense regions with
+methylation beta values. Sample subtypes are stored in
+<code>attr(aml, "metadata_h")$category</code>.</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">aml</span><span class="op">)</span></span>
+<span><span class="va">meta</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">aml</span>, <span class="st">"metadata_h"</span><span class="op">)</span></span>
+<span><span class="va">model_aml</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">aml</span>, k <span class="op">=</span> <span class="fl">6</span>, seed <span class="op">=</span> <span class="fl">42</span>, tol <span class="op">=</span> <span class="fl">1e-5</span><span class="op">)</span></span></code></pre></div>
+<p>Since AML features are genomic coordinate ranges (e.g.,
+<code>chr1:847816-848609</code>) rather than gene names, a table of top
+loadings per factor is not directly interpretable without external
+annotation databases. Instead, we visualize the H matrix (sample
+embeddings) — where the factor structure maps directly to AML subtypes —
+using <code>pheatmap</code>, which handles clustering and annotation
+alignment automatically:</p>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">pheatmap</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">H</span> <span class="op">&lt;-</span> <span class="va">model_aml</span><span class="op">$</span><span class="va">h</span></span>
+<span><span class="va">subtypes</span> <span class="op">&lt;-</span> <span class="va">meta</span><span class="op">$</span><span class="va">category</span></span>
+<span></span>
+<span><span class="co"># pheatmap needs unique column identifiers for annotation mapping</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">H</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"S"</span>, <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">H</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">anno_col</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>Subtype <span class="op">=</span> <span class="va">subtypes</span>, row.names <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">H</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Define subtype colors</span></span>
+<span><span class="va">subtype_levels</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sort.html" class="external-link">sort</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="va">subtypes</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">subtype_colors</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/setNames.html" class="external-link">setNames</a></span><span class="op">(</span></span>
+<span>  <span class="fu">RColorBrewer</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/RColorBrewer/man/ColorBrewer.html" class="external-link">brewer.pal</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="fl">3</span>, <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">subtype_levels</span><span class="op">)</span><span class="op">)</span>, <span class="st">"Set2"</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_along</a></span><span class="op">(</span><span class="va">subtype_levels</span><span class="op">)</span><span class="op">]</span>,</span>
+<span>  <span class="va">subtype_levels</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://rdrr.io/pkg/pheatmap/man/pheatmap.html" class="external-link">pheatmap</a></span><span class="op">(</span><span class="va">H</span>,</span>
+<span>         annotation_col <span class="op">=</span> <span class="va">anno_col</span>,</span>
+<span>         annotation_colors <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>Subtype <span class="op">=</span> <span class="va">subtype_colors</span><span class="op">)</span>,</span>
+<span>         cluster_cols <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>         cluster_rows <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>         show_colnames <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>         color <span class="op">=</span> <span class="fu">viridis</span><span class="fu">::</span><span class="fu"><a href="https://sjmgarnier.github.io/viridisLite/reference/viridis.html" class="external-link">viridis</a></span><span class="op">(</span><span class="fl">100</span><span class="op">)</span>,</span>
+<span>         main <span class="op">=</span> <span class="st">"NMF Sample Embeddings (H) by AML Subtype"</span>,</span>
+<span>         fontsize <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span></code></pre></div>
+<p><img src="nmf-fundamentals_files/figure-html/aml-heatmap-1.png" class="r-plt" alt="" width="672"></p>
+<p>The H heatmap reveals clear subtype structure: <code>pheatmap</code>
+hierarchically clusters both rows (factors) and columns (samples), then
+aligns the subtype annotation bar with the clustered column order
+automatically. Certain factors activate preferentially within specific
+AML subtypes, indicating that NMF captures biologically meaningful
+methylation programs.</p>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Stacked bar chart: mean factor activation by subtype</span></span>
+<span><span class="va">H</span> <span class="op">&lt;-</span> <span class="va">model_aml</span><span class="op">$</span><span class="va">h</span></span>
+<span><span class="va">subtypes</span> <span class="op">&lt;-</span> <span class="va">meta</span><span class="op">$</span><span class="va">category</span></span>
+<span></span>
+<span><span class="va">mean_H</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="va">subtypes</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">s</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/pkg/Matrix/man/colSums-methods.html" class="external-link">rowMeans</a></span><span class="op">(</span><span class="va">H</span><span class="op">[</span>, <span class="va">subtypes</span> <span class="op">==</span> <span class="va">s</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span><span class="op">)</span></span>
+<span><span class="op">}</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">mean_H</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="va">subtypes</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">bar_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">mean_H</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">s</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>Subtype <span class="op">=</span> <span class="va">s</span>, Factor <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"F"</span>, <span class="fl">1</span><span class="op">:</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">mean_H</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>             Activation <span class="op">=</span> <span class="va">mean_H</span><span class="op">[</span>, <span class="va">s</span><span class="op">]</span><span class="op">)</span></span>
+<span><span class="op">}</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">bar_df</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">Subtype</span>, y <span class="op">=</span> <span class="va">Activation</span>, fill <span class="op">=</span> <span class="va">Factor</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_col</span><span class="op">(</span>position <span class="op">=</span> <span class="st">"fill"</span>, width <span class="op">=</span> <span class="fl">0.7</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">scale_fill_brewer</span><span class="op">(</span>palette <span class="op">=</span> <span class="st">"Set2"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Factor Composition by AML Subtype"</span>,</span>
+<span>       subtitle <span class="op">=</span> <span class="st">"Proportional factor activation reveals subtype-specific methylation programs"</span>,</span>
+<span>       y <span class="op">=</span> <span class="st">"Proportion of Total Activation"</span>, x <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme</span><span class="op">(</span>axis.text.x <span class="op">=</span> <span class="fu">element_text</span><span class="op">(</span>angle <span class="op">=</span> <span class="fl">45</span>, hjust <span class="op">=</span> <span class="fl">1</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p><img src="nmf-fundamentals_files/figure-html/aml-factor-composition-1.png" class="r-plt" alt="" width="672"></p>
+<p>The stacked bar chart provides a complementary view to the heatmap:
+each subtype’s bar shows the relative contribution of each factor,
+making subtype-specific factor dominance immediately visible.</p>
+</div>
+<div class="section level3">
+<h3 id="example-4-convergence-and-initialization-comparison">Example 4: Convergence and Initialization Comparison<a class="anchor" aria-label="anchor" href="#example-4-convergence-and-initialization-comparison"></a>
 </h3>
 <p>We compare random vs. Lanczos initialization by tracking loss per
 iteration using the <code>on_iteration</code> callback:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Track loss over iterations via callback</span></span>
 <span><span class="va">track_loss</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="va">losses</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">numeric</a></span><span class="op">(</span><span class="fl">0</span><span class="op">)</span></span>
@@ -725,12 +862,13 @@ iteration using the <code>on_iteration</code> callback:</p>
 <span><span class="op">}</span></span>
 <span></span>
 <span><span class="va">tracker_random</span> <span class="op">&lt;-</span> <span class="fu">track_loss</span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="va">model_random</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">aml</span>, k <span class="op">=</span> <span class="fl">6</span>, seed <span class="op">=</span> <span class="fl">42</span>, init <span class="op">=</span> <span class="st">"random"</span>, tol <span class="op">=</span> <span class="fl">1e-6</span>,</span>
-<span>                    maxit <span class="op">=</span> <span class="fl">80</span>, on_iteration <span class="op">=</span> <span class="va">tracker_random</span><span class="op">$</span><span class="va">callback</span><span class="op">)</span></span>
+<span><span class="va">model_random</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">aml</span>, k <span class="op">=</span> <span class="fl">6</span>, seed <span class="op">=</span> <span class="fl">42</span>, tol <span class="op">=</span> <span class="fl">1e-6</span>,</span>
+<span>                    maxit <span class="op">=</span> <span class="fl">80</span>, on_iteration <span class="op">=</span> <span class="va">tracker_random</span><span class="op">$</span><span class="va">callback</span>, resource <span class="op">=</span> <span class="st">"cpu"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">tracker_lanczos</span> <span class="op">&lt;-</span> <span class="fu">track_loss</span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="va">model_lanczos</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">aml</span>, k <span class="op">=</span> <span class="fl">6</span>, seed <span class="op">=</span> <span class="fl">42</span>, init <span class="op">=</span> <span class="st">"lanczos"</span>, tol <span class="op">=</span> <span class="fl">1e-6</span>,</span>
-<span>                     maxit <span class="op">=</span> <span class="fl">80</span>, on_iteration <span class="op">=</span> <span class="va">tracker_lanczos</span><span class="op">$</span><span class="va">callback</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">42</span><span class="op">)</span></span>
+<span><span class="va">model_lanczos</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">aml</span>, k <span class="op">=</span> <span class="fl">6</span>, seed <span class="op">=</span> <span class="st">"lanczos"</span>, tol <span class="op">=</span> <span class="fl">1e-6</span>,</span>
+<span>                     maxit <span class="op">=</span> <span class="fl">80</span>, on_iteration <span class="op">=</span> <span class="va">tracker_lanczos</span><span class="op">$</span><span class="va">callback</span>, resource <span class="op">=</span> <span class="st">"cpu"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">loss_random</span> <span class="op">&lt;-</span> <span class="va">tracker_random</span><span class="op">$</span><span class="fu">get</span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="va">loss_lanczos</span> <span class="op">&lt;-</span> <span class="va">tracker_lanczos</span><span class="op">$</span><span class="fu">get</span><span class="op">(</span><span class="op">)</span></span>
@@ -739,7 +877,7 @@ iteration using the <code>on_iteration</code> callback:</p>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>Iteration <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_along</a></span><span class="op">(</span><span class="va">loss_random</span><span class="op">)</span>, Loss <span class="op">=</span> <span class="va">loss_random</span>, Init <span class="op">=</span> <span class="st">"Random"</span><span class="op">)</span>,</span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>Iteration <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_along</a></span><span class="op">(</span><span class="va">loss_lanczos</span><span class="op">)</span>, Loss <span class="op">=</span> <span class="va">loss_lanczos</span>, Init <span class="op">=</span> <span class="st">"Lanczos"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>    Initialization <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Random"</span>, <span class="st">"Lanczos"</span><span class="op">)</span>,</span>
@@ -766,17 +904,18 @@ AML data.</caption>
 <tr class="even">
 <td align="left">Lanczos</td>
 <td align="right">80</td>
-<td align="right">2449.680</td>
+<td align="right">2449.652</td>
 </tr>
 </tbody>
 </table>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">ggplot</span><span class="op">(</span><span class="va">convergence_df</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">Iteration</span>, y <span class="op">=</span> <span class="va">Loss</span>, color <span class="op">=</span> <span class="va">Init</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">geom_line</span><span class="op">(</span>linewidth <span class="op">=</span> <span class="fl">0.8</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">scale_y_log10</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">scale_color_brewer</span><span class="op">(</span>palette <span class="op">=</span> <span class="st">"Set1"</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">labs</span><span class="op">(</span></span>
 <span>    title <span class="op">=</span> <span class="st">"Convergence: Random vs. Lanczos Initialization"</span>,</span>
-<span>    x <span class="op">=</span> <span class="st">"Iteration"</span>, y <span class="op">=</span> <span class="st">"Reconstruction Loss"</span>, color <span class="op">=</span> <span class="st">"Initialization"</span></span>
+<span>    x <span class="op">=</span> <span class="st">"Iteration"</span>, y <span class="op">=</span> <span class="st">"Reconstruction Loss (log scale)"</span>, color <span class="op">=</span> <span class="st">"Initialization"</span></span>
 <span>  <span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p><img src="nmf-fundamentals_files/figure-html/convergence-plot-1.png" class="r-plt" alt="" width="672"></p>
@@ -784,6 +923,16 @@ AML data.</caption>
 warm start) and typically reaches a low loss in fewer iterations, while
 random initialization requires more iterations to reach a comparable
 solution.</p>
+<blockquote>
+<p><strong>A note on local minima:</strong> NMF is a non-convex problem,
+so every initialization converges to a <em>local</em> minimum. SVD-based
+initializations deterministically find a single good starting point, but
+that point may sit in a basin that is not globally optimal. Running many
+random initializations samples a wider landscape and can discover better
+local minima that the SVD path misses entirely. In practice, a common
+strategy is to run several random restarts and keep the solution with
+the lowest loss.</p>
+</blockquote>
 </div>
 </div>
 <div class="section level2">
@@ -791,9 +940,9 @@ solution.</p>
 </h2>
 <ul>
 <li>
-<strong>Rank selection</strong>: How many factors should you use?
-See the <a href="cross-validation.html">Cross-Validation</a>
-vignette.</li>
+<strong>Deep-dive on cross-validation</strong>: Example 2 introduced
+rank selection on synthetic data. See the <a href="cross-validation.html">Cross-Validation</a> vignette for real-data
+workflows, repeated CV, and sparse vs. dense masking strategies.</li>
 <li>
 <strong>Non-Gaussian data</strong>: Count data, ratings, and
 overdispersed data need distribution-aware NMF. See the <a href="distributions.html">Distributions</a> vignette.</li>

@@ -13,25 +13,33 @@ A \code{raw} vector containing StreamPress (.spz) compressed bytes.
   tmp <- tempfile(fileext = ".spz")
   writeBin(pbmc3k, tmp)
   counts <- st_read(tmp)
-  # counts is a dgCMatrix: 8,000 genes x 500 cells
+  # counts is a dgCMatrix: 13,714 genes x 2,638 cells
+  }
+
+  Cell type annotations are embedded in the .spz file as column (var) metadata:
+  \preformatted{
+  cell_types <- st_read_var(tmp)$cell_type
+  table(cell_types)
   }
 }
 \source{
-10x Genomics PBMC 3k dataset, filtered, processed, and subsetted for size.
+10x Genomics PBMC 3k dataset, processed with Seurat (SeuratData::pbmc3k.final).
 }
 \usage{
 pbmc3k
 }
 \description{
-A representative subset of the 10x Genomics PBMC 3k single-cell RNA-seq
-dataset, shipped as StreamPress-compressed raw bytes to meet CRAN tarball
-size limits. Contains the 8,000 most variable genes across 500 cells.
+The full 10x Genomics PBMC 3k single-cell RNA-seq dataset with Seurat
+cell type annotations, shipped as StreamPress-compressed raw bytes.
+Contains 13,714 genes across 2,638 cells with 9 annotated cell types.
 }
 \details{
-The underlying matrix is a \code{dgCMatrix} with 8,000 rows (genes) and
-500 columns (cells), containing 412,180 non-zero entries (integer UMI counts).
-Genes were selected by variance from the full 13,714-gene panel. The data was
-compressed with StreamPress, which is lossless for integer count data.
+The underlying matrix is a \code{dgCMatrix} with 13,714 rows (genes) and
+2,638 columns (cells), containing 2,238,732 non-zero entries (integer UMI counts).
+Cell type annotations (9 types: Naive CD4 T, Memory CD4 T, CD14+ Mono, B,
+CD8 T, FCGR3A+ Mono, NK, DC, Platelet) were obtained from the Seurat
+\code{pbmc3k.final} reference object via the SeuratData package and stored
+as StreamPress column metadata.
 
 This dataset is commonly used for demonstrating single-cell analysis workflows
 including distribution-aware NMF and zero-inflation diagnostics.
@@ -45,7 +53,11 @@ data(pbmc3k)
 tmp <- tempfile(fileext = ".spz")
 writeBin(pbmc3k, tmp)
 counts <- st_read(tmp)
-dim(counts)  # 8000 x 500
+dim(counts)  # 13714 x 2638
+
+# Access cell type annotations
+cell_types <- st_read_var(tmp)$cell_type
+table(cell_types)
 }
 
 }

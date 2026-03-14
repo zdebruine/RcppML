@@ -1,5 +1,5 @@
 # Test: Zero-Inflation modes across distributions
-# Tests ZI row/col/twoway for GP and NB on CPU
+# Tests ZI row/col for GP and NB on CPU
 
 options(RcppML.verbose = FALSE)
 

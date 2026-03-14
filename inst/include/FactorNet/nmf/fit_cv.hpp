@@ -528,9 +528,11 @@ template<typename Resource, typename Scalar, typename MatrixType>
         }
 #endif
 
-        // Post-NNLS bounds on H
+        // Post-NNLS bounds and angular on H
         if (config.H.upper_bound > 0)
             features::apply_upper_bound(H, config.H.upper_bound);
+        if (config.H.angular > 0)
+            features::apply_angular_posthoc(H, config.H.angular);
 
         }  // end standard H update
 
@@ -841,9 +843,11 @@ template<typename Resource, typename Scalar, typename MatrixType>
         }
 #endif
 
-        // Post-NNLS bounds on W
+        // Post-NNLS bounds and angular on W
         if (config.W.upper_bound > 0)
             features::apply_upper_bound(W_T, config.W.upper_bound);
+        if (config.W.angular > 0)
+            features::apply_angular_posthoc(W_T, config.W.angular);
 
         // Normalize W → d (with epsilon to prevent component death)
         if (config.norm_type == NormType::None) {

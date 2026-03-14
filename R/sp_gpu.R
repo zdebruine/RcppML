@@ -154,7 +154,7 @@ st_free_gpu <- function(x) {
 #' Methods for gpu_sparse_matrix objects
 #'
 #' S3 methods for the \code{gpu_sparse_matrix} class returned by
-#' \code{\link{sp_read_gpu}}.
+#' \code{\link{st_read_gpu}}.
 #'
 #' @param x a \code{gpu_sparse_matrix} object
 #' @param ... additional arguments (unused)

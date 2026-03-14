@@ -111,7 +111,7 @@ bash tools/fix_rcpp_info_bug.sh
 
 5. **Thread safety**: OpenMP parallelization requires proper reduction clauses for shared variables.
 
-6. **C++ API indexing**: `bipartiteMatch()` returns 0-indexed `$assignment` (not `$pairs`). `dclust()` returns 0-indexed `$samples` and numeric `$id` (not character). Always check C++ struct definitions for actual field names and types.
+6. **C++ API indexing**: `bipartiteMatch()` returns 0-indexed `$assignment` (not `$pairs`). `dclust()` returns 0-indexed `$samples` and character `$id` (binary path string encoding split hierarchy, e.g. "01" means root→left→right). Always check C++ struct definitions for actual field names and types.
 
 7. **Rcpp 1.1.0 info bug**: After every `roxygenise()`, run `bash tools/fix_rcpp_info_bug.sh`. The bug inserts an undefined `info` symbol into `RcppExports.cpp`. Never use `roxygenise(".", clean = TRUE)` — it fails because it tries to dyn.load the .so with the bug.
 
@@ -386,3 +386,18 @@ If a new command pattern is needed frequently, add it to `.vscode/settings.json`
 ### Module Setup
 - `module load r/4.5.2` on compute nodes.
 - **OpenMP**: Set `OMP_NUM_THREADS=4` to `8` when sharing nodes with existing jobs (not `$SLURM_CPUS_PER_TASK`, since you are SSH'd, not in a SLURM allocation).
+
+### Viewing Rendered HTML in VS Code on the HPC
+
+To view rendered HTML files (e.g. vignettes, pkgdown output) in VS Code's Simple Browser:
+
+1. Start a Python HTTP server **on the login node** (serving static files is lightweight and safe):
+   ```bash
+   cd /path/to/html/files && python3 -m http.server 8899 --bind 127.0.0.1
+   ```
+2. VS Code Remote SSH auto-forwards the port. Open in Simple Browser:
+   ```
+   http://localhost:8899/filename.html
+   ```
+
+Do **not** use `file://` URIs — VS Code's Simple Browser cannot resolve remote filesystem paths. Do **not** run the server on a compute node — VS Code only auto-forwards ports from the host it's connected to (the login node).

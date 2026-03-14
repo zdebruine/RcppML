@@ -2,7 +2,7 @@
 % Please edit documentation in R/RcppExports.R
 \name{Rcpp_sp_compress}
 \alias{Rcpp_sp_compress}
-\title{Convert a dgCMatrix to SparsePress format (in-memory)}
+\title{Convert a dgCMatrix to StreamPress format (in-memory)}
 \usage{
 Rcpp_sp_compress(A, use_delta = TRUE, use_value_pred = FALSE)
 }
@@ -17,6 +17,6 @@ Rcpp_sp_compress(A, use_delta = TRUE, use_value_pred = FALSE)
 A raw vector containing the compressed data
 }
 \description{
-Convert a dgCMatrix to SparsePress format (in-memory)
+Convert a dgCMatrix to StreamPress format (in-memory)
 }
 \keyword{internal}

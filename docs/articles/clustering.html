@@ -78,9 +78,14 @@ different clusters. <strong>Consensus NMF</strong> addresses this by
 running many replicates, tracking which samples consistently co-cluster,
 and building a robust consensus matrix.</p>
 <p>Beyond flat clustering, RcppML provides <strong>divisive hierarchical
-clustering</strong> via recursive rank-2 NMF splits, and
-<strong>classification from embeddings</strong> that leverages the
-low-dimensional H representation for supervised tasks.</p>
+clustering</strong> (<code>dclust</code>) via recursive rank-2 NMF
+splits. The core idea is that <strong>rank-2 NMF is binary
+clustering</strong>: each split partitions samples into two groups based
+on which of the two factors dominates. <code>dclust</code> applies this
+recursively, building a full hierarchy — each node in the tree is a
+<code><a href="../reference/bipartition.html">bipartition()</a></code> that finds the best binary split.
+Classification from embeddings leverages the low-dimensional H
+representation for supervised tasks.</p>
 </div>
 <div class="section level2">
 <h2 id="api-reference">API Reference<a class="anchor" aria-label="anchor" href="#api-reference"></a>
@@ -132,8 +137,10 @@ smaller than <code>min_samples</code> or have modularity below
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/bipartiteMatch.html">bipartiteMatch</a></span><span class="op">(</span><span class="va">x</span><span class="op">)</span></span></code></pre></div>
 <p>Hungarian algorithm for optimal 1:1 factor correspondence given a
-cost matrix. Returns 0-indexed <code>$assignment</code> and total
-<code>$cost</code>.</p>
+<strong>cost</strong> (dissimilarity) matrix. Returns 0-indexed
+<code>$assignment</code> and total <code>$cost</code>. If using cosine
+similarity, convert to cost first:
+<code>bipartiteMatch(1 - cosine_sim)</code>.</p>
 </div>
 <div class="section level3">
 <h3 id="classification-from-embeddings">Classification from Embeddings<a class="anchor" aria-label="anchor" href="#classification-from-embeddings"></a>
@@ -193,25 +200,37 @@ these known subtypes?</p>
 check how well they correspond to the known ALL/AML labels.</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Confusion matrix: consensus clusters vs. true labels</span></span>
-<span><span class="va">conf</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span>Cluster <span class="op">=</span> <span class="va">cons</span><span class="op">$</span><span class="va">clusters</span>, Cancer <span class="op">=</span> <span class="va">labels</span><span class="op">)</span></span>
-<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">conf</span>, caption <span class="op">=</span> <span class="st">"Consensus clusters vs. true cancer type"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">conf</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span>Cluster <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"Cluster "</span>, <span class="va">cons</span><span class="op">$</span><span class="va">clusters</span><span class="op">)</span>, Cancer <span class="op">=</span> <span class="va">labels</span><span class="op">)</span></span>
+<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">conf</span>, caption <span class="op">=</span> <span class="st">"Consensus cluster assignments vs. true cancer type (ALL/AML)"</span><span class="op">)</span></span></code></pre></div>
 <table class="table">
-<caption>Consensus clusters vs. true cancer type</caption>
+<caption>Consensus cluster assignments vs. true cancer type
+(ALL/AML)</caption>
 <thead><tr class="header">
+<th align="left"></th>
 <th align="right">ALL</th>
 <th align="right">AML</th>
 </tr></thead>
 <tbody>
 <tr class="odd">
+<td align="left">Cluster 1</td>
 <td align="right">24</td>
 <td align="right">1</td>
 </tr>
 <tr class="even">
+<td align="left">Cluster 2</td>
 <td align="right">3</td>
 <td align="right">10</td>
 </tr>
 </tbody>
 </table>
+<blockquote>
+<p><strong>Reading the confusion matrix</strong>: Each row is a
+consensus cluster, each column a true cancer type. A well-separated
+clustering aligns each row with predominantly one column. Here, Cluster
+1 captures nearly all ALL samples and Cluster 2 captures most AML
+samples. The overall <strong>purity</strong> (fraction of samples
+assigned to their majority class) is 0.895.</p>
+</blockquote>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">summary_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>  Metric <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Cophenetic correlation"</span>, <span class="st">"Cluster 1 size"</span>, <span class="st">"Cluster 2 size"</span><span class="op">)</span>,</span>
@@ -244,14 +263,75 @@ check how well they correspond to the known ALL/AML labels.</p>
 <p>Consensus NMF with k = 2 cleanly separates the two leukemia subtypes.
 The cophenetic correlation confirms high clustering stability across
 replicates.</p>
+<div class="section level3">
+<h3 id="going-deeper-k-5-reveals-substructure">Going Deeper: k = 5 Reveals Substructure<a class="anchor" aria-label="anchor" href="#going-deeper-k-5-reveals-substructure"></a>
+</h3>
+<p>What happens when we push beyond the known two classes? With k = 5,
+consensus NMF discovers finer-grained substructure within both ALL and
+AML.</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">cons5</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/consensus_nmf.html">consensus_nmf</a></span><span class="op">(</span><span class="va">golub</span>, k <span class="op">=</span> <span class="fl">5</span>, reps <span class="op">=</span> <span class="fl">20</span>, seed <span class="op">=</span> <span class="fl">42</span>, verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">cons5</span>, show_clusters <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">ggtitle</span><span class="op">(</span><span class="st">"Consensus matrix: Golub leukemia (k = 5, 20 replicates)"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="clustering_files/figure-html/golub-k5-heatmap-1.png" class="r-plt" alt="" width="576"></p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">conf5</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span>Cluster <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"C"</span>, <span class="va">cons5</span><span class="op">$</span><span class="va">clusters</span><span class="op">)</span>, Cancer <span class="op">=</span> <span class="va">labels</span><span class="op">)</span></span>
+<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">conf5</span>, caption <span class="op">=</span> <span class="st">"k = 5 consensus clusters vs. cancer type: substructure within ALL and AML"</span><span class="op">)</span></span></code></pre></div>
+<table class="table">
+<caption>k = 5 consensus clusters vs. cancer type: substructure within
+ALL and AML</caption>
+<thead><tr class="header">
+<th align="left"></th>
+<th align="right">ALL</th>
+<th align="right">AML</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td align="left">C1</td>
+<td align="right">10</td>
+<td align="right">0</td>
+</tr>
+<tr class="even">
+<td align="left">C2</td>
+<td align="right">5</td>
+<td align="right">1</td>
+</tr>
+<tr class="odd">
+<td align="left">C3</td>
+<td align="right">2</td>
+<td align="right">4</td>
+</tr>
+<tr class="even">
+<td align="left">C4</td>
+<td align="right">9</td>
+<td align="right">0</td>
+</tr>
+<tr class="odd">
+<td align="left">C5</td>
+<td align="right">1</td>
+<td align="right">6</td>
+</tr>
+</tbody>
+</table>
+<p>At k = 5, the consensus matrix reveals that ALL and AML each contain
+subpopulations — ALL splits into 2–3 subgroups and AML into 2. A
+cophenetic correlation of 0.999 confirms stable cluster boundaries even
+at this finer resolution. This substructure is biologically meaningful:
+ALL includes B-cell and T-cell subtypes, and AML harbors distinct
+genetic programs.</p>
+</div>
 </div>
 <div class="section level2">
-<h2 id="example-2-hierarchical-clustering-with-dclust-aml-chromatin">Example 2: Hierarchical Clustering with dclust (AML Chromatin)<a class="anchor" aria-label="anchor" href="#example-2-hierarchical-clustering-with-dclust-aml-chromatin"></a>
+<h2 id="example-2-hierarchical-clustering-with-dclust-aml-methylation">Example 2: Hierarchical Clustering with dclust (AML
+Methylation)<a class="anchor" aria-label="anchor" href="#example-2-hierarchical-clustering-with-dclust-aml-methylation"></a>
 </h2>
-<p>The AML dataset contains 824 chromatin accessibility regions across
-135 samples with known subtype annotations. Divisive clustering
-discovers a hierarchy of subtypes.</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<p>The AML dataset contains 824 differentially methylated regions (DMRs)
+with beta-value measurements across 135 samples with known subtype
+annotations (AML and matched controls at MEP, GMP, and L-MPP progenitor
+stages). Divisive clustering discovers a hierarchy of subtypes by
+recursively applying rank-2 NMF splits.</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">aml</span><span class="op">)</span></span>
 <span><span class="va">meta</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">aml</span>, <span class="st">"metadata_h"</span><span class="op">)</span></span>
 <span></span>
@@ -274,9 +354,9 @@ discovers a hierarchy of subtypes.</p>
 <span>  <span class="op">)</span></span>
 <span><span class="op">}</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
-<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">cluster_info</span>, <span class="fl">8</span><span class="op">)</span>, caption <span class="op">=</span> <span class="st">"Divisive clustering of AML chromatin data"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">cluster_info</span>, <span class="fl">8</span><span class="op">)</span>, caption <span class="op">=</span> <span class="st">"Divisive clustering of AML methylation data"</span><span class="op">)</span></span></code></pre></div>
 <table class="table">
-<caption>Divisive clustering of AML chromatin data</caption>
+<caption>Divisive clustering of AML methylation data</caption>
 <colgroup>
 <col width="8%">
 <col width="5%">
@@ -285,7 +365,7 @@ discovers a hierarchy of subtypes.</p>
 <col width="58%">
 </colgroup>
 <thead><tr class="header">
-<th align="right">Cluster</th>
+<th align="left">Cluster</th>
 <th align="right">Size</th>
 <th align="left">Top Category</th>
 <th align="right">Top Count</th>
@@ -293,14 +373,14 @@ discovers a hierarchy of subtypes.</p>
 </tr></thead>
 <tbody>
 <tr class="odd">
-<td align="right">0</td>
+<td align="left">111</td>
 <td align="right">13</td>
 <td align="left">AML (L-MPP)</td>
 <td align="right">12</td>
 <td align="left">AML (L-MPP):12, Control (MEP):1</td>
 </tr>
 <tr class="even">
-<td align="right">1</td>
+<td align="left">110</td>
 <td align="right">15</td>
 <td align="left">Control (GMP)</td>
 <td align="right">5</td>
@@ -308,42 +388,42 @@ discovers a hierarchy of subtypes.</p>
 (MEP):4</td>
 </tr>
 <tr class="odd">
-<td align="right">2</td>
+<td align="left">101</td>
 <td align="right">11</td>
 <td align="left">AML (GMP)</td>
 <td align="right">7</td>
 <td align="left">AML (GMP):7, AML (MEP):4</td>
 </tr>
 <tr class="even">
-<td align="right">3</td>
+<td align="left">100</td>
 <td align="right">21</td>
 <td align="left">AML (GMP)</td>
 <td align="right">14</td>
 <td align="left">AML (GMP):14, AML (MEP):7</td>
 </tr>
 <tr class="odd">
-<td align="right">4</td>
+<td align="left">011</td>
 <td align="right">17</td>
 <td align="left">AML (GMP)</td>
 <td align="right">16</td>
 <td align="left">AML (GMP):16, AML (MEP):1</td>
 </tr>
 <tr class="even">
-<td align="right">5</td>
+<td align="left">010</td>
 <td align="right">16</td>
 <td align="left">AML (GMP)</td>
 <td align="right">14</td>
 <td align="left">AML (GMP):14, AML (MEP):2</td>
 </tr>
 <tr class="odd">
-<td align="right">6</td>
+<td align="left">001</td>
 <td align="right">16</td>
 <td align="left">AML (GMP)</td>
 <td align="right">16</td>
 <td align="left">AML (GMP):16</td>
 </tr>
 <tr class="even">
-<td align="right">7</td>
+<td align="left">0001</td>
 <td align="right">12</td>
 <td align="left">AML (GMP)</td>
 <td align="right">12</td>
@@ -354,36 +434,59 @@ discovers a hierarchy of subtypes.</p>
 <p>Divisive clustering discovers a hierarchy of subtypes, with early
 splits separating biologically distinct cell populations. Each cluster’s
 composition reflects known AML subtype structure.</p>
+<div class="section level3">
+<h3 id="splitting-hierarchy">Splitting Hierarchy<a class="anchor" aria-label="anchor" href="#splitting-hierarchy"></a>
+</h3>
+<p>Cluster labels encode the splitting path as binary strings: each
+character records whether a node went left (“0”) or right (“1”). The
+root split (depth 0) produces children “0” and “1”. Splits at depth 1
+subdivide those further: “0” → “00” (left) and “01” (right), and so on.
+The string length minus one gives the split depth at which each cluster
+was created.</p>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">clusters</span>, labels <span class="op">=</span> <span class="va">meta</span><span class="op">$</span><span class="va">category</span>,</span>
+<span>     main <span class="op">=</span> <span class="st">"Divisive Hierarchy with Subtype Composition"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="clustering_files/figure-html/dclust-tree-1.png" class="r-plt" alt="" width="672"></p>
+<p>The top panel shows the true splitting tree with branch points
+corresponding to individual <code><a href="../reference/bipartition.html">bipartition()</a></code> calls. The bottom
+panel shows the composition of each leaf cluster as a stacked bar,
+aligned with the tree above. The root split (depth 0) separates
+biologically distinct cell populations, while deeper splits resolve
+finer substructure within AML subtypes.</p>
+</div>
 </div>
 <div class="section level2">
-<h2 id="example-3-comparing-classification-methods">Example 3: Comparing Classification Methods<a class="anchor" aria-label="anchor" href="#example-3-comparing-classification-methods"></a>
+<h2 id="example-3-classification-from-nmf-embeddings-aml-subtypes">Example 3: Classification from NMF Embeddings (AML Subtypes)<a class="anchor" aria-label="anchor" href="#example-3-classification-from-nmf-embeddings-aml-subtypes"></a>
 </h2>
-<p>Using the Golub NMF model, we compare classification accuracy from
-k-NN and logistic regression applied to the H embedding.</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Fit NMF to get embeddings</span></span>
-<span><span class="va">model</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">golub</span><span class="op">)</span>, k <span class="op">=</span> <span class="fl">3</span>, seed <span class="op">=</span> <span class="fl">42</span>, maxit <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span>
-<span><span class="va">embedding</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">model</span><span class="op">@</span><span class="va">h</span><span class="op">)</span>  <span class="co"># 38 samples x 3 factors</span></span>
-<span><span class="va">int_labels</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">as.integer</a></span><span class="op">(</span><span class="va">labels</span><span class="op">)</span> <span class="op">-</span> <span class="fl">1L</span>  <span class="co"># 0-indexed</span></span>
+<p>AML methylation data provides a realistic multi-class classification
+challenge: 6 subtypes with imbalanced class sizes. The NMF embedding
+compresses 824 DMRs into k factors; we classify subtypes from this
+low-dimensional representation.</p>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Fit NMF to AML data (features x samples)</span></span>
+<span><span class="va">model</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/nmf.html">nmf</a></span><span class="op">(</span><span class="va">aml</span>, k <span class="op">=</span> <span class="fl">8</span>, seed <span class="op">=</span> <span class="fl">42</span>, maxit <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span>
+<span><span class="va">embedding</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">model</span><span class="op">@</span><span class="va">h</span><span class="op">)</span>  <span class="co"># 135 samples x 8 factors</span></span>
+<span><span class="va">int_labels</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">as.integer</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">meta</span><span class="op">$</span><span class="va">category</span><span class="op">)</span><span class="op">)</span> <span class="op">-</span> <span class="fl">1L</span>  <span class="co"># 0-indexed</span></span>
 <span></span>
-<span><span class="co"># Use same test split for fair comparison</span></span>
+<span><span class="co"># 20% held-out test set</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">42</span><span class="op">)</span></span>
 <span><span class="va">n</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">embedding</span><span class="op">)</span></span>
-<span><span class="va">test_idx</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sort.html" class="external-link">sort</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sample.html" class="external-link">sample</a></span><span class="op">(</span><span class="va">n</span>, <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">floor</a></span><span class="op">(</span><span class="va">n</span> <span class="op">*</span> <span class="fl">0.3</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">test_idx</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sort.html" class="external-link">sort</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sample.html" class="external-link">sample</a></span><span class="op">(</span><span class="va">n</span>, <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">floor</a></span><span class="op">(</span><span class="va">n</span> <span class="op">*</span> <span class="fl">0.2</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">knn_eval</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/classify_embedding.html">classify_embedding</a></span><span class="op">(</span><span class="va">embedding</span>, <span class="va">int_labels</span>, test_idx <span class="op">=</span> <span class="va">test_idx</span>, k <span class="op">=</span> <span class="fl">3</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span>
+<span><span class="va">knn_eval</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/classify_embedding.html">classify_embedding</a></span><span class="op">(</span><span class="va">embedding</span>, <span class="va">int_labels</span>, test_idx <span class="op">=</span> <span class="va">test_idx</span>, k <span class="op">=</span> <span class="fl">5</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span>
 <span><span class="va">log_eval</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/classify_logistic.html">classify_logistic</a></span><span class="op">(</span><span class="va">embedding</span>, <span class="va">int_labels</span>, test_idx <span class="op">=</span> <span class="va">test_idx</span>, seed <span class="op">=</span> <span class="fl">42</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">comp_table</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
-<span>  Method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"k-NN (k=3)"</span>, <span class="st">"Logistic regression"</span><span class="op">)</span>,</span>
+<span>  Method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"k-NN (k=5)"</span>, <span class="st">"Logistic regression"</span><span class="op">)</span>,</span>
 <span>  Accuracy <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">knn_eval</span><span class="op">$</span><span class="va">accuracy</span>, <span class="va">log_eval</span><span class="op">$</span><span class="va">accuracy</span><span class="op">)</span>,</span>
 <span>  `Macro F1` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">knn_eval</span><span class="op">$</span><span class="va">macro_f1</span>, <span class="va">log_eval</span><span class="op">$</span><span class="va">macro_f1</span><span class="op">)</span>,</span>
 <span>  check.names <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span>
 <span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">comp_table</span>, digits <span class="op">=</span> <span class="fl">3</span>,</span>
-<span>             caption <span class="op">=</span> <span class="st">"Classification from NMF embeddings (k = 3)"</span><span class="op">)</span></span></code></pre></div>
+<span>             caption <span class="op">=</span> <span class="st">"Classification from NMF embeddings (k = 8, AML subtypes)"</span><span class="op">)</span></span></code></pre></div>
 <table class="table">
-<caption>Classification from NMF embeddings (k = 3)</caption>
+<caption>Classification from NMF embeddings (k = 8, AML
+subtypes)</caption>
 <thead><tr class="header">
 <th align="left">Method</th>
 <th align="right">Accuracy</th>
@@ -391,33 +494,147 @@ k-NN and logistic regression applied to the H embedding.</p>
 </tr></thead>
 <tbody>
 <tr class="odd">
-<td align="left">k-NN (k=3)</td>
-<td align="right">1</td>
-<td align="right">1</td>
+<td align="left">k-NN (k=5)</td>
+<td align="right">0.778</td>
+<td align="right">0.324</td>
 </tr>
 <tr class="even">
 <td align="left">Logistic regression</td>
-<td align="right">1</td>
-<td align="right">1</td>
+<td align="right">0.889</td>
+<td align="right">0.467</td>
 </tr>
 </tbody>
 </table>
-<p>Both classifiers achieve high accuracy from just 3 NMF factors,
-confirming that the low-dimensional embedding captures the ALL/AML
-distinction effectively. The NMF representation compresses 5,000 genes
-into a handful of components without losing discriminative power.</p>
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># k-NN confusion matrix</span></span>
+<span><span class="va">conf_knn</span> <span class="op">&lt;-</span> <span class="va">knn_eval</span><span class="op">$</span><span class="va">confusion</span></span>
+<span><span class="va">cat_levels</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/levels.html" class="external-link">levels</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">meta</span><span class="op">$</span><span class="va">category</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">conf_knn</span><span class="op">)</span> <span class="op">==</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">cat_levels</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">conf_knn</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="va">cat_levels</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">conf_knn</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="va">cat_levels</span></span>
+<span><span class="op">}</span></span>
+<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">conf_knn</span>, caption <span class="op">=</span> <span class="st">"k-NN confusion matrix (AML subtypes)"</span><span class="op">)</span></span></code></pre></div>
+<table class="table">
+<caption>k-NN confusion matrix (AML subtypes)</caption>
+<colgroup>
+<col width="17%">
+<col width="10%">
+<col width="13%">
+<col width="10%">
+<col width="15%">
+<col width="17%">
+<col width="15%">
+</colgroup>
+<thead><tr class="header">
+<th align="left"></th>
+<th align="right">AML (GMP)</th>
+<th align="right">AML (L-MPP)</th>
+<th align="right">AML (MEP)</th>
+<th align="right">Control (GMP)</th>
+<th align="right">Control (L-MPP)</th>
+<th align="right">Control (MEP)</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td align="left">AML (GMP)</td>
+<td align="right">17</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+</tr>
+<tr class="even">
+<td align="left">AML (L-MPP)</td>
+<td align="right">0</td>
+<td align="right">4</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+</tr>
+<tr class="odd">
+<td align="left">AML (MEP)</td>
+<td align="right">2</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+</tr>
+<tr class="even">
+<td align="left">Control (GMP)</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">4</td>
+<td align="right">0</td>
+</tr>
+<tr class="odd">
+<td align="left">Control (L-MPP)</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+</tr>
+<tr class="even">
+<td align="left">Control (MEP)</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0</td>
+</tr>
+</tbody>
+</table>
+<p>Unlike the two-class Golub problem (where NMF achieves near-perfect
+separation with any classifier), AML’s 6 subtypes with imbalanced class
+sizes are harder to classify from 8 factors. The confusion matrix shows
+which subtypes are well-resolved and which are confused.</p>
+<div class="section level3">
+<h3 id="umap-of-factor-embeddings">UMAP of Factor Embeddings<a class="anchor" aria-label="anchor" href="#umap-of-factor-embeddings"></a>
+</h3>
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/jlmelville/uwot" class="external-link">uwot</a></span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">42</span><span class="op">)</span></span>
+<span><span class="va">umap_coords</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://jlmelville.github.io/uwot/reference/umap.html" class="external-link">umap</a></span><span class="op">(</span><span class="va">embedding</span>, n_neighbors <span class="op">=</span> <span class="fl">15</span>, min_dist <span class="op">=</span> <span class="fl">0.3</span>, n_components <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">umap_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>  UMAP1 <span class="op">=</span> <span class="va">umap_coords</span><span class="op">[</span>, <span class="fl">1</span><span class="op">]</span>,</span>
+<span>  UMAP2 <span class="op">=</span> <span class="va">umap_coords</span><span class="op">[</span>, <span class="fl">2</span><span class="op">]</span>,</span>
+<span>  Subtype <span class="op">=</span> <span class="va">meta</span><span class="op">$</span><span class="va">category</span>,</span>
+<span>  Set <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/ifelse.html" class="external-link">ifelse</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">n</span><span class="op">)</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="va">test_idx</span>, <span class="st">"Test"</span>, <span class="st">"Train"</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu">ggplot</span><span class="op">(</span><span class="va">umap_df</span>, <span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">UMAP1</span>, y <span class="op">=</span> <span class="va">UMAP2</span>, color <span class="op">=</span> <span class="va">Subtype</span>, shape <span class="op">=</span> <span class="va">Set</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">geom_point</span><span class="op">(</span>size <span class="op">=</span> <span class="fl">2</span>, alpha <span class="op">=</span> <span class="fl">0.8</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">scale_color_brewer</span><span class="op">(</span>palette <span class="op">=</span> <span class="st">"Set2"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">scale_shape_manual</span><span class="op">(</span>values <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>Train <span class="op">=</span> <span class="fl">16</span>, Test <span class="op">=</span> <span class="fl">4</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>title <span class="op">=</span> <span class="st">"UMAP of NMF Embeddings (AML Subtypes)"</span>,</span>
+<span>       subtitle <span class="op">=</span> <span class="st">"8-factor NMF embedding colored by subtype, shaped by train/test split"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme_minimal</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme</span><span class="op">(</span>legend.position <span class="op">=</span> <span class="st">"bottom"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="clustering_files/figure-html/umap-classify-1.png" class="r-plt" alt="" width="672"></p>
+<p>The UMAP projection reveals how well separated the subtypes are in
+the 8-dimensional NMF embedding space. Tight, isolated groups indicate
+subtypes that will classify well; overlapping groups indicate subtypes
+that share methylation structure.</p>
+</div>
 </div>
 <div class="section level2">
 <h2 id="whats-next">What’s Next<a class="anchor" aria-label="anchor" href="#whats-next"></a>
 </h2>
 <ul>
 <li><em>See the <a href="factor-graphs.html">Factor Graphs</a> vignette
-for semi-supervised NMF with <code>guide_classifier</code> to improve
-embeddings with labels.</em></li>
+for improving embeddings with <code><a href="../reference/refine.html">refine()</a></code>.</em></li>
 <li><em>See the <a href="cross-validation.html">Cross-Validation</a>
 vignette for choosing the optimal k for clustering.</em></li>
 <li><em>See the <a href="nmf-fundamentals.html">NMF Fundamentals</a>
-vignette for the core API.</em></li>
+vignette for the core NMF API.</em></li>
 </ul>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

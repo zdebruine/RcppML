@@ -14,8 +14,8 @@
 
 #include <FactorNet/io/loader.hpp>
 #include <FactorNet/io/file_reader.hpp>
-#include <sparsepress/sparsepress_v3.hpp>
-#include <sparsepress/format/header_v3.hpp>
+#include <streampress/sparsepress_v3.hpp>
+#include <streampress/format/header_v3.hpp>
 
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
@@ -67,11 +67,11 @@ public:
 
         // Parse v3 header
         if (in_core_) {
-            header_ = sparsepress::v3::read_header_v3(file_data_.data(), file_size_);
+            header_ = streampress::v3::read_header_v3(file_data_.data(), file_size_);
         } else {
-            std::vector<uint8_t> hdr_buf(sparsepress::v3::HEADER_SIZE_V3);
-            reader_->pread(0, hdr_buf.data(), sparsepress::v3::HEADER_SIZE_V3);
-            header_ = sparsepress::v3::FileHeader_v3::deserialize(hdr_buf.data());
+            std::vector<uint8_t> hdr_buf(streampress::v3::HEADER_SIZE_V3);
+            reader_->pread(0, hdr_buf.data(), streampress::v3::HEADER_SIZE_V3);
+            header_ = streampress::v3::FileHeader_v3::deserialize(hdr_buf.data());
         }
 
         m_ = header_.m;
@@ -80,7 +80,7 @@ public:
 
         // Parse forward chunk descriptors
         fwd_descs_.resize(header_.num_chunks);
-        size_t fwd_idx_bytes = header_.num_chunks * sizeof(sparsepress::v3::DenseChunkDescriptor);
+        size_t fwd_idx_bytes = header_.num_chunks * sizeof(streampress::v3::DenseChunkDescriptor);
         if (in_core_) {
             std::memcpy(fwd_descs_.data(),
                         file_data_.data() + header_.chunk_index_offset,
@@ -101,7 +101,7 @@ public:
         if (has_transpose_) {
             trans_descs_.resize(header_.num_transpose_chunks);
             size_t trans_idx_bytes = header_.num_transpose_chunks *
-                sizeof(sparsepress::v3::DenseChunkDescriptor);
+                sizeof(streampress::v3::DenseChunkDescriptor);
             if (in_core_) {
                 std::memcpy(trans_descs_.data(),
                             file_data_.data() + header_.transpose_index_offset,
@@ -135,7 +135,7 @@ public:
 
         std::vector<Scalar> panel;
         if (in_core_) {
-            sparsepress::v3::read_forward_chunk<Scalar>(
+            streampress::v3::read_forward_chunk<Scalar>(
                 file_data_.data(), file_size_, header_,
                 fwd_idx_, panel, col_start, num_cols);
         } else {
@@ -162,7 +162,7 @@ public:
 
         std::vector<Scalar> panel;
         if (in_core_) {
-            sparsepress::v3::read_transpose_chunk<Scalar>(
+            streampress::v3::read_transpose_chunk<Scalar>(
                 file_data_.data(), file_size_, header_,
                 trans_idx_, panel, col_start, num_cols);
         } else {
@@ -182,7 +182,7 @@ public:
     void reset_forward()   override { fwd_idx_ = 0; }
     void reset_transpose() override { trans_idx_ = 0; }
 
-    const sparsepress::v3::FileHeader_v3& header() const { return header_; }
+    const streampress::v3::FileHeader_v3& header() const { return header_; }
     bool has_transpose() const { return has_transpose_; }
     bool is_in_core() const { return in_core_; }
 
@@ -193,15 +193,15 @@ public:
 
 private:
     /// Read a dense panel via seek for the out-of-core path
-    void read_dense_panel_seek(const sparsepress::v3::DenseChunkDescriptor& desc,
+    void read_dense_panel_seek(const streampress::v3::DenseChunkDescriptor& desc,
                                uint64_t section_offset,
                                uint32_t panel_rows,
                                std::vector<Scalar>& out_data) const
     {
         const uint64_t panel_offset = section_offset + desc.byte_offset;
         const size_t n_elems = static_cast<size_t>(panel_rows) * desc.num_cols;
-        const uint8_t on_disk_bytes = sparsepress::v3::dense_value_bytes(
-            static_cast<sparsepress::v3::DenseValueType>(header_.value_type));
+        const uint8_t on_disk_bytes = streampress::v3::dense_value_bytes(
+            static_cast<streampress::v3::DenseValueType>(header_.value_type));
 
         out_data.resize(n_elems);
 
@@ -255,9 +255,9 @@ private:
     std::vector<uint8_t> file_data_;
 
     // Shared state
-    sparsepress::v3::FileHeader_v3 header_;
-    std::vector<sparsepress::v3::DenseChunkDescriptor> fwd_descs_;
-    std::vector<sparsepress::v3::DenseChunkDescriptor> trans_descs_;
+    streampress::v3::FileHeader_v3 header_;
+    std::vector<streampress::v3::DenseChunkDescriptor> fwd_descs_;
+    std::vector<streampress::v3::DenseChunkDescriptor> trans_descs_;
 
     uint32_t m_, n_;
     uint64_t nnz_;

@@ -12,9 +12,10 @@ W(
   angular = NULL,
   upper_bound = NULL,
   nonneg = NULL,
-  guide = NULL,
   graph = NULL,
-  graph_lambda = NULL
+  graph_lambda = NULL,
+  target = NULL,
+  target_lambda = NULL
 )
 
 H(
@@ -24,9 +25,10 @@ H(
   angular = NULL,
   upper_bound = NULL,
   nonneg = NULL,
-  guide = NULL,
   graph = NULL,
-  graph_lambda = NULL
+  graph_lambda = NULL,
+  target = NULL,
+  target_lambda = NULL
 )
 }
 \arguments{
@@ -42,11 +44,14 @@ H(
 
 \item{nonneg}{Non-negativity constraint. Default TRUE for NMF, FALSE for SVD.}
 
-\item{guide}{An \code{nmf_guide} or list of guides for this factor.}
-
 \item{graph}{Sparse graph Laplacian matrix (or NULL).}
 
 \item{graph_lambda}{Graph regularization strength. Default 0.}
+
+\item{target}{Target matrix for regularization (k x n for H, k x m for W).
+See \code{\link{compute_target}} for constructing targets from labels.}
+
+\item{target_lambda}{Target regularization strength. Default 0.}
 }
 \value{
 An \code{fn_factor_config} object.
@@ -54,7 +59,7 @@ An \code{fn_factor_config} object.
 \description{
 Use \code{W()} and \code{H()} inside \code{nmf_layer()} or
 \code{svd_layer()} to set factor-specific regularization, constraints,
-and guides. Parameters not set inherit from the layer defaults.
+and targets. Parameters not set inherit from the layer defaults.
 }
 \examples{
 # Per-factor config for W with L1 sparsity

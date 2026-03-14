@@ -18,6 +18,11 @@ gpu_available(force_recheck = FALSE)
 
 logical TRUE if GPU is available
 
+## See also
+
+[`gpu_info`](https://zdebruine.github.io/RcppML/reference/gpu_info.md),
+[`nmf`](https://zdebruine.github.io/RcppML/reference/nmf.md)
+
 ## Examples
 
 ``` r

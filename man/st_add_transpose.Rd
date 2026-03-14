@@ -17,6 +17,18 @@ Invisibly returns the path.
 \description{
 Add Transpose Section to an Existing StreamPress File
 }
+\examples{
+\donttest{
+library(Matrix)
+m <- rsparsematrix(50, 20, 0.3)
+tmp <- tempfile(fileext = ".spz")
+st_write(m, tmp, include_transpose = FALSE)
+st_add_transpose(tmp)
+info <- st_info(tmp)
+unlink(tmp)
+}
+
+}
 \seealso{
 \code{\link{st_write}}, \code{\link{st_read}}
 }

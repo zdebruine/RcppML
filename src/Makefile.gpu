@@ -46,7 +46,7 @@ endif
 # Project include (GPU headers are in inst/include/FactorNet/gpu/)
 PROJECT_INC = ../inst/include
 
-# SparsePress root (sparsepress/gpu/ lives at project root)
+# StreamPress root
 SP_ROOT = ..
 
 # All include dirs
@@ -73,16 +73,16 @@ UNIFIED_HEADERS = $(wildcard $(UNIFIED_HDR_DIR)/core/*.hpp) \
                   $(wildcard $(UNIFIED_HDR_DIR)/algorithms/svd/*.hpp) \
                   $(wildcard $(UNIFIED_HDR_DIR)/gateway/*.hpp)
 
-# SparsePress headers (for sp_gpu_bridge dependency tracking)
-SP_HDR_DIR = ../inst/include/sparsepress
+# StreamPress headers (for sp_gpu_bridge dependency tracking)
+SP_HDR_DIR = ../inst/include/streampress
 SP_HEADERS = $(wildcard $(SP_HDR_DIR)/gpu/*.cuh) \
              $(wildcard $(SP_HDR_DIR)/gpu/*.h) \
              $(wildcard $(SP_HDR_DIR)/format/*.hpp)
 
 # Object files
-# Only include sp_gpu_bridge if sparsepress GPU headers exist
-SP_GPU_HEADER = ../inst/include/sparsepress/gpu/spgpu_v2_adapter.cuh
-OBJ = gpu_bridge_cluster.o gpu_bridge_nmf.o gpu_bridge_svd.o gpu_bridge_utils.o
+# Only include sp_gpu_bridge if streampress GPU headers exist
+SP_GPU_HEADER = ../inst/include/streampress/gpu/spgpu_v2_adapter.cuh
+OBJ = gpu_bridge_cluster.o gpu_bridge_nmf.o gpu_bridge_svd.o gpu_bridge_utils.o gpu_bridge_assess.o
 ifneq ($(wildcard $(SP_GPU_HEADER)),)
   OBJ += sp_gpu_bridge.o
 endif
@@ -109,6 +109,9 @@ gpu_bridge_svd.o: gpu_bridge_svd.cu gpu_bridge_common.cuh $(GPU_HEADERS) $(UNIFI
 	$(NVCC) $(NVCC_FLAGS) $(INCLUDES) -c -o $@ $<
 
 gpu_bridge_utils.o: gpu_bridge_utils.cu gpu_bridge_common.cuh $(GPU_HEADERS) $(UNIFIED_HEADERS)
+	$(NVCC) $(NVCC_FLAGS) $(INCLUDES) -c -o $@ $<
+
+gpu_bridge_assess.o: gpu_bridge_assess.cu gpu_bridge_common.cuh
 	$(NVCC) $(NVCC_FLAGS) $(INCLUDES) -c -o $@ $<
 
 sp_gpu_bridge.o: sp_gpu_bridge.cu $(SP_HEADERS)

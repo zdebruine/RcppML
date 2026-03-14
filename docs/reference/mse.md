@@ -32,8 +32,10 @@ mse(w, d = NULL, h, data, mask = NULL, missing_only = FALSE, ...)
 
 - mask:
 
-  dense or sparse matrix of values in `data` to handle as missing.
-  Alternatively, specify "`zeros`" or "`NA`".
+  missing data mask. Accepts: `NULL` (no masking), `"zeros"` (mask
+  zeros), `"NA"` (mask NAs), a dgCMatrix/matrix (custom mask), or
+  `list("zeros", <matrix>)` to mask zeros and use a custom mask
+  simultaneously.
 
 - missing_only:
 
@@ -50,10 +52,9 @@ A single numeric value: the mean squared error of the factorization.
 ## Examples
 
 ``` r
-# \donttest{
+if (FALSE) { # \dontrun{
 data <- simulateNMF(50, 30, k = 3, seed = 1)
 model <- nmf(data$A, 3, seed = 1, maxit = 50)
 RcppML:::mse(model$w, model$d, model$h, data$A)
-#> [1] 0.03836534
-# }
+} # }
 ```

@@ -171,20 +171,19 @@ test_that("loss parameter accepts all valid options", {
   A <- matrix(abs(rnorm(40 * 25)), 40, 25)
   
   expect_silent(nmf(A, 3, loss = "mse", maxit = 5, verbose = FALSE))
-  expect_silent(nmf(A, 3, loss = "mae", maxit = 5, verbose = FALSE))
-  expect_silent(nmf(A, 3, loss = "huber", maxit = 5, verbose = FALSE))
+  expect_silent(nmf(A, 3, robust = "mae", maxit = 5, verbose = FALSE))
+  expect_silent(nmf(A, 3, robust = TRUE, maxit = 5, verbose = FALSE))
   expect_silent(nmf(A, 3, loss = "gp", maxit = 5, verbose = FALSE))
   expect_silent(nmf(A, 3, loss = "nb", maxit = 5, verbose = FALSE))
-  # "kl" still works but emits a deprecation warning
-  expect_warning(nmf(A, 3, loss = "kl", maxit = 5, verbose = FALSE), "deprecated")
+  expect_silent(nmf(A, 3, loss = "gamma", maxit = 5, verbose = FALSE))
 })
 
-test_that("huber_delta parameter works", {
+test_that("robust parameter works with numeric delta", {
   set.seed(123)
   A <- matrix(abs(rnorm(40 * 25)), 40, 25)
   
-  expect_silent(nmf(A, 3, loss = "huber", huber_delta = 0.5, maxit = 5, verbose = FALSE))
-  expect_silent(nmf(A, 3, loss = "huber", huber_delta = 2.0, maxit = 5, verbose = FALSE))
+  expect_silent(nmf(A, 3, robust = 0.5, maxit = 5, verbose = FALSE))
+  expect_silent(nmf(A, 3, robust = 2.0, maxit = 5, verbose = FALSE))
 })
 
 # ============================================================================
@@ -484,8 +483,8 @@ test_that("all parameters can be combined", {
         L21 = c(0.01, 0), 
         angular = c(0.1, 0.1),
         seed = 123,
-        loss = "huber", 
-        huber_delta = 1.0,
+        loss = "mse", 
+        robust = TRUE,
         graph_W = graph_W, 
         graph_lambda = c(0.05, 0),
         sort_model = TRUE,

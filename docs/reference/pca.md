@@ -29,14 +29,12 @@ pca(A, k = 10, ...)
 
 ## Value
 
-An S4 object of class `svd_pca` (see
+An S4 object of class `svd` (see
 [`svd`](https://zdebruine.github.io/RcppML/reference/svd.md)).
 
 ## See also
 
-[`svd`](https://zdebruine.github.io/RcppML/reference/svd.md),
-[`sparse_pca`](https://zdebruine.github.io/RcppML/reference/svd.md),
-[`nn_pca`](https://zdebruine.github.io/RcppML/reference/svd.md)
+[`svd`](https://zdebruine.github.io/RcppML/reference/svd.md)
 
 ## Examples
 
@@ -46,8 +44,8 @@ library(Matrix)
 data(aml)
 result <- pca(aml, k = 5)
 result
-#> 824x5 rank-5 PCA model of class "svd_pca"
+#> 824x5 rank-5 PCA model of class "svd"
 #>   sigma range: [10.55, 29.15]
-#>   wall time: 41.7 ms
+#>   wall time: 1.2 ms
 # }
 ```

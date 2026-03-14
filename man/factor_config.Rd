@@ -7,8 +7,7 @@
 factor_config(
   maxit = 100,
   tol = 1e-04,
-  loss = c("mse", "mae", "huber", "kl", "gp", "nb", "gamma", "inverse_gaussian",
-    "tweedie"),
+  loss = c("mse", "gp", "nb", "gamma", "inverse_gaussian", "tweedie"),
   verbose = FALSE,
   seed = NULL,
   threads = 0,
@@ -19,8 +18,7 @@ factor_config(
   cv_seed = 0L,
   mask_zeros = FALSE,
   patience = 5L,
-  holdout_fraction,
-  cv_patience
+  ...
 )
 }
 \arguments{
@@ -28,8 +26,9 @@ factor_config(
 
 \item{tol}{Convergence tolerance. Default 1e-4.}
 
-\item{loss}{Loss function: "mse", "mae", "huber", "kl", "gp",
-"nb", "gamma", "inverse_gaussian", "tweedie". Default "mse".}
+\item{loss}{Loss function: "mse", "gp", "nb", "gamma",
+"inverse_gaussian", "tweedie". Default "mse". For robust (Huber/MAE)
+fitting, use the \code{robust} parameter at the layer level instead.}
 
 \item{verbose}{Print per-iteration diagnostics. Default FALSE.}
 
@@ -55,9 +54,12 @@ zeros may appear in the test set. Default FALSE.}
 \item{patience}{Number of iterations without test-loss improvement
 before early stopping during CV. Default 5.}
 
-\item{holdout_fraction}{Deprecated. Use \code{test_fraction} instead.}
-
-\item{cv_patience}{Deprecated. Use \code{patience} instead.}
+\item{...}{Additional arguments applied network-wide. These are forwarded
+to the underlying \code{\link{nmf}} or \code{\link{svd}} call at fit
+time as lowest-priority defaults (layer-level \code{...} overrides
+these). Supports distribution tuning (\code{dispersion},
+\code{theta_init}, etc.), IRLS control, solver tuning, and more.
+See \code{?nmf} or \code{?svd} for the complete list.}
 }
 \value{
 An \code{fn_global_config} object.

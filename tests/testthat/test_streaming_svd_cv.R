@@ -114,12 +114,12 @@ test_that("streaming SVD auto-rank selects reasonable rank", {
 # Streaming CV with mask_zeros
 # ===========================================================================
 
-test_that("streaming deflation mask_zeros=TRUE works", {
+test_that("streaming deflation mask='zeros' works", {
   skip_on_cran()
   s <- RcppML::svd(spz_path, k = 5, method = "deflation",
                    maxit = 100, tol = 1e-5, seed = 1,
                    test_fraction = 0.1, cv_seed = 42,
-                   mask_zeros = TRUE)
+                   mask = "zeros")
   expect_s4_class(s, "svd")
   expect_true(!is.null(s@misc$test_loss))
   expect_true(all(is.finite(s@misc$test_loss)))
@@ -138,11 +138,11 @@ test_that("streaming deflation CV test_loss close to in-memory deflation", {
   s_mem <- RcppML::svd(A_sparse, k = 5, method = "deflation",
                        maxit = 100, tol = 1e-5, seed = 1,
                        test_fraction = 0.1, cv_seed = 42,
-                       mask_zeros = TRUE)
+                       mask = "zeros")
   s_spz <- RcppML::svd(spz_path, k = 5, method = "deflation",
                         maxit = 100, tol = 1e-5, seed = 1,
                         test_fraction = 0.1, cv_seed = 42,
-                        mask_zeros = TRUE)
+                        mask = "zeros")
 
   tl_mem <- s_mem@misc$test_loss
   tl_spz <- s_spz@misc$test_loss
