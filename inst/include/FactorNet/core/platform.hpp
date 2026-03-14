@@ -16,16 +16,9 @@
 #include <string>
 
 #if defined(_WIN32)
-// Workaround for MinGW C++17+: std::byte (from <cstddef>) conflicts
-// with rpcndr.h "typedef unsigned char byte;" inside <windows.h>.
-// Temporarily rename the Windows byte to avoid the ambiguity.
-#define WIN32_LEAN_AND_MEAN
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#define byte win_byte_override
-#include <windows.h>
-#undef byte
+// On Windows we avoid <windows.h> entirely because MinGW C++17+
+// introduces std::byte which conflicts with rpcndr.h's byte typedef.
+// RAM detection is unavailable; callers handle 0 gracefully.
 #elif defined(__APPLE__)
 #include <sys/sysctl.h>
 #include <unistd.h>
@@ -48,11 +41,7 @@ namespace FactorNet {
  */
 inline uint64_t get_available_ram_bytes() {
 #if defined(_WIN32)
-    MEMORYSTATUSEX status;
-    status.dwLength = sizeof(status);
-    if (GlobalMemoryStatusEx(&status))
-        return static_cast<uint64_t>(status.ullAvailPhys);
-    return 0;
+    return 0;  // Windows: <windows.h> avoided; callers treat 0 as "unknown"
 #elif defined(__APPLE__)
     int64_t page_size = sysconf(_SC_PAGE_SIZE);
     int64_t free_pages = 0;

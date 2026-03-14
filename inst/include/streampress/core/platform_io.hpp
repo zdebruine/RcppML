@@ -12,15 +12,11 @@
 #include <cstddef>
 
 #ifdef _WIN32
-// Workaround for MinGW C++17+: std::byte vs rpcndr.h byte collision
-#define WIN32_LEAN_AND_MEAN
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#define byte win_byte_override
-#include <windows.h>
-#undef byte
+// Avoid <windows.h> entirely — MinGW C++17+ std::byte conflicts with
+// rpcndr.h byte typedef.  Use _lseeki64 + _read under a mutex instead.
 #include <io.h>
+#include <fcntl.h>
+#include <mutex>
 #else
 #include <unistd.h>
 #endif
@@ -28,14 +24,12 @@
 namespace streampress {
 
 #ifdef _WIN32
-static inline ssize_t safe_pread(int fd, void* buf, size_t count, uint64_t offset) {
-    HANDLE h = (HANDLE)_get_osfhandle(fd);
-    OVERLAPPED ov = {};
-    ov.Offset     = static_cast<DWORD>(offset & 0xFFFFFFFFULL);
-    ov.OffsetHigh = static_cast<DWORD>(offset >> 32);
-    DWORD nread = 0;
-    if (!ReadFile(h, buf, static_cast<DWORD>(count), &nread, &ov)) return -1;
-    return static_cast<ssize_t>(nread);
+inline ssize_t safe_pread(int fd, void* buf, size_t count, uint64_t offset) {
+    static std::mutex mtx;
+    std::lock_guard<std::mutex> lock(mtx);
+    if (_lseeki64(fd, static_cast<__int64>(offset), SEEK_SET) < 0) return -1;
+    int n = _read(fd, buf, static_cast<unsigned int>(count));
+    return static_cast<ssize_t>(n);
 }
 #else
 static inline ssize_t safe_pread(int fd, void* buf, size_t count, uint64_t offset) {

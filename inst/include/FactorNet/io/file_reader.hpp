@@ -17,10 +17,12 @@
 #include <string>
 
 #ifdef _WIN32
-#  ifndef WIN32_LEAN_AND_MEAN
-#    define WIN32_LEAN_AND_MEAN
-#  endif
-#  include <windows.h>
+// Avoid <windows.h> entirely — MinGW C++17+ std::byte conflicts with
+// rpcndr.h byte typedef.  Use POSIX-compat _open/_read/_lseeki64 instead.
+#  include <io.h>
+#  include <fcntl.h>
+#  include <sys/stat.h>
+#  include <mutex>
 #else
 #  include <fcntl.h>
 #  include <unistd.h>
@@ -33,35 +35,22 @@ namespace streampress {
 /// Platform-agnostic random-access file reader.
 /// Supports positional reads without moving any file cursor.
 /// Thread-safe for concurrent pread() calls on POSIX platforms.
+/// On Windows, uses a mutex to serialise _lseeki64 + _read.
 class FileReader {
 public:
     explicit FileReader(const std::string& path) {
 #ifdef _WIN32
-        // Convert UTF-8 path to wide string
-        int wlen = MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, nullptr, 0);
-        if (wlen <= 0)
-            throw std::runtime_error("Cannot convert path to wide string: " + path);
-        std::wstring wpath(wlen, L'\0');
-        MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, &wpath[0], wlen);
-
-        hFile_ = CreateFileW(
-            wpath.c_str(),
-            GENERIC_READ,
-            FILE_SHARE_READ,
-            nullptr,
-            OPEN_EXISTING,
-            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_RANDOM_ACCESS,
-            nullptr);
-        if (hFile_ == INVALID_HANDLE_VALUE)
+        fd_ = _open(path.c_str(), _O_RDONLY | _O_BINARY);
+        if (fd_ < 0)
             throw std::runtime_error("Cannot open file: " + path);
-
-        LARGE_INTEGER li;
-        if (!GetFileSizeEx(hFile_, &li)) {
-            CloseHandle(hFile_);
-            hFile_ = INVALID_HANDLE_VALUE;
+        __int64 sz = _lseeki64(fd_, 0, SEEK_END);
+        if (sz < 0) {
+            _close(fd_);
+            fd_ = -1;
             throw std::runtime_error("Cannot get file size: " + path);
         }
-        file_size_ = static_cast<uint64_t>(li.QuadPart);
+        file_size_ = static_cast<uint64_t>(sz);
+        _lseeki64(fd_, 0, SEEK_SET);
 #else
         fd_ = ::open(path.c_str(), O_RDONLY);
         if (fd_ < 0)
@@ -86,31 +75,18 @@ public:
     // Movable
     FileReader(FileReader&& other) noexcept
         : file_size_(other.file_size_)
-#ifdef _WIN32
-        , hFile_(other.hFile_)
-#else
         , fd_(other.fd_)
-#endif
     {
         other.file_size_ = 0;
-#ifdef _WIN32
-        other.hFile_ = INVALID_HANDLE_VALUE;
-#else
         other.fd_ = -1;
-#endif
     }
 
     FileReader& operator=(FileReader&& other) noexcept {
         if (this != &other) {
             close();
             file_size_ = other.file_size_;
-#ifdef _WIN32
-            hFile_ = other.hFile_;
-            other.hFile_ = INVALID_HANDLE_VALUE;
-#else
             fd_ = other.fd_;
             other.fd_ = -1;
-#endif
             other.file_size_ = 0;
         }
         return *this;
@@ -121,13 +97,13 @@ public:
     size_t pread(uint64_t offset, void* buf, size_t size) const {
         if (size == 0) return 0;
 #ifdef _WIN32
-        OVERLAPPED ov = {};
-        ov.Offset     = static_cast<DWORD>(offset & 0xFFFFFFFF);
-        ov.OffsetHigh = static_cast<DWORD>(offset >> 32);
-        DWORD bytes_read = 0;
-        if (!ReadFile(hFile_, buf, static_cast<DWORD>(size), &bytes_read, &ov))
-            throw std::runtime_error("ReadFile failed at offset " + std::to_string(offset));
-        return static_cast<size_t>(bytes_read);
+        std::lock_guard<std::mutex> lock(mtx_);
+        if (_lseeki64(fd_, static_cast<__int64>(offset), SEEK_SET) < 0)
+            throw std::runtime_error("_lseeki64 failed at offset " + std::to_string(offset));
+        int n = _read(fd_, buf, static_cast<unsigned int>(size));
+        if (n < 0)
+            throw std::runtime_error("_read failed at offset " + std::to_string(offset));
+        return static_cast<size_t>(n);
 #else
         ssize_t n = ::pread(fd_, buf, size, static_cast<off_t>(offset));
         if (n < 0)
@@ -139,19 +115,13 @@ public:
 
     uint64_t file_size() const { return file_size_; }
 
-    bool is_open() const {
-#ifdef _WIN32
-        return hFile_ != INVALID_HANDLE_VALUE;
-#else
-        return fd_ >= 0;
-#endif
-    }
+    bool is_open() const { return fd_ >= 0; }
 
     void close() {
 #ifdef _WIN32
-        if (hFile_ != INVALID_HANDLE_VALUE) {
-            CloseHandle(hFile_);
-            hFile_ = INVALID_HANDLE_VALUE;
+        if (fd_ >= 0) {
+            _close(fd_);
+            fd_ = -1;
         }
 #else
         if (fd_ >= 0) {
@@ -163,10 +133,9 @@ public:
 
 private:
     uint64_t file_size_ = 0;
-#ifdef _WIN32
-    HANDLE hFile_ = INVALID_HANDLE_VALUE;
-#else
     int fd_ = -1;
+#ifdef _WIN32
+    mutable std::mutex mtx_;
 #endif
 };
 
