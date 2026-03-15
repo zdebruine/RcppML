@@ -4,7 +4,7 @@
 [![CRAN downloads](https://cranlogs.r-pkg.org/badges/grand-total/RcppML)](https://cran.r-project.org/package=RcppML)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-Vignettes here: [https://zdebruine.github.io/RcppML/](https://zdebruine.github.io/RcppML/)](https://zdebruine.github.io/RcppML/articles/getting-started.html)
+Vignettes here: [https://zdebruine.github.io/RcppML/articles/getting-started.html](https://zdebruine.github.io/RcppML/articles/getting-started.html)
 
 **RcppML** is an R package for high-performance **Non-negative Matrix Factorization** (NMF), truncated **SVD/PCA**, and divisive clustering of large sparse and dense matrices. It supports six statistical distributions via IRLS, cross-validation for automatic rank selection, optional CUDA GPU acceleration, out-of-core streaming for datasets larger than memory, and a composable graph DSL for multi-modal and deep NMF.
 
