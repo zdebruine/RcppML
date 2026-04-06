@@ -15,7 +15,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <vector>
-#include <RcppML/core/logging.hpp>
+#include <FactorNet/core/logging.hpp>
 
 // v2 adapter: CPU decode + GPU upload
 #include "streampress/gpu/spgpu_v2_adapter.cuh"
