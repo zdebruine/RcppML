@@ -60,9 +60,9 @@
 
 #' Acute Myelogenous Leukemia (AML) Dataset
 #'
-#' ATAC-seq chromatin accessibility data from 123 acute myelogenous leukemia (AML)
-#' patient samples and 5 healthy hematopoietic stem/progenitor cell (HSPC) samples.
-#' The dataset contains chromatin accessibility measurements across 824 genomic regions.
+#' DNA methylation data from 123 acute myelogenous leukemia (AML) patient samples 
+#' and 5 healthy donors' hematopoietic stem/progenitor cell (HSPC) fractions (3 each). 
+#' The dataset contains 5-methylcytosine rate measurements across 824 genomic regions.
 #'
 #' @format A \code{matrix} (dense) with 824 rows (genomic regions) and
 #'   135 columns (samples). Sample metadata is stored as an attribute.
@@ -75,7 +75,7 @@
 #'   }
 #'
 #' @details
-#' This dataset contains ATAC-seq chromatin accessibility data for studying acute
+#' This dataset contains DNA methylation data from clinical trials in acute
 #' myelogenous leukemia. Samples represent different AML subtypes including:
 #' \itemize{
 #'   \item Common myeloid progenitors (CMP)
@@ -87,8 +87,12 @@
 #' }
 #'
 #' @source
-#' Corces et al. (2016). "Lineage-specific and single-cell chromatin accessibility
-#' charts human hematopoiesis and leukemia evolution." Nature Genetics 48(10): 1193-1203.
+#' 1. Bertrums, Smith, Harmon et al. (2023). "Comprehensive molecular
+#' and clinical characterization of NUP98 fusions in pediatric
+#' acute myeloid leukemia. Haematologica. PMID: 36815378
+#' 2. Jung et al. (2015) "An LSC epigenetic signature is largely mutation
+#' independent and implicates the HOXA cluster in AML pathogenesis." 
+#' Nat Commun. 2015 Oct 7;6:8489. PMID: 26444494
 #'
 #' @examples
 #' \donttest{
