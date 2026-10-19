@@ -2,6 +2,13 @@
 
 ## Bug fixes
 
+- `svd()`/`pca()` with `method = "deflation"` and `nonneg`/`L1`/`upper_bound`
+  now use projection (generalized) deflation for constrained factors, as in
+  nsprcomp: each factor is fit to the data with earlier constrained directions
+  projected out. Hotelling deflation left energy along earlier constrained
+  factors, so at larger k later factors repeated earlier ones (e.g. pbmc3k,
+  k = 16: 16 factors spanned only 8 directions). Unconstrained SVD/PCA is
+  unchanged. CPU path only; the GPU deflation path is not yet updated.
 - `svd()`/`pca()` with `method = "deflation"`: factors with projection
   constraints (`nonneg`, `L1`, `upper_bound`) no longer go through the
   post-factor Gram-Schmidt step, which re-introduced negative entries and

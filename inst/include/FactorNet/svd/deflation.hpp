@@ -626,6 +626,60 @@ SVDResult<Scalar> deflation_svd(const MatrixType& A,
     const bool v_constrained = config.nonneg_v || config.L1_v > 0 ||
                                config.upper_bound_v > 0;
 
+    // ------------------------------------------------------------------
+    // Projection deflation for constrained factors.
+    //
+    // Hotelling deflation (R_k = A - sum_r sigma_r u_r v_r') only removes a
+    // direction exactly when u_r, v_r are singular vectors. Constrained factors
+    // are not, so the residual keeps energy along u_r and later factors can
+    // re-find (near-)copies of earlier ones. When either side is constrained we
+    // instead use generalized (projection) deflation, as in nsprcomp:
+    //   R_k = P_u A P_v,   P_u = I - Qu Qu',  P_v = I - Qv Qv',
+    // where Qu (Qv) is an orthonormal basis for the earlier constrained u (v)
+    // factors. Each new factor can then only explain variance not already
+    // captured. Unconstrained SVD/PCA keeps the Hotelling path unchanged.
+    // ------------------------------------------------------------------
+    const bool use_projection = u_constrained || v_constrained;
+    DenseMatrix<Scalar> Qu, Qv;
+    if (u_constrained) { Qu.resize(m, k_max); Qu.setZero(); }
+    if (v_constrained) { Qv.resize(n, k_max); Qv.setZero(); }
+    int n_proj = 0;
+    auto project_out = [&](DenseVector<Scalar>& x, const DenseMatrix<Scalar>& Q) {
+        if (n_proj == 0) return;
+        auto Qk = Q.leftCols(n_proj);
+        for (int pass = 0; pass < 2; ++pass) {
+            DenseVector<Scalar> c = Qk.transpose() * x;
+            x.noalias() -= Qk * c;
+        }
+    };
+    // Deflated products: out = R_k v  and  out = R_k' u
+    auto apply_R = [&](const DenseVector<Scalar>& v_in, DenseVector<Scalar>& out, int k_cur) {
+        if (!use_projection) {
+            spmv_f(v_in, out);
+            deflation_correct(out, v_in, U_all, d_all, V_all, k_cur);
+            return;
+        }
+        if (v_constrained && n_proj > 0) {
+            DenseVector<Scalar> vp = v_in; project_out(vp, Qv); spmv_f(vp, out);
+        } else {
+            spmv_f(v_in, out);
+        }
+        if (u_constrained) project_out(out, Qu);
+    };
+    auto apply_Rt = [&](const DenseVector<Scalar>& u_in, DenseVector<Scalar>& out, int k_cur) {
+        if (!use_projection) {
+            spmv_t(u_in, out);
+            deflation_correct(out, u_in, V_all, d_all, U_all, k_cur);
+            return;
+        }
+        if (u_constrained && n_proj > 0) {
+            DenseVector<Scalar> up = u_in; project_out(up, Qu); spmv_t(up, out);
+        } else {
+            spmv_t(u_in, out);
+        }
+        if (v_constrained) project_out(out, Qv);
+    };
+
     for (int k = 0; k < k_max; ++k) {
         SVD_CHECK_INTERRUPT();
 
@@ -652,13 +706,11 @@ SVDResult<Scalar> deflation_svd(const MatrixType& A,
             Scalar u_norm_init = u.norm();
             if (u_norm_init > std::numeric_limits<Scalar>::epsilon() * 100) {
                 u /= u_norm_init;
-                spmv_t(u, spmv_result);
-                deflation_correct(spmv_result, u, V_all, d_all, U_all, k);
+                apply_Rt(u, spmv_result, k);
                 v = spmv_result;
                 Scalar v_norm_tmp = v.norm();
                 if (v_norm_tmp > 0) v /= v_norm_tmp;
-                spmv_f(v, spmv_result);
-                deflation_correct(spmv_result, v, U_all, d_all, V_all, k);
+                apply_R(v, spmv_result, k);
                 u = spmv_result;
                 for (int r = 0; r < k; ++r) {
                     u -= u.dot(U_all.col(r)) * U_all.col(r);
@@ -701,14 +753,12 @@ SVDResult<Scalar> deflation_svd(const MatrixType& A,
                 // IRLS: compute row weights from current u, v, sigma
                 // residual_i = (Av)_i - sigma * u_i
                 // ============================================================
-                spmv_f(v, spmv_result_unweighted);
-                deflation_correct(spmv_result_unweighted, v, U_all, d_all, V_all, k);
+                apply_R(v, spmv_result_unweighted, k);
                 compute_row_weights(spmv_result_unweighted, u, sigma,
                                     config.robust_delta, row_weights, eff_threads);
 
                 // Column weights from A'u residuals
-                spmv_t(u, spmv_result_unweighted);
-                deflation_correct(spmv_result_unweighted, u, V_all, d_all, U_all, k);
+                apply_Rt(u, spmv_result_unweighted, k);
                 compute_col_weights(spmv_result_unweighted, v, sigma,
                                     config.robust_delta, col_weights, eff_threads);
             }
@@ -717,8 +767,7 @@ SVDResult<Scalar> deflation_svd(const MatrixType& A,
             if (do_robust && iter > 0) {
                 // Weighted v-update: v = A' diag(w_u) u_hat / (u_hat' diag(w_u) u_hat)
                 DenseVector<Scalar> wu = u_hat.cwiseProduct(row_weights);
-                spmv_t(wu, spmv_result);
-                deflation_correct(spmv_result, wu, V_all, d_all, U_all, k);
+                apply_Rt(wu, spmv_result, k);
                 Scalar u_sq = wu.dot(u_hat);  // u_hat' diag(w) u_hat
                 if (do_cv) u_sq *= cv_denom_correction;
                 if (u_sq > 0) {
@@ -729,8 +778,7 @@ SVDResult<Scalar> deflation_svd(const MatrixType& A,
                 }
             } else {
                 // Standard v-update
-                spmv_t(u_hat, spmv_result);
-                deflation_correct(spmv_result, u_hat, V_all, d_all, U_all, k);
+                apply_Rt(u_hat, spmv_result, k);
                 Scalar u_sq = u_hat.squaredNorm();
                 if (do_cv) u_sq *= cv_denom_correction;
                 if (u_sq > 0) {
@@ -762,8 +810,7 @@ SVDResult<Scalar> deflation_svd(const MatrixType& A,
             if (do_robust && iter > 0) {
                 // Weighted u-update: u = A diag(w_v) v / (v' diag(w_v) v)
                 DenseVector<Scalar> wv = v.cwiseProduct(col_weights);
-                spmv_f(wv, spmv_result);
-                deflation_correct(spmv_result, wv, U_all, d_all, V_all, k);
+                apply_R(wv, spmv_result, k);
                 Scalar v_sq = wv.dot(v);  // v' diag(w) v
                 if (do_cv) v_sq *= cv_denom_correction;
                 if (v_sq > 0) {
@@ -774,8 +821,7 @@ SVDResult<Scalar> deflation_svd(const MatrixType& A,
                 }
             } else {
                 // Standard u-update
-                spmv_f(v, spmv_result);
-                deflation_correct(spmv_result, v, U_all, d_all, V_all, k);
+                apply_R(v, spmv_result, k);
                 Scalar v_sq = v.squaredNorm();
                 if (do_cv) v_sq *= cv_denom_correction;
                 if (v_sq > 0) {
@@ -839,7 +885,7 @@ SVDResult<Scalar> deflation_svd(const MatrixType& A,
         // factors re-introduces negative entries and destroys sparsity, so
         // constrained factors are returned as fitted (non-orthogonal), as in
         // other constrained/sparse PCA methods.
-        if (k > 0) {
+        if (k > 0 && !use_projection) {
             auto U_prev = U_all.leftCols(k);
             auto V_prev = V_all.leftCols(k);
 
@@ -872,8 +918,7 @@ SVDResult<Scalar> deflation_svd(const MatrixType& A,
         // The ALS-loop sigma was computed before GS modified u and v,
         // so it's stale.  Rayleigh quotient: sigma = u' * (A*v corrected).
         {
-            spmv_f(v, spmv_result);
-            deflation_correct(spmv_result, v, U_all, d_all, V_all, k);
+            apply_R(v, spmv_result, k);
             sigma = u.dot(spmv_result);
             if (sigma < 0) sigma = -sigma;  // singular values are non-negative
         }
@@ -882,6 +927,21 @@ SVDResult<Scalar> deflation_svd(const MatrixType& A,
         U_all.col(k) = u;
         d_all(k) = sigma;
         V_all.col(k) = v;
+
+        if (use_projection) {
+            const Scalar eps_q = std::numeric_limits<Scalar>::epsilon() * 100;
+            if (u_constrained) {
+                DenseVector<Scalar> q = u; project_out(q, Qu);
+                Scalar qn = q.norm();
+                if (qn > eps_q) Qu.col(n_proj) = q / qn; else Qu.col(n_proj).setZero();
+            }
+            if (v_constrained) {
+                DenseVector<Scalar> q = v; project_out(q, Qv);
+                Scalar qn = q.norm();
+                if (qn > eps_q) Qv.col(n_proj) = q / qn; else Qv.col(n_proj).setZero();
+            }
+            ++n_proj;
+        }
 
         result.iters_per_factor.push_back(iter);
 

@@ -249,6 +249,22 @@ test_that("deflation L1 sparsity is preserved on later factors", {
               info = "each factor keeps exact zeros from L1 soft-thresholding")
 })
 
+test_that("deflation nonneg PCA returns distinct factors at larger k", {
+  # Hotelling deflation let constrained factors re-find near-copies of earlier
+  # ones; projection deflation must yield k distinct non-negative directions.
+  set.seed(11)
+  A <- matrix(rexp(120 * 400), 120, 400)
+  A[1:30, 1:200] <- A[1:30, 1:200] + 2
+  A[31:60, 150:350] <- A[31:60, 150:350] + 2
+  res <- RcppML::svd(A, k = 10, center = TRUE, nonneg = c(TRUE, FALSE),
+                     method = "deflation", seed = 1, test_fraction = 0)
+  W <- sweep(res@u, 2, sqrt(colSums(res@u^2)), "/")
+  C <- abs(crossprod(W)); diag(C) <- 0
+  expect_true(all(res@u >= 0))
+  expect_lt(max(C), 0.95)
+  expect_equal(qr(W, tol = 1e-3)$rank, 10L)
+})
+
 test_that("auto method uses deflation for nonneg/L1 constraints at any k", {
   set.seed(9)
   A <- matrix(abs(rnorm(200 * 60)), 200, 60)
