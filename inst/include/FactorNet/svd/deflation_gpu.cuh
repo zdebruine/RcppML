@@ -636,6 +636,12 @@ SVDResult<Scalar> deflation_svd_gpu(
     int m, int n, int nnz,
     const SVDConfig<Scalar>& config)
 {
+    // Projection constraints (nonneg/L1/bounds) are incompatible with
+    // post-factor Gram-Schmidt; see deflation.hpp.
+    const bool u_constrained = config.nonneg_u || config.L1_u > 0 ||
+                               config.upper_bound_u > 0;
+    const bool v_constrained = config.nonneg_v || config.L1_v > 0 ||
+                               config.upper_bound_v > 0;
     using namespace FactorNet::gpu;
     using DenseMatrixS = Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>;
     using DenseVectorS = Eigen::Matrix<Scalar, Eigen::Dynamic, 1>;
@@ -1253,27 +1259,31 @@ SVDResult<Scalar> deflation_svd_gpu(
             Scalar* d_gs_h = d_defl_workspace.get();
 
             // Reorthogonalize d_u against d_U_factors[:, 0:k-1]
-            detail::gpu_orthog_against<Scalar>(
-                ctx.cublas, d_U_factors.get(), d_u.get(), m, k, d_gs_h);
-            // Renormalize d_u
-            {
-                detail::cublas_nrm2_device<Scalar>(
-                    ctx.cublas, m, d_u.get(), d_scalars.get());
-                int blocks = (m + BLOCK_SIZE - 1) / BLOCK_SIZE;
-                detail::fused_normalize_kernel<<<blocks, BLOCK_SIZE, 0, ctx.stream>>>(
-                    d_u.get(), d_u.get(), d_scalars.get(), m);
+            if (!u_constrained) {
+                detail::gpu_orthog_against<Scalar>(
+                    ctx.cublas, d_U_factors.get(), d_u.get(), m, k, d_gs_h);
+                // Renormalize d_u
+                {
+                    detail::cublas_nrm2_device<Scalar>(
+                        ctx.cublas, m, d_u.get(), d_scalars.get());
+                    int blocks = (m + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                    detail::fused_normalize_kernel<<<blocks, BLOCK_SIZE, 0, ctx.stream>>>(
+                        d_u.get(), d_u.get(), d_scalars.get(), m);
+                }
             }
 
             // Reorthogonalize d_v against d_V_factors[:, 0:k-1]
-            detail::gpu_orthog_against<Scalar>(
-                ctx.cublas, d_V_factors.get(), d_v.get(), n, k, d_gs_h);
-            // Renormalize d_v
-            {
-                detail::cublas_nrm2_device<Scalar>(
-                    ctx.cublas, n, d_v.get(), d_scalars.get());
-                int blocks = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
-                detail::fused_normalize_kernel<<<blocks, BLOCK_SIZE, 0, ctx.stream>>>(
-                    d_v.get(), d_v.get(), d_scalars.get(), n);
+            if (!v_constrained) {
+                detail::gpu_orthog_against<Scalar>(
+                    ctx.cublas, d_V_factors.get(), d_v.get(), n, k, d_gs_h);
+                // Renormalize d_v
+                {
+                    detail::cublas_nrm2_device<Scalar>(
+                        ctx.cublas, n, d_v.get(), d_scalars.get());
+                    int blocks = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                    detail::fused_normalize_kernel<<<blocks, BLOCK_SIZE, 0, ctx.stream>>>(
+                        d_v.get(), d_v.get(), d_scalars.get(), n);
+                }
             }
         }
 
@@ -1432,6 +1442,12 @@ SVDResult<Scalar> deflation_svd_gpu_dense(
     int m, int n,
     const SVDConfig<Scalar>& config)
 {
+    // Projection constraints (nonneg/L1/bounds) are incompatible with
+    // post-factor Gram-Schmidt; see deflation.hpp.
+    const bool u_constrained = config.nonneg_u || config.L1_u > 0 ||
+                               config.upper_bound_u > 0;
+    const bool v_constrained = config.nonneg_v || config.L1_v > 0 ||
+                               config.upper_bound_v > 0;
     using namespace FactorNet::gpu;
     using DenseMatrixS = Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>;
     using DenseVectorS = Eigen::Matrix<Scalar, Eigen::Dynamic, 1>;
@@ -1797,23 +1813,27 @@ SVDResult<Scalar> deflation_svd_gpu_dense(
         // Post-factor Gram-Schmidt reorthogonalization (same as sparse path)
         if (k > 0) {
             Scalar* d_gs_h = d_defl_workspace.get();
-            detail::gpu_orthog_against<Scalar>(
-                ctx.cublas, d_U_factors.get(), d_u.get(), m, k, d_gs_h);
-            {
-                detail::cublas_nrm2_device<Scalar>(
-                    ctx.cublas, m, d_u.get(), d_scalars.get());
-                int blocks = (m + BLOCK_SIZE - 1) / BLOCK_SIZE;
-                detail::fused_normalize_kernel<<<blocks, BLOCK_SIZE, 0, ctx.stream>>>(
-                    d_u.get(), d_u.get(), d_scalars.get(), m);
+            if (!u_constrained) {
+                detail::gpu_orthog_against<Scalar>(
+                    ctx.cublas, d_U_factors.get(), d_u.get(), m, k, d_gs_h);
+                {
+                    detail::cublas_nrm2_device<Scalar>(
+                        ctx.cublas, m, d_u.get(), d_scalars.get());
+                    int blocks = (m + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                    detail::fused_normalize_kernel<<<blocks, BLOCK_SIZE, 0, ctx.stream>>>(
+                        d_u.get(), d_u.get(), d_scalars.get(), m);
+                }
             }
-            detail::gpu_orthog_against<Scalar>(
-                ctx.cublas, d_V_factors.get(), d_v.get(), n, k, d_gs_h);
-            {
-                detail::cublas_nrm2_device<Scalar>(
-                    ctx.cublas, n, d_v.get(), d_scalars.get());
-                int blocks = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
-                detail::fused_normalize_kernel<<<blocks, BLOCK_SIZE, 0, ctx.stream>>>(
-                    d_v.get(), d_v.get(), d_scalars.get(), n);
+            if (!v_constrained) {
+                detail::gpu_orthog_against<Scalar>(
+                    ctx.cublas, d_V_factors.get(), d_v.get(), n, k, d_gs_h);
+                {
+                    detail::cublas_nrm2_device<Scalar>(
+                        ctx.cublas, n, d_v.get(), d_scalars.get());
+                    int blocks = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                    detail::fused_normalize_kernel<<<blocks, BLOCK_SIZE, 0, ctx.stream>>>(
+                        d_v.get(), d_v.get(), d_scalars.get(), n);
+                }
             }
         }
 

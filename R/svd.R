@@ -285,6 +285,9 @@ svd <- function(A, k = 10, tol = 1e-5, maxit = 200,
 
   has_element_constraints <- any(L1 > 0) || any(L2 > 0) || any(nonneg) ||
                              any(upper_bound > 0) || any(L21 > 0)
+  # Constraints enforced by projection (sign / sparsity / bounds); these are
+  # incompatible with orthogonalizing factors after the fact.
+  has_projection_constraints <- any(nonneg) || any(L1 > 0) || any(upper_bound > 0)
   has_gram_constraints <- any(angular > 0) ||
                           (!is.null(graph_U) && graph_lambda[1] > 0) ||
                           (!is.null(graph_V) && graph_lambda[2] > 0)
@@ -302,6 +305,14 @@ svd <- function(A, k = 10, tol = 1e-5, maxit = 200,
       stop(sprintf(
         "method '%s' does not support constraints (L1/L2/nonneg/bounds/L21). Use 'deflation' or 'krylov'.",
         method))
+    }
+
+    if (method == "krylov" && has_projection_constraints &&
+        (isTRUE(auto_rank) || (is.numeric(k) && k > 1))) {
+      warning("method = 'krylov' with nonneg/L1/upper_bound constraints and k > 1 ",
+              "can return redundant or all-zero components; ",
+              "method = 'deflation' (the default for constrained problems) is recommended.",
+              call. = FALSE)
     }
 
     if (has_gram_constraints && !method %in% gram_methods) {
@@ -377,6 +388,11 @@ svd <- function(A, k = 10, tol = 1e-5, maxit = 200,
   if (method == "auto") {
     has_any_constraints <- has_element_constraints || has_gram_constraints
     if (has_robust) {
+      method <- "deflation"
+    } else if (has_projection_constraints) {
+      # Sign/sparsity constraints: Krylov's block solve-then-project can
+      # return redundant or all-zero components for k > 1; deflation keeps
+      # each factor's constraints and fits it against the residual.
       method <- "deflation"
     } else if (has_any_constraints) {
       method <- if (k >= 8) "krylov" else "deflation"

@@ -1,3 +1,21 @@
+# RcppML (development version)
+
+## Bug fixes
+
+- `svd()`/`pca()` with `method = "deflation"`: factors with projection
+  constraints (`nonneg`, `L1`, `upper_bound`) no longer go through the
+  post-factor Gram-Schmidt step, which re-introduced negative entries and
+  removed L1 zeros on every component after the first. Constrained factors are
+  now returned as fitted (non-negative/sparse, not mutually orthogonal);
+  unconstrained SVD/PCA is unchanged. Applies to the CPU and GPU deflation paths.
+- Constrained factors after the first now start from a non-negative random
+  vector instead of the orthogonalized power-step warm start, which could
+  collapse to zero after projection.
+- `method = "auto"` now selects `"deflation"` whenever `nonneg`, `L1`, or
+  `upper_bound` is set (previously `"krylov"` for `k >= 8`), and requesting
+  `method = "krylov"` with these constraints and `k > 1` warns that components
+  may be redundant or all-zero.
+
 # RcppML 1.0.0
 
 ## Breaking Changes

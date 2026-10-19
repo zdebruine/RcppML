@@ -167,10 +167,10 @@ test_that("svd() with nonneg applies non-negativity constraint (deflation)", {
   nn <- RcppML::svd(A_nn, k = 3, nonneg = TRUE, method = "deflation",
                     seed = 1, maxit = 200, tol = 1e-6, test_fraction = 0)
   expect_s4_class(nn, "svd")
-  # Note: deflation applies Gram-Schmidt reorthogonalization AFTER nonneg
-  # projection, which can reintroduce negatives. This is a known limitation.
-  # For strict non-negativity, use method="krylov" instead.
-  # Here we just check reasonable reconstruction quality.
+  # Constrained factors skip post-factor Gram-Schmidt, so every factor
+  # (not just the first) stays non-negative.
+  expect_true(all(nn@u >= 0), info = "deflation nonneg: U non-negative")
+  expect_true(all(nn@v >= 0), info = "deflation nonneg: V non-negative")
   A_hat <- reconstruct(nn)
   residual_frac <- sum((A_nn - A_hat)^2) / sum(A_nn^2)
   expect_lt(residual_frac, 0.5)
@@ -179,8 +179,8 @@ test_that("svd() with nonneg applies non-negativity constraint (deflation)", {
 test_that("svd() with nonneg via krylov produces non-negative factors", {
   set.seed(77)
   A_nn <- matrix(abs(rnorm(80 * 40)), 80, 40)
-  nn <- RcppML::svd(A_nn, k = 3, nonneg = TRUE, method = "krylov",
-                    seed = 1, maxit = 200, tol = 1e-6, test_fraction = 0)
+  nn <- suppressWarnings(RcppML::svd(A_nn, k = 3, nonneg = TRUE, method = "krylov",
+                    seed = 1, maxit = 200, tol = 1e-6, test_fraction = 0))
   expect_s4_class(nn, "svd")
   expect_true(all(nn@v >= -1e-8), info = "krylov nonneg: V should be non-negative")
   expect_true(all(nn@u >= -1e-8), info = "krylov nonneg: U should be non-negative")
@@ -189,8 +189,8 @@ test_that("svd() with nonneg via krylov produces non-negative factors", {
 test_that("svd() with L1 via krylov applies sparsity", {
   set.seed(99)
   A_sp <- matrix(abs(rnorm(100 * 50)), 100, 50)
-  sp <- RcppML::svd(A_sp, k = 3, L1 = 1.0, method = "krylov",
-                    seed = 1, maxit = 200, tol = 1e-6, test_fraction = 0)
+  sp <- suppressWarnings(RcppML::svd(A_sp, k = 3, L1 = 1.0, method = "krylov",
+                    seed = 1, maxit = 200, tol = 1e-6, test_fraction = 0))
   expect_s4_class(sp, "svd")
   expect_equal(ncol(sp@v), 3L)
   # L1 should induce some zero entries in V
@@ -200,9 +200,9 @@ test_that("svd() with L1 via krylov applies sparsity", {
 test_that("svd() krylov+nonneg+L1 combined constraints", {
   set.seed(42)
   A_combo <- matrix(abs(rnorm(80 * 40)), 80, 40)
-  res <- RcppML::svd(A_combo, k = 3, nonneg = TRUE, L1 = c(0, 0.5),
+  res <- suppressWarnings(RcppML::svd(A_combo, k = 3, nonneg = TRUE, L1 = c(0, 0.5),
                      method = "krylov", seed = 1, maxit = 200,
-                     tol = 1e-6, test_fraction = 0)
+                     tol = 1e-6, test_fraction = 0))
   expect_s4_class(res, "svd")
   expect_true(all(res@u >= -1e-8), info = "krylov nonneg+L1: U non-negative")
   expect_true(all(res@v >= -1e-8), info = "krylov nonneg+L1: V non-negative")
@@ -215,8 +215,8 @@ test_that("krylov vs deflation nonneg quality is comparable", {
   A_nn <- matrix(abs(rnorm(80 * 40)), 80, 40)
   defl <- RcppML::svd(A_nn, k = 3, nonneg = TRUE, method = "deflation",
                       seed = 1, maxit = 200, tol = 1e-6, test_fraction = 0)
-  kry <- RcppML::svd(A_nn, k = 3, nonneg = TRUE, method = "krylov",
-                     seed = 1, maxit = 200, tol = 1e-6, test_fraction = 0)
+  kry <- suppressWarnings(RcppML::svd(A_nn, k = 3, nonneg = TRUE, method = "krylov",
+                     seed = 1, maxit = 200, tol = 1e-6, test_fraction = 0))
   # Both should reconstruct to similar quality
   A_hat_defl <- reconstruct(defl)
   A_hat_kry <- reconstruct(kry)
@@ -225,6 +225,45 @@ test_that("krylov vs deflation nonneg quality is comparable", {
   # Both should have reasonable reconstruction (<50% relative error for k=3)
   expect_lt(err_defl, 0.5)
   expect_lt(err_kry, 0.5)
+})
+
+test_that("deflation nonneg PCA keeps every component non-negative (mixed-sign data)", {
+  # Half the features are anti-correlated with the other half, so the
+  # unconstrained PC1 has mixed signs and later factors overlap earlier ones.
+  set.seed(3)
+  f <- rnorm(600)
+  X <- sapply(1:30, function(j) (if (j <= 15) f else -f) * runif(1, .3, 1) + rnorm(600))
+  res <- RcppML::svd(t(X), k = 3, center = TRUE, nonneg = c(TRUE, FALSE),
+                     method = "deflation", seed = 1, test_fraction = 0)
+  expect_true(all(res@u >= 0))
+  expect_true(all(colSums(res@u > 0) > 0), info = "no all-zero components")
+})
+
+test_that("deflation L1 sparsity is preserved on later factors", {
+  set.seed(5)
+  A <- matrix(rnorm(60 * 300), 60, 300)
+  A[1:20, ] <- A[1:20, ] + outer(rnorm(20, 2), rnorm(300))
+  res <- RcppML::svd(A, k = 3, center = TRUE, L1 = c(2, 0),
+                     method = "deflation", seed = 1, test_fraction = 0)
+  expect_true(all(colSums(res@u == 0) > 0),
+              info = "each factor keeps exact zeros from L1 soft-thresholding")
+})
+
+test_that("auto method uses deflation for nonneg/L1 constraints at any k", {
+  set.seed(9)
+  A <- matrix(abs(rnorm(200 * 60)), 200, 60)
+  res <- RcppML::svd(A, k = 8, nonneg = TRUE, seed = 1, test_fraction = 0)
+  expect_equal(res@misc$method, "deflation")
+})
+
+test_that("krylov with nonneg and k > 1 warns", {
+  set.seed(9)
+  A <- matrix(abs(rnorm(100 * 40)), 100, 40)
+  expect_warning(RcppML::svd(A, k = 3, nonneg = TRUE, method = "krylov",
+                             seed = 1, test_fraction = 0),
+                 "redundant or all-zero")
+  expect_no_warning(RcppML::svd(A, k = 1, nonneg = TRUE, method = "krylov",
+                                seed = 1, test_fraction = 0))
 })
 
 # ===========================================================================
