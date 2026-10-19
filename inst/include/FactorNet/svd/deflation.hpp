@@ -619,6 +619,13 @@ SVDResult<Scalar> deflation_svd(const MatrixType& A,
         col_weights.setOnes();
     }
 
+    // Element-wise constraints on a side make that side's factors
+    // incompatible with Gram-Schmidt (see post-factor reorthogonalization).
+    const bool u_constrained = config.nonneg_u || config.L1_u > 0 ||
+                               config.upper_bound_u > 0;
+    const bool v_constrained = config.nonneg_v || config.L1_v > 0 ||
+                               config.upper_bound_v > 0;
+
     for (int k = 0; k < k_max; ++k) {
         SVD_CHECK_INTERRUPT();
 
@@ -627,8 +634,11 @@ SVDResult<Scalar> deflation_svd(const MatrixType& A,
         // Power-step warm start gives good initial direction
         // Nesterov momentum halves iteration count for clustered SVs
         // ============================================================
-        
-        if (k == 0) {
+
+        // Constrained u: the orthogonalized power-step warm start can point
+        // into the negative orthant and collapse to zero after projection,
+        // so use a fresh non-negative random start instead.
+        if (k == 0 || u_constrained) {
             // Random initialization for first factor
             for (int i = 0; i < m; ++i) {
                 u(i) = static_cast<Scalar>(rng.uniform<double>());
@@ -824,28 +834,37 @@ SVDResult<Scalar> deflation_svd(const MatrixType& A,
         // Two-pass GS ensures orthogonality drift stays below eps
         // at high k. Cost: O(k*(m+n)) — negligible vs O(nnz) SpMV.
         // ============================================================
+        // Gram-Schmidt is skipped on any side with projection constraints
+        // (nonneg, L1, upper bound): subtracting projections onto prior
+        // factors re-introduces negative entries and destroys sparsity, so
+        // constrained factors are returned as fitted (non-orthogonal), as in
+        // other constrained/sparse PCA methods.
         if (k > 0) {
             auto U_prev = U_all.leftCols(k);
             auto V_prev = V_all.leftCols(k);
 
             // Reorthogonalize u against U_all[:, 0:k-1] (two passes)
-            for (int pass = 0; pass < 2; ++pass) {
-                DenseVector<Scalar> dots_u = U_prev.transpose() * u;
-                u.noalias() -= U_prev * dots_u;
-            }
-            Scalar u_norm_gs = u.norm();
-            if (u_norm_gs > std::numeric_limits<Scalar>::epsilon() * 100) {
-                u /= u_norm_gs;
+            if (!u_constrained) {
+                for (int pass = 0; pass < 2; ++pass) {
+                    DenseVector<Scalar> dots_u = U_prev.transpose() * u;
+                    u.noalias() -= U_prev * dots_u;
+                }
+                Scalar u_norm_gs = u.norm();
+                if (u_norm_gs > std::numeric_limits<Scalar>::epsilon() * 100) {
+                    u /= u_norm_gs;
+                }
             }
 
             // Reorthogonalize v against V_all[:, 0:k-1] (two passes)
-            for (int pass = 0; pass < 2; ++pass) {
-                DenseVector<Scalar> dots_v = V_prev.transpose() * v;
-                v.noalias() -= V_prev * dots_v;
-            }
-            Scalar v_norm_gs = v.norm();
-            if (v_norm_gs > std::numeric_limits<Scalar>::epsilon() * 100) {
-                v /= v_norm_gs;
+            if (!v_constrained) {
+                for (int pass = 0; pass < 2; ++pass) {
+                    DenseVector<Scalar> dots_v = V_prev.transpose() * v;
+                    v.noalias() -= V_prev * dots_v;
+                }
+                Scalar v_norm_gs = v.norm();
+                if (v_norm_gs > std::numeric_limits<Scalar>::epsilon() * 100) {
+                    v /= v_norm_gs;
+                }
             }
         }
 
