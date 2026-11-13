@@ -46,7 +46,13 @@ enum class SVDMethod {
  *   32 <= k < 64: Randomized (cuSPARSE SpMM + cuSOLVER QR, fixed cost)
  *   k >= 64:    IRLBA (implicit restart scales well at high rank)
  *
- * Constraints override: Krylov (k≥8) or Deflation (k<8)
+ * Constraints override: Deflation (rank-one fits with projection deflation;
+ * the block Krylov solve-then-project can return redundant or all-zero
+ * components under nonneg/L1).
+ *
+ * NOTE: R/svd.R resolves method = "auto" itself and is the authority (it also
+ * routes L2/L21 and masks to Krylov and cross-validation to deflation). This
+ * function is kept for C++ callers.
  *
  * @param k Target rank
  * @param m Number of rows
@@ -67,13 +73,13 @@ inline SVDMethod auto_select_svd_method(
 {
     // If constraints are active, must use constrained methods
     if (has_constraints) {
-        // Krylov is faster for block methods, deflation for small k
-        return (k >= 8) ? SVDMethod::KRYLOV : SVDMethod::DEFLATION;
+        return SVDMethod::DEFLATION;
     }
 
     // Sanity check: Very high rank relative to dimensions
+    // (also when the matrix is small relative to k, as in R/svd.R)
     int min_dim = std::min(m, n);
-    if (k >= min_dim - 10) {
+    if (k >= min_dim - 10 || min_dim < 4 * k) {
         return SVDMethod::IRLBA;
     }
 

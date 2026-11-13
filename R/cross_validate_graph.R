@@ -33,8 +33,10 @@
 #'   and \code{patience} fields are used for cross-validation.
 #'   If \code{test_fraction} is 0 (default), it is automatically
 #'   set to 0.1.
-#' @param reps Number of CV replicates per parameter combination (each
-#'   with a different CV mask seed). Default 3.
+#' @param reps Number of CV replicates per parameter combination. Replicate
+#'   \code{r} uses the mask seed \code{seed + r} for every parameter
+#'   combination, so combinations are compared on the same held-out entries
+#'   (a paired comparison). Default 3.
 #' @param strategy Search strategy: \code{"grid"} (all combinations) or
 #'   \code{"random"} (sample \code{n_random} combinations). Default "grid".
 #' @param n_random Number of combinations for random search. Ignored
@@ -135,7 +137,10 @@ cross_validate_graph <- function(inputs, layer_fn, params,
       idx <- idx + 1L
 
       # Per-rep CV seed
-      rep_cv_seed <- as.integer(seed + (ci - 1L) * reps + ri)
+      # The mask seed depends on the replicate only, so every parameter
+      # combination is evaluated on the same held-out entries within a
+      # replicate and the comparison between combinations is paired.
+      rep_cv_seed <- as.integer(seed + ri)
       cv_config <- config
       cv_config$cv_seed <- rep_cv_seed
 

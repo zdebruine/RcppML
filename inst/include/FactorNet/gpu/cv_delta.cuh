@@ -97,7 +97,7 @@ __global__ void compute_cv_deltas_h_global_kernel(
         h = (h ^ (h >> 30)) * 0xbf58476d1ce4e5b9ULL;
         h = (h ^ (h >> 27)) * 0x94d049bb133111ebULL;
         h ^= h >> 31;
-        bool is_test = (inv_prob > 0) && (h < (0xFFFFFFFFFFFFFFFFULL / inv_prob));
+        bool is_test = (h < inv_prob)  /* inv_prob carries the threshold f * 2^64 */;
 
         if (is_test) {
             for (int f = 0; f < k; ++f) {
@@ -173,7 +173,7 @@ __global__ void compute_cv_deltas_w_global_kernel(
         h = (h ^ (h >> 30)) * 0xbf58476d1ce4e5b9ULL;
         h = (h ^ (h >> 27)) * 0x94d049bb133111ebULL;
         h ^= h >> 31;
-        bool is_test = (inv_prob > 0) && (h < (0xFFFFFFFFFFFFFFFFULL / inv_prob));
+        bool is_test = (h < inv_prob)  /* inv_prob carries the threshold f * 2^64 */;
 
         if (is_test) {
             for (int f = 0; f < k; ++f) {
@@ -251,7 +251,7 @@ __global__ void add_zero_test_deltas_h_kernel(
             h = (h ^ (h >> 30)) * 0xbf58476d1ce4e5b9ULL;
             h = (h ^ (h >> 27)) * 0x94d049bb133111ebULL;
             h ^= h >> 31;
-            add_to_delta = (inv_prob > 0) && (h < (0xFFFFFFFFFFFFFFFFULL / inv_prob));
+            add_to_delta = (h < inv_prob)  /* inv_prob carries the threshold f * 2^64 */;
         }
 
         if (add_to_delta) {
@@ -405,7 +405,7 @@ __global__ void add_zero_test_deltas_w_kernel(
             h = (h ^ (h >> 30)) * 0xbf58476d1ce4e5b9ULL;
             h = (h ^ (h >> 27)) * 0x94d049bb133111ebULL;
             h ^= h >> 31;
-            add_to_delta = (inv_prob > 0) && (h < (0xFFFFFFFFFFFFFFFFULL / inv_prob));
+            add_to_delta = (h < inv_prob)  /* inv_prob carries the threshold f * 2^64 */;
         }
 
         if (add_to_delta) {

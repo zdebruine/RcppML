@@ -73,6 +73,10 @@ struct DensityModel {
         double d = density_at(row);
         // Expected gap for geometric with success prob = d: (1-d)/d
         double predicted = (1.0 - d) / d;
+        // Keep the float-to-int conversion in range (a model read from a
+        // damaged file can hold a zero density)
+        if (!(predicted < 2147483647.0)) return 2147483647;
+        if (predicted < 0.0) return 0;
         return static_cast<int32_t>(std::round(predicted));
     }
 
@@ -93,6 +97,25 @@ struct DensityModel {
         DensityModel dm;
         dm.n_blocks = static_cast<uint32_t>(varint::decode(ptr));
         dm.block_size = static_cast<uint32_t>(varint::decode(ptr));
+        dm.block_density_q.resize(dm.n_blocks);
+        for (uint32_t b = 0; b < dm.n_blocks; ++b) {
+            dm.block_density_q[b] = static_cast<uint16_t>(ptr[0])
+                                  | (static_cast<uint16_t>(ptr[1]) << 8);
+            ptr += 2;
+        }
+        return dm;
+    }
+
+    // Bounded deserialize for file data: never reads at or past `end`, and
+    // rejects a model that density_at() could not index.
+    static DensityModel deserialize(const uint8_t*& ptr, const uint8_t* end) {
+        DensityModel dm;
+        dm.n_blocks = static_cast<uint32_t>(varint::decode(ptr, end));
+        dm.block_size = static_cast<uint32_t>(varint::decode(ptr, end));
+        if (dm.n_blocks == 0 || dm.block_size == 0)
+            spz_corrupt("density model is empty");
+        if (static_cast<size_t>(end - ptr) / 2 < dm.n_blocks)
+            spz_corrupt("density model is truncated");
         dm.block_density_q.resize(dm.n_blocks);
         for (uint32_t b = 0; b < dm.n_blocks; ++b) {
             dm.block_density_q[b] = static_cast<uint16_t>(ptr[0])
@@ -143,7 +166,12 @@ struct ValuePredictor {
     uint32_t predict(uint32_t row, uint32_t col_nnz) const {
         double rm = static_cast<double>(row_mean_q[row]) / 256.0;
         double col_ratio = static_cast<double>(col_nnz) / global_col_mean;
-        int32_t predicted = static_cast<int32_t>(std::round(rm * col_ratio));
+        const double pred_d = std::round(rm * col_ratio);
+        // Keep the float-to-int conversion in range (global_col_mean read
+        // from a damaged file can be zero)
+        if (!(pred_d < 2147483647.0)) return 2147483647u;
+        if (pred_d < 1.0) return 1u;
+        int32_t predicted = static_cast<int32_t>(pred_d);
         return static_cast<uint32_t>(std::max(1, predicted));
     }
 
@@ -176,6 +204,25 @@ struct ValuePredictor {
         for (uint32_t r = 0; r < m; ++r) {
             int32_t d = static_cast<int32_t>(varint::decode_signed(ptr));
             prev += d;
+            vp.row_mean_q[r] = static_cast<uint16_t>(prev & 0xFFFF);
+        }
+        return vp;
+    }
+
+    // Bounded deserialize for file data: never reads at or past `end`.
+    static ValuePredictor deserialize(const uint8_t*& ptr, const uint8_t* end) {
+        ValuePredictor vp;
+        uint32_t m = static_cast<uint32_t>(varint::decode(ptr, end));
+        uint32_t gcm_q = static_cast<uint32_t>(varint::decode(ptr, end));
+        vp.global_col_mean = static_cast<double>(gcm_q) / 256.0;
+        // Each row mean takes at least one byte
+        if (m > static_cast<size_t>(end - ptr))
+            spz_corrupt("value model is truncated");
+        vp.row_mean_q.resize(m);
+        uint32_t prev = 0;
+        for (uint32_t r = 0; r < m; ++r) {
+            const int64_t d = varint::decode_signed(ptr, end);
+            prev += static_cast<uint32_t>(d);   // modular, as in the encoder
             vp.row_mean_q[r] = static_cast<uint16_t>(prev & 0xFFFF);
         }
         return vp;

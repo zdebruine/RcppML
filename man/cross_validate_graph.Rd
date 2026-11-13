@@ -34,8 +34,10 @@ and \code{patience} fields are used for cross-validation.
 If \code{test_fraction} is 0 (default), it is automatically
 set to 0.1.}
 
-\item{reps}{Number of CV replicates per parameter combination (each
-with a different CV mask seed). Default 3.}
+\item{reps}{Number of CV replicates per parameter combination. Replicate
+\code{r} uses the mask seed \code{seed + r} for every parameter
+combination, so combinations are compared on the same held-out entries
+(a paired comparison). Default 3.}
 
 \item{strategy}{Search strategy: \code{"grid"} (all combinations) or
 \code{"random"} (sample \code{n_random} combinations). Default "grid".}

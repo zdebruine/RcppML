@@ -30,8 +30,11 @@ loss across candidate ranks. Useful for selecting the optimal factorization rank
 \donttest{
 library(Matrix)
 A <- abs(rsparsematrix(50, 30, 0.3))
-cv_result <- nmf(A, k = 2:6, test_fraction = 0.1, cv_seed = 1, maxit = 20)
-plot(cv_result)
+cv_result <- nmf(A, k = 2:6, test_fraction = 0.1, cv_seed = 1, maxit = 20,
+                 threads = 2)
+if (requireNamespace("ggplot2", quietly = TRUE)) {
+  plot(cv_result)
+}
 }
 }
 \seealso{

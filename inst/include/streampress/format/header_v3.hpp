@@ -165,6 +165,7 @@ struct FileHeader_v3 {
     }
 
     static FileHeader_v3 deserialize(const uint8_t* buf) {
+        require_little_endian();
         if (std::memcmp(buf, HEADER_MAGIC_V3, 4) != 0) {
             throw std::runtime_error("Invalid magic bytes (not a SparsePress file)");
         }

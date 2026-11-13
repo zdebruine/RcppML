@@ -156,6 +156,18 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// Rcpp_test_sparse_setup
+Rcpp::List Rcpp_test_sparse_setup(const Rcpp::S4& A_s4, int threads);
+RcppExport SEXP _RcppML_Rcpp_test_sparse_setup(SEXP A_s4SEXP, SEXP threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Rcpp::S4& >::type A_s4(A_s4SEXP);
+    Rcpp::traits::input_parameter< int >::type threads(threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_test_sparse_setup(A_s4, threads));
+    return rcpp_result_gen;
+END_RCPP
+}
 // Rcpp_svd_pca
 Rcpp::List Rcpp_svd_pca(SEXP A_sexp, int k_max, double tol, int max_iter, bool center, bool scale, bool verbose, unsigned int seed, int threads, double L1_u, double L1_v, double L2_u, double L2_v, bool nonneg_u, bool nonneg_v, double upper_bound_u, double upper_bound_v, double L21_u, double L21_v, double angular_u, double angular_v, Rcpp::Nullable<Rcpp::S4> graph_u, Rcpp::Nullable<Rcpp::S4> graph_v, double graph_u_lambda, double graph_v_lambda, double test_fraction, unsigned int cv_seed, int patience, bool mask_zeros, Rcpp::Nullable<Rcpp::S4> obs_mask, std::string convergence, std::string method, double robust_delta, int irls_max_iter, double irls_tol);
 RcppExport SEXP _RcppML_Rcpp_svd_pca(SEXP A_sexpSEXP, SEXP k_maxSEXP, SEXP tolSEXP, SEXP max_iterSEXP, SEXP centerSEXP, SEXP scaleSEXP, SEXP verboseSEXP, SEXP seedSEXP, SEXP threadsSEXP, SEXP L1_uSEXP, SEXP L1_vSEXP, SEXP L2_uSEXP, SEXP L2_vSEXP, SEXP nonneg_uSEXP, SEXP nonneg_vSEXP, SEXP upper_bound_uSEXP, SEXP upper_bound_vSEXP, SEXP L21_uSEXP, SEXP L21_vSEXP, SEXP angular_uSEXP, SEXP angular_vSEXP, SEXP graph_uSEXP, SEXP graph_vSEXP, SEXP graph_u_lambdaSEXP, SEXP graph_v_lambdaSEXP, SEXP test_fractionSEXP, SEXP cv_seedSEXP, SEXP patienceSEXP, SEXP mask_zerosSEXP, SEXP obs_maskSEXP, SEXP convergenceSEXP, SEXP methodSEXP, SEXP robust_deltaSEXP, SEXP irls_max_iterSEXP, SEXP irls_tolSEXP) {
@@ -247,8 +259,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // Rcpp_predict
-Eigen::MatrixXd Rcpp_predict(SEXP A_sexp, const Rcpp::S4& mask, Eigen::MatrixXd w, const double L1, const double L2, const unsigned int threads, const bool mask_zeros, const double upper_bound);
-RcppExport SEXP _RcppML_Rcpp_predict(SEXP A_sexpSEXP, SEXP maskSEXP, SEXP wSEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP threadsSEXP, SEXP mask_zerosSEXP, SEXP upper_boundSEXP) {
+Eigen::MatrixXd Rcpp_predict(SEXP A_sexp, const Rcpp::S4& mask, Eigen::MatrixXd w, const double L1, const double L2, const unsigned int threads, const bool mask_zeros, const double upper_bound, const bool nonneg);
+RcppExport SEXP _RcppML_Rcpp_predict(SEXP A_sexpSEXP, SEXP maskSEXP, SEXP wSEXP, SEXP L1SEXP, SEXP L2SEXP, SEXP threadsSEXP, SEXP mask_zerosSEXP, SEXP upper_boundSEXP, SEXP nonnegSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -260,7 +272,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const unsigned int >::type threads(threadsSEXP);
     Rcpp::traits::input_parameter< const bool >::type mask_zeros(mask_zerosSEXP);
     Rcpp::traits::input_parameter< const double >::type upper_bound(upper_boundSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_predict(A_sexp, mask, w, L1, L2, threads, mask_zeros, upper_bound));
+    Rcpp::traits::input_parameter< const bool >::type nonneg(nonnegSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_predict(A_sexp, mask, w, L1, L2, threads, mask_zeros, upper_bound, nonneg));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -701,9 +714,10 @@ static const R_CallMethodDef CallEntries[] = {
     {"_RcppML_Rcpp_nmf_rank_cv", (DL_FUNC) &_RcppML_Rcpp_nmf_rank_cv, 12},
     {"_RcppML_Rcpp_nmf_full", (DL_FUNC) &_RcppML_Rcpp_nmf_full, 60},
     {"_RcppML_Rcpp_nmf_streaming_spz", (DL_FUNC) &_RcppML_Rcpp_nmf_streaming_spz, 31},
+    {"_RcppML_Rcpp_test_sparse_setup", (DL_FUNC) &_RcppML_Rcpp_test_sparse_setup, 2},
     {"_RcppML_Rcpp_svd_pca", (DL_FUNC) &_RcppML_Rcpp_svd_pca, 35},
     {"_RcppML_Rcpp_svd_streaming_spz", (DL_FUNC) &_RcppML_Rcpp_svd_streaming_spz, 35},
-    {"_RcppML_Rcpp_predict", (DL_FUNC) &_RcppML_Rcpp_predict, 8},
+    {"_RcppML_Rcpp_predict", (DL_FUNC) &_RcppML_Rcpp_predict, 9},
     {"_RcppML_Rcpp_evaluate_loss", (DL_FUNC) &_RcppML_Rcpp_evaluate_loss, 9},
     {"_RcppML_Rcpp_evaluate_loss_missing", (DL_FUNC) &_RcppML_Rcpp_evaluate_loss_missing, 8},
     {"_RcppML_Rcpp_bipartition", (DL_FUNC) &_RcppML_Rcpp_bipartition, 10},

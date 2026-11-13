@@ -31,7 +31,7 @@ recoverable factors even at moderate noise levels. Inspired by \code{NMF::synthe
 }
 \examples{
 data <- simulateNMF(50, 30, k = 3, noise = 0.1, seed = 42)
-dim(data$A)  # 50 x 3
+dim(data$A)  # 50 x 30
 dim(data$w)  # 50 x 3
 dim(data$h)  # 3 x 30
 

@@ -21,11 +21,14 @@
 #pragma once
 
 #include <FactorNet/gpu/context.cuh>
+#include <FactorNet/gpu/batch_nnls.cuh>   // batch_cd_nnls_gpu for the KKT polish
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 #include <cusolverDn.h>
 #include <vector>
 #include <algorithm>
+#include <limits>
+#include <type_traits>
 
 namespace FactorNet {
 namespace gpu {
@@ -47,82 +50,105 @@ __global__ void clip_nonneg_kernel(Scalar* X, int size, bool nonneg) {
 // ============================================================================
 
 /**
- * @brief Solve G * X = B via Cholesky, then clip X >= 0
+ * @brief Exact (non-negative) least squares for all columns: Cholesky solve,
+ *        clip, then coordinate descent until the KKT conditions hold.
  *
  * All operations on GPU:
- *   1. cusolverDnDpotrf: G = L * L^T (Cholesky factorization)
- *   2. cublasDtrsm: solve L * Y = B  (forward substitution)
- *   3. cublasDtrsm: solve L^T * X = Y (backward substitution)
- *   4. Clip: X = max(0, X)
- *
- * G, B, X all device-resident. Zero host-device transfers.
+ *   1. potrf: G = L L^T
+ *   2. two trsm: X = G^{-1} B  (exact when no constraint is active)
+ *   3. clip X at zero (nonneg only)
+ *   4. warm-started coordinate descent on the original G and B until no
+ *      coordinate of a column moves by more than tol * max|x| (nonneg only).
+ *      Clipping alone is not the non-negative least squares solution.
+ * If the factorization fails (G not positive definite, e.g. an empty or
+ * duplicated factor), the solve is done by coordinate descent alone.
  *
  * @param ctx      GPU context with cuBLAS handle
  * @param G        Gram matrix (k × k), overwritten with L (lower triangular)
- * @param B        RHS (k × n), overwritten during solve
+ * @param B        RHS (k × n), not modified
  * @param X        Solution (k × n), output
- * @param nonneg   Enforce non-negativity via clipping
+ * @param nonneg   Enforce non-negativity
+ * @param polish_sweeps  Cap on coordinate-descent sweeps (0 disables the
+ *                 polish and returns the clipped solution)
+ * @param tol      Relative stopping tolerance for the sweeps; <= 0 selects
+ *                 16 machine epsilons, the smallest change a float iterate
+ *                 can still resolve reliably
  */
 template<typename Scalar>
 void cholesky_clip_batch_gpu(
     GPUContext& ctx,
     DenseMatrixGPU<Scalar>& G,     // k×k, overwritten
-    DenseMatrixGPU<Scalar>& B,     // k×n, overwritten
+    DenseMatrixGPU<Scalar>& B,     // k×n
     DenseMatrixGPU<Scalar>& X,     // k×n, output
-    bool nonneg)
+    bool nonneg,
+    int polish_sweeps = 200,
+    Scalar tol = Scalar(0))
 {
     const int k = G.rows;
     const int n = X.cols;
+    const Scalar cd_tol = tol > Scalar(0)
+        ? tol
+        : static_cast<Scalar>(16) * std::numeric_limits<Scalar>::epsilon();
+    // The convergence stop exists for k <= 64; larger ranks run every sweep
+    const int sweeps = (k <= 64) ? polish_sweeps : std::min(polish_sweeps, 100);
 
-    // Create cuSOLVER handle if needed
-    cusolverDnHandle_t cusolver_handle;
-    CUSOLVER_CHECK(cusolverDnCreate(&cusolver_handle));
-    CUSOLVER_CHECK(cusolverDnSetStream(cusolver_handle, ctx.stream));
+    // potrf overwrites the lower triangle of G with the Cholesky factor, so
+    // keep an intact copy for coordinate descent.
+    DenseMatrixGPU<Scalar> G_full(k, k);
+    CUDA_CHECK(cudaMemcpyAsync(G_full.data.get(), G.data.get(),
+                               static_cast<size_t>(k) * k * sizeof(Scalar),
+                               cudaMemcpyDeviceToDevice, ctx.stream));
 
-    // 1. Cholesky factorization: G = L * L^T
+    // 1. Cholesky factorization: G = L * L^T (the context's cuSOLVER handle)
     int lwork = 0;
     if constexpr (std::is_same_v<Scalar, double>) {
         CUSOLVER_CHECK(cusolverDnDpotrf_bufferSize(
-            cusolver_handle, CUBLAS_FILL_MODE_LOWER, k, G.data.get(), k, &lwork));
+            ctx.cusolver, CUBLAS_FILL_MODE_LOWER, k, G.data.get(), k, &lwork));
     } else {
         CUSOLVER_CHECK(cusolverDnSpotrf_bufferSize(
-            cusolver_handle, CUBLAS_FILL_MODE_LOWER, k, G.data.get(), k, &lwork));
+            ctx.cusolver, CUBLAS_FILL_MODE_LOWER, k, G.data.get(), k, &lwork));
     }
 
-    DeviceMemory<Scalar> d_work(lwork);
+    DeviceMemory<Scalar> d_work(lwork > 0 ? lwork : 1);
     DeviceMemory<int> d_info(1);
 
     if constexpr (std::is_same_v<Scalar, double>) {
         CUSOLVER_CHECK(cusolverDnDpotrf(
-            cusolver_handle, CUBLAS_FILL_MODE_LOWER, k,
+            ctx.cusolver, CUBLAS_FILL_MODE_LOWER, k,
             G.data.get(), k, d_work.get(), lwork, d_info.get()));
     } else {
         CUSOLVER_CHECK(cusolverDnSpotrf(
-            cusolver_handle, CUBLAS_FILL_MODE_LOWER, k,
+            ctx.cusolver, CUBLAS_FILL_MODE_LOWER, k,
             G.data.get(), k, d_work.get(), lwork, d_info.get()));
     }
 
-    // Copy B to X (will be overwritten by triangular solves)
+    // Did the factorization succeed? (k × k, so this sync is cheap)
+    int h_info = 0;
+    CUDA_CHECK(cudaStreamSynchronize(ctx.stream));
+    CUDA_CHECK(cudaMemcpy(&h_info, d_info.get(), sizeof(int),
+                          cudaMemcpyDeviceToHost));
+
+    if (h_info != 0) {
+        // G is not positive definite: coordinate descent from a cold start
+        // (it skips coordinates with a zero diagonal).
+        batch_cd_nnls_gpu(ctx, G_full, B, X, std::max(sweeps, 1000),
+                          nonneg, /*warm_start=*/false, cd_tol);
+        CUDA_CHECK(cudaStreamSynchronize(ctx.stream));
+        return;
+    }
+
+    // Copy B to X (overwritten by the triangular solves)
     CUDA_CHECK(cudaMemcpyAsync(X.data.get(), B.data.get(),
                                static_cast<size_t>(k) * n * sizeof(Scalar),
                                cudaMemcpyDeviceToDevice, ctx.stream));
 
-    // 2. Forward solve: L * Y = B  =>  Y overwrites X
+    // 2. Forward solve L * Y = B, then backward solve L^T * X = Y
     const Scalar one = 1.0;
     if constexpr (std::is_same_v<Scalar, double>) {
         CUBLAS_CHECK(cublasDtrsm(ctx.handle,
             CUBLAS_SIDE_LEFT, CUBLAS_FILL_MODE_LOWER,
             CUBLAS_OP_N, CUBLAS_DIAG_NON_UNIT,
             k, n, &one, G.data.get(), k, X.data.get(), k));
-    } else {
-        CUBLAS_CHECK(cublasStrsm(ctx.handle,
-            CUBLAS_SIDE_LEFT, CUBLAS_FILL_MODE_LOWER,
-            CUBLAS_OP_N, CUBLAS_DIAG_NON_UNIT,
-            k, n, &one, G.data.get(), k, X.data.get(), k));
-    }
-
-    // 3. Backward solve: L^T * X = Y  =>  X is final solution
-    if constexpr (std::is_same_v<Scalar, double>) {
         CUBLAS_CHECK(cublasDtrsm(ctx.handle,
             CUBLAS_SIDE_LEFT, CUBLAS_FILL_MODE_LOWER,
             CUBLAS_OP_T, CUBLAS_DIAG_NON_UNIT,
@@ -130,19 +156,30 @@ void cholesky_clip_batch_gpu(
     } else {
         CUBLAS_CHECK(cublasStrsm(ctx.handle,
             CUBLAS_SIDE_LEFT, CUBLAS_FILL_MODE_LOWER,
+            CUBLAS_OP_N, CUBLAS_DIAG_NON_UNIT,
+            k, n, &one, G.data.get(), k, X.data.get(), k));
+        CUBLAS_CHECK(cublasStrsm(ctx.handle,
+            CUBLAS_SIDE_LEFT, CUBLAS_FILL_MODE_LOWER,
             CUBLAS_OP_T, CUBLAS_DIAG_NON_UNIT,
             k, n, &one, G.data.get(), k, X.data.get(), k));
     }
 
-    // 4. Clip negatives
     if (nonneg) {
+        // 3. Clip negatives
+        const size_t total = static_cast<size_t>(k) * n;
         int threads = 256;
-        int blocks = (k * n + threads - 1) / threads;
+        int blocks = static_cast<int>((total + threads - 1) / threads);
         clip_nonneg_kernel<<<blocks, threads, 0, ctx.stream>>>(
-            X.data.get(), k * n, nonneg);
-    }
+            X.data.get(), static_cast<int>(total), nonneg);
 
-    CUSOLVER_CHECK(cusolverDnDestroy(cusolver_handle));
+        // 4. Polish to the KKT point: warm-started coordinate descent
+        if (sweeps > 0) {
+            batch_cd_nnls_gpu(ctx, G_full, B, X, sweeps,
+                              /*nonneg=*/true, /*warm_start=*/true, cd_tol);
+        }
+    }
+    // G_full, d_work and d_info are released on return; let the work finish
+    CUDA_CHECK(cudaStreamSynchronize(ctx.stream));
 }
 
 // ============================================================================

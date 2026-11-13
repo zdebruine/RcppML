@@ -17,6 +17,7 @@
 #include <streampress/format/header_v2.hpp>  // Footer_v2, float_to_half, half_to_float
 #include <streampress/format/checksum.hpp>    // CRC32
 #include <streampress/codec/rans.hpp>
+#include <streampress/core/checks.hpp>
 
 #include <cstdint>
 #include <cstring>
@@ -157,29 +158,38 @@ inline void decode_dense_chunk(
 {
     const size_t n_elems = static_cast<size_t>(m) * num_cols;
 
+    // `compressed_size` is the number of bytes available for this panel;
+    // every codec is checked against it before reading.
     if (codec == DenseCodec::RAW_FP32) {
+        if (compressed_size / 4 < n_elems)
+            spz_corrupt("dense panel is smaller than its dimensions");
         std::memcpy(out, compressed, n_elems * 4);
         return;
     }
 
     if (codec == DenseCodec::FP16) {
+        if (compressed_size / 2 < n_elems)
+            spz_corrupt("dense panel is smaller than its dimensions");
         std::vector<uint8_t> raw(compressed, compressed + compressed_size);
         if (delta_encode)
             xor_delta_decode(raw.data(), raw.size());
-        const uint16_t* fp16 = reinterpret_cast<const uint16_t*>(raw.data());
         for (size_t i = 0; i < n_elems; ++i)
-            out[i] = streampress::v2::half_to_float(fp16[i]);
+            out[i] = streampress::v2::half_to_float(load_u16(raw.data() + 2 * i));
         return;
     }
 
     if (codec == DenseCodec::FP16_RANS) {
         // Parse: [table_size(4)][table_bytes][encoded_bytes]
+        if (compressed_size < 4)
+            spz_corrupt("dense panel is truncated");
         uint32_t tbl_sz;
         std::memcpy(&tbl_sz, compressed, 4);
+        if (tbl_sz > compressed_size - 4)
+            spz_corrupt("dense panel table extends past the panel");
         const uint8_t* tbl_ptr = compressed + 4;
-        RansTable table = RansTable::deserialize(tbl_ptr);
+        RansTable table = RansTable::deserialize(tbl_ptr, compressed + 4 + tbl_sz);
         const uint8_t* enc_ptr = compressed + 4 + tbl_sz;
-        size_t enc_size = compressed_size - 4 - tbl_sz;
+        size_t enc_size = static_cast<size_t>(compressed_size - 4 - tbl_sz);
 
         size_t n_bytes = n_elems * 2;  // fp16 = 2 bytes per elem
         std::vector<uint32_t> symbols(n_bytes);
@@ -192,19 +202,22 @@ inline void decode_dense_chunk(
         if (delta_encode)
             xor_delta_decode(raw.data(), raw.size());
 
-        const uint16_t* fp16 = reinterpret_cast<const uint16_t*>(raw.data());
         for (size_t i = 0; i < n_elems; ++i)
-            out[i] = streampress::v2::half_to_float(fp16[i]);
+            out[i] = streampress::v2::half_to_float(load_u16(raw.data() + 2 * i));
         return;
     }
 
     if (codec == DenseCodec::FP32_RANS) {
+        if (compressed_size < 4)
+            spz_corrupt("dense panel is truncated");
         uint32_t tbl_sz;
         std::memcpy(&tbl_sz, compressed, 4);
+        if (tbl_sz > compressed_size - 4)
+            spz_corrupt("dense panel table extends past the panel");
         const uint8_t* tbl_ptr = compressed + 4;
-        RansTable table = RansTable::deserialize(tbl_ptr);
+        RansTable table = RansTable::deserialize(tbl_ptr, compressed + 4 + tbl_sz);
         const uint8_t* enc_ptr = compressed + 4 + tbl_sz;
-        size_t enc_size = compressed_size - 4 - tbl_sz;
+        size_t enc_size = static_cast<size_t>(compressed_size - 4 - tbl_sz);
 
         size_t n_bytes = n_elems * 4;
         std::vector<uint32_t> symbols(n_bytes);
@@ -222,6 +235,8 @@ inline void decode_dense_chunk(
     }
 
     if (codec == DenseCodec::QUANT8) {
+        if (compressed_size < 8 || compressed_size - 8 < n_elems)
+            spz_corrupt("dense panel is smaller than its dimensions");
         float vmin, vmax;
         std::memcpy(&vmin, compressed, 4);
         std::memcpy(&vmax, compressed + 4, 4);
@@ -562,7 +577,7 @@ void read_forward_chunk(const uint8_t* buf, size_t size,
     uint64_t byte_offset, byte_size, uncompressed_sz;
 
     if (compressed) {
-        if (desc_offset + sizeof(DenseChunkDescriptorExt) > size)
+        if (!range_ok(desc_offset, sizeof(DenseChunkDescriptorExt), size))
             throw std::runtime_error("Chunk descriptor beyond file bounds");
         DenseChunkDescriptorExt desc;
         std::memcpy(&desc, buf + desc_offset, sizeof(desc));
@@ -572,7 +587,7 @@ void read_forward_chunk(const uint8_t* buf, size_t size,
         byte_size = desc.byte_size;
         uncompressed_sz = desc.uncompressed_size;
     } else {
-        if (desc_offset + sizeof(DenseChunkDescriptor) > size)
+        if (!range_ok(desc_offset, sizeof(DenseChunkDescriptor), size))
             throw std::runtime_error("Chunk descriptor beyond file bounds");
         DenseChunkDescriptor desc;
         std::memcpy(&desc, buf + desc_offset, sizeof(desc));
@@ -583,9 +598,12 @@ void read_forward_chunk(const uint8_t* buf, size_t size,
         uncompressed_sz = byte_size;
     }
 
-    const uint64_t panel_offset = header.data_offset + byte_offset;
-    if (panel_offset + byte_size > size)
+    if (header.data_offset > size ||
+        !range_ok(byte_offset, byte_size, size - header.data_offset))
         throw std::runtime_error("Panel data beyond file bounds");
+    const uint64_t panel_offset = header.data_offset + byte_offset;
+    if (static_cast<uint64_t>(col_start) + num_cols > header.n)
+        spz_corrupt("dense panel covers columns outside the matrix");
 
     const uint32_t m = header.m;
     const size_t n_elems = static_cast<size_t>(m) * num_cols;
@@ -603,16 +621,21 @@ void read_forward_chunk(const uint8_t* buf, size_t size,
         // Uncompressed: handle type conversion
         const uint8_t on_disk_bytes = dense_value_bytes(
             static_cast<DenseValueType>(header.value_type));
+        // The panel must hold n_elems values of the on-disk type; copy by
+        // element count (never by the size recorded in the file) and load
+        // with memcpy, since the panel is not aligned for float/double.
+        if (on_disk_bytes == 0 || byte_size / on_disk_bytes < n_elems)
+            spz_corrupt("dense panel is smaller than its dimensions");
+        const uint8_t* src = buf + panel_offset;
         if (on_disk_bytes == sizeof(Scalar)) {
-            std::memcpy(out_data.data(), buf + panel_offset, byte_size);
+            if (n_elems > 0)
+                std::memcpy(out_data.data(), src, n_elems * sizeof(Scalar));
         } else if (on_disk_bytes == 4 && sizeof(Scalar) == 8) {
-            const float* src = reinterpret_cast<const float*>(buf + panel_offset);
             for (size_t i = 0; i < n_elems; ++i)
-                out_data[i] = static_cast<Scalar>(src[i]);
+                out_data[i] = static_cast<Scalar>(load_f32(src + 4 * i));
         } else if (on_disk_bytes == 8 && sizeof(Scalar) == 4) {
-            const double* src = reinterpret_cast<const double*>(buf + panel_offset);
             for (size_t i = 0; i < n_elems; ++i)
-                out_data[i] = static_cast<Scalar>(src[i]);
+                out_data[i] = static_cast<Scalar>(load_f64(src + 8 * i));
         } else {
             throw std::runtime_error("Unsupported on-disk value size");
         }
@@ -659,7 +682,7 @@ void read_transpose_chunk(const uint8_t* buf, size_t size,
     uint64_t byte_offset, byte_size, uncompressed_sz;
 
     if (compressed) {
-        if (desc_offset + sizeof(DenseChunkDescriptorExt) > size)
+        if (!range_ok(desc_offset, sizeof(DenseChunkDescriptorExt), size))
             throw std::runtime_error("Transpose chunk descriptor beyond file bounds");
         DenseChunkDescriptorExt desc;
         std::memcpy(&desc, buf + desc_offset, sizeof(desc));
@@ -669,7 +692,7 @@ void read_transpose_chunk(const uint8_t* buf, size_t size,
         byte_size = desc.byte_size;
         uncompressed_sz = desc.uncompressed_size;
     } else {
-        if (desc_offset + sizeof(DenseChunkDescriptor) > size)
+        if (!range_ok(desc_offset, sizeof(DenseChunkDescriptor), size))
             throw std::runtime_error("Transpose chunk descriptor beyond file bounds");
         DenseChunkDescriptor desc;
         std::memcpy(&desc, buf + desc_offset, sizeof(desc));
@@ -680,9 +703,12 @@ void read_transpose_chunk(const uint8_t* buf, size_t size,
         uncompressed_sz = byte_size;
     }
 
-    const uint64_t panel_offset = header.transpose_data_offset + byte_offset;
-    if (panel_offset + byte_size > size)
+    if (header.transpose_data_offset > size ||
+        !range_ok(byte_offset, byte_size, size - header.transpose_data_offset))
         throw std::runtime_error("Transpose panel data beyond file bounds");
+    const uint64_t panel_offset = header.transpose_data_offset + byte_offset;
+    if (static_cast<uint64_t>(col_start) + num_cols > header.m)
+        spz_corrupt("dense transpose panel covers columns outside the matrix");
 
     const uint32_t n = header.n;
     const size_t n_elems = static_cast<size_t>(n) * num_cols;
@@ -698,16 +724,21 @@ void read_transpose_chunk(const uint8_t* buf, size_t size,
     } else {
         const uint8_t on_disk_bytes = dense_value_bytes(
             static_cast<DenseValueType>(header.value_type));
+        // The panel must hold n_elems values of the on-disk type; copy by
+        // element count (never by the size recorded in the file) and load
+        // with memcpy, since the panel is not aligned for float/double.
+        if (on_disk_bytes == 0 || byte_size / on_disk_bytes < n_elems)
+            spz_corrupt("dense panel is smaller than its dimensions");
+        const uint8_t* src = buf + panel_offset;
         if (on_disk_bytes == sizeof(Scalar)) {
-            std::memcpy(out_data.data(), buf + panel_offset, byte_size);
+            if (n_elems > 0)
+                std::memcpy(out_data.data(), src, n_elems * sizeof(Scalar));
         } else if (on_disk_bytes == 4 && sizeof(Scalar) == 8) {
-            const float* src = reinterpret_cast<const float*>(buf + panel_offset);
             for (size_t i = 0; i < n_elems; ++i)
-                out_data[i] = static_cast<Scalar>(src[i]);
+                out_data[i] = static_cast<Scalar>(load_f32(src + 4 * i));
         } else if (on_disk_bytes == 8 && sizeof(Scalar) == 4) {
-            const double* src = reinterpret_cast<const double*>(buf + panel_offset);
             for (size_t i = 0; i < n_elems; ++i)
-                out_data[i] = static_cast<Scalar>(src[i]);
+                out_data[i] = static_cast<Scalar>(load_f64(src + 8 * i));
         } else {
             throw std::runtime_error("Unsupported on-disk value size");
         }
@@ -730,6 +761,22 @@ void read_full_matrix(const uint8_t* buf, size_t size,
                       uint32_t& m, uint32_t& n)
 {
     FileHeader_v3 header = read_header_v3(buf, size);
+
+    // A full read sees the whole file: the footer must be present, and the
+    // CRC32 it records (when non-zero) must match the bytes before it.
+    if (size < HEADER_SIZE_V3 + streampress::v2::FOOTER_SIZE)
+        spz_corrupt("file is shorter than its header and footer");
+    {
+        streampress::v2::Footer_v2 footer = streampress::v2::Footer_v2::deserialize(
+            buf + size - streampress::v2::FOOTER_SIZE);
+        if (footer.file_crc32 != 0 &&
+            streampress::CRC32::compute(buf, size - streampress::v2::FOOTER_SIZE)
+                != footer.file_crc32)
+            spz_corrupt("CRC32 mismatch");
+    }
+    if (header.m > 0x7FFFFFFFu || header.n > 0x7FFFFFFFu)
+        spz_corrupt("matrix dimensions exceed 2^31 - 1");
+
     m = header.m;
     n = header.n;
     out_data.resize(static_cast<size_t>(m) * n);
@@ -740,9 +787,10 @@ void read_full_matrix(const uint8_t* buf, size_t size,
         read_forward_chunk<Scalar>(buf, size, header, c,
                                    chunk_data, col_start, num_cols);
         // Copy into output at correct column position
-        std::memcpy(out_data.data() + static_cast<size_t>(col_start) * m,
-                    chunk_data.data(),
-                    static_cast<size_t>(m) * num_cols * sizeof(Scalar));
+        if (!chunk_data.empty())
+            std::memcpy(out_data.data() + static_cast<size_t>(col_start) * m,
+                        chunk_data.data(),
+                        static_cast<size_t>(m) * num_cols * sizeof(Scalar));
     }
 }
 

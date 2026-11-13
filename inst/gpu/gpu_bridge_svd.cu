@@ -79,6 +79,7 @@ void rcppml_gpu_svd_pca_double(
     int* out_status)
 {
     try {
+        rcppml_check_gpu_dims(*m, *n, *k_max, false);
         FactorNet::SVDConfig<double> config;
         config.k_max = *k_max;
         config.tol = *tol;
@@ -246,6 +247,7 @@ void rcppml_gpu_svd_pca_float(
     int* out_status)
 {
     try {
+        rcppml_check_gpu_dims(*m, *n, *k_max, false);
         // Convert sparse values from double to float
         int nz = *nnz;
         std::vector<float> values_f(nz);
@@ -417,6 +419,7 @@ void rcppml_gpu_svd_pca_dense_double(
     int* out_status)
 {
     try {
+        rcppml_check_gpu_dims(*m, *n, *k_max, false);
         FactorNet::SVDConfig<double> config;
         config.k_max    = *k_max;
         config.tol      = *tol;
@@ -580,6 +583,7 @@ void rcppml_gpu_svd_pca_dense_float(
     int* out_status)
 {
     try {
+        rcppml_check_gpu_dims(*m, *n, *k_max, false);
         // Convert dense matrix from double to float
         const size_t mn = static_cast<size_t>(*m) * (*n);
         std::vector<float> A_f(mn);

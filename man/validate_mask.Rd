@@ -4,12 +4,15 @@
 \alias{validate_mask}
 \title{Validate mask parameter}
 \usage{
-validate_mask(mask, has_na = FALSE)
+validate_mask(mask, has_na = FALSE, dims = NULL)
 }
 \arguments{
 \item{mask}{NULL, character, matrix, or list}
 
 \item{has_na}{Logical; whether data contains NA values}
+
+\item{dims}{Optional \code{c(nrow, ncol)} of the data; when given, a custom
+mask matrix must have exactly these dimensions.}
 }
 \value{
 List with \code{mask_matrix} (dgCMatrix), \code{mask_zeros} (logical), and optionally \code{mask_na}

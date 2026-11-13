@@ -25,9 +25,38 @@ A \code{factor_net_result} object. Access per-layer results by
   \code{total_loss}, and \code{converged}.
 }
 \description{
-Executes the compiled graph from \code{factor_net()}. For single-layer
-networks, this delegates directly to \code{nmf()} for maximum performance.
-Multi-layer networks use R-level alternating least squares.
+Executes the compiled graph from \code{factor_net()}.
+}
+\details{
+\strong{Single-layer networks} run the same solver as \code{\link{nmf}}.
+A layer on \code{factor_shared()} inputs is one NMF of the row-bound
+inputs: \code{rbind(X1, X2, ...) ~ rbind(W1, W2, ...) diag(d) H}. The
+modalities are not reweighted, so a modality with more rows or larger
+values contributes more to the shared \code{H}; scale the inputs first
+if they should contribute equally.
+
+\strong{Multi-layer networks are fit greedily, layer by layer.} Layer 1
+factorizes the data, \code{X ~ W1 diag(d1) H1}. Every deeper layer
+factorizes the transposed, unit-scaled embedding of the layer(s) it is
+connected to, \code{t(H_prev) ~ W diag(d) H}, so its \code{W} has one row
+per sample and its \code{H} has one column per factor of the previous
+layer. In each outer iteration every layer performs one alternating
+update on its own input. A layer is never updated to improve the fit of a
+later layer, so there is no joint objective: the first layer converges to
+the ordinary factorization of the data and later layers follow it.
+\code{total_loss} is the sum of the per-layer mean squared errors, each
+measured against that layer's own input; it is used for the stopping rule
+and is not guaranteed to decrease monotonically.
+
+\strong{Unsupported options raise an error} instead of being ignored:
+per-layer \code{mask}, \code{zi}, \code{projective}, \code{symmetric},
+\code{robust}, \code{target} in a multi-layer network or with a
+streaming input, extra \code{...}
+arguments of a layer or of \code{factor_config()}, the
+\code{center}/\code{scale}/\code{method} arguments of
+\code{svd_layer()}, \code{factor_condition()} applied directly to an
+input, and multi-layer networks with more than one input. Use
+\code{\link{nmf}} or \code{\link{svd}} directly for those features.
 }
 \examples{
 \donttest{

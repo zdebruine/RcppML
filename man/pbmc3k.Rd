@@ -23,7 +23,7 @@ A \code{raw} vector containing StreamPress (.spz) compressed bytes.
   }
 }
 \source{
-10x Genomics PBMC 3k dataset, processed with Seurat (SeuratData::pbmc3k.final).
+10x Genomics PBMC 3k dataset, processed with Seurat (the \code{pbmc3k.final} object).
 }
 \usage{
 pbmc3k
@@ -38,7 +38,7 @@ The underlying matrix is a \code{dgCMatrix} with 13,714 rows (genes) and
 2,638 columns (cells), containing 2,238,732 non-zero entries (integer UMI counts).
 Cell type annotations (9 types: Naive CD4 T, Memory CD4 T, CD14+ Mono, B,
 CD8 T, FCGR3A+ Mono, NK, DC, Platelet) were obtained from the Seurat
-\code{pbmc3k.final} reference object via the SeuratData package and stored
+\code{pbmc3k.final} reference object (distributed by the Satija lab) and stored
 as StreamPress column metadata.
 
 This dataset is commonly used for demonstrating single-cell analysis workflows

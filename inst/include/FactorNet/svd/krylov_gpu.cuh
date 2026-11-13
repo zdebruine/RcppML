@@ -658,7 +658,17 @@ SVDResult<Scalar> krylov_svd_gpu(
     DeviceMemory<Scalar> d_norm_sq(k_actual);  // column norm² for projection
 
     // cuSPARSE dense descriptors for SpMM
-    cusparseDnMatDescr_t dnDescr_V, dnDescr_W, dnDescr_AV, dnDescr_AtW;
+    cusparseDnMatDescr_t dnDescr_V = nullptr, dnDescr_W = nullptr,
+                         dnDescr_AV = nullptr, dnDescr_AtW = nullptr;
+    // Destroys whichever descriptors are still alive if an exception unwinds
+    // this function (the CUDA/cuBLAS/cuSPARSE check macros throw).
+    struct DnMatCleanup {
+        cusparseDnMatDescr_t* d[4];
+        ~DnMatCleanup() {
+            for (int i = 0; i < 4; ++i)
+                if (*d[i]) { cusparseDestroyDnMat(*d[i]); *d[i] = nullptr; }
+        }
+    } dn_cleanup{{&dnDescr_V, &dnDescr_W, &dnDescr_AV, &dnDescr_AtW}};
     CUSPARSE_CHECK(cusparseCreateDnMat(
         &dnDescr_V, n, k_actual, n, d_V.get(),
         CudaDataType<Scalar>::value, CUSPARSE_ORDER_COL));
@@ -1108,10 +1118,15 @@ SVDResult<Scalar> krylov_svd_gpu(
     // Cleanup cuSPARSE descriptors
     // ==================================================================
     // dual_csr destructor handles descr_A and descr_AT cleanup
-    CUSPARSE_CHECK(cusparseDestroyDnMat(dnDescr_V));
-    CUSPARSE_CHECK(cusparseDestroyDnMat(dnDescr_W));
-    CUSPARSE_CHECK(cusparseDestroyDnMat(dnDescr_AV));
-    CUSPARSE_CHECK(cusparseDestroyDnMat(dnDescr_AtW));
+    {
+        cusparseDnMatDescr_t dv = dnDescr_V, dw = dnDescr_W,
+                             dav = dnDescr_AV, datw = dnDescr_AtW;
+        dnDescr_V = dnDescr_W = dnDescr_AV = dnDescr_AtW = nullptr;
+        CUSPARSE_CHECK(cusparseDestroyDnMat(dv));
+        CUSPARSE_CHECK(cusparseDestroyDnMat(dw));
+        CUSPARSE_CHECK(cusparseDestroyDnMat(dav));
+        CUSPARSE_CHECK(cusparseDestroyDnMat(datw));
+    }
 
     // ==================================================================
     // Build result — sort by decreasing d

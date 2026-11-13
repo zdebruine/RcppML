@@ -19,6 +19,8 @@
 #include <vector>
 #include <map>
 #include <limits>
+
+#include <streampress/core/checks.hpp>
 #include <stdexcept>
 #include <algorithm>
 #include <cmath>
@@ -244,20 +246,47 @@ inline std::vector<ColumnData> obs_var_table_deserialize(
     if (buf_bytes < th.header_bytes) {
         throw std::runtime_error("obs_var_table: buffer too small for descriptors");
     }
-
-    // Read descriptors
-    const ColDescriptor* descs = reinterpret_cast<const ColDescriptor*>(
-        buf + sizeof(ObsVarTableHeader));
+    // The descriptor array itself must fit in the buffer (header_bytes is
+    // only a field in the file and need not agree with n_cols)
+    if (!range_ok(sizeof(ObsVarTableHeader),
+                  static_cast<uint64_t>(n_cols) * sizeof(ColDescriptor),
+                  buf_bytes)) {
+        throw std::runtime_error("obs_var_table: buffer too small for descriptors");
+    }
 
     std::vector<ColumnData> columns(n_cols);
 
     for (uint32_t i = 0; i < n_cols; ++i) {
-        const ColDescriptor& d = descs[i];
+        // Copy the descriptor out: the buffer is not aligned for its
+        // 64-bit fields
+        ColDescriptor d;
+        std::memcpy(&d, buf + sizeof(ObsVarTableHeader) +
+                            static_cast<size_t>(i) * sizeof(ColDescriptor),
+                    sizeof(ColDescriptor));
         ColumnData& col = columns[i];
 
-        col.name = std::string(d.name);
+        // The name field holds at most 63 characters and may lack a NUL
+        col.name = std::string(d.name, bounded_strlen(d.name, sizeof(d.name)));
         col.type = static_cast<ColType>(d.col_type);
         col.nullable = (d.nullable != 0);
+
+        // Every column stores n_rows fixed-width values at data_offset
+        size_t elem_bytes = 0;
+        switch (col.type) {
+            case ColType::INT32:       elem_bytes = sizeof(int32_t);  break;
+            case ColType::FLOAT32:     elem_bytes = sizeof(float);    break;
+            case ColType::FLOAT64:     elem_bytes = sizeof(double);   break;
+            case ColType::BOOL:        elem_bytes = sizeof(uint8_t);  break;
+            case ColType::UINT32:      elem_bytes = sizeof(uint32_t); break;
+            case ColType::STRING_DICT: elem_bytes = sizeof(uint32_t); break;
+            default:
+                throw std::runtime_error("obs_var_table: unknown column type");
+        }
+        if (!range_ok(d.data_offset,
+                      static_cast<uint64_t>(n_rows) * elem_bytes, buf_bytes)) {
+            throw std::runtime_error("obs_var_table: column data lies outside the table");
+        }
+        if (n_rows == 0) continue;
 
         const uint8_t* data_ptr = buf + d.data_offset;
 
@@ -292,10 +321,15 @@ inline std::vector<ColumnData> obs_var_table_deserialize(
                 std::memcpy(col.codes.data(), data_ptr, n_rows * sizeof(uint32_t));
                 // Parse null-delimited dictionary
                 if (d.dict_bytes > 0) {
+                    if (!range_ok(d.dict_offset, d.dict_bytes, buf_bytes)) {
+                        throw std::runtime_error(
+                            "obs_var_table: dictionary lies outside the table");
+                    }
                     const char* dp = reinterpret_cast<const char*>(buf + d.dict_offset);
                     const char* dend = dp + d.dict_bytes;
                     while (dp < dend) {
-                        std::string s(dp);
+                        // Bounded: the last entry may lack its terminator
+                        std::string s(dp, bounded_strlen(dp, static_cast<size_t>(dend - dp)));
                         col.dict.push_back(s);
                         dp += s.size() + 1;
                     }

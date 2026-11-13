@@ -51,7 +51,17 @@
 #include <FactorNet/gpu/bridge_nmf.hpp>
 #endif
 
+#include <FactorNet/core/logging.hpp>
+
+#include <cstdio>
 #include <string>
+
+#if defined(FACTORNET_USE_R)
+// Declared here (instead of including R_ext/Error.h) so no R remap macros
+// such as `error`/`warning` leak into translation units that include this
+// header before Rcpp.h.
+extern "C" void Rf_warning(const char*, ...);
+#endif
 
 namespace FactorNet {
 namespace nmf {
@@ -61,6 +71,96 @@ namespace nmf {
 // ========================================================================
 
 namespace detail {
+
+/**
+ * @brief Name the first requested option the GPU path cannot honor.
+ *
+ * The GPU fit paths implement only a subset of the NMF options, and the
+ * runtime bridge (gpu/bridge_nmf.hpp) forwards a smaller subset still.
+ * Rather than drop an option silently, the gateway asks this function
+ * before launching and runs on CPU when it returns a non-empty string.
+ *
+ * @param is_sparse   Input matrix is sparse
+ * @param is_cv       Cross-validation fit (holdout_fraction > 0)
+ * @param has_H_init  A user H initialization was supplied
+ * @return Empty string if the configuration is fully supported on GPU,
+ *         otherwise a short description of the unsupported option.
+ */
+template<typename Scalar>
+inline std::string gpu_unsupported_reason(const NMFConfig<Scalar>& config,
+                                          bool is_sparse, bool is_cv,
+                                          bool has_H_init)
+{
+    // The GPU runs only what has been verified against the same references
+    // as the CPU path: Gaussian loss, no mask, no cross-validation, with L1,
+    // L2 and non-negativity as the only penalties and constraints.
+    // Everything else is named here and runs on CPU.
+    // Dense input with L1 or L2: the GPU dense path did not reproduce the
+    // CPU loss to 1e-3 with these penalties and that has not been explained,
+    // so it runs on CPU for now. (Plain dense and sparse Gaussian fits were
+    // checked against exact double-precision ALS and are within 0.1%.)
+    if (!is_sparse && (config.W.L1 > 0 || config.H.L1 > 0 ||
+                       config.W.L2 > 0 || config.H.L2 > 0))
+        return "L1 / L2 on dense input";
+    if (is_cv)
+        return "cross-validation (test_fraction, k = \"auto\")";
+    if (config.requires_irls())
+        return "non-Gaussian or robust losses";
+    if (config.has_mask())
+        return "a user-supplied mask matrix";
+    if (config.mask_zeros)
+        return "mask = \"zeros\"";
+    if (config.has_zi())
+        return "zero inflation (zi)";
+    if (config.has_target())
+        return "target regularization (target_H / target_lambda)";
+    if (config.has_alignment_guide() || config.has_classifier_guide_H())
+        return "guides";
+    if (config.symmetric)
+        return "symmetric NMF";
+    if (config.projective)
+        return "projective NMF";
+    if (config.W.L21 > 0 || config.H.L21 > 0)
+        return "L21";
+    if (config.W.angular > 0 || config.H.angular > 0)
+        return "angular";
+    if (config.W.graph != nullptr || config.H.graph != nullptr)
+        return "graph regularization";
+    // The GPU clamps after the solve; CPU enforces the bound inside it.
+    if (config.W.upper_bound > 0 || config.H.upper_bound > 0)
+        return "upper_bound";
+    if (has_H_init)
+        return "h_init";
+    return std::string();
+}
+
+/**
+ * @brief Tell the user once that a GPU request is being served on CPU.
+ *
+ * A warning when the GPU was requested explicitly, a plain note otherwise.
+ */
+inline void notify_gpu_fallback(const std::string& why, bool explicit_gpu)
+{
+    const std::string msg =
+        "RcppML: the GPU backend does not support " + why +
+        "; running on CPU instead.";
+#if defined(FACTORNET_USE_R)
+    if (explicit_gpu) {
+        Rf_warning("%s", msg.c_str());
+    } else {
+        // resource = "auto": one note per reason per session (a rank search
+        // calls the gateway many times)
+        static std::string last_reason;
+        if (why != last_reason) {
+            last_reason = why;
+            FACTORNET_WARN_IMPL("%s\n", msg.c_str());
+        }
+    }
+#else
+    (void)explicit_gpu;
+    std::fprintf(stderr, "%s\n", msg.c_str());
+#endif
+}
 
 /**
  * @brief Dispatch to the appropriate NMF implementation based on resource plan
@@ -298,6 +398,22 @@ NMFResult<Scalar> nmf(
     }
 
     // ------------------------------------------------------------------
+    // 2b. Refuse GPU for configurations it cannot honor in full
+    // ------------------------------------------------------------------
+    std::string gpu_fallback_why;
+    if (plan == ResourcePlan::GPU) {
+        gpu_fallback_why = detail::gpu_unsupported_reason(
+            config, is_sparse_v<MatrixType>, config.is_cv(),
+            H_init != nullptr);
+        if (!gpu_fallback_why.empty()) {
+            const bool explicit_gpu =
+                (env_override == "gpu") || (config.resource_override == "gpu");
+            detail::notify_gpu_fallback(gpu_fallback_why, explicit_gpu);
+            plan = ResourcePlan::CPU;
+        }
+    }
+
+    // ------------------------------------------------------------------
     // 3. Build diagnostics
     // ------------------------------------------------------------------
     ResourceDiagnostics diag = build_diagnostics(resources, plan);
@@ -330,6 +446,11 @@ NMFResult<Scalar> nmf(
         result.diagnostics.gpus_detected = diag.gpus_detected;
         result.diagnostics.gpu_memory_available = diag.gpu_memory_available;
 
+    }
+    if (!gpu_fallback_why.empty()) {
+        result.diagnostics.plan_chosen = "CPU (GPU unsupported option)";
+        result.diagnostics.plan_reason =
+            "CPU fallback: GPU backend does not support " + gpu_fallback_why;
     }
 
     return result;

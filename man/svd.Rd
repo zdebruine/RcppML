@@ -26,37 +26,52 @@ svd(
 )
 }
 \arguments{
-\item{A}{Input matrix. May be dense (\code{matrix}), sparse (\code{dgCMatrix}),
+\item{A}{Input matrix with variables (features) in rows and samples in
+columns. May be dense (\code{matrix}), sparse (\code{dgCMatrix}),
 or a path to a \code{.spz} file for out-of-core streaming SVD.}
 
-\item{k}{Number of factors (rank). Use \code{"auto"} for automatic rank selection
-via cross-validation. Default: 10.}
+\item{k}{Number of factors (rank), at most \code{min(dim(A))}. Use
+\code{"auto"} for automatic rank selection via cross-validation.
+Default: 10, or \code{min(dim(A))} if that is smaller.}
 
-\item{tol}{Convergence tolerance per rank-1 subproblem. Default: 1e-5.}
+\item{tol}{Convergence tolerance; its meaning depends on \code{method}
+(see Details). Default: 1e-5. Values below single-precision resolution are
+raised to it.}
 
-\item{maxit}{Maximum ALS iterations per factor. Default: 200.}
+\item{maxit}{Iteration limit; its meaning depends on \code{method} (see
+Details). Default: 200 iterations per factor for \code{"deflation"};
+method-specific defaults otherwise.}
 
 \item{center}{If \code{TRUE}, subtract row means (PCA mode). Default: \code{FALSE}.}
 
-\item{scale}{If \code{TRUE}, divide each row by its standard deviation after centering. Default: \code{FALSE}.}
+\item{scale}{If \code{TRUE}, divide each row by its sample standard deviation
+(denominator \code{n - 1}, as in \code{prcomp}) after centering.
+Rows without variance are left unscaled. Default: \code{FALSE}.}
 
 \item{verbose}{Print per-factor diagnostics. Default: \code{FALSE}.}
 
 \item{seed}{Random seed for initialization and cross-validation. Default: NULL.}
 
-\item{L1}{L1 (lasso) penalty. Single value or length-2 vector. Default: 0.}
+\item{L1}{L1 (lasso) penalty, an absolute threshold on the data scale (see
+\strong{Constraints and penalties}). Single value or length-2 vector
+\code{c(u, v)}. Default: 0.}
 
-\item{L2}{L2 (ridge) penalty. Single value or length-2 vector. Default: 0.}
+\item{L2}{L2 (ridge) penalty. Single value or length-2 vector. Default: 0.
+With \code{method = "deflation"} it leaves \code{u} and \code{v} unchanged
+and subtracts \code{sqrt(L2[1] * L2[2])} from each singular value
+(floored at zero), which is what a ridge penalty on both factors of a
+rank-one term amounts to; see \strong{Constraints and penalties}.}
 
 \item{nonneg}{Non-negativity constraints. Single logical or length-2 vector. Default: \code{FALSE}.}
 
-\item{upper_bound}{Upper bound constraints. Single value or length-2 vector. Default: 0.}
+\item{upper_bound}{Not supported; must be 0.}
 
 \item{test_fraction}{Fraction of entries to hold out for cross-validation. Default: 0.}
 
-\item{mask}{Masking control. \code{NULL} (default, no masking), \code{"zeros"}
-(mask zero entries — only non-zero entries can be holdout in CV),
-a \code{dgCMatrix} (custom mask matrix where non-zero entries are excluded),
+\item{mask}{Missing-data control. \code{NULL} (default, no masking), a
+\code{dgCMatrix} whose non-zero entries mark missing values,
+\code{"zeros"} (only non-zero entries can be held out in
+cross-validation; requires \code{test_fraction > 0} or \code{k = "auto"}),
 or \code{list("zeros", <dgCMatrix>)} to combine both.}
 
 \item{robust}{Robustness control: \code{FALSE} (default), \code{TRUE} (Huber delta=1.345),
@@ -65,54 +80,127 @@ or \code{list("zeros", <dgCMatrix>)} to combine both.}
 \item{resource}{Compute backend: \code{"auto"} (default), \code{"cpu"}, or \code{"gpu"}.}
 
 \item{method}{Algorithm: \code{"auto"} (default), \code{"deflation"}, \code{"krylov"},
-\code{"lanczos"}, \code{"irlba"}, \code{"randomized"}.}
+\code{"lanczos"}, \code{"irlba"}, \code{"randomized"}. \code{"auto"} picks
+\code{"deflation"} for \code{nonneg}/\code{L1}, robust fits and
+cross-validation, \code{"krylov"} for \code{L2}/\code{L21} and for a
+\code{mask} without cross-validation, and otherwise
+\code{"lanczos"} or \code{"irlba"} depending on \code{k} and the matrix size.}
 
 \item{...}{Advanced parameters. See \strong{Advanced Parameters} section.}
 }
 \value{
 An S4 object of class \code{svd} with slots:
 \describe{
-  \item{\code{u}}{Left singular vectors (scores), m x k matrix}
+  \item{\code{u}}{Left singular vectors (one row per variable), m x k matrix}
   \item{\code{d}}{Singular values, length-k numeric vector}
-  \item{\code{v}}{Right singular vectors (loadings), n x k matrix}
+  \item{\code{v}}{Right singular vectors (one row per sample), n x k matrix}
   \item{\code{misc}}{List with metadata: \code{centered}, \code{row_means},
-    \code{test_loss}, \code{iters_per_factor}, \code{wall_time_ms}}
+    \code{scaled}, \code{row_sds}, \code{test_loss},
+    \code{iters_per_factor}, \code{wall_time_ms}}
 }
 }
 \description{
 Compute a truncated SVD or PCA of a matrix using multiple algorithm backends.
 Supports sparse and dense matrices, implicit PCA centering, per-element
-regularization (L1/L2/non-negativity/bounds), Gram-level regularization
-(L2,1/angular/graph Laplacian), and automatic rank selection via speckled
-holdout cross-validation.
+regularization (L1/L2/non-negativity), Gram-level regularization
+(L2,1/angular/graph Laplacian), missing data, and automatic rank selection
+via speckled holdout cross-validation.
 }
 \details{
+\strong{Orientation.} As in \code{\link{nmf}}, \strong{rows are variables
+(features) and columns are samples}. \code{center} and \code{scale} act on
+rows. To reproduce \code{stats::prcomp(X)} for a samples-in-rows matrix
+\code{X}, call \code{pca(t(X))}: then \code{d / sqrt(ncol(A) - 1)} equals
+\code{prcomp(X)$sdev}, \code{u} holds the loadings (\code{rotation}) and
+\code{v \%*\% diag(d)} the scores (\code{x}), up to sign.
+
+\strong{Precision.} All fits run in single precision. Expect singular values
+accurate to roughly \code{1e-5} relative to the largest one and
+\eqn{\|U^T U - I\|} of about \code{1e-5} for the Lanczos-type methods; later
+deflation components are accurate to about \code{1e-3}. Signs of singular
+vectors are not normalized.
+
 Multiple algorithms are available via the \code{method} parameter:
 \describe{
-  \item{\code{"deflation"}}{Sequential rank-1 ALS with deflation correction.
-    Supports all constraints/CV/auto-rank. Best for small k with mixed constraints.}
-  \item{\code{"krylov"}}{Krylov-Seeded Projected Refinement (KSPR). Block
-    method: computes all k factors simultaneously via Lanczos seed + Gram-solve-then-project.
-    Faster than deflation for larger k. Supports all regularization except robust. CV is
-    evaluated post-convergence.}
-  \item{\code{"lanczos"}}{Unconstrained Lanczos bidiagonalization. Fast for
-    unconstrained SVD. No regularization support.}
-  \item{\code{"irlba"}}{Implicitly Restarted Lanczos. Good general-purpose
-    unconstrained SVD. No regularization support.}
-  \item{\code{"randomized"}}{Randomized SVD with power iterations. Fast
-    approximate SVD for large matrices. No regularization support.}
+  \item{\code{"deflation"}}{Sequential rank-1 alternating least squares.
+    Supports constraints, masks, cross-validation, auto-rank and robust
+    fitting. This is the method for constrained problems
+    (\code{nonneg}, \code{L1}): each factor is fit to the data with earlier
+    constrained directions projected out. \code{maxit} is the number of
+    iterations per factor and \code{tol} the change in \eqn{1 - |\cos|}
+    between successive iterates.}
+  \item{\code{"krylov"}}{Lanczos seed followed by block
+    solve-then-project refinement of all k factors. Supports
+    \code{L2}, \code{L21}, \code{angular} and graph penalties, masks and
+    cross-validation. With \code{nonneg}/\code{L1} and \code{k > 1} it can
+    return redundant or all-zero components, so \code{"deflation"} is
+    preferred there. Without constraints or missing data it is identical to
+    \code{"lanczos"}. \code{maxit} is the number of refinement passes.}
+  \item{\code{"lanczos"}}{Golub-Kahan-Lanczos bidiagonalization with full
+    reorthogonalization. Unconstrained. \code{maxit} is the maximum number
+    of Lanczos steps (default \code{max(8k, k + 120)}, never more than
+    \code{min(dim(A))}); \code{tol} bounds the Ritz residual relative to the
+    largest singular value.}
+  \item{\code{"irlba"}}{Augmented implicitly restarted Lanczos
+    bidiagonalization (Baglama and Reichel). Unconstrained. \code{maxit} is
+    the number of restarts (default 1000).}
+  \item{\code{"randomized"}}{Randomized SVD (Halko, Martinsson and Tropp)
+    with oversampling \code{max(10, k/5)} and \code{maxit} power iterations
+    (default 3). Unconstrained; \code{tol} is not used. Approximate by
+    design: accurate when the spectrum decays, but on flat spectra (for
+    example a random matrix) singular values come out a few percent low.
+    Use \code{"lanczos"} or \code{"irlba"} when accuracy matters.}
 }
+A warning is issued when a method stops before the requested tolerance is
+met, naming the number of unconverged values.
 }
 \note{
 This function shadows \code{base::svd()}. To use the base R version,
 call \code{base::svd()} explicitly.
 }
+\section{Missing data and cross-validation}{
+
+Entries selected by \code{mask} (a sparse matrix whose non-zero entries mark
+missing values) and entries held out by \code{test_fraction} are treated as
+\emph{missing}: they are imputed from the current model at every iteration,
+so the fit is the least-squares fit to the observed entries and \code{d} is
+not biased towards zero. Row means and standard deviations are computed from
+observed entries only. This is implemented for \code{"deflation"} and
+\code{"krylov"} on the CPU; other methods raise an error.
+The holdout set is the same for sparse and dense input; with
+\code{mask = "zeros"} only non-zero entries can be held out.
+}
+
 \section{Auto-rank}{
 
 When \code{k = "auto"}, a speckled holdout set is created and test MSE is
 evaluated after each factor. Rank selection stops when test MSE fails to
 improve for \code{patience} consecutive factors. The returned model is
 truncated to the best rank.
+}
+
+\section{Constraints and penalties}{
+
+\describe{
+  \item{\code{nonneg}, \code{L1}}{Applied to each factor before it is
+    normalized. \code{L1} is an absolute soft threshold \code{L1 / 2} on the
+    unnormalized factor, whose entries are on the scale of the data
+    (\eqn{\sigma u_i} or \eqn{\sigma v_j}); choose it relative to the
+    singular values. Constrained factors are not orthogonal. For them
+    \code{d} is the least-squares scale given \code{u} and \code{v}, so
+    that \code{\link{reconstruct}} returns the fitted model, and
+    \code{\link{variance_explained}} reports the drop in residual variance
+    as each component is added.}
+  \item{\code{L2}}{With \code{"deflation"}, a ridge penalty on both factors
+    of a rank-one term is equivalent to soft-thresholding its singular
+    value by \code{sqrt(L2[1] * L2[2])}; a penalty on one factor only has
+    no effect on a bilinear model and is rejected. With \code{"krylov"} the
+    penalty is added to the Gram matrix of each block solve.}
+  \item{\code{L21}}{Group sparsity across factors; \code{"krylov"} only.}
+  \item{\code{upper_bound}}{Not supported: factors are returned with unit
+    norm, so an element-wise bound has no scale-free meaning. A positive
+    value is an error.}
+}
 }
 
 \section{Advanced Parameters (via \code{...})}{
@@ -124,11 +212,15 @@ The following parameters can be passed via \code{...}:
   \item{\code{graph_U}}{Sparse graph Laplacian for features (m x m). Default NULL.}
   \item{\code{graph_V}}{Sparse graph Laplacian for samples (n x n). Default NULL.}
   \item{\code{graph_lambda}}{Graph regularization strength. Single value or length-2 (default 0).}
-  \item{\code{convergence}}{Convergence criterion: \code{"factor"} (default) or \code{"global"}.}
+  \item{\code{convergence}}{Convergence criterion for \code{"deflation"} and
+    \code{"krylov"}: \code{"factor"} (default, change in the factors),
+    \code{"loss"} (relative change in the singular values) or \code{"both"}
+    (either). Other methods only accept \code{"factor"}.}
   \item{\code{cv_seed}}{Separate seed for holdout mask. Default NULL.}
   \item{\code{patience}}{Auto-rank non-improving factor patience (default 3).}
   \item{\code{k_max}}{Maximum rank for auto-rank mode (default 50).}
-  \item{\code{threads}}{Number of OpenMP threads. 0 = all (default 0).}
+  \item{\code{threads}}{Number of OpenMP threads. 0 (default) uses
+    \code{getOption("RcppML.threads")}, or all cores if that is unset.}
 }
 }
 
@@ -136,7 +228,8 @@ The following parameters can be passed via \code{...}:
 \donttest{
 library(RcppML)
 data(iris)
-A <- as.matrix(iris[, 1:4])
+# iris has samples in rows; svd() and pca() expect samples in columns
+A <- t(as.matrix(iris[, 1:4]))
 
 # Standard SVD (3 factors)
 s <- svd(A, k = 3)
@@ -145,10 +238,10 @@ s <- svd(A, k = 3)
 p <- pca(A, k = 3)
 
 # Auto-rank PCA
-ar <- svd(A, k = "auto", center = TRUE, verbose = TRUE)
+ar <- svd(A, k = "auto", center = TRUE)
 
 # Robust PCA (outlier-resistant)
-rp <- svd(A, k = 3, center = TRUE, robust = TRUE, verbose = TRUE)
+rp <- svd(A, k = 3, center = TRUE, robust = TRUE)
 }
 
 }

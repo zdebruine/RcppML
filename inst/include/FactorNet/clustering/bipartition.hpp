@@ -12,6 +12,8 @@
 #include <FactorNet/core/constants.hpp>
 #include <FactorNet/rng/rng.hpp>
 #include <numeric>
+#include <cmath>
+#include <vector>
 #include <FactorNet/core/logging.hpp>
 
 namespace FactorNet {
@@ -38,6 +40,7 @@ struct bipartitionModel {
 template<typename SpMat>
 inline std::vector<double> centroid(const SpMat& A, const std::vector<unsigned int>& samples) {
     std::vector<double> center(A.rows(), 0.0);
+    if (samples.empty()) return center;
     for (unsigned int s = 0; s < samples.size(); ++s) {
         for (typename SpMat::InnerIterator it(A, samples[s]); it; ++it) {
             center[it.row()] += it.value();
@@ -52,6 +55,7 @@ inline std::vector<double> centroid(const SpMat& A, const std::vector<unsigned i
 // Compute centroid for dense matrix
 inline std::vector<double> centroid(const Eigen::MatrixXd& A, const std::vector<unsigned int>& samples) {
     std::vector<double> center(A.rows(), 0.0);
+    if (samples.empty()) return center;
     for (unsigned int s = 0; s < samples.size(); ++s) {
         for (int r = 0; r < A.rows(); ++r) {
             center[r] += A(r, samples[s]);
@@ -67,6 +71,7 @@ inline std::vector<double> centroid(const Eigen::MatrixXd& A, const std::vector<
 template<typename Scalar, typename Mat>
 inline std::vector<Scalar> compute_centroid(const Mat& A, const std::vector<unsigned int>& samples) {
     std::vector<Scalar> center(A.rows(), static_cast<Scalar>(0));
+    if (samples.empty()) return center;
     
     if constexpr (is_sparse_v<Mat>) {
         for (unsigned int s = 0; s < samples.size(); ++s) {
@@ -89,36 +94,71 @@ inline std::vector<Scalar> compute_centroid(const Mat& A, const std::vector<unsi
     return center;
 }
 
+// ----------------------------------------------------------------------------
+// Relative cosine distance of a bipartition
+//
+// For every sample x the cosine similarity to the center of its own cluster
+// and to the center of the other cluster is computed. The measure is the mean
+// over samples of
+//
+//     cosdist(x, c_other) - cosdist(x, c_own) = cos(x, c_own) - cos(x, c_other)
+//
+// It lies in [-1, 1], is close to 0 when the two centers point in the same
+// direction (an arbitrary split of a homogeneous cluster) and approaches 1
+// when the two clusters are orthogonal. Being a mean of cosines it does not
+// depend on the number of features, the number of samples or the scale of the
+// data. All-zero samples and all-zero centers contribute 0, so the result is
+// always finite. A degenerate split with an empty child returns 0.
+// ----------------------------------------------------------------------------
+namespace detail {
+inline double rel_cosine_term(double x_own, double x_other, double xx,
+                              double norm_own, double norm_other) {
+    if (!(xx > 0)) return 0.0;
+    const double xn = std::sqrt(xx);
+    const double cos_own = (norm_own > 0) ? x_own / (xn * norm_own) : 0.0;
+    const double cos_other = (norm_other > 0) ? x_other / (xn * norm_other) : 0.0;
+    const double val = cos_own - cos_other;
+    return std::isfinite(val) ? val : 0.0;
+}
+}  // namespace detail
+
 // Relative cosine distance for sparse matrix
 template<typename SpMat>
-inline double rel_cosine(const SpMat& A, 
+inline double rel_cosine(const SpMat& A,
                          const std::vector<unsigned int>& samples1,
                          const std::vector<unsigned int>& samples2,
                          const std::vector<double>& center1,
                          const std::vector<double>& center2) {
-    double center1_innerprod = std::sqrt(std::inner_product(center1.begin(), center1.end(), center1.begin(), 0.0));
-    double center2_innerprod = std::sqrt(std::inner_product(center2.begin(), center2.end(), center2.begin(), 0.0));
-    double dist1 = 0, dist2 = 0;
-    
+    const double norm1 = std::sqrt(std::inner_product(center1.begin(), center1.end(), center1.begin(), 0.0));
+    const double norm2 = std::sqrt(std::inner_product(center2.begin(), center2.end(), center2.begin(), 0.0));
+    const size_t n_total = samples1.size() + samples2.size();
+    // A split with an empty side is no split at all: report zero separation
+    if (samples1.empty() || samples2.empty()) return 0.0;
+    double total = 0;
+
     for (unsigned int s = 0; s < samples1.size(); ++s) {
-        double x1_center1 = 0, x1_center2 = 0;
+        double x_c1 = 0, x_c2 = 0, xx = 0;
         for (typename SpMat::InnerIterator it(A, samples1[s]); it; ++it) {
-            x1_center1 += center1[it.row()] * it.value();
-            x1_center2 += center2[it.row()] * it.value();
+            const double val = it.value();
+            x_c1 += center1[it.row()] * val;
+            x_c2 += center2[it.row()] * val;
+            xx += val * val;
         }
-        dist1 += (std::sqrt(x1_center2) * center1_innerprod) / (std::sqrt(x1_center1) * center2_innerprod);
+        total += detail::rel_cosine_term(x_c1, x_c2, xx, norm1, norm2);
     }
-    
+
     for (unsigned int s = 0; s < samples2.size(); ++s) {
-        double x2_center1 = 0, x2_center2 = 0;
+        double x_c1 = 0, x_c2 = 0, xx = 0;
         for (typename SpMat::InnerIterator it(A, samples2[s]); it; ++it) {
-            x2_center1 += center1[it.row()] * it.value();
-            x2_center2 += center2[it.row()] * it.value();
+            const double val = it.value();
+            x_c1 += center1[it.row()] * val;
+            x_c2 += center2[it.row()] * val;
+            xx += val * val;
         }
-        dist2 += (std::sqrt(x2_center1) * center2_innerprod) / (std::sqrt(x2_center2) * center1_innerprod);
+        total += detail::rel_cosine_term(x_c2, x_c1, xx, norm2, norm1);
     }
-    
-    return (dist1 + dist2) / (2 * A.rows());
+
+    return total / static_cast<double>(n_total);
 }
 
 // Relative cosine distance for dense matrix
@@ -127,34 +167,43 @@ inline double rel_cosine(const Eigen::MatrixXd& A,
                          const std::vector<unsigned int>& samples2,
                          const std::vector<double>& center1,
                          const std::vector<double>& center2) {
-    double center1_innerprod = std::sqrt(std::inner_product(center1.begin(), center1.end(), center1.begin(), 0.0));
-    double center2_innerprod = std::sqrt(std::inner_product(center2.begin(), center2.end(), center2.begin(), 0.0));
-    double dist1 = 0, dist2 = 0;
-    
+    const double norm1 = std::sqrt(std::inner_product(center1.begin(), center1.end(), center1.begin(), 0.0));
+    const double norm2 = std::sqrt(std::inner_product(center2.begin(), center2.end(), center2.begin(), 0.0));
+    const size_t n_total = samples1.size() + samples2.size();
+    // A split with an empty side is no split at all: report zero separation
+    if (samples1.empty() || samples2.empty()) return 0.0;
+    double total = 0;
+
     for (unsigned int s = 0; s < samples1.size(); ++s) {
-        double x1_center1 = 0, x1_center2 = 0;
+        double x_c1 = 0, x_c2 = 0, xx = 0;
         for (int r = 0; r < A.rows(); ++r) {
-            x1_center1 += center1[r] * A(r, samples1[s]);
-            x1_center2 += center2[r] * A(r, samples1[s]);
+            const double val = A(r, samples1[s]);
+            x_c1 += center1[r] * val;
+            x_c2 += center2[r] * val;
+            xx += val * val;
         }
-        dist1 += (std::sqrt(x1_center2) * center1_innerprod) / (std::sqrt(x1_center1) * center2_innerprod);
+        total += detail::rel_cosine_term(x_c1, x_c2, xx, norm1, norm2);
     }
-    
+
     for (unsigned int s = 0; s < samples2.size(); ++s) {
-        double x2_center1 = 0, x2_center2 = 0;
+        double x_c1 = 0, x_c2 = 0, xx = 0;
         for (int r = 0; r < A.rows(); ++r) {
-            x2_center1 += center1[r] * A(r, samples2[s]);
-            x2_center2 += center2[r] * A(r, samples2[s]);
+            const double val = A(r, samples2[s]);
+            x_c1 += center1[r] * val;
+            x_c2 += center2[r] * val;
+            xx += val * val;
         }
-        dist2 += (std::sqrt(x2_center1) * center2_innerprod) / (std::sqrt(x2_center2) * center1_innerprod);
+        total += detail::rel_cosine_term(x_c2, x_c1, xx, norm2, norm1);
     }
-    
-    return (dist1 + dist2) / (2 * A.rows());
+
+    return total / static_cast<double>(n_total);
 }
 
-// Scale matrix columns by row sums
+// Scale matrix rows by their L1 norms (sum of absolute values).
+// For non-negative factors this is the row sum; for signed factors
+// (nonneg = false) the absolute sum keeps the scaling positive.
 inline void scale(Eigen::VectorXd& d, Eigen::MatrixXd& w) {
-    d = w.rowwise().sum();
+    d = w.cwiseAbs().rowwise().sum();
     d.array() += tiny_num<double>();
     for (unsigned int i = 0; i < w.rows(); ++i) {
         for (unsigned int j = 0; j < w.cols(); ++j) {
@@ -163,11 +212,12 @@ inline void scale(Eigen::VectorXd& d, Eigen::MatrixXd& w) {
     }
 }
 
-// Correlation between matrices for convergence check
+// Correlation distance (1 - Pearson r) between matrices for convergence check.
+// Returns 0 (converged) when either matrix is constant or not finite.
 inline double cor(const Eigen::MatrixXd& w, const Eigen::MatrixXd& w_it) {
     double sum_xy = 0, sum_x = 0, sum_y = 0, sum_xx = 0, sum_yy = 0;
     size_t n = w.rows() * w.cols();
-    
+
     for (int i = 0; i < w.rows(); ++i) {
         for (int j = 0; j < w.cols(); ++j) {
             double x = w_it(i, j);
@@ -179,43 +229,80 @@ inline double cor(const Eigen::MatrixXd& w, const Eigen::MatrixXd& w_it) {
             sum_yy += y * y;
         }
     }
-    
+
     double numerator = n * sum_xy - sum_x * sum_y;
     double denominator = std::sqrt((n * sum_xx - sum_x * sum_x) * (n * sum_yy - sum_y * sum_y));
-    
+    if (!(denominator > 0) || !std::isfinite(denominator) || !std::isfinite(numerator))
+        return 0.0;
+
     return 1.0 - (numerator / denominator);
 }
 
-// Fast rank-2 NNLS solver (ported from original nnls2 function)
-inline void nnls2(const Eigen::Matrix2d& a, const Eigen::Vector2d& b, 
-                  const double denom, Eigen::MatrixXd& h, unsigned int col, bool nonneg) {
-    if (!nonneg) {
-        // Unconstrained least squares: h = inv(a) * b
-        h(0, col) = (b(0) * a(1, 1) - b(1) * a(0, 1)) / denom;
-        h(1, col) = (b(1) * a(0, 0) - b(0) * a(0, 1)) / denom;
+// ----------------------------------------------------------------------------
+// Exact 2-variable least squares / non-negative least squares
+//
+// Minimizes 0.5 * x^T G x - b^T x for the symmetric positive semi-definite
+// 2x2 matrix G = [a00 a01; a01 a11].
+//
+// nonneg = false: unconstrained solution. A singular G (collinear factors)
+//                 is solved on the dominant coordinate only.
+// nonneg = true : if the unconstrained solution is feasible it is returned.
+//                 Otherwise the optimum lies on a face of the non-negative
+//                 quadrant, i.e. it is (max(0, b0/a00), 0) or
+//                 (0, max(0, b1/a11)); the one with the lower objective is
+//                 returned. This is the exact NNLS solution in all sign cases.
+// ----------------------------------------------------------------------------
+inline void nnls2_solve(const double a00, const double a01, const double a11,
+                        const double b0, const double b1, const bool nonneg,
+                        double& x0, double& x1) {
+    const double denom = a00 * a11 - a01 * a01;
+    const bool regular = (a00 > 0) && (a11 > 0) && (denom > 1e-12 * a00 * a11);
+    if (regular) {
+        x0 = (b0 * a11 - b1 * a01) / denom;
+        x1 = (b1 * a00 - b0 * a01) / denom;
+        if (!nonneg || (x0 >= 0 && x1 >= 0)) return;
+    } else if (!nonneg) {
+        if (a00 >= a11) {
+            x0 = (a00 > 0) ? b0 / a00 : 0.0;
+            x1 = 0.0;
+        } else {
+            x0 = 0.0;
+            x1 = b1 / a11;
+        }
+        return;
+    }
+    // Boundary candidates. Objective values: f(c0, 0) = -0.5 * b0 * c0 and
+    // f(0, c1) = -0.5 * b1 * c1.
+    const double c0 = (a00 > 0 && b0 > 0) ? b0 / a00 : 0.0;
+    const double c1 = (a11 > 0 && b1 > 0) ? b1 / a11 : 0.0;
+    if (b0 * c0 >= b1 * c1) {
+        x0 = c0;
+        x1 = 0.0;
     } else {
-        // Non-negative least squares (simplified for 2x2 case)
-        double h0 = (b(0) * a(1, 1) - b(1) * a(0, 1)) / denom;
-        double h1 = (b(1) * a(0, 0) - b(0) * a(0, 1)) / denom;
-        h(0, col) = std::max(0.0, h0);
-        h(1, col) = std::max(0.0, h1);
+        x0 = 0.0;
+        x1 = c1;
     }
 }
 
-// Fast rank-2 NNLS solver in-place (ported from original nnls2InPlace)
-inline void nnls2InPlace(const Eigen::Matrix2d& a, const double denom,
+// Rank-2 solver for one column (denom is kept for interface compatibility
+// and is not used; see nnls2_solve)
+inline void nnls2(const Eigen::Matrix2d& a, const Eigen::Vector2d& b,
+                  const double /*denom*/, Eigen::MatrixXd& h, unsigned int col, bool nonneg) {
+    double x0 = 0, x1 = 0;
+    nnls2_solve(a(0, 0), a(0, 1), a(1, 1), b(0), b(1), nonneg, x0, x1);
+    h(0, col) = x0;
+    h(1, col) = x1;
+}
+
+// Rank-2 solver in-place: columns of w hold the right-hand sides on entry
+// and the solutions on exit
+inline void nnls2InPlace(const Eigen::Matrix2d& a, const double /*denom*/,
                           Eigen::MatrixXd& w, bool nonneg) {
     for (unsigned int j = 0; j < w.cols(); ++j) {
-        double b0 = w(0, j);
-        double b1 = w(1, j);
-        
-        if (!nonneg) {
-            w(0, j) = (b0 * a(1, 1) - b1 * a(0, 1)) / denom;
-            w(1, j) = (b1 * a(0, 0) - b0 * a(0, 1)) / denom;
-        } else {
-            w(0, j) = std::max(0.0, (b0 * a(1, 1) - b1 * a(0, 1)) / denom);
-            w(1, j) = std::max(0.0, (b1 * a(0, 0) - b0 * a(0, 1)) / denom);
-        }
+        double x0 = 0, x1 = 0;
+        nnls2_solve(a(0, 0), a(0, 1), a(1, 1), w(0, j), w(1, j), nonneg, x0, x1);
+        w(0, j) = x0;
+        w(1, j) = x1;
     }
 }
 
@@ -236,7 +323,8 @@ inline bipartitionModel c_bipartition_sparse(
     const bool verbose) {
     
     // Rank-2 NMF
-    Eigen::MatrixXd w_it, h(w.rows(), samples.size());
+    Eigen::MatrixXd w_it;
+    Eigen::MatrixXd h = Eigen::MatrixXd::Zero(w.rows(), samples.size());
     Eigen::VectorXd d = Eigen::VectorXd::Ones(2);
     
     FACTORNET_LOG_INFO(verbose, "\n%4s | %8s \n---------------\n", "iter", "tol");
@@ -248,15 +336,31 @@ inline bipartitionModel c_bipartition_sparse(
         // Update h
         Eigen::Matrix2d a = w * w.transpose();
         double denom = a(0, 0) * a(1, 1) - a(0, 1) * a(0, 1);
-        for (unsigned int i = 0; i < h.cols(); ++i) {
-            Eigen::Vector2d b(0, 0);
-            for (typename SpMat::InnerIterator it(A, samples[i]); it; ++it) {
-                const double val = it.value();
-                const unsigned int r = it.row();
-                b(0) += val * w(0, r);
-                b(1) += val * w(1, r);
+        // Columns are independent, so the loop is parallel and the result
+        // does not depend on the number of threads. w is 2 x m column-major:
+        // (w(0, r), w(1, r)) are adjacent in memory.
+        {
+            const int n_h = static_cast<int>(h.cols());
+            const double* w_ptr = w.data();
+            double* h_ptr = h.data();
+            const double a00 = a(0, 0), a01 = a(0, 1), a11 = a(1, 1);
+            (void)denom;
+#ifdef _OPENMP
+            #pragma omp parallel for schedule(static) if(n_h >= 256)
+#endif
+            for (int i = 0; i < n_h; ++i) {
+                double b0 = 0, b1 = 0;
+                for (typename SpMat::InnerIterator it(A, samples[i]); it; ++it) {
+                    const double val = it.value();
+                    const double* w_r = w_ptr + 2 * static_cast<size_t>(it.row());
+                    b0 += val * w_r[0];
+                    b1 += val * w_r[1];
+                }
+                double x0 = 0, x1 = 0;
+                nnls2_solve(a00, a01, a11, b0, b1, nonneg, x0, x1);
+                h_ptr[2 * static_cast<size_t>(i)] = x0;
+                h_ptr[2 * static_cast<size_t>(i) + 1] = x1;
             }
-            nnls2(a, b, denom, h, i, nonneg);
         }
         scale(d, h);
         
@@ -264,10 +368,21 @@ inline bipartitionModel c_bipartition_sparse(
         a = h * h.transpose();
         denom = a(0, 0) * a(1, 1) - a(0, 1) * a(0, 1);
         w.setZero();
-        for (unsigned int i = 0; i < h.cols(); ++i) {
-            for (typename SpMat::InnerIterator it(A, samples[i]); it; ++it) {
-                for (unsigned int j = 0; j < 2; ++j) {
-                    w(j, it.row()) += it.value() * h(j, i);
+        // Serial on purpose: a parallel scatter would make the floating-point
+        // sums depend on the number of threads.
+        {
+            const int n_h = static_cast<int>(h.cols());
+            double* w_ptr = w.data();
+            const double* h_ptr = h.data();
+            for (int i = 0; i < n_h; ++i) {
+                const double h0 = h_ptr[2 * static_cast<size_t>(i)];
+                const double h1 = h_ptr[2 * static_cast<size_t>(i) + 1];
+                if (h0 == 0 && h1 == 0) continue;
+                for (typename SpMat::InnerIterator it(A, samples[i]); it; ++it) {
+                    const double val = it.value();
+                    double* w_r = w_ptr + 2 * static_cast<size_t>(it.row());
+                    w_r[0] += val * h0;
+                    w_r[1] += val * h1;
                 }
             }
         }
@@ -333,7 +448,8 @@ inline bipartitionModel c_bipartition_dense(
     const bool verbose) {
     
     // Rank-2 NMF
-    Eigen::MatrixXd w_it, h(w.rows(), samples.size());
+    Eigen::MatrixXd w_it;
+    Eigen::MatrixXd h = Eigen::MatrixXd::Zero(w.rows(), samples.size());
     Eigen::VectorXd d = Eigen::VectorXd::Ones(2);
     
     FACTORNET_LOG_INFO(verbose, "\n%4s | %8s \n---------------\n", "iter", "tol");
@@ -345,14 +461,28 @@ inline bipartitionModel c_bipartition_dense(
         // Update h
         Eigen::Matrix2d a = w * w.transpose();
         double denom = a(0, 0) * a(1, 1) - a(0, 1) * a(0, 1);
-        for (unsigned int i = 0; i < h.cols(); ++i) {
-            Eigen::Vector2d b(0, 0);
-            for (int j = 0; j < A.rows(); ++j) {
-                const double val = A(j, samples[i]);
-                b(0) += val * w(0, j);
-                b(1) += val * w(1, j);
+        {
+            const int n_h = static_cast<int>(h.cols());
+            const int m_rows = static_cast<int>(A.rows());
+            const double* w_ptr = w.data();
+            double* h_ptr = h.data();
+            const double a00 = a(0, 0), a01 = a(0, 1), a11 = a(1, 1);
+            (void)denom;
+#ifdef _OPENMP
+            #pragma omp parallel for schedule(static) if(n_h >= 256)
+#endif
+            for (int i = 0; i < n_h; ++i) {
+                const double* a_col = A.data() + static_cast<size_t>(samples[i]) * static_cast<size_t>(m_rows);
+                double b0 = 0, b1 = 0;
+                for (int j = 0; j < m_rows; ++j) {
+                    b0 += a_col[j] * w_ptr[2 * static_cast<size_t>(j)];
+                    b1 += a_col[j] * w_ptr[2 * static_cast<size_t>(j) + 1];
+                }
+                double x0 = 0, x1 = 0;
+                nnls2_solve(a00, a01, a11, b0, b1, nonneg, x0, x1);
+                h_ptr[2 * static_cast<size_t>(i)] = x0;
+                h_ptr[2 * static_cast<size_t>(i) + 1] = x1;
             }
-            nnls2(a, b, denom, h, i, nonneg);
         }
         scale(d, h);
         

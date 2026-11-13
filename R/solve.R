@@ -30,7 +30,7 @@
 #'   \item{\code{gamma_phi_max}}{Maximum Gamma shape (default 1e4)}
 #'   \item{\code{gamma_phi_min}}{Minimum Gamma shape (default 1e-6)}
 #'   \item{\code{tweedie_power}}{Tweedie variance power (default 1.5)}
-#'   \item{\code{irls_max_iter}}{Maximum IRLS iterations per solve (default 5)}
+#'   \item{\code{irls_max_iter}}{Maximum IRLS iterations per solve (default 20)}
 #'   \item{\code{irls_tol}}{IRLS convergence tolerance (default 1e-4)}
 #' }
 #'
@@ -42,10 +42,23 @@
 #' @param loss loss function: \code{"mse"} (default) or others via NMF dispatch.
 #' @param upper_bound maximum value in solution, length 1 or 2. 0 = no bound.
 #' @param nonneg non-negativity constraints, length 1 or 2.
-#' @param threads number of threads for OpenMP parallelization (0 = all available).
+#' @param threads number of threads for OpenMP parallelization. \code{0} (default)
+#'   uses \code{getOption("RcppML.threads")}, and all available cores if that is unset.
 #' @param verbose print progress information.
 #' @param ... advanced parameters. See \strong{Advanced Parameters} section.
 #' @return matrix of dimension (k x n_samples) for H or (n_features x k) for W
+#'
+#' @section Compatibility with RcppML 0.3.7:
+#' The previous signature was \code{nnls(a, b, cd_maxit, cd_tol, fast_nnls, L1)},
+#' which solved the system \eqn{a x = b} for \eqn{x \ge 0} with \code{a} a
+#' symmetric positive definite matrix (typically \eqn{W^T W}) and \code{b} the
+#' right-hand sides (typically \eqn{W^T A}). Calls of that form (two leading
+#' matrices and no \code{A}, optionally followed by positional \code{cd_maxit}
+#' and \code{cd_tol}, or the named arguments \code{a} and \code{b}) are still
+#' accepted with a deprecation warning and return the same solution: for a
+#' symmetric positive definite \code{a}, \eqn{\min_x x^T a x / 2 - b^T x}; for
+#' any other \code{a}, the least-squares solution of \eqn{a x = b}, both
+#' subject to \eqn{x \ge 0}. \code{fast_nnls} is ignored.
 #'
 #' @section Target Regularization:
 #' When \code{target_H} and \code{target_lambda} are provided (via \code{...}),
@@ -95,17 +108,42 @@ nnls <- function(w = NULL, h = NULL, A,
   cd_maxit   <- dots$cd_maxit
   cd_tol     <- dots$cd_tol
   warm_start <- dots$warm_start
-  
-  # === BACKWARD COMPATIBILITY ===
-  # Old CRAN 0.3.7 API: nnls(factor_matrix, data_matrix) with 2 positional args
-  # In the new API: w=factor, h=data, A=missing → detect and redirect
-  if (!is.null(w) && !is.null(h) && missing(A)) {
+  threads    <- .resolve_threads(threads)
+
+  # === BACKWARD COMPATIBILITY (RcppML <= 0.3.7) ===
+  # Old signature: nnls(a, b, cd_maxit = 100L, cd_tol = 1e-08, fast_nnls = FALSE, L1 = 0)
+  # solving a %*% x = b for x >= 0. In the current signature the first two
+  # positional arguments land in `w` and `h`, the third (cd_maxit) in `A`,
+  # the fourth (cd_tol) in `L1`, the fifth (fast_nnls) in `L2` and the
+  # sixth (L1) in `loss`.
+  legacy_named <- !is.null(dots$a) || !is.null(dots$b)
+  legacy_positional <- !is.null(w) && !is.null(h) &&
+    (missing(A) || (is.numeric(A) && !is.matrix(A) && length(A) == 1L))
+  if (legacy_named || legacy_positional) {
     .Deprecated(msg = paste0(
-      "nnls(w, A) 2-positional-arg form is deprecated.\n",
+      "nnls(a, b, ...) is the RcppML 0.3.7 calling convention and is deprecated.\n",
       "Use nnls(w = ..., A = ...) to solve for H, or ",
       "nnls(h = ..., A = ...) to solve for W."))
-    A <- h
-    h <- NULL
+    if (legacy_named) {
+      a_old <- if (!is.null(dots$a)) dots$a else w
+      b_old <- if (!is.null(dots$b)) dots$b else if (!is.null(dots$a)) w else h
+      if (is.null(a_old) || is.null(b_old))
+        stop("nnls(): both 'a' and 'b' are required in the 0.3.7 calling convention",
+             call. = FALSE)
+      L1_old <- L1[1]
+    } else {
+      a_old <- w
+      b_old <- h
+      if (!missing(A)) {
+        cd_maxit <- A
+        if (!missing(L1) && is.numeric(L1) && length(L1) == 1L) cd_tol <- L1
+        L1_old <- if (is.numeric(loss) && length(loss) == 1L) loss else 0
+      } else {
+        L1_old <- L1[1]
+      }
+    }
+    return(.nnls_legacy(a_old, b_old, cd_maxit = cd_maxit, cd_tol = cd_tol,
+                        L1 = L1_old, threads = threads))
   }
   
   # === PARAMETER VALIDATION ===
@@ -160,7 +198,8 @@ nnls <- function(w = NULL, h = NULL, A,
                    gamma_phi_min = dots$gamma_phi_min,
                    tweedie_power = dots$tweedie_power,
                    irls_max_iter = dots$irls_max_iter,
-                   irls_tol = dots$irls_tol)
+                   irls_tol = dots$irls_tol,
+                   .skip_rank_check = TRUE)
       return(model@h)
     } else {
       model <- nmf(A, k = nrow(factor_matrix), seed = t(A) %*% t(t(factor_matrix)), maxit = 1,
@@ -180,7 +219,8 @@ nnls <- function(w = NULL, h = NULL, A,
                    gamma_phi_min = dots$gamma_phi_min,
                    tweedie_power = dots$tweedie_power,
                    irls_max_iter = dots$irls_max_iter,
-                   irls_tol = dots$irls_tol)
+                   irls_tol = dots$irls_tol,
+                   .skip_rank_check = TRUE)
       return(model@w)
     }
   }
@@ -354,4 +394,47 @@ nnls <- function(w = NULL, h = NULL, A,
     
     return(w)
   }
+}
+
+
+# RcppML 0.3.7 `nnls(a, b)`: solve a %*% x = b subject to x >= 0.
+#
+# For symmetric positive definite `a` (the documented 0.3.7 use, a = W'W and
+# b = W'A) this is the quadratic program min_x x'ax/2 - b'x, x >= 0. With the
+# Cholesky factor a = R'R it is identical to the least-squares problem
+# min_x ||R x - R^{-T} b||^2, x >= 0 (same Gram matrix a, same right-hand
+# side b), which the current solver handles. Any other `a` (non-symmetric,
+# rank-deficient or tall) is solved as least squares on a x = b directly.
+.nnls_legacy <- function(a, b, cd_maxit = 100L, cd_tol = 1e-8, L1 = 0,
+                         threads = 0L) {
+  if (inherits(a, "Matrix")) a <- as.matrix(a)
+  if (inherits(b, "Matrix")) b <- as.matrix(b)
+  a <- as.matrix(a)
+  b <- as.matrix(b)
+  if (!is.numeric(a) || !is.numeric(b))
+    stop("nnls(): 'a' and 'b' must be numeric", call. = FALSE)
+  if (nrow(a) != nrow(b))
+    stop(sprintf("nnls(): nrow(a) (%d) must equal nrow(b) (%d)", nrow(a), nrow(b)),
+         call. = FALSE)
+  if (any(!is.finite(a)) || any(!is.finite(b)))
+    stop("nnls(): 'a' and 'b' must be finite", call. = FALSE)
+  if (!is.numeric(L1) || length(L1) != 1L || L1 < 0)
+    stop("nnls(): 'L1' must be a single non-negative number", call. = FALSE)
+  storage.mode(a) <- "double"
+  storage.mode(b) <- "double"
+
+  lhs <- a
+  rhs <- b
+  if (nrow(a) == ncol(a) && isSymmetric(unname(a))) {
+    R <- tryCatch(chol(a), error = function(e) NULL)
+    if (!is.null(R)) {
+      lhs <- R
+      rhs <- backsolve(R, b, transpose = TRUE)
+    }
+  }
+  x <- c_nnls(lhs, rhs, as.integer(cd_maxit), as.double(cd_tol),
+              as.double(L1), 0, 0, TRUE, as.integer(threads), NULL)
+  if (!is.null(colnames(a))) rownames(x) <- colnames(a)
+  if (!is.null(colnames(b))) colnames(x) <- colnames(b)
+  x
 }

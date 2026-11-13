@@ -358,10 +358,13 @@ SVDResult<Scalar> lanczos_svd_gpu_impl(
     // Default: max(3k, k+50) steps — 2k is too tight for bottom SVs at large k.
     // Reference: for k=50, this gives 150 vs the old 100, ensuring better convergence
     // of all k Ritz values. Early stopping avoids waste when convergence is fast.
-    const int default_steps = std::max(3 * k, k + 50);
+    // Same budget as the CPU Lanczos (svd/lanczos.hpp): 8k or k + 120 steps.
+    const int default_steps = std::max(8 * k, k + 120);
     const int user_steps = config.max_iter > 0 ? config.max_iter : 0;
+    // A positive max_iter is the step limit (at least k); 0 means default.
     const int jmax = std::min(std::min(m, n) - 1,
-                              std::max(default_steps, user_steps));
+                              user_steps > 0 ? std::max(user_steps, k)
+                                             : default_steps);
 
     SVDResult<Scalar> result;
     result.centered = config.center;
@@ -370,7 +373,9 @@ SVDResult<Scalar> lanczos_svd_gpu_impl(
     if (config.center && row_means.size() > 0) result.row_means = row_means;
 
     const Scalar eps = std::numeric_limits<Scalar>::epsilon() * 100;
-    const Scalar conv_tol = config.tol > 0 ? config.tol : static_cast<Scalar>(1e-10);
+    // Stopping tolerance floored at what the scalar type can resolve (CPU rule)
+    const Scalar conv_tol = std::max(
+        config.tol, static_cast<Scalar>(16) * std::numeric_limits<Scalar>::epsilon());
     const int check_interval = 5;
     const int min_steps_before_check = k + 2;
     const int BLOCK_SIZE = 256;
@@ -533,7 +538,52 @@ SVDResult<Scalar> lanczos_svd_gpu_impl(
     // ========================================================================
     int j_actual = 0;
 
+    // Breakdown handling (checked on the host every step).
+    //
+    // A step "breaks down" when alpha_j or beta_{j+1} is negligible relative
+    // to the largest bidiagonal entry seen so far (an estimate of ||A||).
+    //  - alpha_j ~ 0: the left basis has exhausted range(A P_{j+1}). The
+    //    coupling beta_j to p_j is still needed for B, so nothing is
+    //    truncated: q_j becomes a random unit vector orthogonal to Q and
+    //    alpha_j is recorded as exactly zero.
+    //  - beta_{j+1} ~ 0: span(P), span(Q) form an exact invariant pair. With
+    //    at least k steps done the factorization is complete; otherwise p_{j+1}
+    //    is restarted the same way so that k vectors are still returned.
+    // The relations A P = Q B and A' Q = P B' + beta p e' hold exactly through
+    // a restart, so the singular values of B remain those of A.
+    Scalar bidiag_scale = Scalar(0);
+    // Restart bookkeeping, as in the CPU Lanczos (svd/lanczos.hpp): a single
+    // start vector finds one copy of each repeated singular value, so after a
+    // breakdown the iteration continues from a random direction until a
+    // random vector is itself annihilated (remaining spectrum is zero).
+    bool p_random = false;    // p_j is a random restart vector
+    bool exhausted = false;   // a random vector was annihilated
+    int n_restarts = 0;
+    // Relative breakdown tolerance, as on CPU: eps^(2/3) times the largest
+    // bidiagonal entry seen so far.
+    const Scalar breakdown_tol = static_cast<Scalar>(
+        std::pow(static_cast<double>(std::numeric_limits<Scalar>::epsilon()),
+                 2.0 / 3.0));
+    rng::SplitMix64 restart_rng(
+        (config.seed == 0 ? 42ULL : static_cast<uint64_t>(config.seed))
+        ^ 0x9E3779B97F4A7C15ULL);
+    DenseVectorS restart_vec;
+    auto upload_random = [&](Scalar* d_dst, int len) {
+        restart_vec.resize(len);
+        restart_rng.fill_uniform(restart_vec.data(), len, 1);
+        restart_vec.array() -= Scalar(0.5);
+        CUDA_CHECK(cudaMemcpy(d_dst, restart_vec.data(),
+            static_cast<size_t>(len) * sizeof(Scalar), cudaMemcpyHostToDevice));
+    };
+    auto write_device_zero = [&](Scalar* d_dst) {
+        const Scalar zero_h = Scalar(0);
+        ctx.sync();
+        CUDA_CHECK(cudaMemcpy(d_dst, &zero_h, sizeof(Scalar),
+                              cudaMemcpyHostToDevice));
+    };
+
     for (int j = 0; j < jmax; ++j) {
+        bool q_random = false;   // q_j is a random restart vector
         // Step 1: r = A · p_j - beta_j · q_{j-1}
         spmv_forward(d_P_col(j));
 
@@ -553,15 +603,39 @@ SVDResult<Scalar> lanczos_svd_gpu_impl(
                 ctx.cublas, d_Q.get(), d_r.get(), m, j, d_orth_h.get());
         }
 
-        // alpha_j = ||r|| → device (no sync)
+        // alpha_j = ||r|| -> device, then read it back for the breakdown test
         detail::cublas_nrm2_device<Scalar>(
             ctx.cublas, m, d_r.get(), d_alpha_dev.get() + j);
-
-        // q_j = r / alpha_j (reads norm from device, handles breakdown)
         {
+            ctx.sync();
+            Scalar alpha_h = Scalar(0);
+            CUDA_CHECK(cudaMemcpy(&alpha_h, d_alpha_dev.get() + j,
+                                  sizeof(Scalar), cudaMemcpyDeviceToHost));
+            const bool left_breakdown = !(alpha_h > breakdown_tol * bidiag_scale);
+            if (left_breakdown) {
+                if (p_random) exhausted = true;   // a random p was annihilated
+                q_random = true;
+                ++n_restarts;
+                // q_j = random unit vector orthogonal to Q[:, 0:j-1]; alpha_j = 0
+                if (config.verbose)
+                    FACTORNET_PRINT_IMPL(
+                        "    Left breakdown at step %d (alpha=%.2e): restarting q\n",
+                        j, static_cast<double>(alpha_h));
+                upload_random(d_r.get(), m);
+                if (j > 0) {
+                    detail::gpu_orthog<Scalar>(
+                        ctx.cublas, d_Q.get(), d_r.get(), m, j, d_orth_h.get());
+                }
+                detail::cublas_nrm2_device<Scalar>(
+                    ctx.cublas, m, d_r.get(), d_alpha_dev.get() + j);
+            } else {
+                if (alpha_h > bidiag_scale) bidiag_scale = alpha_h;
+            }
+            // q_j = r / ||r||
             int blocks = (m + BLOCK_SIZE - 1) / BLOCK_SIZE;
             detail::normalize_copy_kernel<<<blocks, BLOCK_SIZE, 0, ctx.stream>>>(
-                d_Q_col(j), d_r.get(), d_alpha_dev.get() + j, eps, m);
+                d_Q_col(j), d_r.get(), d_alpha_dev.get() + j, Scalar(0), m);
+            if (left_breakdown) write_device_zero(d_alpha_dev.get() + j);
         }
 
         // Step 2: s = A' · q_j - alpha_j · p_j (reads alpha from device)
@@ -576,21 +650,56 @@ SVDResult<Scalar> lanczos_svd_gpu_impl(
         detail::gpu_orthog<Scalar>(
             ctx.cublas, d_P.get(), d_s.get(), n, j + 1, d_orth_h.get());
 
-        // beta_{j+1} = ||s|| → device (no sync)
+        // beta_{j+1} = ||s|| -> device, then read it back for the breakdown test
         detail::cublas_nrm2_device<Scalar>(
             ctx.cublas, n, d_s.get(), d_beta_dev.get() + (j + 1));
-
-        // p_{j+1} = s / beta_{j+1} (reads norm from device, handles breakdown)
+        j_actual = j + 1;
         {
+            ctx.sync();
+            Scalar beta_h = Scalar(0);
+            CUDA_CHECK(cudaMemcpy(&beta_h, d_beta_dev.get() + (j + 1),
+                                  sizeof(Scalar), cudaMemcpyDeviceToHost));
+            const bool right_breakdown = !(beta_h > breakdown_tol * bidiag_scale);
+            if (right_breakdown) {
+                write_device_zero(d_beta_dev.get() + (j + 1));
+                if (q_random) exhausted = true;   // a random q was annihilated
+                if (exhausted && j_actual >= k) {
+                    // Remaining spectrum is zero and k triplets exist: done.
+                    if (config.verbose)
+                        FACTORNET_PRINT_IMPL(
+                            "    Spectrum exhausted at step %d (beta=%.2e)\n",
+                            j_actual, static_cast<double>(beta_h));
+                    break;
+                }
+                p_random = true;
+                ++n_restarts;
+                // An invariant pair is not the end: repeated singular values
+                // have further copies outside it. p_{j+1} = random unit
+                // vector orthogonal to P[:, 0:j], beta_{j+1} = 0
+                if (config.verbose)
+                    FACTORNET_PRINT_IMPL(
+                        "    Right breakdown at step %d (beta=%.2e): restarting p\n",
+                        j_actual, static_cast<double>(beta_h));
+                upload_random(d_s.get(), n);
+                detail::gpu_orthog<Scalar>(
+                    ctx.cublas, d_P.get(), d_s.get(), n, j + 1, d_orth_h.get());
+                detail::cublas_nrm2_device<Scalar>(
+                    ctx.cublas, n, d_s.get(), d_beta_dev.get() + (j + 1));
+            } else {
+                if (beta_h > bidiag_scale) bidiag_scale = beta_h;
+                p_random = false;
+            }
+            // p_{j+1} = s / ||s||
             int blocks = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
             detail::normalize_copy_kernel<<<blocks, BLOCK_SIZE, 0, ctx.stream>>>(
-                d_P_col(j + 1), d_s.get(), d_beta_dev.get() + (j + 1), eps, n);
+                d_P_col(j + 1), d_s.get(), d_beta_dev.get() + (j + 1), Scalar(0), n);
+            if (right_breakdown) write_device_zero(d_beta_dev.get() + (j + 1));
         }
-
-        j_actual = j + 1;
+        if (exhausted && j_actual >= k) break;
 
         // Adaptive early stopping (periodic sync point)
-        if (j_actual >= min_steps_before_check &&
+        if (n_restarts == 0 &&   // residual bounds say nothing after a restart
+            j_actual >= min_steps_before_check &&
             j_actual % check_interval == 0 &&
             j_actual < jmax) {
             // Sync + download device bidiagonal for convergence check
@@ -599,19 +708,6 @@ SVDResult<Scalar> lanczos_svd_gpu_impl(
                 j_actual * sizeof(Scalar), cudaMemcpyDeviceToHost));
             CUDA_CHECK(cudaMemcpy(beta_vec.data() + 1, d_beta_dev.get() + 1,
                 j_actual * sizeof(Scalar), cudaMemcpyDeviceToHost));
-
-            // Check for breakdowns (alpha ≈ 0 → lucky breakdown)
-            bool had_breakdown = false;
-            for (int jj = 0; jj < j_actual; ++jj) {
-                if (std::abs(alpha_vec(jj)) < eps) {
-                    j_actual = jj;
-                    had_breakdown = true;
-                    if (config.verbose)
-                        FACTORNET_PRINT_IMPL("    Lucky breakdown at step %d\n", jj);
-                    break;
-                }
-            }
-            if (had_breakdown) break;
 
             DenseMatrixS B_check = DenseMatrixS::Zero(j_actual, j_actual);
             for (int jj = 0; jj < j_actual; ++jj) {
@@ -657,10 +753,18 @@ SVDResult<Scalar> lanczos_svd_gpu_impl(
     // ========================================================================
     // Build bidiagonal B (j_actual × j_actual), SVD on host
     // ========================================================================
-    DenseMatrixS B = DenseMatrixS::Zero(j_actual, j_actual);
+    // A' Q_j = P_j B_j' + beta_j p_j e_j' exactly, so the projected matrix is
+    // the j x (j+1) matrix [B_j | beta_j e_j] against P[:, 0:j] (j+1 columns).
+    // Dropping the last column (the usual j x j truncation) biases the
+    // smallest Ritz values downward. When beta_j is zero (invariant pair, or
+    // a restart at the last step) the extra column is zero and p_j is not
+    // used, so the square form is taken.
+    const int jp = (j_actual > 0 && beta_vec(j_actual) > Scalar(0))
+                 ? j_actual + 1 : j_actual;
+    DenseMatrixS B = DenseMatrixS::Zero(j_actual, jp);
     for (int j = 0; j < j_actual; ++j) {
         B(j, j) = alpha_vec(j);
-        if (j < j_actual - 1) B(j, j + 1) = beta_vec(j + 1);
+        if (j + 1 < jp) B(j, j + 1) = beta_vec(j + 1);
     }
 
     Eigen::JacobiSVD<DenseMatrixS> svd_b(B, Eigen::ComputeFullU | Eigen::ComputeFullV);
@@ -676,9 +780,9 @@ SVDResult<Scalar> lanczos_svd_gpu_impl(
         DenseMatrixS V_B = svd_b.matrixV().leftCols(k_actual);     // j_actual × k_actual
 
         DeviceMemory<Scalar> d_UB(static_cast<size_t>(j_actual) * k_actual);
-        DeviceMemory<Scalar> d_VB(static_cast<size_t>(j_actual) * k_actual);
+        DeviceMemory<Scalar> d_VB(static_cast<size_t>(jp) * k_actual);
         d_UB.upload(U_B.data(), static_cast<size_t>(j_actual) * k_actual);
-        d_VB.upload(V_B.data(), static_cast<size_t>(j_actual) * k_actual);
+        d_VB.upload(V_B.data(), static_cast<size_t>(jp) * k_actual);
 
         // U_final (m × k_actual) = Q[:, 0:j_actual] * U_B
         DeviceMemory<Scalar> d_U_final(static_cast<size_t>(m) * k_actual);
@@ -693,9 +797,9 @@ SVDResult<Scalar> lanczos_svd_gpu_impl(
         DeviceMemory<Scalar> d_V_final(static_cast<size_t>(n) * k_actual);
         detail::cublas_gemm<Scalar>(ctx.cublas,
             CUBLAS_OP_N, CUBLAS_OP_N,
-            n, k_actual, j_actual,
+            n, k_actual, jp,
             Scalar(1), d_P.get(), n,
-            d_VB.get(), j_actual,
+            d_VB.get(), jp,
             Scalar(0), d_V_final.get(), n);
 
         ctx.sync();
@@ -827,10 +931,13 @@ SVDResult<Scalar> lanczos_svd_gpu_dense_impl(
     auto t_start = std::chrono::high_resolution_clock::now();
 
     const int k = config.k_max;
-    const int default_steps = std::max(3 * k, k + 50);
+    // Same budget as the CPU Lanczos (svd/lanczos.hpp): 8k or k + 120 steps.
+    const int default_steps = std::max(8 * k, k + 120);
     const int user_steps = config.max_iter > 0 ? config.max_iter : 0;
+    // A positive max_iter is the step limit (at least k); 0 means default.
     const int jmax = std::min(std::min(m, n) - 1,
-                              std::max(default_steps, user_steps));
+                              user_steps > 0 ? std::max(user_steps, k)
+                                             : default_steps);
 
     SVDResult<Scalar> result;
     result.centered = config.center;
@@ -838,7 +945,9 @@ SVDResult<Scalar> lanczos_svd_gpu_dense_impl(
     if (config.center && row_means.size() > 0) result.row_means = row_means;
 
     const Scalar eps = std::numeric_limits<Scalar>::epsilon() * 100;
-    const Scalar conv_tol = config.tol > 0 ? config.tol : static_cast<Scalar>(1e-10);
+    // Stopping tolerance floored at what the scalar type can resolve (CPU rule)
+    const Scalar conv_tol = std::max(
+        config.tol, static_cast<Scalar>(16) * std::numeric_limits<Scalar>::epsilon());
     const int check_interval = 5;
     const int min_steps_before_check = k + 2;
     const int BLOCK_SIZE = 256;
@@ -936,7 +1045,52 @@ SVDResult<Scalar> lanczos_svd_gpu_dense_impl(
     // ========================================================================
     int j_actual = 0;
 
+    // Breakdown handling (checked on the host every step).
+    //
+    // A step "breaks down" when alpha_j or beta_{j+1} is negligible relative
+    // to the largest bidiagonal entry seen so far (an estimate of ||A||).
+    //  - alpha_j ~ 0: the left basis has exhausted range(A P_{j+1}). The
+    //    coupling beta_j to p_j is still needed for B, so nothing is
+    //    truncated: q_j becomes a random unit vector orthogonal to Q and
+    //    alpha_j is recorded as exactly zero.
+    //  - beta_{j+1} ~ 0: span(P), span(Q) form an exact invariant pair. With
+    //    at least k steps done the factorization is complete; otherwise p_{j+1}
+    //    is restarted the same way so that k vectors are still returned.
+    // The relations A P = Q B and A' Q = P B' + beta p e' hold exactly through
+    // a restart, so the singular values of B remain those of A.
+    Scalar bidiag_scale = Scalar(0);
+    // Restart bookkeeping, as in the CPU Lanczos (svd/lanczos.hpp): a single
+    // start vector finds one copy of each repeated singular value, so after a
+    // breakdown the iteration continues from a random direction until a
+    // random vector is itself annihilated (remaining spectrum is zero).
+    bool p_random = false;    // p_j is a random restart vector
+    bool exhausted = false;   // a random vector was annihilated
+    int n_restarts = 0;
+    // Relative breakdown tolerance, as on CPU: eps^(2/3) times the largest
+    // bidiagonal entry seen so far.
+    const Scalar breakdown_tol = static_cast<Scalar>(
+        std::pow(static_cast<double>(std::numeric_limits<Scalar>::epsilon()),
+                 2.0 / 3.0));
+    rng::SplitMix64 restart_rng(
+        (config.seed == 0 ? 42ULL : static_cast<uint64_t>(config.seed))
+        ^ 0x9E3779B97F4A7C15ULL);
+    DenseVectorS restart_vec;
+    auto upload_random = [&](Scalar* d_dst, int len) {
+        restart_vec.resize(len);
+        restart_rng.fill_uniform(restart_vec.data(), len, 1);
+        restart_vec.array() -= Scalar(0.5);
+        CUDA_CHECK(cudaMemcpy(d_dst, restart_vec.data(),
+            static_cast<size_t>(len) * sizeof(Scalar), cudaMemcpyHostToDevice));
+    };
+    auto write_device_zero = [&](Scalar* d_dst) {
+        const Scalar zero_h = Scalar(0);
+        ctx.sync();
+        CUDA_CHECK(cudaMemcpy(d_dst, &zero_h, sizeof(Scalar),
+                              cudaMemcpyHostToDevice));
+    };
+
     for (int j = 0; j < jmax; ++j) {
+        bool q_random = false;   // q_j is a random restart vector
         spmv_forward(d_P_col(j));
 
         if (j > 0) {
@@ -952,13 +1106,39 @@ SVDResult<Scalar> lanczos_svd_gpu_dense_impl(
                 ctx.cublas, d_Q.get(), d_r.get(), m, j, d_orth_h.get());
         }
 
+        // alpha_j = ||r|| -> device, then read it back for the breakdown test
         detail::cublas_nrm2_device<Scalar>(
             ctx.cublas, m, d_r.get(), d_alpha_dev.get() + j);
-
         {
+            ctx.sync();
+            Scalar alpha_h = Scalar(0);
+            CUDA_CHECK(cudaMemcpy(&alpha_h, d_alpha_dev.get() + j,
+                                  sizeof(Scalar), cudaMemcpyDeviceToHost));
+            const bool left_breakdown = !(alpha_h > breakdown_tol * bidiag_scale);
+            if (left_breakdown) {
+                if (p_random) exhausted = true;   // a random p was annihilated
+                q_random = true;
+                ++n_restarts;
+                // q_j = random unit vector orthogonal to Q[:, 0:j-1]; alpha_j = 0
+                if (config.verbose)
+                    FACTORNET_PRINT_IMPL(
+                        "    Left breakdown at step %d (alpha=%.2e): restarting q\n",
+                        j, static_cast<double>(alpha_h));
+                upload_random(d_r.get(), m);
+                if (j > 0) {
+                    detail::gpu_orthog<Scalar>(
+                        ctx.cublas, d_Q.get(), d_r.get(), m, j, d_orth_h.get());
+                }
+                detail::cublas_nrm2_device<Scalar>(
+                    ctx.cublas, m, d_r.get(), d_alpha_dev.get() + j);
+            } else {
+                if (alpha_h > bidiag_scale) bidiag_scale = alpha_h;
+            }
+            // q_j = r / ||r||
             int blocks = (m + BLOCK_SIZE - 1) / BLOCK_SIZE;
             detail::normalize_copy_kernel<<<blocks, BLOCK_SIZE, 0, ctx.stream>>>(
-                d_Q_col(j), d_r.get(), d_alpha_dev.get() + j, eps, m);
+                d_Q_col(j), d_r.get(), d_alpha_dev.get() + j, Scalar(0), m);
+            if (left_breakdown) write_device_zero(d_alpha_dev.get() + j);
         }
 
         spmv_transpose(d_Q_col(j));
@@ -971,18 +1151,55 @@ SVDResult<Scalar> lanczos_svd_gpu_dense_impl(
         detail::gpu_orthog<Scalar>(
             ctx.cublas, d_P.get(), d_s.get(), n, j + 1, d_orth_h.get());
 
+        // beta_{j+1} = ||s|| -> device, then read it back for the breakdown test
         detail::cublas_nrm2_device<Scalar>(
             ctx.cublas, n, d_s.get(), d_beta_dev.get() + (j + 1));
-
+        j_actual = j + 1;
         {
+            ctx.sync();
+            Scalar beta_h = Scalar(0);
+            CUDA_CHECK(cudaMemcpy(&beta_h, d_beta_dev.get() + (j + 1),
+                                  sizeof(Scalar), cudaMemcpyDeviceToHost));
+            const bool right_breakdown = !(beta_h > breakdown_tol * bidiag_scale);
+            if (right_breakdown) {
+                write_device_zero(d_beta_dev.get() + (j + 1));
+                if (q_random) exhausted = true;   // a random q was annihilated
+                if (exhausted && j_actual >= k) {
+                    // Remaining spectrum is zero and k triplets exist: done.
+                    if (config.verbose)
+                        FACTORNET_PRINT_IMPL(
+                            "    Spectrum exhausted at step %d (beta=%.2e)\n",
+                            j_actual, static_cast<double>(beta_h));
+                    break;
+                }
+                p_random = true;
+                ++n_restarts;
+                // An invariant pair is not the end: repeated singular values
+                // have further copies outside it. p_{j+1} = random unit
+                // vector orthogonal to P[:, 0:j], beta_{j+1} = 0
+                if (config.verbose)
+                    FACTORNET_PRINT_IMPL(
+                        "    Right breakdown at step %d (beta=%.2e): restarting p\n",
+                        j_actual, static_cast<double>(beta_h));
+                upload_random(d_s.get(), n);
+                detail::gpu_orthog<Scalar>(
+                    ctx.cublas, d_P.get(), d_s.get(), n, j + 1, d_orth_h.get());
+                detail::cublas_nrm2_device<Scalar>(
+                    ctx.cublas, n, d_s.get(), d_beta_dev.get() + (j + 1));
+            } else {
+                if (beta_h > bidiag_scale) bidiag_scale = beta_h;
+                p_random = false;
+            }
+            // p_{j+1} = s / ||s||
             int blocks = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
             detail::normalize_copy_kernel<<<blocks, BLOCK_SIZE, 0, ctx.stream>>>(
-                d_P_col(j + 1), d_s.get(), d_beta_dev.get() + (j + 1), eps, n);
+                d_P_col(j + 1), d_s.get(), d_beta_dev.get() + (j + 1), Scalar(0), n);
+            if (right_breakdown) write_device_zero(d_beta_dev.get() + (j + 1));
         }
+        if (exhausted && j_actual >= k) break;
 
-        j_actual = j + 1;
-
-        if (j_actual >= min_steps_before_check &&
+        if (n_restarts == 0 &&   // residual bounds say nothing after a restart
+            j_actual >= min_steps_before_check &&
             j_actual % check_interval == 0 &&
             j_actual < jmax) {
             ctx.sync();
@@ -990,18 +1207,6 @@ SVDResult<Scalar> lanczos_svd_gpu_dense_impl(
                 j_actual * sizeof(Scalar), cudaMemcpyDeviceToHost));
             CUDA_CHECK(cudaMemcpy(beta_vec.data() + 1, d_beta_dev.get() + 1,
                 j_actual * sizeof(Scalar), cudaMemcpyDeviceToHost));
-
-            bool had_breakdown = false;
-            for (int jj = 0; jj < j_actual; ++jj) {
-                if (std::abs(alpha_vec(jj)) < eps) {
-                    j_actual = jj;
-                    had_breakdown = true;
-                    if (config.verbose)
-                        FACTORNET_PRINT_IMPL("    Lucky breakdown at step %d\n", jj);
-                    break;
-                }
-            }
-            if (had_breakdown) break;
 
             DenseMatrixS B_check = DenseMatrixS::Zero(j_actual, j_actual);
             for (int jj = 0; jj < j_actual; ++jj) {
@@ -1046,10 +1251,18 @@ SVDResult<Scalar> lanczos_svd_gpu_dense_impl(
     // ========================================================================
     // Build bidiagonal B, SVD on host, final rotation on GPU
     // ========================================================================
-    DenseMatrixS B = DenseMatrixS::Zero(j_actual, j_actual);
+    // A' Q_j = P_j B_j' + beta_j p_j e_j' exactly, so the projected matrix is
+    // the j x (j+1) matrix [B_j | beta_j e_j] against P[:, 0:j] (j+1 columns).
+    // Dropping the last column (the usual j x j truncation) biases the
+    // smallest Ritz values downward. When beta_j is zero (invariant pair, or
+    // a restart at the last step) the extra column is zero and p_j is not
+    // used, so the square form is taken.
+    const int jp = (j_actual > 0 && beta_vec(j_actual) > Scalar(0))
+                 ? j_actual + 1 : j_actual;
+    DenseMatrixS B = DenseMatrixS::Zero(j_actual, jp);
     for (int j = 0; j < j_actual; ++j) {
         B(j, j) = alpha_vec(j);
-        if (j < j_actual - 1) B(j, j + 1) = beta_vec(j + 1);
+        if (j + 1 < jp) B(j, j + 1) = beta_vec(j + 1);
     }
 
     Eigen::JacobiSVD<DenseMatrixS> svd_b(B, Eigen::ComputeFullU | Eigen::ComputeFullV);
@@ -1062,9 +1275,9 @@ SVDResult<Scalar> lanczos_svd_gpu_dense_impl(
         DenseMatrixS V_B = svd_b.matrixV().leftCols(k_actual);
 
         DeviceMemory<Scalar> d_UB(static_cast<size_t>(j_actual) * k_actual);
-        DeviceMemory<Scalar> d_VB(static_cast<size_t>(j_actual) * k_actual);
+        DeviceMemory<Scalar> d_VB(static_cast<size_t>(jp) * k_actual);
         d_UB.upload(U_B.data(), static_cast<size_t>(j_actual) * k_actual);
-        d_VB.upload(V_B.data(), static_cast<size_t>(j_actual) * k_actual);
+        d_VB.upload(V_B.data(), static_cast<size_t>(jp) * k_actual);
 
         DeviceMemory<Scalar> d_U_final(static_cast<size_t>(m) * k_actual);
         cublasSetPointerMode(ctx.cublas, CUBLAS_POINTER_MODE_HOST);
@@ -1078,9 +1291,9 @@ SVDResult<Scalar> lanczos_svd_gpu_dense_impl(
         DeviceMemory<Scalar> d_V_final(static_cast<size_t>(n) * k_actual);
         detail::cublas_gemm<Scalar>(ctx.cublas,
             CUBLAS_OP_N, CUBLAS_OP_N,
-            n, k_actual, j_actual,
+            n, k_actual, jp,
             Scalar(1), d_P.get(), n,
-            d_VB.get(), j_actual,
+            d_VB.get(), jp,
             Scalar(0), d_V_final.get(), n);
 
         ctx.sync();

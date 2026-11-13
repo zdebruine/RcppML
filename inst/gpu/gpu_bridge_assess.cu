@@ -24,6 +24,9 @@
 #include <algorithm>
 #include <numeric>
 #include <random>
+#include <climits>
+#include <stdexcept>
+#include <string>
 
 // ============================================================
 // GPU Kernels
@@ -203,24 +206,52 @@ __global__ void knn_bruteforce_kernel(
 
 static void check_cuda(cudaError_t err, const char* msg) {
     if (err != cudaSuccess) {
-        fprintf(stderr, "CUDA error at %s: %s\n", msg, cudaGetErrorString(err));
+        // Throw instead of continuing with an unallocated or stale buffer;
+        // the entry point catches and reports through out_status.
+        throw std::runtime_error(std::string("CUDA error at ") + msg + ": " +
+                                 cudaGetErrorString(err));
     }
 }
+
+// Owns raw device allocations for one scope so that an exception thrown
+// part-way through (check_cuda) does not leak the earlier buffers.
+struct DevAllocs {
+    std::vector<void*> ptrs;
+    DevAllocs() = default;
+    DevAllocs(const DevAllocs&) = delete;
+    DevAllocs& operator=(const DevAllocs&) = delete;
+    ~DevAllocs() {
+        for (void* q : ptrs) if (q) cudaFree(q);
+    }
+    void* alloc(size_t bytes, const char* msg) {
+        void* q = nullptr;
+        check_cuda(cudaMalloc(&q, bytes > 0 ? bytes : 1), msg);
+        ptrs.push_back(q);
+        return q;
+    }
+    void release(void* q) {
+        for (size_t i = 0; i < ptrs.size(); ++i) {
+            if (ptrs[i] == q) { ptrs[i] = nullptr; break; }
+        }
+        if (q) cudaFree(q);
+    }
+};
 
 // GPU k-means clustering
 // Returns assignments (n integers, 0-indexed)
 static std::vector<int> gpu_kmeans(const float* d_X, int n, int k, int n_centers,
                                     int max_iter, unsigned int seed) {
     // Device memory for centroids, assignments, accumulators
-    float* d_centroids;
-    int* d_assign;
-    float* d_sums;
-    int* d_counts;
+    DevAllocs dev;
+    float* d_centroids = nullptr;
+    int* d_assign = nullptr;
+    float* d_sums = nullptr;
+    int* d_counts = nullptr;
     
-    check_cuda(cudaMalloc(&d_centroids, n_centers * k * sizeof(float)), "kmeans centroids");
-    check_cuda(cudaMalloc(&d_assign, n * sizeof(int)), "kmeans assign");
-    check_cuda(cudaMalloc(&d_sums, n_centers * k * sizeof(float)), "kmeans sums");
-    check_cuda(cudaMalloc(&d_counts, n_centers * sizeof(int)), "kmeans counts");
+    d_centroids = static_cast<decltype(d_centroids)>(dev.alloc(static_cast<size_t>(1) * n_centers * k * sizeof(float), "kmeans centroids"));
+    d_assign = static_cast<decltype(d_assign)>(dev.alloc(static_cast<size_t>(1) * n * sizeof(int), "kmeans assign"));
+    d_sums = static_cast<decltype(d_sums)>(dev.alloc(static_cast<size_t>(1) * n_centers * k * sizeof(float), "kmeans sums"));
+    d_counts = static_cast<decltype(d_counts)>(dev.alloc(static_cast<size_t>(1) * n_centers * sizeof(int), "kmeans counts"));
     
     // Initialize centroids: copy first n_centers points
     // (Better: k-means++ on CPU, but this is fast enough for assessment)
@@ -261,10 +292,10 @@ static std::vector<int> gpu_kmeans(const float* d_X, int n, int k, int n_centers
     std::vector<int> assignments(n);
     check_cuda(cudaMemcpy(assignments.data(), d_assign, n * sizeof(int), cudaMemcpyDeviceToHost), "kmeans assign->host");
     
-    cudaFree(d_centroids);
-    cudaFree(d_assign);
-    cudaFree(d_sums);
-    cudaFree(d_counts);
+    dev.release(d_centroids);
+    dev.release(d_assign);
+    dev.release(d_sums);
+    dev.release(d_counts);
     
     return assignments;
 }
@@ -417,12 +448,18 @@ void rcppml_gpu_assess(
         int n_batch = *n_batch_ptr;
         unsigned int seed = (unsigned int)*seed_ptr;
         
+        if (n < 0 || dim < 0 ||
+            static_cast<long long>(n) * dim > static_cast<long long>(INT_MAX))
+            throw std::runtime_error(
+                "GPU assess: embedding must have fewer than 2^31 entries");
+
         // Upload embedding to GPU as float32
-        std::vector<float> h_emb(n * dim);
+        std::vector<float> h_emb(static_cast<size_t>(n) * dim);
         for (int i = 0; i < n * dim; ++i) h_emb[i] = (float)embedding[i];
         
-        float* d_X;
-        check_cuda(cudaMalloc(&d_X, n * dim * sizeof(float)), "assess alloc X");
+        DevAllocs dev;
+        float* d_X = nullptr;
+        d_X = static_cast<decltype(d_X)>(dev.alloc(static_cast<size_t>(1) * n * dim * sizeof(float), "assess alloc X"));
         check_cuda(cudaMemcpy(d_X, h_emb.data(), n * dim * sizeof(float), cudaMemcpyHostToDevice), "assess upload X");
         
         // Copy labels to host vectors for CPU metric computation
@@ -497,12 +534,12 @@ void rcppml_gpu_assess(
             int* d_class_counts;
             float* d_sil;
             
-            check_cuda(cudaMalloc(&d_samples, total_samples * dim * sizeof(float)), "sil samples");
-            check_cuda(cudaMalloc(&d_labels, n * sizeof(int)), "sil labels");
-            check_cuda(cudaMalloc(&d_sample_labels, total_samples * sizeof(int)), "sil sample labels");
-            check_cuda(cudaMalloc(&d_class_offsets, n_classes * sizeof(int)), "sil offsets");
-            check_cuda(cudaMalloc(&d_class_counts, n_classes * sizeof(int)), "sil counts");
-            check_cuda(cudaMalloc(&d_sil, n * sizeof(float)), "sil output");
+            d_samples = static_cast<decltype(d_samples)>(dev.alloc(static_cast<size_t>(1) * total_samples * dim * sizeof(float), "sil samples"));
+            d_labels = static_cast<decltype(d_labels)>(dev.alloc(static_cast<size_t>(1) * n * sizeof(int), "sil labels"));
+            d_sample_labels = static_cast<decltype(d_sample_labels)>(dev.alloc(static_cast<size_t>(1) * total_samples * sizeof(int), "sil sample labels"));
+            d_class_offsets = static_cast<decltype(d_class_offsets)>(dev.alloc(static_cast<size_t>(1) * n_classes * sizeof(int), "sil offsets"));
+            d_class_counts = static_cast<decltype(d_class_counts)>(dev.alloc(static_cast<size_t>(1) * n_classes * sizeof(int), "sil counts"));
+            d_sil = static_cast<decltype(d_sil)>(dev.alloc(static_cast<size_t>(1) * n * sizeof(float), "sil output"));
             
             check_cuda(cudaMemcpy(d_samples, h_samples.data(), total_samples * dim * sizeof(float), cudaMemcpyHostToDevice), "sil upload samples");
             check_cuda(cudaMemcpy(d_labels, h_labels.data(), n * sizeof(int), cudaMemcpyHostToDevice), "sil upload labels");
@@ -525,12 +562,12 @@ void rcppml_gpu_assess(
             for (int i = 0; i < n; ++i) sil_sum += h_sil[i];
             *out_silhouette = sil_sum / n;
             
-            cudaFree(d_samples);
-            cudaFree(d_labels);
-            cudaFree(d_sample_labels);
-            cudaFree(d_class_offsets);
-            cudaFree(d_class_counts);
-            cudaFree(d_sil);
+            dev.release(d_samples);
+            dev.release(d_labels);
+            dev.release(d_sample_labels);
+            dev.release(d_class_offsets);
+            dev.release(d_class_counts);
+            dev.release(d_sil);
         }
         
         // ========================================
@@ -586,10 +623,10 @@ void rcppml_gpu_assess(
                 float *d_nn_dist;
                 int actual_k = std::min(knn, n_train);
                 
-                check_cuda(cudaMalloc(&d_train, n_train * dim * sizeof(float)), "knn train");
-                check_cuda(cudaMalloc(&d_test, n_test * dim * sizeof(float)), "knn test");
-                check_cuda(cudaMalloc(&d_nn_idx, n_test * actual_k * sizeof(int)), "knn idx");
-                check_cuda(cudaMalloc(&d_nn_dist, n_test * actual_k * sizeof(float)), "knn dist");
+                d_train = static_cast<decltype(d_train)>(dev.alloc(static_cast<size_t>(1) * n_train * dim * sizeof(float), "knn train"));
+                d_test = static_cast<decltype(d_test)>(dev.alloc(static_cast<size_t>(1) * n_test * dim * sizeof(float), "knn test"));
+                d_nn_idx = static_cast<decltype(d_nn_idx)>(dev.alloc(static_cast<size_t>(1) * n_test * actual_k * sizeof(int), "knn idx"));
+                d_nn_dist = static_cast<decltype(d_nn_dist)>(dev.alloc(static_cast<size_t>(1) * n_test * actual_k * sizeof(float), "knn dist"));
                 
                 check_cuda(cudaMemcpy(d_train, h_train.data(), n_train * dim * sizeof(float), cudaMemcpyHostToDevice), "knn upload train");
                 check_cuda(cudaMemcpy(d_test, h_test.data(), n_test * dim * sizeof(float), cudaMemcpyHostToDevice), "knn upload test");
@@ -638,10 +675,10 @@ void rcppml_gpu_assess(
                 total_f1 += f1_sum / std::max(f1_count, 1);
                 valid_folds++;
                 
-                cudaFree(d_train);
-                cudaFree(d_test);
-                cudaFree(d_nn_idx);
-                cudaFree(d_nn_dist);
+                dev.release(d_train);
+                dev.release(d_test);
+                dev.release(d_nn_idx);
+                dev.release(d_nn_dist);
             }
             
             *out_knn_accuracy = (valid_folds > 0) ? total_acc / valid_folds : 0;
@@ -658,8 +695,8 @@ void rcppml_gpu_assess(
             // Self-kNN on GPU
             int *d_nn_idx;
             float *d_nn_dist;
-            check_cuda(cudaMalloc(&d_nn_idx, n * actual_k * sizeof(int)), "batch knn idx");
-            check_cuda(cudaMalloc(&d_nn_dist, n * actual_k * sizeof(float)), "batch knn dist");
+            d_nn_idx = static_cast<decltype(d_nn_idx)>(dev.alloc(static_cast<size_t>(1) * n * actual_k * sizeof(int), "batch knn idx"));
+            d_nn_dist = static_cast<decltype(d_nn_dist)>(dev.alloc(static_cast<size_t>(1) * n * actual_k * sizeof(float), "batch knn dist"));
             
             // For batch metrics, we do self-kNN (query == train)
             // Need to exclude self — shift neighbors by checking for self-match
@@ -667,8 +704,8 @@ void rcppml_gpu_assess(
             int alloc_k = actual_k + 1;
             int *d_nn_idx2;
             float *d_nn_dist2;
-            check_cuda(cudaMalloc(&d_nn_idx2, n * alloc_k * sizeof(int)), "batch knn idx2");
-            check_cuda(cudaMalloc(&d_nn_dist2, n * alloc_k * sizeof(float)), "batch knn dist2");
+            d_nn_idx2 = static_cast<decltype(d_nn_idx2)>(dev.alloc(static_cast<size_t>(1) * n * alloc_k * sizeof(int), "batch knn idx2"));
+            d_nn_dist2 = static_cast<decltype(d_nn_dist2)>(dev.alloc(static_cast<size_t>(1) * n * alloc_k * sizeof(float), "batch knn dist2"));
             
             dim3 block(256);
             dim3 grid((n + 255) / 256);
@@ -735,13 +772,13 @@ void rcppml_gpu_assess(
             *out_batch_entropy = entropy_sum / n;
             *out_batch_sil = batch_sil_sum / n;
             
-            cudaFree(d_nn_idx);
-            cudaFree(d_nn_dist);
-            cudaFree(d_nn_idx2);
-            cudaFree(d_nn_dist2);
+            dev.release(d_nn_idx);
+            dev.release(d_nn_dist);
+            dev.release(d_nn_idx2);
+            dev.release(d_nn_dist2);
         }
         
-        cudaFree(d_X);
+        dev.release(d_X);
         *out_status = 0;
         
     } catch (const std::exception& e) {

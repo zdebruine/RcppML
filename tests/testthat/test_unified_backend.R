@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 # Test: Unified Backend Equivalence
 # Verify that the unified backend (via Rcpp_nmf_full → gateway::nmf)
 # produces correct, high-quality NMF factorizations.

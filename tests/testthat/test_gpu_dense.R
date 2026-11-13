@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 # Tests for GPU dense NMF path (T13: fit_gpu_dense_unified.cuh)
 # Requires GPU hardware — all tests skip gracefully on CPU-only nodes
 
@@ -87,7 +91,7 @@ test_that("GPU dense NMF works with fp32 precision", {
   m <- 50; n <- 70; k <- 3
   A <- matrix(abs(rnorm(m * n)), m, n)
 
-  result <- nmf(A, k = k, seed = 1, maxit = 30, precision = "float", resource = "gpu")
+  result <- nmf(A, k = k, seed = 1, maxit = 30, resource = "gpu")
   expect_s4_class(result, "nmf")
 
   gpu_mse <- mse(result@w, result@d, result@h, A)
@@ -450,22 +454,16 @@ test_that("GPU dense symmetric NMF enforces H = Wt", {
 # GPU dense projective CV
 # ---------------------------------------------------------------
 
-test_that("GPU dense projective CV enforces constraint and produces finite loss", {
+test_that("projective NMF with cross-validation is rejected", {
   skip_if_no_gpu()
   M <- .make_dense_pos()
-  g <- nmf(M, k = 5, seed = 42, tol = 1e-10, maxit = 30,
-           projective = TRUE, test_fraction = 0.1,
-           resource = "gpu", verbose = FALSE)
-  expect_true(is.finite(g@misc$test_loss) && g@misc$test_loss > 0,
-    label = "GPU projective CV produces finite test_loss")
-  # Check projective constraint is approximately enforced
-  Wt <- t(g@w)
-  d_diag <- diag(g@d)
-  check <- d_diag %*% Wt %*% M
-  check_norm <- sweep(check, 1, sqrt(rowSums(check^2)), "/")
-  cors <- sapply(1:5, function(i) cor(g@h[i, ], check_norm[i, ]))
-  expect_true(all(cors > 0.99),
-    label = sprintf("Projective CV H~WtA cors: %s", paste(round(cors, 4), collapse = ", ")))
+  # projective = TRUE with test_fraction > 0 is an error on every backend
+  for (res in c("cpu", "gpu")) {
+    expect_error(suppressWarnings(
+      nmf(M, k = 5, seed = 42, tol = 1e-10, maxit = 30,
+          projective = TRUE, test_fraction = 0.1,
+          resource = res, verbose = FALSE)))
+  }
 })
 
 # ---------------------------------------------------------------
@@ -527,9 +525,9 @@ test_that("GPU dense ZI-ROW GP matches CPU", {
   A <- .make_dense_pos()
   A[sample(length(A), length(A) * 0.3)] <- 0
   g <- nmf(A, 5, seed = 42, tol = 1e-5, maxit = 20, loss = "gp",
-           zi_mode = "row", resource = "gpu", verbose = FALSE)
+           zi = "row", resource = "gpu", verbose = FALSE)
   c <- nmf(A, 5, seed = 42, tol = 1e-5, maxit = 20, loss = "gp",
-           zi_mode = "row", resource = "cpu", verbose = FALSE)
+           zi = "row", resource = "cpu", verbose = FALSE)
   gap <- abs(g@misc$loss - c@misc$loss) / max(abs(c@misc$loss), 1e-16)
   expect_lt(gap, 0.02, label = sprintf("ZI-ROW GP gap=%.4f", gap))
 })
@@ -539,9 +537,9 @@ test_that("GPU dense ZI-ROW NB matches CPU", {
   A <- .make_dense_pos()
   A[sample(length(A), length(A) * 0.3)] <- 0
   g <- nmf(A, 5, seed = 42, tol = 1e-5, maxit = 20, loss = "nb",
-           zi_mode = "row", resource = "gpu", verbose = FALSE)
+           zi = "row", resource = "gpu", verbose = FALSE)
   c <- nmf(A, 5, seed = 42, tol = 1e-5, maxit = 20, loss = "nb",
-           zi_mode = "row", resource = "cpu", verbose = FALSE)
+           zi = "row", resource = "cpu", verbose = FALSE)
   gap <- abs(g@misc$loss - c@misc$loss) / max(abs(c@misc$loss), 1e-16)
   expect_lt(gap, 0.01, label = sprintf("ZI-ROW NB gap=%.4f", gap))
 })

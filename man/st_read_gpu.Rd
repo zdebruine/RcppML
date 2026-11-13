@@ -24,6 +24,12 @@ An object of class \code{"gpu_sparse_matrix"} with fields:
   }
 }
 \description{
+\strong{Not available in this build.} The GPU-side StreamPress decoder is
+not included in this release, so this function always stops with an error.
+Use \code{\link{st_read}} and pass the result to
+\code{nmf(..., resource = "gpu")}. The description below documents the
+intended behavior.
+
 Reads a \code{.spz} v2 file and decodes it directly on the GPU, returning
 an opaque GPU-resident CSC matrix. This avoids the CPU-to-GPU transfer that
 occurs when using \code{st_read()} followed by \code{nmf(data, gpu = TRUE)}.

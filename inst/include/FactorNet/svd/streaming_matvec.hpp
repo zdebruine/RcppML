@@ -35,6 +35,10 @@
 #include <cstdio>
 #include <memory>
 #include <cstring>
+#include <cmath>
+#include <limits>
+#include <stdexcept>
+#include <string>
 
 namespace FactorNet {
 namespace svd {
@@ -227,7 +231,9 @@ struct StreamingContext {
             frobenius_norm_sq -= static_cast<Scalar>(n) * row_means.squaredNorm();
         }
         if (scale) {
-            frobenius_norm_sq = static_cast<Scalar>(m) * static_cast<Scalar>(n);
+            // sample SD (n - 1): each scaled row has sum of squares n - 1
+            frobenius_norm_sq = static_cast<Scalar>(m) *
+                                static_cast<Scalar>(n > 1 ? n - 1 : 1);
         }
     }
 
@@ -284,8 +290,8 @@ struct StreamingContext {
     /**
      * @brief Compute row standard deviations by streaming (requires row_means)
      *
-     * Uses Var(x_i) = E[x_i²] - μ_i², streaming through all chunks to
-     * accumulate E[x_i²] per row.
+     * Sample variance (n - 1 denominator), streaming through all chunks to
+     * accumulate the sum of squares per row.
      */
     DenseVector<Scalar> compute_row_sds_streaming() const {
         DenseVector<Scalar> sum_sq = DenseVector<Scalar>::Zero(m);
@@ -306,11 +312,21 @@ struct StreamingContext {
                 }
             }
         }
-        DenseVector<Scalar> variance = sum_sq / static_cast<Scalar>(n) -
-                                       row_means.cwiseProduct(row_means);
-        // Clamp away from zero to avoid division by zero
-        const Scalar eps = std::numeric_limits<Scalar>::epsilon() * 100;
-        return variance.cwiseMax(eps).cwiseSqrt();
+        // Sample SD (n - 1 denominator, as stats::sd / prcomp). Rows without
+        // measurable variance get SD 1 (left unscaled).
+        DenseVector<Scalar> sds(m);
+        const double nn = static_cast<double>(n);
+        for (uint32_t i = 0; i < m; ++i) {
+            const double ss = static_cast<double>(sum_sq(i));
+            const double mu = static_cast<double>(row_means(i));
+            double sd = 1.0;
+            if (n > 1) {
+                const double var = (ss - nn * mu * mu) / (nn - 1.0);
+                if (var > 0.0 && var > 1e-6 * (ss / nn)) sd = std::sqrt(var);
+            }
+            sds(i) = static_cast<Scalar>(sd);
+        }
+        return sds;
     }
 };
 

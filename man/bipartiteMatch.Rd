@@ -7,16 +7,21 @@
 bipartiteMatch(x)
 }
 \arguments{
-\item{x}{symmetric matrix giving the cost of every possible pairing}
+\item{x}{matrix giving the cost of every possible pairing (rows are matched to columns)}
 }
 \value{
-List with elements \code{cost} (total matching cost) and \code{assignment} (0-indexed column assignment for each row).
+List with elements \code{cost} (total matching cost) and \code{assignment} (0-indexed column assignment for each row, \code{-1} for a row left unmatched).
 }
 \description{
 Hungarian algorithm for matching samples in a bipartite graph from a distance ("cost") matrix
 }
 \details{
 This implementation was adapted from RcppHungarian, an Rcpp wrapper for the original C++ implementation by Cong Ma (2016).
+
+Negative costs are permitted. The solver requires non-negative costs, so a matrix
+with negative entries is shifted by its minimum before solving; a constant shift does
+not change the optimal assignment, and the returned \code{cost} is computed from the
+original matrix.
 }
 \examples{
 cost <- matrix(c(1, 0.5, 0.2,

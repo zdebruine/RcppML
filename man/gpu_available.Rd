@@ -14,10 +14,14 @@ logical TRUE if GPU is available
 }
 \description{
 Detects CUDA GPUs at runtime. Result is cached for the session.
+The GPU library is looked for in the installed package and in the per-user
+directory written by \code{\link{install_gpu}}; when this returns
+\code{FALSE}, \code{\link{gpu_status}} reports which step failed.
 }
 \examples{
 gpu_available()
 }
 \seealso{
-\code{\link{gpu_info}}, \code{\link{nmf}}
+\code{\link{gpu_info}}, \code{\link{gpu_status}},
+  \code{\link{install_gpu}}, \code{\link{nmf}}
 }

@@ -110,7 +110,9 @@ __global__ void batch_cd_kernel_tpc_dynamic(
     int n,
     int max_cd_iter,
     bool nonneg,
-    bool warm_start)
+    bool warm_start,
+    Scalar tol)                       // > 0: stop a column once a sweep moves
+                                      // no coordinate by more than tol * max|h|
 {
     extern __shared__ char smem[];
     Scalar* s_G = reinterpret_cast<Scalar*>(smem);
@@ -137,8 +139,12 @@ __global__ void batch_cd_kernel_tpc_dynamic(
             h[i] = nonneg ? max(B[i + j * k], Scalar(0)) : B[i + j * k];
     }
 
-    // Fixed-iteration coordinate descent
+    // Coordinate descent: at most max_cd_iter sweeps. With tol > 0 a column
+    // stops as soon as a full sweep changes no coordinate by more than
+    // tol * max|h| (a fixed point of the sweep satisfies the KKT conditions).
     for (int iter = 0; iter < max_cd_iter; ++iter) {
+        Scalar max_delta = Scalar(0);
+        Scalar max_h = Scalar(0);
         for (int coord = 0; coord < k; ++coord) {
             Scalar grad = -B[coord + j * k];
             for (int l = 0; l < k; ++l) {
@@ -147,9 +153,16 @@ __global__ void batch_cd_kernel_tpc_dynamic(
             Scalar g_diag = s_G[coord * k + coord];
             if (g_diag > Scalar(0)) {
                 Scalar new_val = h[coord] - grad / g_diag;
-                h[coord] = nonneg ? max(new_val, Scalar(0)) : new_val;
+                new_val = nonneg ? max(new_val, Scalar(0)) : new_val;
+                Scalar delta = new_val - h[coord];
+                if (delta < Scalar(0)) delta = -delta;
+                if (delta > max_delta) max_delta = delta;
+                h[coord] = new_val;
             }
+            Scalar ah = h[coord] < Scalar(0) ? -h[coord] : h[coord];
+            if (ah > max_h) max_h = ah;
         }
+        if (tol > Scalar(0) && max_delta <= tol * max_h) break;
     }
 
     for (int i = 0; i < k; ++i)
@@ -306,7 +319,9 @@ void batch_cd_nnls_gpu(
     DenseMatrixGPU<Scalar>& H,
     int max_cd_iter = 10,
     bool nonneg = true,
-    bool warm_start = true)
+    bool warm_start = true,
+    Scalar tol = Scalar(0))   // > 0: per-column convergence stop (k <= 64);
+                              // larger ranks always run max_cd_iter sweeps
 {
     const int k = G.rows;
     const int n = H.cols;
@@ -321,7 +336,7 @@ void batch_cd_nnls_gpu(
         size_t smem = static_cast<size_t>(k) * k * sizeof(Scalar);
         batch_cd_kernel_tpc_dynamic<Scalar><<<blocks, threads, smem, ctx.stream>>>(
             G.data.get(), B.data.get(), H.data.get(), k, n,
-            max_cd_iter, nonneg, warm_start);
+            max_cd_iter, nonneg, warm_start, tol);
     } else if (k <= 128) {
         // k = 33..128: generalised warp-per-column kernel.
         //
@@ -405,7 +420,7 @@ void batch_cd_nnls_gpu(
 template<typename Scalar>
 __global__ void l1_accum_gridstride(
     const Scalar* __restrict__ M,  // k×n col-major
-    Scalar* __restrict__ d,        // k, must be pre-zeroed
+    Scalar* __restrict__ d,        // k x gridDim.x partial sums (one per block)
     int k, int n)
 {
     // threadIdx.x = row index (0..k-1)
@@ -420,8 +435,27 @@ __global__ void l1_accum_gridstride(
         Scalar v = M[row + (size_t)j * k];
         acc += (v < Scalar(0) ? -v : v);
     }
-    // ceil(n/k)/gridDim atomics per d[row]: ~39 for grid=1024, n=40000, k=128
-    atomicAdd(d + row, acc);
+    // One partial sum per (block, row), written to its own slot. The slots
+    // are added in block order by l1_reduce_partials below. (An atomicAdd
+    // into d[row] here made the order of the floating-point additions, and
+    // so the last bits of the scaling vector, vary from run to run.)
+    d[row + (size_t)blockIdx.x * k] = acc;
+}
+
+/// Fixed-order reduction of the per-block partial sums: d[row] = sum over
+/// blocks 0..n_blocks-1 of partials[row + block * k]. One thread per row.
+template<typename Scalar>
+__global__ void l1_reduce_partials(
+    const Scalar* __restrict__ partials,  // k × n_blocks
+    Scalar* __restrict__ d,               // k
+    int k, int n_blocks)
+{
+    const int row = threadIdx.x;
+    if (row >= k) return;
+    Scalar acc = Scalar(0);
+    for (int b = 0; b < n_blocks; ++b)
+        acc += partials[row + (size_t)b * k];
+    d[row] = acc;
 }
 
 template<typename Scalar>
@@ -453,9 +487,14 @@ void l1_norm_rows_gpu(
     // Grid: enough blocks to target ~48% SM occupancy; cap at n (no idle blocks)
     const int blocks = min(1024, (n + bk - 1) / bk);
 
-    CUDA_CHECK(cudaMemsetAsync(d.get(), 0, static_cast<size_t>(k) * sizeof(Scalar), ctx.stream));
-    l1_accum_gridstride<Scalar>    <<<blocks, bk, 0, ctx.stream>>>(M.data.get(), d.get(), k, n);
+    // Per-block partial sums (k × blocks), then a fixed-order reduction, so
+    // the norms are bit-reproducible from run to run.
+    DeviceMemory<Scalar> partials(static_cast<size_t>(k) * blocks);
+    l1_accum_gridstride<Scalar>    <<<blocks, bk, 0, ctx.stream>>>(M.data.get(), partials.get(), k, n);
+    l1_reduce_partials<Scalar>     <<<1, bk, 0, ctx.stream>>>(partials.get(), d.get(), k, blocks);
     l1_normalize_gridstride<Scalar><<<blocks, bk, 0, ctx.stream>>>(M.data.get(), d.get(), k, n, eps);
+    // `partials` is released on return; let the kernels that read it finish
+    CUDA_CHECK(cudaStreamSynchronize(ctx.stream));
 }
 
 // ===========================================================================

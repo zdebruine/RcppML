@@ -8,6 +8,9 @@
 #include <cstdint>
 #include <cstddef>
 #include <vector>
+#include <stdexcept>
+
+#include <streampress/core/checks.hpp>
 
 namespace streampress {
 
@@ -44,26 +47,49 @@ inline size_t decode(const uint8_t* in, uint64_t& value) {
     size_t n = 0;
     int shift = 0;
     do {
+        // A 64-bit value needs at most 10 groups; more is malformed input
+        // (and a shift of 64 or more would be undefined behaviour).
+        if (shift > 63) spz_corrupt("varint longer than 10 bytes");
         value |= static_cast<uint64_t>(in[n] & 0x7F) << shift;
         shift += 7;
     } while (in[n++] & 0x80);
     return n;
 }
 
-// Decode from pointer, advance pointer
+// Decode from pointer, advance pointer.
+// No end bound: only for buffers known to be well formed. Readers of file
+// data use the bounded overload below.
 inline uint64_t decode(const uint8_t*& ptr) {
     uint64_t value = 0;
     int shift = 0;
     do {
+        if (shift > 63) spz_corrupt("varint longer than 10 bytes");
         value |= static_cast<uint64_t>(*ptr & 0x7F) << shift;
         shift += 7;
     } while (*ptr++ & 0x80);
     return value;
 }
 
+// Bounded decode: never reads at or past `end`; throws on overrun.
+inline uint64_t decode(const uint8_t*& ptr, const uint8_t* end) {
+    uint64_t value = 0;
+    int shift = 0;
+    for (;;) {
+        if (ptr >= end) spz_corrupt("varint runs past the end of its section");
+        if (shift > 63) spz_corrupt("varint longer than 10 bytes");
+        const uint8_t b = *ptr++;
+        value |= static_cast<uint64_t>(b & 0x7F) << shift;
+        if (!(b & 0x80)) break;
+        shift += 7;
+    }
+    return value;
+}
+
 // ZigZag encoding for signed integers: (n << 1) ^ (n >> 63)
 inline uint64_t zigzag_encode(int64_t n) {
-    return static_cast<uint64_t>((n << 1) ^ (n >> 63));
+    // Shift in the unsigned domain: left-shifting a negative value is
+    // undefined before C++20.
+    return (static_cast<uint64_t>(n) << 1) ^ static_cast<uint64_t>(n >> 63);
 }
 
 // ZigZag decoding
@@ -79,6 +105,11 @@ inline void encode_signed(int64_t value, std::vector<uint8_t>& out) {
 // Decode signed integer
 inline int64_t decode_signed(const uint8_t*& ptr) {
     return zigzag_decode(decode(ptr));
+}
+
+// Bounded signed decode
+inline int64_t decode_signed(const uint8_t*& ptr, const uint8_t* end) {
+    return zigzag_decode(decode(ptr, end));
 }
 
 // Encode a vector of uint32_t values

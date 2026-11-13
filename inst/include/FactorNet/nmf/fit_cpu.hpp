@@ -53,6 +53,7 @@
 #include <FactorNet/primitives/cpu/loss.hpp>
 #include <FactorNet/primitives/cpu/fused_nnls.hpp>
 #include <FactorNet/primitives/cpu/data_accessor.hpp>
+#include <FactorNet/primitives/cpu/sparse_setup.hpp>
 
 // Features (backend-agnostic)
 #include <FactorNet/features/sparsity.hpp>
@@ -74,6 +75,7 @@
 #include <cmath>
 #include <limits>
 #include <algorithm>
+#include <string>
 
 // NMF initialization (Lanczos, IRLBA, random)
 #include <FactorNet/nmf/nmf_init.hpp>
@@ -182,6 +184,33 @@ template<typename Resource, typename Scalar, typename MatrixType>
     // Validate configuration (guards against unsupported combos)
     config.validate();
 
+    // Target matrices must match the factor they steer (k × n for H,
+    // k × m for W); a mismatch would read out of bounds.
+    if (config.H.has_target() &&
+        (static_cast<int>(config.H.target->rows()) != k ||
+         static_cast<int>(config.H.target->cols()) != n)) {
+        throw InvalidArgument(
+            "target_H must be a k x n matrix (" + std::to_string(k) + " x " +
+            std::to_string(n) + "), got " +
+            std::to_string(static_cast<long long>(config.H.target->rows())) + " x " +
+            std::to_string(static_cast<long long>(config.H.target->cols())));
+    }
+    if (config.W.has_target() &&
+        (static_cast<int>(config.W.target->rows()) != k ||
+         static_cast<int>(config.W.target->cols()) != m)) {
+        throw InvalidArgument(
+            "the W-side target must be a k x m matrix (" + std::to_string(k) + " x " +
+            std::to_string(m) + "), got " +
+            std::to_string(static_cast<long long>(config.W.target->rows())) + " x " +
+            std::to_string(static_cast<long long>(config.W.target->cols())));
+    }
+
+    // Graph Laplacians: square, sized to the factor, symmetric.
+    if (config.H.graph && config.H.graph_lambda > 0)
+        features::validate_graph(*config.H.graph, n, "graph_H");
+    if (config.W.graph && config.W.graph_lambda > 0)
+        features::validate_graph(*config.W.graph, m, "graph_W");
+
     // ------------------------------------------------------------------
     // 1. Initialize factors
     // ------------------------------------------------------------------
@@ -221,7 +250,39 @@ template<typename Resource, typename Scalar, typename MatrixType>
     // 2. Precompute tr(AᵗA) for Gram-trick loss
     // ------------------------------------------------------------------
 
-    const Scalar trAtA = primitives::trace_AtA<Resource, Scalar, MatrixType>(A);
+    // Accumulated in double.  The Gram-trick loss is
+    //   ‖A‖² − 2·cross + recon,
+    // a small difference of large terms (‖A‖² is often 100× the loss), so a
+    // sequential single-precision sum of ‖A‖² over the non-zeros — relative
+    // error of order 1e-4 at 1e5 terms — showed up as a 0.6% error in the
+    // reported loss on sparse input.  All three terms are now summed in
+    // double; only the final loss is rounded to Scalar.
+    double trAtA_d = 0.0;
+    {
+#ifdef _OPENMP
+        const int tr_threads = (config.threads > 0) ? config.threads
+                                                    : omp_get_max_threads();
+#else
+        const int tr_threads = 1;
+        (void)tr_threads;
+#endif
+        if constexpr (is_sparse_v<MatrixType>) {
+            #pragma omp parallel for schedule(static) reduction(+:trAtA_d) num_threads(tr_threads) if(tr_threads > 1)
+            for (int j = 0; j < n; ++j) {
+                double s = 0.0;
+                for (typename MatrixType::InnerIterator it(A, j); it; ++it) {
+                    const double v = static_cast<double>(it.value());
+                    s += v * v;
+                }
+                trAtA_d += s;
+            }
+        } else {
+            #pragma omp parallel for schedule(static) reduction(+:trAtA_d) num_threads(tr_threads) if(tr_threads > 1)
+            for (int j = 0; j < n; ++j) {
+                trAtA_d += A.col(j).template cast<double>().squaredNorm();
+            }
+        }
+    }
 
     // ------------------------------------------------------------------
     // 2b. Pre-compute CSC(Aᵀ) for gather-based W update
@@ -248,8 +309,9 @@ template<typename Resource, typename Scalar, typename MatrixType>
                 mem_check.message);
         }
 
-        At_storage = A.transpose();
-        At_storage.makeCompressed();
+        // Parallel transpose (bit-identical to Eigen's; serial Eigen path for
+        // small inputs, one thread, or builds without OpenMP)
+        At_storage = primitives::sparse_transpose<Scalar>(A, config.threads);
         At_ptr = &At_storage;
     }
 
@@ -271,10 +333,46 @@ template<typename Resource, typename Scalar, typename MatrixType>
 
     // Pre-compute mask transpose for W-update (needed for per-row masking)
     SparseMatrix<Scalar> mask_T_storage;
-    const bool use_mask = config.has_mask();
+    // Two kinds of missingness share the masked solve path:
+    //   - a user-supplied mask matrix (config.mask), and
+    //   - mask = "zeros" (config.mask_zeros): zero entries are missing, so the
+    //     per-column Gram and RHS run over the non-zero entries only.
+    const bool zero_mask = config.mask_zeros;
+    const bool use_mask = config.has_mask() || zero_mask;
+    SparseMatrix<Scalar> mask_empty;
+    const SparseMatrix<Scalar>* mask_ptr = config.mask;
     if (use_mask) {
-        mask_T_storage = config.mask->transpose();
+        if (!config.has_mask()) {
+            mask_empty.resize(m, n);
+            mask_ptr = &mask_empty;
+        }
+        mask_T_storage = mask_ptr->transpose();
         mask_T_storage.makeCompressed();
+    }
+
+    // Combinations that no CPU solve path implements are rejected here
+    // rather than silently dropped.
+    if (use_mask && config.requires_irls()) {
+        throw InvalidArgument(
+            "a mask (mask matrix, mask = \"NA\" or mask = \"zeros\") is not supported "
+            "together with a non-Gaussian or robust loss outside cross-validation: "
+            "the masked solve is an unweighted least-squares solve. "
+            "Use loss = \"mse\" without robust, or remove the mask.");
+    }
+    if (config.requires_irls() && (config.W.L21 > 0 || config.H.L21 > 0)) {
+        throw InvalidArgument(
+            "L21 is not supported together with a non-Gaussian or robust loss: "
+            "the IRLS solver has no per-column ridge. Use loss = \"mse\" without robust.");
+    }
+    {
+        const bool neg_target =
+            (config.H.target && config.H.target_lambda < 0) ||
+            (config.W.target && config.W.target_lambda < 0);
+        if (neg_target && (use_mask || config.requires_irls())) {
+            throw InvalidArgument(
+                "negative target_lambda (batch removal) is only supported for the "
+                "Gaussian loss without a mask.");
+        }
     }
 
     ::FactorNet::NMFResult<Scalar> result;
@@ -421,16 +519,177 @@ template<typename Resource, typename Scalar, typename MatrixType>
     }
 
     // ------------------------------------------------------------------
+    // 3a-zi-helpers. Dispersion and zero-inflation lookups
+    // ------------------------------------------------------------------
+    // Dispersion vectors are indexed by column under PER_COL and by row
+    // otherwise (GLOBAL and NONE store a constant of length m).
+    const bool disp_per_col = (config.gp_dispersion == DispersionMode::PER_COL);
+
+    // P(Y = 0 | mu = s) under the count model at entry (i, j)
+    auto zi_p0 = [&](int i, int j, double s) -> double {
+        const int di = disp_per_col ? j : i;
+        if (is_nb) {
+            const double r = std::max(static_cast<double>(nb_size_vec(di)), 1e-10);
+            return std::pow(r / (r + s), r);
+        }
+        const double th = std::max(static_cast<double>(theta_vec(di)), 0.0);
+        return std::exp(-s / (1.0 + th));
+    };
+
+    // Structural-zero probability at entry (i, j)
+    auto zi_pi = [&](int i, int j) -> double {
+        if (config.zi_mode == ZIMode::ZI_ROW)
+            return static_cast<double>(pi_row_vec(i));
+        if (config.zi_mode == ZIMode::ZI_COL)
+            return static_cast<double>(pi_col_vec(j));
+        const double pr = static_cast<double>(pi_row_vec(i));
+        const double pc = static_cast<double>(pi_col_vec(j));
+        return 1.0 - (1.0 - pr) * (1.0 - pc);
+    };
+
+    // Sums over the zero entries of z*mu and z*mu^2, per row and per column,
+    // with z the posterior probability that the zero is structural. A zero
+    // enters the count model with weight (1 - z), so the dispersion updates
+    // subtract these sums from their all-entry totals. Cost O(m n k).
+    auto zi_zero_sums = [&](const DenseMatrix<Scalar>& W_Td_x,
+                            Eigen::VectorXd& zs_row, Eigen::VectorXd& zs2_row,
+                            Eigen::VectorXd& zs_col, Eigen::VectorXd& zs2_col) {
+        zs_row = Eigen::VectorXd::Zero(m);
+        zs2_row = Eigen::VectorXd::Zero(m);
+        zs_col = Eigen::VectorXd::Zero(n);
+        zs2_col = Eigen::VectorXd::Zero(n);
+        std::vector<char> nz_flag(static_cast<size_t>(m));
+        for (int j = 0; j < n; ++j) {
+            std::fill(nz_flag.begin(), nz_flag.end(), static_cast<char>(0));
+            if constexpr (is_sparse_v<MatrixType>) {
+                for (typename std::decay_t<decltype(A)>::InnerIterator it(A, j); it; ++it)
+                    if (static_cast<double>(it.value()) != 0.0)
+                        nz_flag[static_cast<size_t>(it.row())] = 1;
+            } else {
+                for (int i = 0; i < m; ++i)
+                    if (static_cast<double>(A(i, j)) != 0.0)
+                        nz_flag[static_cast<size_t>(i)] = 1;
+            }
+            for (int i = 0; i < m; ++i) {
+                if (nz_flag[static_cast<size_t>(i)]) continue;
+                const double s_ij = std::max(static_cast<double>(
+                    W_Td_x.col(i).dot(H.col(j))), 1e-10);
+                const double pi_ij = zi_pi(i, j);
+                const double z_ij = pi_ij /
+                    (pi_ij + (1.0 - pi_ij) * zi_p0(i, j, s_ij) + 1e-300);
+                zs_row(i) += z_ij * s_ij;
+                zs2_row(i) += z_ij * s_ij * s_ij;
+                zs_col(j) += z_ij * s_ij;
+                zs2_col(j) += z_ij * s_ij * s_ij;
+            }
+        }
+    };
+
+    // ------------------------------------------------------------------
     // 3b. Fused RHS+NNLS eligibility
     // ------------------------------------------------------------------
     // Use fused path when: sparse data, no mask, no IRLS.
-    // Works for all solver modes (CD, Cholesky+clip, hierarchical Cholesky).
+    // Works for both solver modes (CD, Cholesky + KKT polish) and for every
+    // penalty: per-column terms are passed to the fused solvers.
     // The fused path computes RHS + warm start + NNLS in a single parallel
     // loop, eliminating the global B matrix and BLAS-3 warm start GEMM.
     const bool can_fuse = is_sparse_v<MatrixType>
                        && !use_mask
-                       && !config.requires_irls()
-                       && !config.has_target();  // target reg needs standard path for B modification
+                       && !config.requires_irls();
+
+    // ------------------------------------------------------------------
+    // 3c. Penalty buffers and the shared Gaussian solve
+    // ------------------------------------------------------------------
+    nmf::variant::ColumnPenalty<Scalar> cp_H, cp_W;
+    DenseMatrix<Scalar> G_raw;        // raw Gram copy (mask = "zeros" only)
+    DenseMatrix<Scalar> G_pen_irls;   // k × k penalty Gram for the IRLS path
+    DenseMatrix<Scalar> B_pen_irls;   // k × ncols penalty RHS for the IRLS path
+
+    // Double-precision Grams.  The factors are single precision, but the
+    // k × k normal equations lose about cond(G)·eps when formed and solved in
+    // single precision, and the Gram-trick loss loses eps·‖A‖² — both visible
+    // on nearly exact low-rank data, where the Gram is ill-conditioned and
+    // the loss is a tiny fraction of ‖A‖².  The Gaussian Cholesky solves and
+    // the loss therefore use Grams accumulated in double (O(k²·(m+n)), small
+    // next to the O(nnz·k) work, which stays in single precision).
+    // Single-precision limit that remains: the coordinate-descent solver
+    // (solver = "cd", and the graph / L21 / masked / IRLS / symmetric paths)
+    // forms and solves its systems in Scalar and stops on a single-precision
+    // tolerance, so on ill-conditioned Grams its solution is accurate to
+    // about cond(G)·eps only.
+    DenseMatrix<double> Gd_WT;    // W_T·W_Tᵀ for the current normalized W_T
+    DenseMatrix<double> Gd_H;     // H·Hᵀ for the current normalized H
+    DenseMatrix<double> Gd_solve; // Gram + shared ridge handed to the solver
+    bool Gd_WT_valid = false;
+
+    // Gaussian solve from a materialized Gram (shared penalties included)
+    // and RHS.  L1, the box and the per-column terms are handled by the
+    // solver, so every penalty has the same meaning as on the fused path.
+    auto solve_gaussian = [&](DenseMatrix<Scalar>& Gm,
+                              DenseMatrix<Scalar>& Bm,
+                              DenseMatrix<Scalar>& X,
+                              const FactorConfig<Scalar>& fc,
+                              const nmf::variant::ColumnPenalty<Scalar>& cp,
+                              bool warm,
+                              const DenseMatrix<double>* Gd) {
+        if (cp.has_B()) Bm.noalias() += cp.B_add;
+        if (cp.has_ridge() || cp.has_group()) {
+            // Per-column ridge (graph, L21): coordinate descent
+            primitives::nnls_batch_percol(Gm, Bm, X,
+                                          config.cd_max_iter, config.cd_tol,
+                                          fc.L1, fc.nonneg, config.threads,
+                                          fc.upper_bound, warm,
+                                          cp.ridge_ptr(), fc.L21, cp.group_ptr());
+        } else if (config.solver_mode == 1) {
+            // Cholesky solve, then KKT polish of the columns that violate
+            // a constraint (in double when a double Gram is supplied)
+            if (Gd != nullptr) {
+                primitives::cholesky_clip_batch_double(*Gd, Bm, X,
+                                                       fc.nonneg, config.threads,
+                                                       fc.L1, fc.upper_bound,
+                                                       config.cd_max_iter);
+            } else {
+                primitives::cholesky_clip_batch(Gm, Bm, X,
+                                                fc.nonneg, config.threads, warm,
+                                                fc.L1, fc.upper_bound,
+                                                config.cd_max_iter);
+            }
+        } else {
+            primitives::nnls_batch<Resource>(Gm, Bm, X,
+                                             config.cd_max_iter, config.cd_tol,
+                                             fc.L1,
+                                             static_cast<Scalar>(0),  // L2 is in Gm
+                                             fc.nonneg,
+                                             config.threads,
+                                             fc.upper_bound,
+                                             warm);
+        }
+    };
+
+    // Penalty terms for the IRLS path.  The IRLS solver takes one k × k
+    // G_penalty for all columns, so the per-column graph ridge λ·L_jj is
+    // replaced by the uniform ridge c = max_j λ·L_jj, with the compensating
+    // term (c − λ·L_jj)·s_j added to the RHS.  The fixed point is the same
+    // as the per-column (Jacobi) update; the step is a damped version of it.
+    auto irls_penalty = [&](const nmf::variant::ColumnPenalty<Scalar>& cp,
+                            const DenseMatrix<Scalar>& S,
+                            DenseMatrix<Scalar>& Gp,
+                            DenseMatrix<Scalar>& Bp,
+                            bool& has_G, bool& has_B) {
+        has_G = (cp.shared_ridge > 0);
+        has_B = cp.has_B();
+        if (has_B) Bp = cp.B_add;
+        if (has_B && cp.has_ridge()) {
+            const Scalar c = cp.ridge.maxCoeff();
+            if (c > 0) {
+                Gp.diagonal().array() += c;
+                has_G = true;
+                const int nc = static_cast<int>(S.cols());
+                for (int j = 0; j < nc; ++j)
+                    Bp.col(j).noalias() += (c - cp.ridge(j)) * S.col(j);
+            }
+        }
+    };
 
     if (config.verbose && can_fuse) {
         FACTORNET_LOG_NMF(FactorNet::LogLevel::SUMMARY, true,
@@ -491,6 +750,51 @@ template<typename Resource, typename Scalar, typename MatrixType>
             primitives::gram<Resource>(W_T, G);
             prof_timer.end();
 
+            // 2. Penalties.  The previous iterate is put on the scale of the
+            //    variable being solved (H̃ = diag(d)·H): it is the warm start
+            //    and the reference point of the graph and L21 penalties.
+            //    Shared terms (L2, target) go into G; column-specific terms
+            //    (graph, target RHS, L21 norms) go into cp_H.  Every solve
+            //    path below consumes the same cp_H.
+            _t_rhs_h = std::chrono::high_resolution_clock::now();
+            prof_timer.begin("features_H");
+            nmf::variant::apply_scaling(H, d);
+            const bool h_irls = !use_mask && config.requires_irls();
+            bool h_irls_G = false, h_irls_B = false;
+            if (h_irls) {
+                // IRLS adds L1/L2 itself; the rest travels as G_penalty / B_penalty.
+                G_pen_irls.setZero(k, k);
+                nmf::variant::build_column_penalty(
+                    G_pen_irls, H, config.H, cp_H, false, false);
+                irls_penalty(cp_H, H, G_pen_irls, B_pen_irls, h_irls_G, h_irls_B);
+            } else {
+                if (zero_mask) G_raw = G;
+                nmf::variant::build_column_penalty(G, H, config.H, cp_H);
+                // mask = "zeros": the data Gram is rebuilt per column from the
+                // observed entries, so only the shared penalties are passed.
+                if (zero_mask) G -= G_raw;
+            }
+            const bool h_percol = cp_H.has_ridge() || cp_H.has_group();
+            (void)h_percol;
+
+            // Double-precision Gram for the Gaussian Cholesky solve: the
+            // same matrix as G (W_T·W_Tᵀ plus the shared ridge from L2 and
+            // a positive target), accumulated in double.
+            const DenseMatrix<double>* h_Gd = nullptr;
+            if (!h_irls && !use_mask && config.solver_mode != 0 && !h_percol
+                && !(config.H.target && config.H.target_lambda < 0)) {
+                if (!Gd_WT_valid) {
+                    primitives::gram_double(W_T, Gd_WT, eff_threads);
+                    Gd_WT_valid = true;
+                }
+                Gd_solve = Gd_WT;
+                Gd_solve.diagonal().array() +=
+                    static_cast<double>(config.H.L2 > 0 ? config.H.L2 : Scalar(0))
+                    + static_cast<double>(cp_H.shared_ridge);
+                h_Gd = &Gd_solve;
+            }
+            prof_timer.end();
+
             // The fused path is sparse-only: guard with if constexpr so that
             // fused_rhs_nnls_sparse (which calls sparse-only Eigen API) is never
             // instantiated when MatrixType is a dense matrix.
@@ -501,19 +805,10 @@ template<typename Resource, typename Scalar, typename MatrixType>
                 // FUSED PATH: RHS + warm start + NNLS in one parallel loop
                 // No global B matrix needed.
                 // ====================================================
-                _t_rhs_h = std::chrono::high_resolution_clock::now();
-                prof_timer.begin("features_H");
-                if (config.H.L2 > 0) G.diagonal().array() += config.H.L2;
-                // Angular: applied post-NNLS via apply_angular_posthoc
-                if (config.H.graph)
-                    features::apply_graph_reg(G, *config.H.graph, H, config.H.graph_lambda);
-                if (config.H.L21 > 0)
-                    features::apply_L21(G, H, config.H.L21);
-                prof_timer.end();
-
-                // Fused RHS+NNLS (L1 applied per-column inside the loop)
                 prof_timer.begin("fused_rhs_nnls_H");
-                if (config.solver_mode == 0) {
+                // A per-column ridge (graph, L21) rules out the shared
+                // factorization, so those cases use coordinate descent.
+                if (config.solver_mode == 0 || h_percol) {
                     primitives::fused_rhs_nnls_sparse(
                         A, W_T, G, H,
                         config.cd_max_iter, config.cd_tol,
@@ -521,17 +816,35 @@ template<typename Resource, typename Scalar, typename MatrixType>
                         config.H.nonneg,
                         eff_threads,
                         iter > 0,
-                        static_cast<Scalar>(0));
+                        config.H.upper_bound,
+                        cp_H.B_ptr(), cp_H.ridge_ptr(),
+                        config.H.L21, cp_H.group_ptr());
                 } else {
-                    // Modes 1 and 2: pre-factorized Cholesky fused path
-                    primitives::fused_rhs_cholesky_sparse(
-                        A, W_T, G, H,
-                        config.solver_mode,
-                        config.H.L1,
-                        config.H.nonneg,
-                        eff_threads,
-                        iter > 0,
-                        static_cast<Scalar>(0));
+                    // Pre-factorized Cholesky + KKT polish (double Gram and
+                    // solve when available)
+                    if (h_Gd != nullptr) {
+                        primitives::fused_rhs_cholesky_sparse(
+                            A, W_T, *h_Gd, H,
+                            config.solver_mode,
+                            config.H.L1,
+                            config.H.nonneg,
+                            eff_threads,
+                            iter > 0,
+                            config.H.upper_bound,
+                            cp_H.B_ptr(),
+                            config.cd_max_iter);
+                    } else {
+                        primitives::fused_rhs_cholesky_sparse(
+                            A, W_T, G, H,
+                            config.solver_mode,
+                            config.H.L1,
+                            config.H.nonneg,
+                            eff_threads,
+                            iter > 0,
+                            config.H.upper_bound,
+                            cp_H.B_ptr(),
+                            config.cd_max_iter);
+                    }
                 }
                 prof_timer.end();
 
@@ -541,33 +854,32 @@ template<typename Resource, typename Scalar, typename MatrixType>
             } // end if constexpr sparse
             if (!h_used_fused) {
                 // ====================================================
-                // STANDARD PATH: separate RHS → features → NNLS
-                // Used for dense data, non-CD solvers, mask, IRLS
+                // STANDARD PATH: separate RHS → NNLS
+                // Used for dense data, mask, IRLS
                 // ====================================================
-                _t_rhs_h = std::chrono::high_resolution_clock::now();
-                prof_timer.begin("rhs_H");
-                primitives::rhs<Resource>(A, W_T, B);
-                prof_timer.end();
-
-                // 2. Apply all H-side features (shared sequence)
-                prof_timer.begin("features_H");
-                nmf::variant::apply_h_features(G, B, H, config);
-                prof_timer.end();
-
                 _t_nnls_h = std::chrono::high_resolution_clock::now();
                 prof_timer.begin("nnls_H");
-                // 4. NNLS solve — branch on mask / loss type
+                // NNLS solve — branch on mask / loss type
                 if (use_mask) {
-                    // Masked path: per-column NNLS with delta-G correction
-                    primitives::gram<Resource>(W_T, G);  // Rebuild unmodified G
+                    // Masked path: per-column solve with delta-G correction
+                    // (or per-column Gram over non-zeros for mask = "zeros")
                     mask_detail::masked_nnls_h(
-                        A, W_T, G, H, *config.mask, config, eff_threads, iter > 0);
-                } else if (config.requires_irls()) {
-                    // IRLS path: per-column weighted NNLS
-                    primitives::gram<Resource>(W_T, G);  // Rebuild unmodified G for IRLS base
-                    // GP strategy: use KL weights for W/H updates (stable),
-                    // estimate theta separately via closed-form MM update.
-                    // KL weight (1/s) and GP share the same fixed point for W/H.
+                        A, W_T, G, H, *mask_ptr, config, eff_threads, iter > 0,
+                        config.H, &cp_H, zero_mask);
+                } else if (h_irls) {
+                    // IRLS path: per-column weighted NNLS.  G is the raw Gram;
+                    // graph/target penalties are passed as G_penalty/B_penalty.
+                    const DenseMatrix<Scalar>* Gp_h = h_irls_G ? &G_pen_irls : nullptr;
+                    const DenseMatrix<Scalar>* Bp_h = h_irls_B ? &B_pen_irls : nullptr;
+                    // GP strategy: the mean is fitted by the Poisson
+                    // quasi-likelihood (KL weights 1/s) and theta is estimated
+                    // separately by maximum likelihood (MM update below).
+                    // Weighted least squares on y cannot reproduce the fixed
+                    // point of the GP likelihood under the identity link:
+                    // the GP score in s is -1/s - (y-1)/(s+theta*y) + 1/(1+theta),
+                    // not a weight times (y - s). The Poisson score is
+                    // unbiased for the mean under GP, so the fit is consistent;
+                    // the reported loss is the exact GP likelihood at that fit.
                     // NB strategy: use NB weights directly (well-behaved, r/(μ(r+μ))).
                     FactorNet::LossConfig<Scalar> active_loss = config.loss;
                     if (is_gp) {
@@ -594,7 +906,8 @@ template<typename Resource, typename Scalar, typename MatrixType>
                             config.H.nonneg,
                             config.cd_max_iter, config.cd_tol,
                             config.irls_max_iter, config.irls_tol,
-                            config.threads, irls_theta_ptr, irls_theta_col_ptr);
+                            config.threads, irls_theta_ptr, irls_theta_col_ptr,
+                            Gp_h, Bp_h);
                     } else if constexpr (std::is_base_of_v<Eigen::SparseMatrixBase<std::decay_t<decltype(A)>>,
                                                     std::decay_t<decltype(A)>>) {
                         primitives::nnls_batch_irls_sparse(
@@ -603,7 +916,8 @@ template<typename Resource, typename Scalar, typename MatrixType>
                             config.H.nonneg,
                             config.cd_max_iter, config.cd_tol,
                             config.irls_max_iter, config.irls_tol,
-                            config.threads, irls_theta_ptr, irls_theta_col_ptr);
+                            config.threads, irls_theta_ptr, irls_theta_col_ptr,
+                            Gp_h, Bp_h);
                     } else {
                         primitives::nnls_batch_irls_dense(
                             A, W_T, G, H, active_loss,
@@ -611,32 +925,24 @@ template<typename Resource, typename Scalar, typename MatrixType>
                             config.H.nonneg,
                             config.cd_max_iter, config.cd_tol,
                             config.irls_max_iter, config.irls_tol,
-                            config.threads, irls_theta_ptr, irls_theta_col_ptr);
+                            config.threads, irls_theta_ptr, irls_theta_col_ptr,
+                            Gp_h, Bp_h);
                     }
-                } else if (config.solver_mode == 1) {
-                    // Cholesky + clip solver: unconstrained LS then max(0,x)
-                    primitives::cholesky_clip_batch(G, B, H,
-                                                   config.H.nonneg,
-                                                   config.threads,
-                                                   iter > 0);
                 } else {
-                    primitives::nnls_batch<Resource>(G, B, H,
-                                                     config.cd_max_iter, config.cd_tol,
-                                                     static_cast<Scalar>(0),
-                                                     static_cast<Scalar>(0),
-                                                     config.H.nonneg,
-                                                     config.threads,
-                                                     static_cast<Scalar>(0),  // upper_bound
-                                                     iter > 0);               // warm_start
+                    // Gaussian solve from a materialized RHS
+                    primitives::rhs<Resource>(A, W_T, B);
+                    solve_gaussian(G, B, H, config.H, cp_H, iter > 0, h_Gd);
                 }
+                prof_timer.end();  // end nnls_H
             }  // end fused vs standard H-update NNLS
-            if (!h_used_fused) prof_timer.end();  // end nnls_H for standard path
 
-            // 5. Post-NNLS bounds and angular decorrelation
+            // 5. Post-solve.  The upper bound is enforced inside the Gaussian
+            //    and masked solvers (box-constrained); this clamp only acts on
+            //    the IRLS path, whose solver has no bound argument.
             if (config.H.upper_bound > 0)
                 features::apply_upper_bound(H, config.H.upper_bound);
             if (config.H.angular > 0)
-                features::apply_angular_posthoc(H, config.H.angular);
+                features::apply_angular_posthoc(H, config.H.angular, config.H.nonneg);
 
             _t_norm_h = std::chrono::high_resolution_clock::now();
             // 6. Normalize H → d
@@ -653,6 +959,12 @@ template<typename Resource, typename Scalar, typename MatrixType>
         DenseMatrix<Scalar> G_w_saved, B_w_saved;
         bool saved_for_loss = false;
         bool used_fused_w = false;  // Track if fused path was used (no B_w_saved)
+        // W_T is about to change: the cached double Gram of W_T is stale.
+        Gd_WT_valid = false;
+        // Loss cross term Σ_ℓ dot(w̃_ℓ, H·Aᵀ[:,ℓ]) accumulated inside the fused
+        // W-update (double), so the loss needs no extra pass over A.
+        double w_cross_acc = 0.0;
+        bool have_w_cross = false;
 
         const auto w_mode = nmf::variant::w_update_mode(config);
 
@@ -665,37 +977,26 @@ template<typename Resource, typename Scalar, typename MatrixType>
             primitives::gram<Resource>(W_T, G);
             primitives::rhs<Resource>(A, W_T, B);
 
-            // Save pre-feature Gram and RHS for loss computation
-            if (need_loss && compute_loss_this_iter && !use_mask && !config.requires_irls()) {
-                G_w_saved = G;
-                B_w_saved = B;
-                saved_for_loss = true;
+            // saved_for_loss stays false: the Gram-trick shortcut would give
+            // ‖A − W_newᵀ·D·W_old‖², which is not the returned model.  The
+            // loss section recomputes ‖A − W·D·Wᵀ‖² from the updated factor.
+
+            // Penalties, referenced to the previous iterate on the scale of
+            // the variable (W_T itself stays normalized: it is the fixed
+            // factor in G and B above).
+            {
+                DenseMatrix<Scalar> W_prev = W_T;
+                nmf::variant::apply_scaling(W_prev, d);
+                nmf::variant::build_column_penalty(G, W_prev, config.W, cp_W);
             }
 
-            // Apply W-side features (shared sequence)
-            nmf::variant::apply_w_features(G, B, W_T, config);
-
-            // NNLS solve for W_T
-            if (config.solver_mode == 1) {
-                primitives::cholesky_clip_batch(G, B, W_T,
-                                               config.W.nonneg,
-                                               config.threads,
-                                               iter > 0);
-            } else {
-                primitives::nnls_batch<Resource>(G, B, W_T,
-                                                 config.cd_max_iter, config.cd_tol,
-                                                 static_cast<Scalar>(0),
-                                                 static_cast<Scalar>(0),
-                                                 config.W.nonneg,
-                                                 config.threads,
-                                                 static_cast<Scalar>(0),
-                                                 iter > 0);
-            }
+            // Solve for W_T
+            solve_gaussian(G, B, W_T, config.W, cp_W, iter > 0, nullptr);
 
             if (config.W.upper_bound > 0)
                 features::apply_upper_bound(W_T, config.W.upper_bound);
             if (config.W.angular > 0)
-                features::apply_angular_posthoc(W_T, config.W.angular);
+                features::apply_angular_posthoc(W_T, config.W.angular, config.W.nonneg);
 
             // Normalize W_T → d
             variant::extract_scaling(W_T, d, config.norm_type);
@@ -721,6 +1022,43 @@ template<typename Resource, typename Scalar, typename MatrixType>
                 saved_for_loss = true;
             }
 
+            // Double-precision Gram of H: recon term of the loss and the
+            // Gaussian Cholesky solve below.
+            const bool w_gauss = !use_mask && !config.requires_irls();
+            if (w_gauss) primitives::gram_double(H, Gd_H, eff_threads);
+
+            // Penalties (see the H-update for the conventions).  The previous
+            // iterate is put on the scale of the variable: W̃ = diag(d)·W_T.
+            _t_rhs_w = std::chrono::high_resolution_clock::now();
+            prof_timer.begin("features_W");
+            nmf::variant::apply_scaling(W_T, d);
+            const bool w_irls = !use_mask && config.requires_irls();
+            bool w_irls_G = false, w_irls_B = false;
+            if (w_irls) {
+                G_pen_irls.setZero(k, k);
+                nmf::variant::build_column_penalty(
+                    G_pen_irls, W_T, config.W, cp_W, false, false);
+                irls_penalty(cp_W, W_T, G_pen_irls, B_pen_irls, w_irls_G, w_irls_B);
+            } else {
+                if (zero_mask) G_raw = G;
+                nmf::variant::build_column_penalty(G, W_T, config.W, cp_W);
+                if (zero_mask) G -= G_raw;
+            }
+            const bool w_percol = cp_W.has_ridge() || cp_W.has_group();
+            (void)w_percol;
+
+            // Double-precision Gram for the Gaussian Cholesky solve
+            const DenseMatrix<double>* w_Gd = nullptr;
+            if (w_gauss && config.solver_mode != 0 && !w_percol
+                && !(config.W.target && config.W.target_lambda < 0)) {
+                Gd_solve = Gd_H;
+                Gd_solve.diagonal().array() +=
+                    static_cast<double>(config.W.L2 > 0 ? config.W.L2 : Scalar(0))
+                    + static_cast<double>(cp_W.shared_ridge);
+                w_Gd = &Gd_solve;
+            }
+            prof_timer.end();
+
             // The fused path is sparse-only: guard with if constexpr so that
             // fused_rhs_nnls_sparse (which calls sparse-only Eigen API) is never
             // instantiated when MatrixType is a dense matrix.
@@ -731,21 +1069,15 @@ template<typename Resource, typename Scalar, typename MatrixType>
                 // Iterates columns of A^T (= rows of A).
                 // No global B matrix needed.
                 // ====================================================
-                _t_rhs_w = std::chrono::high_resolution_clock::now();
-                prof_timer.begin("features_W");
-
-                // Apply G-modifying features before the fused loop
-                if (config.W.L2 > 0) G.diagonal().array() += config.W.L2;
-                // Angular: applied post-NNLS via apply_angular_posthoc
-                if (config.W.graph)
-                    features::apply_graph_reg(G, *config.W.graph, W_T, config.W.graph_lambda);
-                if (config.W.L21 > 0)
-                    features::apply_L21(G, W_T, config.W.L21);
-                prof_timer.end();
-
-                // Fused RHS+NNLS on columns of A^T
                 prof_timer.begin("fused_rhs_nnls_W");
-                if (config.solver_mode == 0) {
+                // The accumulated cross term refers to the solved columns, so
+                // it is only valid if nothing changes W_T between the solve
+                // and the normalization: the angular step does (the bound
+                // clamp below is a no-op here, the solve is box-constrained).
+                double* w_cross_ptr =
+                    (saved_for_loss && !(config.W.angular > 0)) ? &w_cross_acc
+                                                                : nullptr;
+                if (config.solver_mode == 0 || w_percol) {
                     primitives::fused_rhs_nnls_sparse(
                         *At_ptr, H, G, W_T,
                         config.cd_max_iter, config.cd_tol,
@@ -753,18 +1085,40 @@ template<typename Resource, typename Scalar, typename MatrixType>
                         config.W.nonneg,
                         eff_threads,
                         iter > 0,
-                        static_cast<Scalar>(0));
+                        config.W.upper_bound,
+                        cp_W.B_ptr(), cp_W.ridge_ptr(),
+                        config.W.L21, cp_W.group_ptr(),
+                        w_cross_ptr);
                 } else {
-                    // Modes 1 and 2: pre-factorized Cholesky fused path
-                    primitives::fused_rhs_cholesky_sparse(
-                        *At_ptr, H, G, W_T,
-                        config.solver_mode,
-                        config.W.L1,
-                        config.W.nonneg,
-                        eff_threads,
-                        iter > 0,
-                        static_cast<Scalar>(0));
+                    // Pre-factorized Cholesky + KKT polish (double Gram and
+                    // solve when available)
+                    if (w_Gd != nullptr) {
+                        primitives::fused_rhs_cholesky_sparse(
+                            *At_ptr, H, *w_Gd, W_T,
+                            config.solver_mode,
+                            config.W.L1,
+                            config.W.nonneg,
+                            eff_threads,
+                            iter > 0,
+                            config.W.upper_bound,
+                            cp_W.B_ptr(),
+                            config.cd_max_iter,
+                            w_cross_ptr);
+                    } else {
+                        primitives::fused_rhs_cholesky_sparse(
+                            *At_ptr, H, G, W_T,
+                            config.solver_mode,
+                            config.W.L1,
+                            config.W.nonneg,
+                            eff_threads,
+                            iter > 0,
+                            config.W.upper_bound,
+                            cp_W.B_ptr(),
+                            config.cd_max_iter,
+                            w_cross_ptr);
+                    }
                 }
+                have_w_cross = (w_cross_ptr != nullptr);
                 prof_timer.end();
 
                 _t_nnls_w = std::chrono::high_resolution_clock::now();
@@ -773,44 +1127,31 @@ template<typename Resource, typename Scalar, typename MatrixType>
             } // end if constexpr sparse
             if (!used_fused_w) {
                 // ====================================================
-                // STANDARD PATH (W-update): separate RHS → features → NNLS
+                // STANDARD PATH (W-update): separate RHS → NNLS
                 // ====================================================
-
-                // Transposed RHS: B = H · Aᵗ  (k × m)
-                // Uses gather pattern when transpose is available (no atomics)
-                _t_rhs_w = std::chrono::high_resolution_clock::now();
-                prof_timer.begin("rhs_W");
-                detail::rhs_transpose(A, H, B, m, n, At_ptr, eff_threads);
-                prof_timer.end();
-
-                // Save B_w = H·A^T BEFORE features modify it.
-                if (saved_for_loss) {
-                    B_w_saved = B;  // k × m
-                }
-
-                // Apply W-side features (shared sequence)
-                prof_timer.begin("features_W");
-                nmf::variant::apply_w_features(G, B, W_T, config);
-                prof_timer.end();
-
                 _t_nnls_w = std::chrono::high_resolution_clock::now();
                 prof_timer.begin("nnls_W");
                 // NNLS solve — branch on mask / loss type
                 if (use_mask) {
-                    // Masked path: per-column NNLS with delta-G correction
-                    primitives::gram<Resource>(H, G);  // Rebuild unmodified G
+                    // Masked path: per-column solve with delta-G correction
+                    // (or per-column Gram over non-zeros for mask = "zeros")
                     if constexpr (is_sparse_v<MatrixType>) {
                         // Pass A^T so that DA::for_col(At, j) iterates row j of A
                         mask_detail::masked_nnls_w(
-                            *At_ptr, H, G, W_T, mask_T_storage, config, eff_threads, iter > 0);
+                            *At_ptr, H, G, W_T, mask_T_storage, config, eff_threads, iter > 0,
+                            config.W, &cp_W, zero_mask);
                     } else {
                         // Pass A; DA::for_row(A, j) iterates row j of A
                         mask_detail::masked_nnls_w(
-                            A, H, G, W_T, mask_T_storage, config, eff_threads, iter > 0);
+                            A, H, G, W_T, mask_T_storage, config, eff_threads, iter > 0,
+                            config.W, &cp_W, zero_mask);
                     }
-                } else if (config.requires_irls()) {
-                    // IRLS W-update: uses A^T as the "data" with H as the "factor"
-                    primitives::gram<Resource>(H, G);  // Rebuild unmodified G
+                } else if (w_irls) {
+                    // IRLS W-update: uses A^T as the "data" with H as the "factor".
+                    // G is the raw Gram; graph/target penalties are passed as
+                    // G_penalty/B_penalty.
+                    const DenseMatrix<Scalar>* Gp_w = w_irls_G ? &G_pen_irls : nullptr;
+                    const DenseMatrix<Scalar>* Bp_w = w_irls_B ? &B_pen_irls : nullptr;
                     // GP: use KL weights (stable), theta estimated separately
                     // NB: use NB weights directly (well-behaved)
                     FactorNet::LossConfig<Scalar> active_loss_w = config.loss;
@@ -839,7 +1180,8 @@ template<typename Resource, typename Scalar, typename MatrixType>
                             config.W.nonneg,
                             config.cd_max_iter, config.cd_tol,
                             config.irls_max_iter, config.irls_tol,
-                            config.threads, irls_theta_ptr_w, irls_theta_col_ptr_w);
+                            config.threads, irls_theta_ptr_w, irls_theta_col_ptr_w,
+                            Gp_w, Bp_w);
                     } else if constexpr (is_sparse_v<MatrixType>) {
                         // Use pre-computed transpose
                         if (At_ptr) {
@@ -849,7 +1191,8 @@ template<typename Resource, typename Scalar, typename MatrixType>
                                 config.W.nonneg,
                                 config.cd_max_iter, config.cd_tol,
                                 config.irls_max_iter, config.irls_tol,
-                                config.threads, irls_theta_ptr_w, irls_theta_col_ptr_w);
+                                config.threads, irls_theta_ptr_w, irls_theta_col_ptr_w,
+                                Gp_w, Bp_w);
                         }
                     } else {
                         // Dense case: use A^T directly
@@ -860,31 +1203,31 @@ template<typename Resource, typename Scalar, typename MatrixType>
                             config.W.nonneg,
                             config.cd_max_iter, config.cd_tol,
                             config.irls_max_iter, config.irls_tol,
-                            config.threads, irls_theta_ptr_w, irls_theta_col_ptr_w);
+                            config.threads, irls_theta_ptr_w, irls_theta_col_ptr_w,
+                            Gp_w, Bp_w);
                     }
-                } else if (config.solver_mode == 1) {
-                    // Cholesky + clip solver
-                    primitives::cholesky_clip_batch(G, B, W_T,
-                                                   config.W.nonneg,
-                                                   config.threads,
-                                                   iter > 0);
                 } else {
-                    primitives::nnls_batch<Resource>(G, B, W_T,
-                                                     config.cd_max_iter, config.cd_tol,
-                                                     static_cast<Scalar>(0),
-                                                     static_cast<Scalar>(0),
-                                                     config.W.nonneg,
-                                                     config.threads,
-                                                     static_cast<Scalar>(0),  // upper_bound
-                                                     iter > 0);               // warm_start
-                }
-            }  // end fused vs standard W-update NNLS
-            if (!used_fused_w) prof_timer.end();  // end nnls_W for standard path
+                    // Gaussian solve from a materialized RHS.
+                    // Transposed RHS: B = H · Aᵗ  (k × m); uses the gather
+                    // pattern when the transpose is available (no atomics).
+                    detail::rhs_transpose(A, H, B, m, n, At_ptr, eff_threads);
 
+                    // Save B_w = H·A^T BEFORE penalties modify it.
+                    if (saved_for_loss) {
+                        B_w_saved = B;  // k × m
+                    }
+
+                    solve_gaussian(G, B, W_T, config.W, cp_W, iter > 0, w_Gd);
+                }
+                prof_timer.end();  // end nnls_W
+            }  // end fused vs standard W-update NNLS
+
+            // Upper bound: enforced inside the Gaussian and masked solvers;
+            // this clamp only acts on the IRLS path.
             if (config.W.upper_bound > 0)
                 features::apply_upper_bound(W_T, config.W.upper_bound);
             if (config.W.angular > 0)
-                features::apply_angular_posthoc(W_T, config.W.angular);
+                features::apply_angular_posthoc(W_T, config.W.angular, config.W.nonneg);
 
             _t_norm_w = std::chrono::high_resolution_clock::now();
             // Normalize W_T → d
@@ -967,6 +1310,16 @@ template<typename Resource, typename Scalar, typename MatrixType>
                     }
                 }
 
+                // Zero inflation: a zero that is structural with posterior
+                // probability z enters the count likelihood with weight
+                // (1 - z). Zeros contribute only s/(1+theta), so the total of
+                // s is reduced by sum_zeros z*s.
+                if (is_zi) {
+                    Eigen::VectorXd zs_r, zs2_r, zs_c, zs2_c;
+                    zi_zero_sums(W_Td, zs_r, zs2_r, zs_c, zs2_c);
+                    sum_s_d -= zs_r;
+                }
+
                 // Inner MM iterations: re-accumulate alpha/gamma with updated theta
                 double cap = static_cast<double>(config.gp_theta_max);
                 for (int mm_iter = 0; mm_iter < THETA_INNER_ITERS; ++mm_iter) {
@@ -992,7 +1345,11 @@ template<typename Resource, typename Scalar, typename MatrixType>
                         if (alpha_i > 1e-15) {
                             double disc = beta_i * beta_i + 4.0 * alpha_i * gamma_d(i);
                             if (disc > 0.0 && std::isfinite(disc)) {
-                                double new_theta = (-beta_i + std::sqrt(disc)) / (2.0 * alpha_i);
+                                // Root of alpha t^2 + beta t - gamma = 0 without cancellation
+                                const double sq_disc = std::sqrt(disc);
+                                double new_theta = (beta_i > 0.0)
+                                    ? 2.0 * gamma_d(i) / (beta_i + sq_disc)
+                                    : (-beta_i + sq_disc) / (2.0 * alpha_i);
                                 if (std::isfinite(new_theta) && new_theta >= 0.0) {
                                     theta_vec(i) = static_cast<Scalar>(std::min(new_theta, cap));
                                 }
@@ -1052,6 +1409,12 @@ template<typename Resource, typename Scalar, typename MatrixType>
                     }
                 }
 
+                if (is_zi) {
+                    Eigen::VectorXd zs_r, zs2_r, zs_c, zs2_c;
+                    zi_zero_sums(W_Td, zs_r, zs2_r, zs_c, zs2_c);
+                    sum_s_col -= zs_c;
+                }
+
                 double cap = static_cast<double>(config.gp_theta_max);
                 constexpr int THETA_INNER_ITERS_COL = 5;
                 for (int mm_iter = 0; mm_iter < THETA_INNER_ITERS_COL; ++mm_iter) {
@@ -1074,7 +1437,10 @@ template<typename Resource, typename Scalar, typename MatrixType>
                         if (alpha_j > 1e-15) {
                             double disc = beta_j * beta_j + 4.0 * alpha_j * gamma_col(j);
                             if (disc > 0.0 && std::isfinite(disc)) {
-                                double new_theta = (-beta_j + std::sqrt(disc)) / (2.0 * alpha_j);
+                                const double sq_disc = std::sqrt(disc);
+                                double new_theta = (beta_j > 0.0)
+                                    ? 2.0 * gamma_col(j) / (beta_j + sq_disc)
+                                    : (-beta_j + sq_disc) / (2.0 * alpha_j);
                                 if (std::isfinite(new_theta) && new_theta >= 0.0)
                                     theta_vec(j) = static_cast<Scalar>(std::min(new_theta, cap));
                             }
@@ -1098,6 +1464,24 @@ template<typename Resource, typename Scalar, typename MatrixType>
 
             double r_min = static_cast<double>(config.nb_size_min);
             double r_max = static_cast<double>(config.nb_size_max);
+
+            // Moment estimator r = sum mu^2 / sum[(y - mu)^2 - mu], with:
+            //  - residual degrees of freedom: the fitted factors absorb part
+            //    of the variance, so sum (y - mu)^2 is scaled by N / (N - p),
+            //    p = k (m + n - k) free parameters;
+            //  - under zero inflation, zeros weighted by (1 - z);
+            //  - a pooled estimate (all entries) used for GLOBAL and as the
+            //    fallback for a row/column with no measurable excess
+            //    variance, instead of sending it to nb_size_max.
+            double nb_dfc = 1.0;
+            {
+                const double N_all = static_cast<double>(m) * static_cast<double>(n);
+                const double p_all = static_cast<double>(k) *
+                    (static_cast<double>(m) + static_cast<double>(n) - static_cast<double>(k));
+                if (N_all > 2.0 * p_all) nb_dfc = N_all / (N_all - p_all);
+            }
+            Eigen::VectorXd nb_zs_r, nb_zs2_r, nb_zs_c, nb_zs2_c;
+            if (is_zi) zi_zero_sums(W_Td_nb, nb_zs_r, nb_zs2_r, nb_zs_c, nb_zs2_c);
 
           if (config.gp_dispersion == DispersionMode::PER_COL) {
             // PER_COL: accumulate per column j instead of per row i
@@ -1147,6 +1531,24 @@ template<typename Resource, typename Scalar, typename MatrixType>
                 }
             }
 
+            DenseVector<Scalar> w_rs_df = W_Td_nb.rowwise().sum();
+            double pooled_num = 0.0, pooled_den = 0.0;
+            for (int j = 0; j < n; ++j) {
+                double total_mu = static_cast<double>(w_rs_df.dot(H.col(j)));
+                if (is_zi) {
+                    sum_mu_sq_col(j) -= nb_zs2_c(j);
+                    sum_excess_var_col(j) -= (nb_zs2_c(j) - nb_zs_c(j));
+                    total_mu -= nb_zs_c(j);
+                }
+                sum_excess_var_col(j) = nb_dfc * sum_excess_var_col(j)
+                                      + (nb_dfc - 1.0) * total_mu;
+                pooled_num += sum_mu_sq_col(j);
+                pooled_den += sum_excess_var_col(j);
+            }
+            double r_pooled = r_max;
+            if (pooled_den > 1e-10 && pooled_num > 1e-10)
+                r_pooled = std::max(r_min, std::min(pooled_num / pooled_den, r_max));
+
             for (int j = 0; j < n; ++j) {
                 if (sum_excess_var_col(j) > 1e-10 && sum_mu_sq_col(j) > 1e-10) {
                     double r_new = sum_mu_sq_col(j) / sum_excess_var_col(j);
@@ -1154,7 +1556,7 @@ template<typename Resource, typename Scalar, typename MatrixType>
                     if (std::isfinite(r_new))
                         nb_size_vec(j) = static_cast<Scalar>(r_new);
                 } else {
-                    nb_size_vec(j) = static_cast<Scalar>(r_max);
+                    nb_size_vec(j) = static_cast<Scalar>(r_pooled);
                 }
             }
           } else {
@@ -1239,7 +1641,25 @@ template<typename Resource, typename Scalar, typename MatrixType>
                 }
             }
 
-            // Solve per row: r_i = Σ μ² / max(excess_var, ε)
+            DenseVector<Scalar> h_rs_df = H.rowwise().sum();
+            double pooled_num = 0.0, pooled_den = 0.0;
+            for (int i = 0; i < m; ++i) {
+                double total_mu = static_cast<double>(W_Td_nb.col(i).dot(h_rs_df));
+                if (is_zi) {
+                    sum_mu_sq(i) -= nb_zs2_r(i);
+                    sum_excess_var(i) -= (nb_zs2_r(i) - nb_zs_r(i));
+                    total_mu -= nb_zs_r(i);
+                }
+                sum_excess_var(i) = nb_dfc * sum_excess_var(i)
+                                  + (nb_dfc - 1.0) * total_mu;
+                pooled_num += sum_mu_sq(i);
+                pooled_den += sum_excess_var(i);
+            }
+            double r_pooled = r_max;
+            if (pooled_den > 1e-10 && pooled_num > 1e-10)
+                r_pooled = std::max(r_min, std::min(pooled_num / pooled_den, r_max));
+
+            // Solve per row: r_i = Σ μ² / excess_var
             for (int i = 0; i < m; ++i) {
                 if (sum_excess_var(i) > 1e-10 && sum_mu_sq(i) > 1e-10) {
                     double r_new = sum_mu_sq(i) / sum_excess_var(i);
@@ -1248,17 +1668,14 @@ template<typename Resource, typename Scalar, typename MatrixType>
                         nb_size_vec(i) = static_cast<Scalar>(r_new);
                     }
                 } else {
-                    // Underdispersed or degenerate → Poisson limit
-                    nb_size_vec(i) = static_cast<Scalar>(r_max);
+                    // No measurable excess variance in this row: pooled estimate
+                    nb_size_vec(i) = static_cast<Scalar>(r_pooled);
                 }
             }
 
-            // GLOBAL mode: use median per-row r (median is robust to outliers)
+            // GLOBAL mode: the pooled estimate over all entries
             if (config.gp_dispersion == DispersionMode::GLOBAL) {
-                std::vector<Scalar> r_vals(nb_size_vec.data(), nb_size_vec.data() + m);
-                std::nth_element(r_vals.begin(), r_vals.begin() + m / 2, r_vals.end());
-                Scalar median_r = r_vals[m / 2];
-                nb_size_vec.setConstant(median_r);
+                nb_size_vec.setConstant(static_cast<Scalar>(r_pooled));
             }
           }  // end PER_ROW/GLOBAL vs PER_COL
             prof_timer.end();  // end NB dispersion
@@ -1330,11 +1747,11 @@ template<typename Resource, typename Scalar, typename MatrixType>
                                 // P(Y=0|μ) depends on distribution
                                 double p0;
                                 if (is_nb) {
-                                    double r_i = std::max(static_cast<double>(nb_size_vec(i)), 1e-10);
+                                    double r_i = std::max(static_cast<double>(nb_size_vec(disp_per_col ? j : i)), 1e-10);
                                     // NB(0|μ,r) = (r/(r+μ))^r
                                     p0 = std::pow(r_i / (r_i + s_ij), r_i);
                                 } else {
-                                    double th_i = static_cast<double>(theta_vec(i));
+                                    double th_i = static_cast<double>(theta_vec(disp_per_col ? j : i));
                                     // GP(0|s,theta) = exp(-s/(1+theta))
                                     double otp = 1.0 + th_i;
                                     p0 = std::exp(-s_ij / otp);
@@ -1392,10 +1809,10 @@ template<typename Resource, typename Scalar, typename MatrixType>
                                     W_Td_zi.col(i).dot(H.col(j))), 1e-10);
                                 double p0;
                                 if (is_nb) {
-                                    double r_i = std::max(static_cast<double>(nb_size_vec(i)), 1e-10);
+                                    double r_i = std::max(static_cast<double>(nb_size_vec(disp_per_col ? j : i)), 1e-10);
                                     p0 = std::pow(r_i / (r_i + s_ij), r_i);
                                 } else {
-                                    double th_i = static_cast<double>(theta_vec(i));
+                                    double th_i = static_cast<double>(theta_vec(disp_per_col ? j : i));
                                     double otp = 1.0 + th_i;
                                     p0 = std::exp(-s_ij / otp);
                                 }
@@ -1470,8 +1887,11 @@ template<typename Resource, typename Scalar, typename MatrixType>
                 }
 
                 // Apply theta floor to prevent collapse
-                if (config.gp_theta_min > 0) {
-                    for (int i = 0; i < m; ++i) {
+                // (GP only: under NB theta_vec is empty. Its length is n
+                // under PER_COL and m otherwise.)
+                if (is_gp && config.gp_theta_min > 0) {
+                    const int n_theta = static_cast<int>(theta_vec.size());
+                    for (int i = 0; i < n_theta; ++i) {
                         if (theta_vec(i) < config.gp_theta_min)
                             theta_vec(i) = config.gp_theta_min;
                     }
@@ -1522,10 +1942,10 @@ template<typename Resource, typename Scalar, typename MatrixType>
                                 W_Td_zi.col(i).dot(H.col(j))), 1e-10);
                             double p0;
                             if (is_nb) {
-                                double r_i = std::max(static_cast<double>(nb_size_vec(i)), 1e-10);
+                                double r_i = std::max(static_cast<double>(nb_size_vec(disp_per_col ? j : i)), 1e-10);
                                 p0 = std::pow(r_i / (r_i + s_ij), r_i);
                             } else {
-                                double th_i = static_cast<double>(theta_vec(i));
+                                double th_i = static_cast<double>(theta_vec(disp_per_col ? j : i));
                                 double otp = 1.0 + th_i;
                                 p0 = std::exp(-s_ij / otp);
                             }
@@ -1688,7 +2108,50 @@ template<typename Resource, typename Scalar, typename MatrixType>
                 DenseMatrix<Scalar> W_Td_loss = W_T;
                 detail::apply_scaling(W_Td_loss, d);
                 loss_val = mask_detail::masked_loss(
-                    A, W_Td_loss, H, *config.mask, config.loss, eff_threads);
+                    A, W_Td_loss, H, *mask_ptr, config.loss, eff_threads,
+                    zero_mask);
+            } else if (is_zi) {
+                // Zero-inflated negative log-likelihood of the fitted mixture
+                // over all entries: a zero contributes
+                // -log(pi + (1 - pi) P0(mu)), any other entry -log(1 - pi)
+                // plus the NLL of the count model. Cost O(m n k).
+                DenseMatrix<Scalar> W_Td_loss = W_T;
+                detail::apply_scaling(W_Td_loss, d);
+                double zi_total = 0.0;
+                std::vector<char> nz_l(static_cast<size_t>(m));
+                for (int j = 0; j < n; ++j) {
+                    std::fill(nz_l.begin(), nz_l.end(), static_cast<char>(0));
+                    auto add_nonzero = [&](int i, Scalar y) {
+                        nz_l[static_cast<size_t>(i)] = 1;
+                        const Scalar pred = W_Td_loss.col(i).dot(H.col(j));
+                        const int di = disp_per_col ? j : i;
+                        const Scalar disp = is_nb ? nb_size_vec(di) : theta_vec(di);
+                        const double pi_ij = zi_pi(i, j);
+                        zi_total += static_cast<double>(
+                                        FactorNet::compute_loss(y, pred, config.loss, disp))
+                                  - std::log(std::max(1.0 - pi_ij, 1e-300));
+                    };
+                    if constexpr (is_sparse_v<MatrixType>) {
+                        for (typename std::decay_t<decltype(A)>::InnerIterator it(A, j); it; ++it) {
+                            const Scalar y = static_cast<Scalar>(it.value());
+                            if (y != static_cast<Scalar>(0))
+                                add_nonzero(static_cast<int>(it.row()), y);
+                        }
+                    } else {
+                        for (int i = 0; i < m; ++i) {
+                            const Scalar y = static_cast<Scalar>(A(i, j));
+                            if (y != static_cast<Scalar>(0)) add_nonzero(i, y);
+                        }
+                    }
+                    for (int i = 0; i < m; ++i) {
+                        if (nz_l[static_cast<size_t>(i)]) continue;
+                        const double s_ij = std::max(static_cast<double>(
+                            W_Td_loss.col(i).dot(H.col(j))), 1e-10);
+                        const double pi_ij = zi_pi(i, j);
+                        zi_total -= std::log(pi_ij + (1.0 - pi_ij) * zi_p0(i, j, s_ij) + 1e-300);
+                    }
+                }
+                loss_val = static_cast<Scalar>(zi_total);
             } else if (config.requires_irls()) {
                 // Non-MSE loss: explicit per-element computation
                 DenseMatrix<Scalar> W_Td_loss = W_T;
@@ -1710,47 +2173,59 @@ template<typename Resource, typename Scalar, typename MatrixType>
             } else if (saved_for_loss && !used_fused_w) {
                 // MSE: Optimized Gram trick reusing W-update matrices.
                 // B_w_saved was materialized in the standard path.
-                // Gram of new W_T: O(k²·m)
-                DenseMatrix<Scalar> G_wt;
-                primitives::gram<Resource>(W_T, G_wt);
+                // Gram of new W_T in double: O(k²·m).  Kept for the next
+                // H-update's Cholesky solve.
+                primitives::gram_double(W_T, Gd_WT, eff_threads);
+                Gd_WT_valid = true;
 
                 // Cross term: Σᵢ dᵢ · dot(W_T.row(i), B_w_saved.row(i)): O(k·m)
-                Scalar cross_term = 0;
+                // (all three loss terms are summed in double)
+                double cross_term = 0.0;
                 for (int i = 0; i < k; ++i)
-                    cross_term += d(i) * W_T.row(i).dot(B_w_saved.row(i));
+                    cross_term += static_cast<double>(d(i)) *
+                        W_T.row(i).template cast<double>().dot(
+                            B_w_saved.row(i).template cast<double>());
 
-                // Recon norm: Σᵢⱼ dᵢ·dⱼ · G_wt(i,j) · G_w_saved(i,j): O(k²)
-                Scalar recon_norm = 0;
+                // Recon norm: Σᵢⱼ dᵢ·dⱼ · Gd_WT(i,j) · Gd_H(i,j): O(k²), double Grams
+                double recon_norm = 0.0;
                 for (int i = 0; i < k; ++i)
                     for (int j = 0; j < k; ++j)
-                        recon_norm += d(i) * d(j) * G_wt(i, j) * G_w_saved(i, j);
+                        recon_norm += static_cast<double>(d(i)) * static_cast<double>(d(j))
+                                    * Gd_WT(i, j) * Gd_H(i, j);
 
-                loss_val = trAtA - static_cast<Scalar>(2) * cross_term + recon_norm;
+                loss_val = static_cast<Scalar>(trAtA_d - 2.0 * cross_term + recon_norm);
             } else if (saved_for_loss && used_fused_w) {
                 // MSE: Fused path — B_w was never materialized.
                 // Use sparse cross-term computation: O(nnz·k) + O(k²·m).
 
-                // Gram of new W_T: O(k²·m)
-                DenseMatrix<Scalar> G_wt;
-                primitives::gram<Resource>(W_T, G_wt);
+                // Gram of new W_T in double: O(k²·m).  Kept for the next
+                // H-update's Cholesky solve.
+                primitives::gram_double(W_T, Gd_WT, eff_threads);
+                Gd_WT_valid = true;
 
-                // Cross term via sparse traversal of A^T: O(nnz·k)
-                Scalar cross_term;
-                if constexpr (is_sparse_v<MatrixType>) {
-                    cross_term = primitives::loss_cross_term_sparse_via_At(
-                        *At_ptr, W_T, H, d, eff_threads);
+                // Cross term: accumulated inside the fused W-update when
+                // available (no extra pass over A); otherwise one sparse
+                // traversal of A^T, O(nnz·k).
+                double cross_term = 0.0;
+                if (have_w_cross) {
+                    cross_term = w_cross_acc;
                 } else {
-                    // Dense fallback (shouldn't reach here since can_fuse requires sparse)
-                    cross_term = 0;
+                    if constexpr (is_sparse_v<MatrixType>) {
+                        cross_term = static_cast<double>(
+                            primitives::loss_cross_term_sparse_via_At(
+                                *At_ptr, W_T, H, d, eff_threads));
+                    }
+                    // Dense: not reachable (can_fuse requires sparse input)
                 }
 
-                // Recon norm: Σᵢⱼ dᵢ·dⱼ · G_wt(i,j) · G_w_saved(i,j): O(k²)
-                Scalar recon_norm = 0;
+                // Recon norm: Σᵢⱼ dᵢ·dⱼ · Gd_WT(i,j) · Gd_H(i,j): O(k²), double Grams
+                double recon_norm = 0.0;
                 for (int i = 0; i < k; ++i)
                     for (int j = 0; j < k; ++j)
-                        recon_norm += d(i) * d(j) * G_wt(i, j) * G_w_saved(i, j);
+                        recon_norm += static_cast<double>(d(i)) * static_cast<double>(d(j))
+                                    * Gd_WT(i, j) * Gd_H(i, j);
 
-                loss_val = trAtA - static_cast<Scalar>(2) * cross_term + recon_norm;
+                loss_val = static_cast<Scalar>(trAtA_d - 2.0 * cross_term + recon_norm);
             } else {
                 // MSE fallback: full recomputation
                 DenseMatrix<Scalar> W_Td_loss = W_T;
@@ -1759,8 +2234,16 @@ template<typename Resource, typename Scalar, typename MatrixType>
                 primitives::gram<Resource>(W_Td_loss, G_loss);
                 DenseMatrix<Scalar> B_loss;
                 primitives::rhs<Resource>(A, W_Td_loss, B_loss);
-                loss_val = detail::gram_trick_loss(
-                    trAtA, G_loss, B_loss, H);
+                // ‖A‖² − 2·tr(BᵀH) + tr(G·HHᵀ), summed in double
+                const double tr_bh =
+                    (B_loss.template cast<double>().array()
+                     * H.template cast<double>().array()).sum();
+                const DenseMatrix<Scalar> GH_loss = G_loss * H;
+                const double tr_ghh =
+                    (H.template cast<double>().array()
+                     * GH_loss.template cast<double>().array()).sum();
+                loss_val = static_cast<Scalar>(
+                    std::max(trAtA_d - 2.0 * tr_bh + tr_ghh, 0.0));
             }
 
             if (config.track_loss_history)

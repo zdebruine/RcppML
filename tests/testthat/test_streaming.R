@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 test_that("streaming NMF produces valid factorization", {
   skip_on_cran()
   skip_if_not_installed("Matrix")
@@ -26,16 +30,6 @@ test_that("streaming NMF converges to similar loss as standard", {
   # TEST-STREAMING-MSE-PARITY: Loss should be within 1% relative difference
   loss_ratio <- abs(res_std@misc$loss - res_str@misc$loss) / res_std@misc$loss
   expect_lt(loss_ratio, 0.01)
-})
-
-test_that("streaming NMF with custom panel_cols works", {
-  skip_on_cran()
-  skip_if_not_installed("Matrix")
-  data(movielens, package = "RcppML")
-  result <- nmf(movielens, k = 2, tol = 1e-2, maxit = 10, streaming = TRUE, 
-                panel_cols = 50L, seed = 42, verbose = FALSE)
-  expect_s4_class(result, "nmf")
-  expect_equal(ncol(result@w), 2)
 })
 
 test_that("streaming NMF with L1/L2 regularization", {
@@ -75,7 +69,7 @@ test_that("streaming NMF with file-path input", {
 })
 
 test_that("streaming NMF with .spz file-path input", {
-  skip(".st_dispatch not yet re-implemented")
+  skip_streaming_dispatch()
   skip_on_cran()
   skip_if_not_installed("Matrix")
   data(movielens, package = "RcppML")
@@ -90,7 +84,7 @@ test_that("streaming NMF with .spz file-path input", {
 })
 
 test_that("streaming NMF with .spz transpose (chunked gather)", {
-  skip(".st_dispatch not yet re-implemented")
+  skip_streaming_dispatch()
   skip_on_cran()
   skip_if_not_installed("Matrix")
   data(movielens, package = "RcppML")
@@ -247,7 +241,7 @@ test_that("TEST-STREAMING-CV: streaming CV produces valid test loss", {
 # ===========================================================================
 
 test_that("TEST-SPZ-AUTO-CHUNK-CPU: SPZ auto-chunking produces same result as in-memory", {
-  skip(".st_dispatch not yet re-implemented")
+  skip_streaming_dispatch()
   skip_on_cran()
 
   # Use a matrix with enough columns to exercise multiple chunks (default 256 cols/chunk)

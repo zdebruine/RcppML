@@ -83,7 +83,7 @@ test_that("mse function works as wrapper", {
   A <- abs(rsparsematrix(50, 30, 0.3))
   model <- nmf(A, 3, seed = 1, maxit = 50, tol = 1e-4, verbose = FALSE)
   
-  mse_result <- mse(model@w, model@d, model@h, A)
+  mse_result <- suppressWarnings(RcppML:::mse(model@w, model@d, model@h, A))  # deprecated wrapper
   eval_result <- evaluate(model, A, loss = "mse")
   
   expect_equal(mse_result, eval_result, tolerance = 1e-10)
@@ -98,7 +98,7 @@ test_that("mse works without d vector", {
   w_scaled <- model@w %*% diag(model@d)
   h <- model@h
   
-  result <- RcppML:::mse(w_scaled, h = h, data = A)
+  result <- suppressWarnings(RcppML:::mse(w_scaled, h = h, data = A))  # deprecated wrapper
   
   expect_true(is.numeric(result))
   expect_true(result >= 0)

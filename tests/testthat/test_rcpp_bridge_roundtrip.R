@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 # =============================================================================
 # TEST-GATE-03: Rcpp Bridge Roundtrip Tests
 # Phase 0 safety net — tests each Rcpp_* export that will be touched in Phase 2.

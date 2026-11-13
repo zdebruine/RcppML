@@ -39,8 +39,9 @@ setClass("nmf",
 #' @export
 setMethod("subset", signature("nmf"), function(x, i, ...) {
   validObject(x)
-  x@w <- x@w[, i]
-  x@h <- x@h[i,]
+  if (missing(i)) return(x)
+  x@w <- x@w[, i, drop = FALSE]
+  x@h <- x@h[i, , drop = FALSE]
   x@d <- x@d[i]
   x
 })
@@ -49,72 +50,103 @@ setMethod("subset", signature("nmf"), function(x, i, ...) {
 #' @export
 #' @rdname nmf-class-methods
 #' @param x object of class \code{nmf}
-#' @param i indices
-#' @return An \code{nmf} object subsetted to the specified factors.
-setMethod("[", signature("nmf"), function(x, i) {
+#' @param i indices of the factors to keep
+#' @param j,drop ignored (an \code{nmf} object is subset by factor only and always stays an \code{nmf} object)
+#' @return An \code{nmf} object subsetted to the specified factors. A single factor is kept as a rank-1 model.
+setMethod("[", signature(x = "nmf"), function(x, i, j, ..., drop = FALSE) {
   validObject(x)
-  x@w <- x@w[, i]
-  x@h <- x@h[i,]
+  if (missing(i)) return(x)
+  x@w <- x@w[, i, drop = FALSE]
+  x@h <- x@h[i, , drop = FALSE]
   x@d <- x@d[i]
   x
 })
 
+# Print the first (or last) n rows/columns of an nmf model
+.print_nmf <- function(x, n, from_end = FALSE) {
+  validObject(x)
+  n <- max(1L, as.integer(n)[1])
+  cat(nrow(x@w), "x", ncol(x@h), "x", length(x@d), "factor model of class \"nmf\"\n")
+  pick <- function(len) {
+    m <- min(len, n)
+    if (m == 0L) return(integer(0))
+    if (from_end) seq.int(len - m + 1L, len) else seq_len(m)
+  }
+  rows_w <- pick(nrow(x@w))
+  cols_h <- pick(ncol(x@h))
+  k_idx <- seq_len(min(length(x@d), n))
+  cat("@ w\n")
+  print.table(x@w[rows_w, k_idx, drop = FALSE], zero.print = ".")
+  dropped_rows <- nrow(x@w) - length(rows_w)
+  dropped_k <- length(x@d) - length(k_idx)
+  if (dropped_rows > 0 && dropped_k > 0) {
+    cat("...suppressing", dropped_rows, "rows and", dropped_k, "columns\n")
+  } else if (dropped_rows > 0) {
+    cat("...suppressing", dropped_rows, "rows\n")
+  } else if (dropped_k > 0) {
+    cat("...suppressing", dropped_k, "columns\n")
+  }
+  cat("\n@ d\n")
+  cat(x@d[k_idx], "\n")
+  if (dropped_k > 0) cat("...suppressing", dropped_k, "values\n")
+  cat("\n@ h\n")
+  print.table(x@h[k_idx, cols_h, drop = FALSE], zero.print = ".")
+  dropped_cols <- ncol(x@h) - length(cols_h)
+  if (dropped_cols > 0 && dropped_k > 0) {
+    cat("...suppressing", dropped_k, "rows and", dropped_cols, "columns\n")
+  } else if (dropped_cols > 0) {
+    cat("...suppressing", dropped_cols, "columns\n")
+  } else if (dropped_k > 0) {
+    cat("...suppressing", dropped_k, "rows\n")
+  }
+  cat("\n@ misc\n")
+  str(x@misc)
+  invisible(x)
+}
+
 #' nmf class methods
-#' 
-#' @method head nmf
+#'
+#' \code{head} and \code{tail} print the first or last \code{n} rows of \code{w}
+#' and columns of \code{h} (and at most \code{n} factors).
+#'
+#' The S4 generics \code{head} and \code{tail} come from the \pkg{Matrix} import;
+#' the S3 methods are registered for \code{utils::head} and \code{utils::tail}, so
+#' \code{head(model)} works whether or not \pkg{Matrix} is attached.
+#'
 #' @importFrom utils str
-#' @export
+#' @exportS3Method utils::head
 #' @docType methods
 #' @rdname nmf-class-methods
 #' @param n number of rows/columns to show
 #' @param ... additional parameters
 #' @return Invisibly returns the \code{nmf} object.
-#' 
-setMethod("head", signature("nmf"), function(x, n = getOption("digits"), ...) {
-  validObject(x)
-  cat(nrow(x@w), "x", ncol(x@h), "x", length(x@d), "factor model of class \"nmf\"\n")
-  n <- n_h <- n_w <- n
-  if (nrow(x@w) < n) n_w <- nrow(x@w)
-  if (ncol(x@h) < n) n_h <- ncol(x@h)
-  if (length(x@d) < n) n <- length(x@d)
-  cat("@ w\n")
-  print.table(x@w[1:n_w, 1:n], zero.print = ".")
-  if (nrow(x@w) > n_w && ncol(x@w) > n) {
-    cat("...suppressing", nrow(x@w) - n_w, "rows and", ncol(x@w) - n, "columns\n")
-  } else if (nrow(x@w) > n_w) {
-    cat("...suppressing", nrow(x@w) - n_w, "rows\n")
-  } else if (ncol(x@w) > n) {
-    cat("...suppressing", ncol(x@w) - n, "columns\n")
-  }
-  cat("\n@ d\n")
-  d_ <- x@d[1:n]
-  for (i in 1:length(d_))
-    cat(d_[i], " ")
-  cat("\n")
-  if (length(x@d) > n) cat("...suppressing", length(x@d) - n, "values\n")
-  cat("\n@ h\n")
-  print.table(x@h[1:n, 1:n_h], zero.print = ".")
-  if (ncol(x@h) > n_h && nrow(x@h) > n) {
-    cat("...suppressing", nrow(x@h) - n, "rows and", ncol(x@h) - n_h, "columns\n")
-  } else if (ncol(x@h) > n_h) {
-    cat("...suppressing", ncol(x@h) - n_h, "columns\n")
-  } else if (nrow(x@h) > n) {
-    cat("...suppressing", nrow(x@h), "rows\n")
-  }
-  cat("\n@ misc\n")
-  cat(str(x@misc))
+#'
+head.nmf <- function(x, n = getOption("digits"), ...) {
+  .print_nmf(x, n, from_end = FALSE)
+}
 
-  invisible(x)
-})
+#' @exportS3Method utils::tail
+#' @rdname nmf-class-methods
+tail.nmf <- function(x, n = getOption("digits"), ...) {
+  .print_nmf(x, n, from_end = TRUE)
+}
+
+#' @export
+#' @rdname nmf-class-methods
+setMethod("head", signature("nmf"), function(x, ...) head.nmf(x, ...))
+
+#' @export
+#' @rdname nmf-class-methods
+setMethod("tail", signature("nmf"), function(x, ...) tail.nmf(x, ...))
 
 #' @export
 #' @method show nmf
 #' @param object object of class \code{nmf}
 #' @rdname nmf-class-methods
 #' @return Invisibly returns the \code{nmf} object.
-#' 
+#'
 setMethod("show", signature("nmf"), function(object) {
-  head(object)
+  .print_nmf(object, getOption("digits"), from_end = FALSE)
   invisible(object)
 })
 
@@ -179,15 +211,19 @@ setMethod("prod", signature = "nmf", function(x, ...) {
 #' @param x object of class \code{nmf}.
 #' @param name name of nmf class slot
 #' @return Contents of the named slot (\code{w}, \code{d}, \code{h}, or \code{misc}), or the named element from \code{misc}.
+#'   Names are matched exactly first (so \code{model$L1} returns \code{model@misc$L1}); a case-insensitive match
+#'   (e.g. \code{model$W}) is used only when no exact match exists.
 #' @export
 setMethod("$", signature = "nmf", function(x, name) {
   validObject(x)
-  name <- tolower(name)
-  if (!(name %in% c("w", "d", "h", "misc"))) {
-    if (!(name %in% names(x@misc))) {
-      stop("'name' not a slot in 'object' or component in 'object@misc'")
-    } else x@misc[[name]]
-  } else slot(x, name)
+  slots <- c("w", "d", "h", "misc")
+  if (name %in% slots) return(slot(x, name))
+  if (name %in% names(x@misc)) return(x@misc[[name]])
+  lname <- tolower(name)
+  if (lname %in% slots) return(slot(x, lname))
+  hit <- which(tolower(names(x@misc)) == lname)
+  if (length(hit) >= 1) return(x@misc[[hit[1]]])
+  stop("'", name, "' is not a slot of the nmf object or a component of its 'misc' list")
 })
 
 #' @export
@@ -265,9 +301,16 @@ setMethod("align", signature = "nmf", function(object, ref, method = "cosine", .
     cost <- 1 - cosine(object$w, ref$w) + 1e-10
   } else if (method == "cor") {
     cost <- 1 - cor(object$w, ref$w) + 1e-10
+  } else {
+    stop("'method' must be \"cosine\" or \"cor\"")
   }
   cost[cost < 0] <- 0
-  object[bipartiteMatch(cost)$assignment + 1L]
+  # cost[i, j] is the distance between factor i of 'object' and factor j of
+  # 'ref'; assignment[i] is the (0-based) reference factor matched to object
+  # factor i. Position r of the aligned model must hold the object factor
+  # matched to reference factor r, which is the inverse permutation.
+  assignment <- bipartiteMatch(cost)$assignment
+  object[order(assignment)]
 })
 
 #' Summarize NMF factors
@@ -299,22 +342,23 @@ setMethod("summary", signature = "nmf", function(object, group_by, stat = "sum",
   if (length(group_by) == ncol(object$h)) {
     for (group in levels(group_by)) {
       if (stat == "sum") {
-        bins[[group]] <- rowSums(object$h[, which(group_by == group)])
+        bins[[group]] <- rowSums(object$h[, which(group_by == group), drop = FALSE])
       } else {
-        bins[[group]] <- rowMeans(object$h[, which(group_by == group)])
+        bins[[group]] <- rowMeans(object$h[, which(group_by == group), drop = FALSE])
       }
     }
   } else if (length(group_by) == nrow(object$w)) {
     for (group in levels(group_by)) {
       if (stat == "sum") {
-        bins[[group]] <- colSums(object$w[which(group_by == group),])
+        bins[[group]] <- colSums(object$w[which(group_by == group), , drop = FALSE])
       } else {
-        bins[[group]] <- colMeans(object$w[which(group_by == group),])
+        bins[[group]] <- colMeans(object$w[which(group_by == group), , drop = FALSE])
       }
     }
   } else stop("'group_by' was not of length equal to rows in 'object$w' (which would correspond to features) or columns in 'object$h' (which would correspond to samples")
-  bins <- do.call(cbind, bins)
-  bins <- apply(bins, 1, function(x) x)
+  # groups x factors matrix (kept a matrix for a single group or a single factor)
+  bins <- t(do.call(cbind, bins))
+  if (is.null(colnames(bins))) colnames(bins) <- paste0("nmf", seq_len(ncol(bins)))
   result <- list()
   for (i in 1:ncol(bins))
     result[[length(result) + 1]] <- data.frame("group" = rownames(bins), "factor" = colnames(bins)[i], "stat" = as.vector(bins[, i]))
@@ -331,6 +375,9 @@ setMethod("summary", signature = "nmf", function(object, group_by, stat = "sum",
 #' @param x fitted model, class \code{nmf}, generally the result of calling \code{nmf}, with models of equal dimensions as \code{data}
 #' @param loss loss function to use: "mse" (Mean Squared Error, default) or
 #'   "gp" (Generalized Poisson / KL divergence)
+#' @param mask missing data mask, as in \code{\link{nmf}}: \code{NULL}, \code{"zeros"}, \code{"NA"} or a matrix whose
+#'   non-zero entries mark missing values. Masked entries are excluded from the loss
+#'   (or are the only entries included when \code{missing_only = TRUE}).
 #' @param missing_only calculate loss only for missing values specified as a matrix in \code{mask}
 #' @param test_fraction fraction of entries to hold out as test set (default 0 = disabled). When > 0, creates a random mask for test/train split.
 #' @param test_seed seed for test set generation. If NULL, attempts to use test mask from model's @misc$test_mask if available.
@@ -378,13 +425,15 @@ setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, missing_
   # NA detection
   if (is(data, "dgCMatrix")) {
     if (any(is.na(data@x))) {
-      if (!is.null(mask) && mask != "NA") stop("data contains 'NA' values. Either remove these values or specify \"mask = 'NA'\"")
+      if (!is.null(mask) && !identical(mask, "NA")) stop("data contains 'NA' values. Either remove these values or specify \"mask = 'NA'\"")
       mask <- is.na(data)
+      data@x[is.na(data@x)] <- 0
     }
   } else if (is.matrix(data)) {
     if (any(is.na(data))) {
-      if (!is.null(mask) && mask != "NA") stop("data contains 'NA' values. Either remove these values or specify \"mask = 'NA'\"")
+      if (!is.null(mask) && !identical(mask, "NA")) stop("data contains 'NA' values. Either remove these values or specify \"mask = 'NA'\"")
       mask <- is.na(.to_dgCMatrix(data))
+      data[is.na(data)] <- 0
     }
   }
   
@@ -421,9 +470,15 @@ setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, missing_
   if (is.null(mask)) {
     mask_matrix <- new("dgCMatrix")
     mask_zeros <- FALSE
-  } else if (class(mask)[[1]] == "character" && mask == "zeros") {
+  } else if (identical(mask, "zeros")) {
     mask_matrix <- new("dgCMatrix")
     mask_zeros <- TRUE
+  } else if (identical(mask, "NA")) {
+    # mask = "NA" requested but the data hold no NA values: nothing to mask
+    mask_matrix <- new("dgCMatrix")
+    mask_zeros <- FALSE
+  } else if (is.character(mask)) {
+    stop("'mask' must be NULL, \"zeros\", \"NA\" or a matrix")
   } else {
     mask_zeros <- FALSE
     if (!canCoerce(mask, "dgCMatrix")) {
@@ -433,6 +488,8 @@ setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, missing_
     }
     # Use dMatrix intermediate to avoid ngCMatrix -> dgCMatrix deprecation warning
     mask_matrix <- .to_dgCMatrix(as(mask, "dMatrix"))
+    if (!identical(dim(mask_matrix), dim(data)))
+      stop("'mask' must have the same dimensions as 'data'")
   }
   
   # Apply test set logic
@@ -459,19 +516,24 @@ setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, missing_
   # Unified loss evaluation — always use general loss functions
   # (loss_type=0 corresponds to MSE, handled by compute_loss_general)
   huber_delta <- 0.0  # kept for C++ interface compatibility
+  # The C++ side needs a numeric dgCMatrix (test masks are pattern/logical)
+  if (!is(mask_matrix, "dgCMatrix"))
+    mask_matrix <- .to_dgCMatrix(as(mask_matrix, "dMatrix"))
   if (missing_only) {
     Rcpp_evaluate_loss_missing(data, mask_matrix, x@w, x@d, x@h, 
-                               loss_type, huber_delta, as.integer(threads))
+                               loss_type, huber_delta, .resolve_threads(threads))
   } else {
     Rcpp_evaluate_loss(data, mask_matrix, x@w, x@d, x@h, 
-                       loss_type, huber_delta, as.integer(threads), mask_zeros)
+                       loss_type, huber_delta, .resolve_threads(threads), mask_zeros)
   }
 })
 
 #' Mean squared error of factor model
 #' 
 #' Same as the \code{evaluate} S4 method for the \code{nmf} class, but allows one to input the `w`, `d`, `h`, and `data` independently.
+#' @description \code{mse()} is deprecated; use \code{\link{evaluate}}.
 #' @keywords internal
+#' @export
 #' @param w feature factor matrix (features as rows)
 #' @param h sample factor matrix (samples as columns)
 #' @param d scaling diagonal vector (if applicable)
@@ -483,9 +545,10 @@ setMethod("evaluate", signature = "nmf", function(x, data, mask = NULL, missing_
 #' \dontrun{
 #' data <- simulateNMF(50, 30, k = 3, seed = 1)
 #' model <- nmf(data$A, 3, seed = 1, maxit = 50)
-#' RcppML:::mse(model$w, model$d, model$h, data$A)
+#' mse(model$w, model$d, model$h, data$A)
 #' }
 mse <- function(w, d = NULL, h, data, mask = NULL, missing_only = FALSE, ...) {
+  .Deprecated(msg = "mse() is deprecated; use evaluate().")
   if (is.null(d)) d <- rep(1, nrow(h))
   m <- new("nmf", w = w, d = d, h = h)
   evaluate(m, data, mask = mask, missing_only = missing_only, loss = "mse", ...)

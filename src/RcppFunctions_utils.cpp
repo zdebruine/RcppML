@@ -11,6 +11,9 @@
 #include "../inst/include/FactorNet/primitives/cpu/rhs.hpp"
 #include "../inst/include/FactorNet/nmf/nnls_streaming.hpp"
 
+#include <vector>
+#include <algorithm>
+
 
 using namespace FactorNet::clustering;
 using FactorNet::tiny_num;
@@ -19,36 +22,147 @@ using FactorNet::tiny_num;
 // PREDICTION (PROJECT NEW SAMPLES)
 // ============================================================================
 
+namespace {
+
+// Extract a user mask (dgCMatrix, non-zero = masked) as an Eigen sparse matrix.
+// Returns false when the mask has no stored entries (the R side passes an
+// empty 0 x 0 dgCMatrix for "no mask"). Throws when a non-empty mask does not
+// match the data dimensions.
+inline bool extract_user_mask(const Rcpp::S4& mask, int m, int n,
+                              Eigen::SparseMatrix<double>& out) {
+    Rcpp::IntegerVector dims = mask.slot("Dim");
+    Rcpp::NumericVector x = mask.slot("x");
+    if (x.size() == 0) return false;
+    if (dims[0] != m || dims[1] != n) {
+        Rcpp::stop("'mask' must have the same dimensions as the data "
+                   "(%d x %d), but is %d x %d", m, n,
+                   static_cast<int>(dims[0]), static_cast<int>(dims[1]));
+    }
+    out = Rcpp::as<Eigen::SparseMatrix<double>>(mask);
+    return true;
+}
+
+}  // anonymous namespace
+
+// Solves min_h ||A_j - W h_j||^2 for every column j of A, over the observed
+// entries of column j only.
+//   mask       : non-zero entries are treated as missing
+//   mask_zeros : zero entries of A are treated as missing
+//   nonneg     : enforce h >= 0
+// w is k x m (transposed W). The result is on the scale of W, i.e. it is not
+// divided by the model diagonal (the R method does that).
 // [[Rcpp::export]]
 Eigen::MatrixXd Rcpp_predict(SEXP A_sexp, const Rcpp::S4& mask, Eigen::MatrixXd w,
                              const double L1, const double L2, const unsigned int threads,
-                             const bool mask_zeros, const double upper_bound = 0) {
+                             const bool mask_zeros, const double upper_bound = 0,
+                             const bool nonneg = true) {
     FactorNet::clustering::ThreadGuard guard(static_cast<int>(threads));
-    // R predict method passes w as k×m (already transposed)
+    // R predict method passes w as k x m (already transposed)
     const int k = static_cast<int>(w.rows());
-    
+    const int m = static_cast<int>(w.cols());
+
     // Compute Gram matrix (shared for sparse and dense)
     Eigen::MatrixXd G(k, k);
     FactorNet::primitives::gram<FactorNet::primitives::CPU, double>(w, G);
     G.diagonal().array() += tiny_num<double>();
     if (L2 > 0) G.diagonal().array() += L2;
-    
-    // Compute RHS — dispatch on sparse vs dense
-    Eigen::MatrixXd B;
-    if (Rf_isS4(A_sexp)) {
+
+    const bool is_sparse = Rf_isS4(A_sexp);
+    Eigen::SparseMatrix<double> A_sp;
+    Eigen::MatrixXd A_dense;
+    int n = 0;
+    if (is_sparse) {
         auto A_mapped = mapSparseMatrix(Rcpp::S4(A_sexp));
-        Eigen::SparseMatrix<double> A_copy(A_mapped);
-        B.resize(k, A_copy.cols());
-        FactorNet::primitives::rhs<FactorNet::primitives::CPU, double>(A_copy, w, B);
+        A_sp = A_mapped;
+        n = static_cast<int>(A_sp.cols());
+        if (static_cast<int>(A_sp.rows()) != m)
+            Rcpp::stop("number of rows in 'data' does not match the number of rows in 'w'");
     } else {
-        Eigen::MatrixXd A_dense = Rcpp::as<Eigen::MatrixXd>(A_sexp);
-        B.resize(k, A_dense.cols());
-        FactorNet::primitives::rhs<FactorNet::primitives::CPU, double>(A_dense, w, B);
+        A_dense = Rcpp::as<Eigen::MatrixXd>(A_sexp);
+        n = static_cast<int>(A_dense.cols());
+        if (static_cast<int>(A_dense.rows()) != m)
+            Rcpp::stop("number of rows in 'data' does not match the number of rows in 'w'");
     }
-    
-    Eigen::MatrixXd h(k, B.cols());
-    FactorNet::primitives::nnls_batch<FactorNet::primitives::CPU, double>(
-        G, B, h, 100, 1e-8, L1, 0.0, true, static_cast<int>(threads), upper_bound);
+
+    Eigen::SparseMatrix<double> M;
+    const bool has_mask = extract_user_mask(mask, m, n, M);
+
+    if (!has_mask && !mask_zeros) {
+        // Fast path: all entries observed, one Gram matrix for all columns
+        Eigen::MatrixXd B(k, n);
+        if (is_sparse) {
+            FactorNet::primitives::rhs<FactorNet::primitives::CPU, double>(A_sp, w, B);
+        } else {
+            FactorNet::primitives::rhs<FactorNet::primitives::CPU, double>(A_dense, w, B);
+        }
+        Eigen::MatrixXd h(k, n);
+        FactorNet::primitives::nnls_batch<FactorNet::primitives::CPU, double>(
+            G, B, h, 100, 1e-8, L1, 0.0, nonneg, static_cast<int>(threads), upper_bound);
+        return h;
+    }
+
+    // Masked path: per-column Gram matrix over the observed rows only
+    Eigen::MatrixXd h = Eigen::MatrixXd::Zero(k, n);
+    const double ridge = tiny_num<double>() + ((L2 > 0) ? L2 : 0.0);
+
+#ifdef _OPENMP
+    int n_threads = (static_cast<int>(threads) > 0) ? static_cast<int>(threads) : omp_get_max_threads();
+    #pragma omp parallel for schedule(dynamic, 16) num_threads(n_threads)
+#endif
+    for (int j = 0; j < n; ++j) {
+        std::vector<char> masked(m, 0);
+        if (has_mask) {
+            for (Eigen::SparseMatrix<double>::InnerIterator mit(M, j); mit; ++mit)
+                if (mit.value() != 0) masked[mit.row()] = 1;
+        }
+
+        Eigen::VectorXd b = Eigen::VectorXd::Zero(k);
+        Eigen::MatrixXd Gj;
+        if (mask_zeros) {
+            // Observed = non-zero entries of A that are not masked
+            Gj = Eigen::MatrixXd::Zero(k, k);
+            if (is_sparse) {
+                for (Eigen::SparseMatrix<double>::InnerIterator it(A_sp, j); it; ++it) {
+                    const int r = static_cast<int>(it.row());
+                    const double val = it.value();
+                    if (masked[r] || val == 0) continue;
+                    b.noalias() += val * w.col(r);
+                    Gj.noalias() += w.col(r) * w.col(r).transpose();
+                }
+            } else {
+                for (int r = 0; r < m; ++r) {
+                    const double val = A_dense(r, j);
+                    if (masked[r] || val == 0) continue;
+                    b.noalias() += val * w.col(r);
+                    Gj.noalias() += w.col(r) * w.col(r).transpose();
+                }
+            }
+            Gj.diagonal().array() += ridge;
+        } else {
+            // Observed = all entries that are not masked
+            Gj = G;
+            for (Eigen::SparseMatrix<double>::InnerIterator mit(M, j); mit; ++mit) {
+                if (mit.value() != 0) {
+                    const int r = static_cast<int>(mit.row());
+                    Gj.noalias() -= w.col(r) * w.col(r).transpose();
+                }
+            }
+            if (is_sparse) {
+                for (Eigen::SparseMatrix<double>::InnerIterator it(A_sp, j); it; ++it) {
+                    const int r = static_cast<int>(it.row());
+                    if (!masked[r]) b.noalias() += it.value() * w.col(r);
+                }
+            } else {
+                for (int r = 0; r < m; ++r) {
+                    if (!masked[r]) b.noalias() += A_dense(r, j) * w.col(r);
+                }
+            }
+        }
+
+        FactorNet::primitives::detail::cd_nnls_col_fixed(
+            Gj, b.data(), h.col(j).data(), k,
+            L1, 0.0, nonneg, 100, upper_bound, 1e-8);
+    }
     return h;
 }
 
@@ -93,72 +207,96 @@ double compute_mse(const MatrixType& A, const Eigen::MatrixXd& W,
 // GENERAL LOSS CALCULATION (MSE, MAE, HUBER, KL)
 // ============================================================================
 
+// Mean loss over the observed entries.
+//   mask       : non-zero entries are excluded (nullptr = no mask)
+//   mask_zeros : zero entries of A are excluded
 template<typename MatrixType>
-double compute_loss_general(const MatrixType& A, const Eigen::MatrixXd& W, 
+double compute_loss_general(const MatrixType& A, const Eigen::MatrixXd& W,
                            const Eigen::VectorXd& d, const Eigen::MatrixXd& H,
                            int loss_type, double huber_delta,
-                           bool mask_zeros = false) {
+                           bool mask_zeros = false,
+                           const Eigen::SparseMatrix<double>* mask = nullptr) {
     using namespace FactorNet;
-    
+
     // Set up loss configuration
     FactorNet::LossConfig<double> loss_config;
     loss_config.type = static_cast<LossType>(loss_type);
     loss_config.huber_delta = huber_delta;
-    
+
     // Reconstruct: A_hat = W * diag(d) * H
     Eigen::MatrixXd WH = W * d.asDiagonal() * H;
-    
+
     double total_loss = 0;
-    int count = 0;
-    
-    if constexpr (FactorNet::is_sparse_v<MatrixType>) {
-        if (mask_zeros) {
-            // Only compute loss over nonzero entries in A
-            for (int k = 0; k < A.outerSize(); ++k) {
-                for (typename MatrixType::InnerIterator it(A, k); it; ++it) {
-                    double observed = it.value();
-                    double predicted = WH(it.row(), it.col());
-                    total_loss += compute_loss(observed, predicted, loss_config);
-                    count++;
+    double count = 0;
+    const int m = static_cast<int>(A.rows());
+    const int n = static_cast<int>(A.cols());
+    std::vector<char> masked(m, 0);
+
+    for (int j = 0; j < n; ++j) {
+        if (mask) {
+            std::fill(masked.begin(), masked.end(), 0);
+            for (Eigen::SparseMatrix<double>::InnerIterator mit(*mask, j); mit; ++mit)
+                if (mit.value() != 0) masked[mit.row()] = 1;
+        }
+        if constexpr (FactorNet::is_sparse_v<MatrixType>) {
+            if (mask_zeros) {
+                // Only non-zero entries of A are observed
+                for (typename MatrixType::InnerIterator it(A, j); it; ++it) {
+                    const int i = static_cast<int>(it.row());
+                    const double observed = it.value();
+                    if (masked[i] || observed == 0) continue;
+                    total_loss += compute_loss(observed, WH(i, j), loss_config);
+                    count += 1;
+                }
+            } else {
+                // All entries: walk the rows alongside the (sorted) non-zeros
+                typename MatrixType::InnerIterator it(A, j);
+                for (int i = 0; i < m; ++i) {
+                    double observed = 0;
+                    if (it && static_cast<int>(it.row()) == i) {
+                        observed = it.value();
+                        ++it;
+                    }
+                    if (masked[i]) continue;
+                    total_loss += compute_loss(observed, WH(i, j), loss_config);
+                    count += 1;
                 }
             }
         } else {
-            // Compute loss over ALL entries
-            for (int i = 0; i < A.rows(); ++i) {
-                for (int j = 0; j < A.cols(); ++j) {
-                    double observed = A.coeff(i, j);
-                    double predicted = WH(i, j);
-                    total_loss += compute_loss(observed, predicted, loss_config);
-                    count++;
-                }
-            }
-        }
-    } else {
-        // For dense matrices, iterate over all entries
-        for (int i = 0; i < A.rows(); ++i) {
-            for (int j = 0; j < A.cols(); ++j) {
-                double observed = A(i, j);
-                double predicted = WH(i, j);
-                total_loss += compute_loss(observed, predicted, loss_config);
-                count++;
+            for (int i = 0; i < m; ++i) {
+                if (masked[i]) continue;
+                const double observed = A(i, j);
+                if (mask_zeros && observed == 0) continue;
+                total_loss += compute_loss(observed, WH(i, j), loss_config);
+                count += 1;
             }
         }
     }
-    
+
     return count > 0 ? total_loss / count : 0;
 }
 
 // [[Rcpp::export]]
-double Rcpp_evaluate_loss(SEXP A_sexp, const Rcpp::S4& mask, 
+double Rcpp_evaluate_loss(SEXP A_sexp, const Rcpp::S4& mask,
                           Eigen::MatrixXd w, Eigen::VectorXd d, Eigen::MatrixXd h,
                           int loss_type, double huber_delta,
                           const unsigned int threads, const bool mask_zeros) {
+    const int m = static_cast<int>(w.rows());
+    const int n = static_cast<int>(h.cols());
+    Eigen::SparseMatrix<double> M;
+    const bool has_mask = extract_user_mask(mask, m, n, M);
+    const Eigen::SparseMatrix<double>* mask_ptr = has_mask ? &M : nullptr;
+
     if (Rf_isS4(A_sexp)) {
         auto A_mapped = mapSparseMatrix(Rcpp::S4(A_sexp));
-        return compute_loss_general(A_mapped, w, d, h, loss_type, huber_delta, mask_zeros);
+        if (static_cast<int>(A_mapped.rows()) != m || static_cast<int>(A_mapped.cols()) != n)
+            Rcpp::stop("dimensions of 'data' do not match the model");
+        return compute_loss_general(A_mapped, w, d, h, loss_type, huber_delta, mask_zeros, mask_ptr);
     } else {
         Eigen::MatrixXd A_dense = Rcpp::as<Eigen::MatrixXd>(A_sexp);
-        return compute_loss_general(A_dense, w, d, h, loss_type, huber_delta, mask_zeros);
+        if (static_cast<int>(A_dense.rows()) != m || static_cast<int>(A_dense.cols()) != n)
+            Rcpp::stop("dimensions of 'data' do not match the model");
+        return compute_loss_general(A_dense, w, d, h, loss_type, huber_delta, mask_zeros, mask_ptr);
     }
 }
 
@@ -262,6 +400,11 @@ Rcpp::List Rcpp_dclust_sparse(const Rcpp::S4& A, const unsigned int min_samples,
     
     auto A_mapped = mapSparseMatrix(A);
     
+    if (min_samples < 1)
+        Rcpp::stop("'min_samples' must be at least 1");
+    if (!(min_dist >= 0))
+        Rcpp::stop("'min_dist' must be a non-negative number");
+
     // Route through gateway for RAII thread management
     auto clusters = FactorNet::clustering::dclust_gateway<double>(
         A_mapped, min_samples, min_dist, verbose,
@@ -358,9 +501,12 @@ Eigen::MatrixXd c_nnls(const Eigen::MatrixXd& w, SEXP A_sexp,
                 L1, 0.0, nonneg, static_cast<int>(cd_maxit), upper_bound);
         }
     } else {
-        FactorNet::primitives::nnls_batch<FactorNet::primitives::CPU, double>(
-            G, B, h, static_cast<int>(cd_maxit), cd_tol,
-            L1, 0.0, nonneg, static_cast<int>(threads), upper_bound);
+        // Exact NNLS: Cholesky solve, active-set refinement, KKT polish.
+        h.resize(k, n);
+        FactorNet::primitives::cholesky_clip_batch<double>(
+            G, B, h, nonneg, static_cast<int>(threads), false,
+            L1, upper_bound, static_cast<int>(cd_maxit));
+        (void)cd_tol;
     }
     return h;
 }

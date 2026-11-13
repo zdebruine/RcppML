@@ -10,9 +10,38 @@
 
 #' Fit a factorization network
 #'
-#' Executes the compiled graph from \code{factor_net()}. For single-layer
-#' networks, this delegates directly to \code{nmf()} for maximum performance.
-#' Multi-layer networks use R-level alternating least squares.
+#' Executes the compiled graph from \code{factor_net()}.
+#'
+#' @details
+#' \strong{Single-layer networks} run the same solver as \code{\link{nmf}}.
+#' A layer on \code{factor_shared()} inputs is one NMF of the row-bound
+#' inputs: \code{rbind(X1, X2, ...) ~ rbind(W1, W2, ...) diag(d) H}. The
+#' modalities are not reweighted, so a modality with more rows or larger
+#' values contributes more to the shared \code{H}; scale the inputs first
+#' if they should contribute equally.
+#'
+#' \strong{Multi-layer networks are fit greedily, layer by layer.} Layer 1
+#' factorizes the data, \code{X ~ W1 diag(d1) H1}. Every deeper layer
+#' factorizes the transposed, unit-scaled embedding of the layer(s) it is
+#' connected to, \code{t(H_prev) ~ W diag(d) H}, so its \code{W} has one row
+#' per sample and its \code{H} has one column per factor of the previous
+#' layer. In each outer iteration every layer performs one alternating
+#' update on its own input. A layer is never updated to improve the fit of a
+#' later layer, so there is no joint objective: the first layer converges to
+#' the ordinary factorization of the data and later layers follow it.
+#' \code{total_loss} is the sum of the per-layer mean squared errors, each
+#' measured against that layer's own input; it is used for the stopping rule
+#' and is not guaranteed to decrease monotonically.
+#'
+#' \strong{Unsupported options raise an error} instead of being ignored:
+#' per-layer \code{mask}, \code{zi}, \code{projective}, \code{symmetric},
+#' \code{robust}, \code{target} in a multi-layer network or with a
+#' streaming input, extra \code{...}
+#' arguments of a layer or of \code{factor_config()}, the
+#' \code{center}/\code{scale}/\code{method} arguments of
+#' \code{svd_layer()}, \code{factor_condition()} applied directly to an
+#' input, and multi-layer networks with more than one input. Use
+#' \code{\link{nmf}} or \code{\link{svd}} directly for those features.
 #'
 #' @param object A \code{factor_net} object from \code{factor_net()}.
 #' @param logger Optional \code{training_logger} from \code{training_logger()}
@@ -51,6 +80,9 @@ fit.factor_net <- function(object, logger = NULL, ...) {
 
   if (!is.null(logger) && !inherits(logger, "training_logger"))
     stop("logger must be a training_logger object from training_logger()")
+
+  # --- Refuse options that the graph engine does not implement ---
+  .fn_check_supported(object)
 
   # --- C++ graph path: build descriptor and dispatch ---
   descriptor <- .fn_build_descriptor(object)
@@ -498,7 +530,7 @@ fit.factor_net <- function(object, logger = NULL, ...) {
     tol = config$tol,
     maxit = config$maxit,
     verbose = config$verbose,
-    threads = config$threads,
+    threads = .resolve_threads(config$threads),
     loss = config$loss,
     norm = config$norm,
     resource = config$resource,
@@ -679,7 +711,7 @@ fit.factor_net <- function(object, logger = NULL, ...) {
   if (w_ang != 0 || h_ang != 0) args$angular <- c(w_ang, h_ang)
 
   # Threads from config
-  args$threads <- config$threads
+  args$threads <- .resolve_threads(config$threads)
 
   # Forward ... from config (lowest priority) then layer (overrides)
   config_dots <- if (!is.null(config$dots)) config$dots else list()
@@ -856,6 +888,138 @@ summary.factor_net_result <- function(object, ...) {
 # ============================================================================
 
 
+# Rows and columns of the matrix the first layer factorizes (rows are summed
+# over the inputs of factor_shared()). NULL when an input is a file path.
+.fn_first_layer_dims <- function(layer) {
+  node <- layer$input
+  while (identical(node$type, "condition")) node <- node$input
+  nodes <- if (identical(node$type, "shared")) node$inputs else list(node)
+  m <- 0L
+  n <- NA_integer_
+  for (nd in nodes) {
+    if (!identical(nd$type, "input") || is.character(nd$data)) return(NULL)
+    m <- m + nrow(nd$data)
+    n <- ncol(nd$data)
+  }
+  c(m, n)
+}
+
+#' Stop on network options that the graph engine does not implement
+#'
+#' The graph engine honors per-factor L1, L2, L21, angular, upper_bound,
+#' nonneg, graph and (single-layer networks only) target settings and the
+#' fields of \code{factor_config()}.
+#' Everything else used to be dropped silently; it now raises an error that
+#' names the offending option.
+#' @return \code{NULL} invisibly; called for its side effect (an error).
+#' @keywords internal
+.fn_check_supported <- function(net) {
+  layers <- net$layers
+  config <- net$config
+
+  dot_names <- function(dots) {
+    nms <- names(dots)
+    if (is.null(nms)) nms <- rep("", length(dots))
+    nms[nms == ""] <- "<unnamed>"
+    paste(nms, collapse = ", ")
+  }
+
+  if (length(config$dots) > 0)
+    stop("factor_config(): additional arguments (", dot_names(config$dots),
+         ") are not supported by fit() for factor networks and would be ignored. ",
+         "Remove them, or use nmf()/svd() directly.", call. = FALSE)
+
+  for (i in seq_along(layers)) {
+    layer <- layers[[i]]
+    lname <- if (!is.null(layer$name)) layer$name else paste0("L", i)
+    bad <- character(0)
+
+    if (!is.null(layer$mask)) bad <- c(bad, "mask")
+    if (!is.null(layer$zi) && !identical(layer$zi, "none")) bad <- c(bad, "zi")
+    if (isTRUE(layer$projective)) bad <- c(bad, "projective")
+    if (isTRUE(layer$symmetric)) bad <- c(bad, "symmetric")
+    if (!is.null(layer$robust) && !identical(layer$robust, FALSE)) bad <- c(bad, "robust")
+    for (side in c("W", "H")) {
+      fc <- layer[[paste0(side, "_config")]]
+      if (is.null(fc)) next
+      has_lambda <- !is.null(fc$target_lambda) && any(fc$target_lambda != 0)
+      if (is.null(fc$target)) {
+        if (has_lambda)
+          stop("factor_net layer '", lname, "': ", side, "(target_lambda) was given without ",
+               side, "(target).", call. = FALSE)
+        next
+      }
+      if (length(fc$target_lambda) > 1)
+        stop("factor_net layer '", lname, "': ", side, "(target_lambda) must be a single number.",
+             call. = FALSE)
+      # Targets are implemented for single-layer networks on in-memory data
+      if (length(layers) > 1L) {
+        bad <- c(bad, paste0(side, "(target) in a multi-layer network"))
+        next
+      }
+      dims <- .fn_first_layer_dims(layer)
+      if (is.null(dims)) {
+        bad <- c(bad, paste0(side, "(target) with a streaming (.spz) input"))
+        next
+      }
+      want <- c(layer$k, if (side == "H") dims[2] else dims[1])
+      if (!identical(as.integer(dim(fc$target)), as.integer(want)))
+        stop("factor_net layer '", lname, "': ", side, "(target) must be a ",
+             want[1], " x ", want[2], " matrix (k x ",
+             if (side == "H") "samples" else "features", "), but is ",
+             paste(dim(fc$target), collapse = " x "), ".", call. = FALSE)
+    }
+    if (length(layer$dots) > 0)
+      bad <- c(bad, paste0("... (", dot_names(layer$dots), ")"))
+    if (identical(layer$type, "svd_layer")) {
+      if (isTRUE(layer$center)) bad <- c(bad, "center")
+      if (isTRUE(layer$scale)) bad <- c(bad, "scale")
+      if (!is.null(layer$method) && !identical(layer$method, "auto"))
+        bad <- c(bad, "method")
+    }
+
+    if (length(bad) > 0)
+      stop("factor_net layer '", lname, "': unsupported option(s): ",
+           paste(bad, collapse = ", "),
+           ". These are not implemented for factor networks and would be ignored. ",
+           "Remove them, or use nmf()/svd() directly.", call. = FALSE)
+
+    # --- topology that the engine cannot execute ---
+    node <- layer$input
+    has_condition <- FALSE
+    while (identical(node$type, "condition")) {
+      has_condition <- TRUE
+      node <- node$input
+    }
+    if (has_condition && node$type %in% c("input", "shared"))
+      stop("factor_net layer '", lname, "': factor_condition() directly on an input ",
+           "is not supported (it would be ignored). Condition the output of a layer instead.",
+           call. = FALSE)
+    if (identical(node$type, "shared")) {
+      if (i != 1L || length(layers) > 1L)
+        stop("factor_net layer '", lname, "': factor_shared() is only supported as the ",
+             "input of a single-layer network.", call. = FALSE)
+      if (!all(vapply(node$inputs, function(x) identical(x$type, "input"), logical(1))))
+        stop("factor_net layer '", lname, "': factor_shared() accepts factor_input() ",
+             "nodes only.", call. = FALSE)
+      nms <- vapply(node$inputs, function(x) as.character(x$name)[1], character(1))
+      if (anyNA(nms) || any(nms == "") || anyDuplicated(nms) || any(grepl(",", nms, fixed = TRUE)))
+        stop("factor_net layer '", lname, "': inputs of factor_shared() need unique, ",
+             "non-empty names without commas.", call. = FALSE)
+    }
+  }
+
+  if (length(layers) > 1L) {
+    in_names <- unique(vapply(net$input_nodes, function(x) as.character(x$name)[1], character(1)))
+    if (length(in_names) > 1L)
+      stop("Multi-layer factor networks with more than one input (",
+           paste(in_names, collapse = ", "),
+           ") are not supported: every branch would be fit to the first input.",
+           call. = FALSE)
+  }
+  invisible(NULL)
+}
+
 #' Build a flat descriptor for Rcpp_factor_net_fit()
 #' @return A named list describing the factor network graph for C++.
 #' @keywords internal
@@ -877,7 +1041,7 @@ summary.factor_net_result <- function(object, ...) {
     maxit = config$maxit,
     tol = config$tol,
     verbose = config$verbose,
-    threads = config$threads,
+    threads = .resolve_threads(config$threads),
     seed = if (!is.null(config$seed)) as.integer(config$seed) else 0L,
     solver_mode = solver_mode,
     resource = config$resource,
@@ -943,6 +1107,10 @@ summary.factor_net_result <- function(object, ...) {
       graph_lambda = if (!is.null(wc) && !is.null(wc$graph_lambda)) wc$graph_lambda else 0
     )
     if (!is.null(wc) && !is.null(wc$graph)) w_cfg$graph <- wc$graph
+    if (!is.null(wc) && !is.null(wc$target)) {
+      w_cfg$target <- wc$target
+      w_cfg$target_lambda <- if (!is.null(wc$target_lambda)) as.double(wc$target_lambda)[1] else 0
+    }
 
     h_cfg <- list(
       L1 = if (!is.null(hc) && !is.null(hc$L1)) hc$L1 else ld$L1,
@@ -954,6 +1122,10 @@ summary.factor_net_result <- function(object, ...) {
       graph_lambda = if (!is.null(hc) && !is.null(hc$graph_lambda)) hc$graph_lambda else 0
     )
     if (!is.null(hc) && !is.null(hc$graph)) h_cfg$graph <- hc$graph
+    if (!is.null(hc) && !is.null(hc$target)) {
+      h_cfg$target <- hc$target
+      h_cfg$target_lambda <- if (!is.null(hc$target_lambda)) as.double(hc$target_lambda)[1] else 0
+    }
 
     layer_descs[[i]] <- list(
       name = lname,

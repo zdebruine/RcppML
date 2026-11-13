@@ -13,6 +13,15 @@
 extern "C" {
 
 /**
+ * @brief Report the interface version of this library (see
+ *        RCPPML_GPU_ABI_VERSION in gpu_bridge_common.cuh).
+ */
+void rcppml_gpu_abi_version(int* version)
+{
+    if (version) *version = RCPPML_GPU_ABI_VERSION;
+}
+
+/**
  * @brief Query GPU availability and info.
  *
  * @param num_gpus     Output: number of suitable GPUs found

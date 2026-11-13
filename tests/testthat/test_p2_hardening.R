@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 # Test: Cholesky dense, regularization dense, projective/symmetric dense,
 #       seeded NMF, and edge cases
 
@@ -178,13 +182,21 @@ test_that("Seeded NMF with W+H seeds achieves lower loss than random", {
   H_seed <- H_true + matrix(rnorm(k * n, 0, 0.01), k, n)
   H_seed[H_seed < 0] <- 0
 
-  model_both <- nmf(A, k, seed = W_seed, h_init = H_seed, maxit = 30, tol = 1e-8, verbose = FALSE)
+  # The first update recomputes H from W, so supplying both is an error
+  expect_error(
+    nmf(A, k, seed = W_seed, h_init = H_seed, maxit = 30, tol = 1e-8, verbose = FALSE),
+    "h_init")
+
+  model_w <- nmf(A, k, seed = W_seed, maxit = 30, tol = 1e-8, verbose = FALSE)
+  model_h <- nmf(A, k, h_init = H_seed, maxit = 30, tol = 1e-8, verbose = FALSE)
   model_random <- nmf(A, k, seed = 99, maxit = 30, tol = 1e-8, verbose = FALSE)
 
-  expect_s4_class(model_both, "nmf")
-  expect_true(is.finite(model_both@misc$loss))
-  # With near-perfect seeds, should achieve lower loss
-  expect_true(model_both@misc$loss <= model_random@misc$loss * 1.5)
+  for (model in list(model_w, model_h)) {
+    expect_s4_class(model, "nmf")
+    expect_true(is.finite(model@misc$loss))
+    # With near-perfect seeds, should achieve lower loss
+    expect_true(model@misc$loss <= model_random@misc$loss * 1.5)
+  }
 })
 
 # ============================================================
@@ -296,7 +308,7 @@ test_that("robust=TRUE uses default delta", {
 # ============================================================
 
 test_that("Streaming NMF dispatches via SPZ file with RcppML.streaming option", {
-  skip(".st_dispatch not yet re-implemented")
+  skip_streaming_dispatch()
   skip_on_cran()
   set.seed(42)
   A <- Matrix::rsparsematrix(50, 40, density = 0.3)

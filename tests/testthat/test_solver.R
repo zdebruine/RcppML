@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 options(RcppML.threads = 1)
 options(RcppML.verbose = FALSE)
 
@@ -10,14 +14,15 @@ test_that("solver='auto' selects Cholesky for small k MSE no-L1", {
   expect_equal(res@misc$solver_mode, 1L)
 })
 
-test_that("solver='auto' selects CD when L1 > 0", {
+test_that("solver='auto' selects exact Cholesky when L1 > 0", {
+  # the Cholesky path is exact for any L1, and faster than coordinate descent
   res <- nmf(A, k = 8, solver = "auto", loss = "mse", L1 = 0.1, seed = 42, maxit = 3)
-  expect_equal(res@misc$solver_mode, 0L)
+  expect_equal(res@misc$solver_mode, 1L)
 })
 
-test_that("solver='auto' selects CD for large k", {
+test_that("solver='auto' selects exact Cholesky for large k", {
   res <- nmf(A, k = 35, solver = "auto", loss = "mse", seed = 42, maxit = 3)
-  expect_equal(res@misc$solver_mode, 0L)
+  expect_equal(res@misc$solver_mode, 1L)
 })
 
 test_that("solver='auto' selects CD for non-MSE distributions", {

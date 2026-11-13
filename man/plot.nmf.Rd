@@ -45,19 +45,22 @@ and factor diagnostics. Provides multiple plot types for comprehensive model ana
 }
 \examples{
 \donttest{
-# Basic loss plot
-model <- nmf(hawaiibirds, k = 10)
-plot(model)
+model <- nmf(hawaiibirds, k = 5, seed = 1, maxit = 30, threads = 2)
+if (requireNamespace("ggplot2", quietly = TRUE)) {
+  # Basic loss plot
+  plot(model)
 
-# Convergence analysis
-plot(model, type = "convergence")
+  # Convergence analysis
+  plot(model, type = "convergence")
 
-# Interactive plot
-plot(model, type = "loss", interactive = TRUE)
+  # Factor sparsity
+  plot(model, type = "sparsity")
 
-# Compare multiple runs
-models <- replicate(5, nmf(hawaiibirds, k = 10), simplify = FALSE)
-plot(models[[1]], type = "sparsity")
+  # Interactive plot (needs plotly and an interactive session)
+  if (interactive() && requireNamespace("plotly", quietly = TRUE)) {
+    plot(model, type = "loss", interactive = TRUE)
+  }
+}
 }
 }
 \seealso{

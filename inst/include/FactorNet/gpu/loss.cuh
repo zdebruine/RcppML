@@ -246,7 +246,7 @@ __global__ void cv_loss_sparse_kernel(
                 h = (h ^ (h >> 30)) * 0xbf58476d1ce4e5b9ULL;
                 h = (h ^ (h >> 27)) * 0x94d049bb133111ebULL;
                 h ^= h >> 31;
-                is_test = (h < (0xFFFFFFFFFFFFFFFFULL / inv_prob));
+                is_test = (h < inv_prob);  // inv_prob carries the threshold f * 2^64
             }
         }
 

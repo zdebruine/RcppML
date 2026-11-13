@@ -470,23 +470,13 @@ classify_rf <- function(embedding, labels,
   n <- length(y_true)
   if (n == 0 || length(unique(y_true)) < 2) return(0.5)
 
-  # Sort by decreasing score
-  ord <- order(scores, decreasing = TRUE)
-  y_sorted <- y_true[ord]
-
   n_pos <- sum(y_true == 1)
   n_neg <- n - n_pos
   if (n_pos == 0 || n_neg == 0) return(0.5)
 
-  # Wilcoxon-Mann-Whitney statistic
-  tp <- 0
-  auc <- 0
-  for (i in seq_len(n)) {
-    if (y_sorted[i] == 1) {
-      tp <- tp + 1
-    } else {
-      auc <- auc + tp
-    }
-  }
-  auc / (n_pos * n_neg)
+  # Wilcoxon-Mann-Whitney statistic with average ranks, so that a tied
+  # positive/negative pair counts 1/2 regardless of the order of the samples:
+  #   AUC = P(score_pos > score_neg) + 0.5 * P(score_pos == score_neg)
+  r <- rank(scores, ties.method = "average")
+  (sum(r[y_true == 1]) - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg)
 }

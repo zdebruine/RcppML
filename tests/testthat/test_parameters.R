@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 # Comprehensive Parameter Testing for NMF Function
 # Tests all parameters for expected behavior
 
@@ -173,9 +177,11 @@ test_that("loss parameter accepts all valid options", {
   expect_silent(nmf(A, 3, loss = "mse", maxit = 5, verbose = FALSE))
   expect_silent(nmf(A, 3, robust = "mae", maxit = 5, verbose = FALSE))
   expect_silent(nmf(A, 3, robust = TRUE, maxit = 5, verbose = FALSE))
-  expect_silent(nmf(A, 3, loss = "gp", maxit = 5, verbose = FALSE))
-  expect_silent(nmf(A, 3, loss = "nb", maxit = 5, verbose = FALSE))
-  expect_silent(nmf(A, 3, loss = "gamma", maxit = 5, verbose = FALSE))
+  # count models need integer data; positive models need non-zero data
+  counts <- matrix(rpois(40 * 25, lambda = 3), 40, 25)
+  expect_silent(nmf(counts, 3, loss = "gp", maxit = 5, verbose = FALSE))
+  expect_silent(nmf(counts, 3, loss = "nb", maxit = 5, verbose = FALSE))
+  expect_silent(nmf(A + 0.1, 3, loss = "gamma", maxit = 5, verbose = FALSE))
 })
 
 test_that("robust parameter works with numeric delta", {
@@ -254,21 +260,18 @@ test_that("cv_k_range controls automatic rank search range", {
 })
 
 # ============================================================================
-# Matrix Format Parameters
+# Removed arguments are rejected with a pointer to the replacement
 # ============================================================================
 
-test_that("sparse parameter treats zeros as missing", {
-  set.seed(123)
-  A <- matrix(abs(rnorm(50 * 30)), 50, 30)
-  A[sample(length(A), 500)] <- 0  # Add explicit zeros
-  
-  m_sparse <- nmf(A, 3, sparse = TRUE, maxit = 10, verbose = FALSE)
-  m_dense <- nmf(A, 3, sparse = FALSE, maxit = 10, verbose = FALSE)
-  
-  # Both should complete without error
-  expect_s4_class(m_sparse, "nmf")
-  expect_s4_class(m_dense, "nmf")
+test_that("removed nmf() arguments give an informative error", {
+  A <- matrix(abs(rnorm(20 * 10)), 20, 10)
+  expect_error(nmf(A, 2, sparse = TRUE), "mask = \"zeros\"")
+  expect_error(nmf(A, 2, huber_delta = 1), "robust")
+  expect_error(nmf(A, 2, panel_cols = 10), "panel_cols")
+  expect_error(nmf(A, 2, precision = "float"), "single precision")
+  expect_error(nmf(A, 2, zi_mode = "row"), "zi =")
 })
+
 
 # ============================================================================
 # Precision (always fp32 by default, options override)
@@ -281,44 +284,7 @@ test_that("default precision (fp32) works", {
   expect_silent(nmf(A, 3, maxit = 5, verbose = FALSE))
 })
 
-test_that("options(RcppML.precision = 'double') escape hatch works", {
-  set.seed(123)
-  A <- matrix(abs(rnorm(50 * 30)), 50, 30)
-  
-  old_opt <- getOption("RcppML.precision")
-  on.exit(options(RcppML.precision = old_opt))
-  
-  options(RcppML.precision = "double")
-  expect_silent(m_double <- nmf(A, 3, maxit = 5, verbose = FALSE))
-  
-  options(RcppML.precision = "float")
-  expect_silent(m_float <- nmf(A, 3, maxit = 5, verbose = FALSE))
-  
-  # Both should produce valid models
-  expect_s4_class(m_double, "nmf")
-  expect_s4_class(m_float, "nmf")
-})
 
-test_that("precision gives consistent model structure", {
-  set.seed(123)
-  A <- matrix(abs(rnorm(50 * 30)), 50, 30)
-  
-  old_opt <- getOption("RcppML.precision")
-  on.exit(options(RcppML.precision = old_opt))
-  
-  options(RcppML.precision = "float")
-  m_float <- nmf(A, 5, seed = 123, maxit = 10, verbose = FALSE)
-  
-  options(RcppML.precision = "double")
-  m_double <- nmf(A, 5, seed = 123, maxit = 10, verbose = FALSE)
-  
-  # Should have same dimensions
-  expect_equal(dim(m_float@w), dim(m_double@w))
-  expect_equal(dim(m_float@h), dim(m_double@h))
-  
-  # Results should be similar (not identical due to precision)
-  expect_lt(abs(evaluate(m_float, A) - evaluate(m_double, A)) / evaluate(m_double, A), 0.15)
-})
 
 # ============================================================================
 # Constraint Parameters
@@ -473,29 +439,39 @@ test_that("all parameters can be combined", {
   graph_W <- Matrix::bandSparse(60, 60, k = c(-1, 0, 1),
                                 diagonals = list(rep(1, 59), rep(2, 60), rep(1, 59)))
   
-  # Kitchen sink test
-  expect_silent(
-    nmf(A, k = 4, 
-        tol = 1e-5, 
+  # Kitchen sink, split into the two combinations that are supported together:
+  # L21 needs a Gaussian, non-robust fit.
+  kitchen_sink <- function(...) {
+    nmf(A, k = 4,
+        tol = 1e-5,
         maxit = 20,
-        L1 = c(0.01, 0.01), 
+        L1 = c(0.01, 0.01),
         L2 = c(0.01, 0.01),
-        L21 = c(0.01, 0), 
         angular = c(0.1, 0.1),
         seed = 123,
-        loss = "mse", 
-        robust = TRUE,
-        graph_W = graph_W, 
+        loss = "mse",
+        graph_W = graph_W,
         graph_lambda = c(0.05, 0),
         sort_model = TRUE,
-        sparse = FALSE,
         nonneg = c(TRUE, TRUE),
         upper_bound = c(10, 10),
         test_fraction = 0.1,
         patience = 5,
         cv_seed = 456,
-        verbose = FALSE)
-  )
+        verbose = FALSE,
+        ...)
+  }
+
+  # (1) Gaussian fit with every penalty, including L21
+  expect_silent(m_l21 <- kitchen_sink(L21 = c(0.01, 0)))
+  expect_s4_class(m_l21, "nmf")
+
+  # (2) robust (IRLS) fit with every penalty except L21
+  expect_silent(m_rob <- kitchen_sink(robust = TRUE))
+  expect_s4_class(m_rob, "nmf")
+
+  # the unsupported combination is an error, not a silent no-op
+  expect_error(kitchen_sink(L21 = c(0.01, 0), robust = TRUE), "L21")
 })
 
 test_that("model output has expected structure", {

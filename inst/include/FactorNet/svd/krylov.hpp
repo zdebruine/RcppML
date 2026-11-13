@@ -57,6 +57,11 @@
 #include <numeric>
 #include <chrono>
 #include <random>
+#include <string>
+#include <stdexcept>
+#include <cstdio>
+#include <vector>
+#include <limits>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -253,44 +258,54 @@ void extract_svd_from_factors(
 // ============================================================================
 
 /**
- * @brief Core krylov SVD logic — works on any matrix type (original or training copy)
+ * @brief Krylov-seeded projected refinement (KSPR).
  *
- * @tparam TrainMatrix  Matrix used for training SpMMs (could be Map or owned SparseMatrix)
- * @tparam OrigMatrix   Original matrix used for test entry initialization
- * @tparam Scalar       Precision type
+ * Missing data (config.obs_mask and the CV holdout) is handled by iterative
+ * imputation: before each block update the missing entries of the transformed
+ * matrix are set to the current model W diag(d) V' (see MaskedEntries), so the
+ * refinement converges to the least-squares fit over observed entries. The
+ * Lanczos seed runs with missing entries at the row mean. Row means and SDs
+ * are computed from observed entries only.
+ *
+ * Without constraints and without missing data this is plain Lanczos.
  */
-template<typename TrainMatrix, typename OrigMatrix, typename Scalar>
-SVDResult<Scalar> krylov_constrained_svd_impl(
-    const TrainMatrix& A_train,
-    const OrigMatrix& A_orig,
-    const SVDConfig<Scalar>& config,
-    std::chrono::high_resolution_clock::time_point t_start)
+template<typename MatrixType, typename Scalar>
+SVDResult<Scalar> krylov_constrained_svd(const MatrixType& A,
+                                         const SVDConfig<Scalar>& config)
 {
     using Clock = std::chrono::high_resolution_clock;
     using Ms    = std::chrono::duration<double, std::milli>;
 
-    const int m = static_cast<int>(A_train.rows());
-    const int n = static_cast<int>(A_train.cols());
-    const int k = config.k_max;
+    auto t_start = Clock::now();
+
+    const int m = static_cast<int>(A.rows());
+    const int n = static_cast<int>(A.cols());
+    const int k = std::min(config.k_max, std::min(m, n));
+
+    if (config.upper_bound_u > 0 || config.upper_bound_v > 0) {
+        throw std::invalid_argument(
+            "svd: 'upper_bound' is not supported: factors are returned with unit "
+            "norm, so an element-wise bound has no scale-free meaning");
+    }
 
     // --- Detect whether constraints are active ---
     const bool has_constraints =
         config.nonneg_u || config.nonneg_v ||
         config.L1_u > 0 || config.L1_v > 0 ||
         config.L2_u > 0 || config.L2_v > 0 ||
-        config.upper_bound_u > 0 || config.upper_bound_v > 0 ||
         config.L21_u > 0 || config.L21_v > 0 ||
         config.angular_u > 0 || config.angular_v > 0 ||
         config.has_gram_level_reg();
 
-    // If no constraints AND no CV, just run Lanczos directly (optimal).
-    // When CV is active, we need Phase 2.5 for test evaluation, so we
-    // go through the full refinement path (will converge in ~1 pass).
-    if (!has_constraints && !config.is_cv()) {
+    const bool do_cv = config.is_cv();
+    const bool need_mask = do_cv || (config.obs_mask != nullptr);
+
+    // No constraints and nothing missing: plain Lanczos is optimal.
+    if (!has_constraints && !need_mask) {
         if (config.verbose) {
             KSVD_PRINT("  Krylov SVD: no constraints — direct Lanczos\n");
         }
-        return lanczos_svd<TrainMatrix, Scalar>(A_train, config);
+        return lanczos_svd<MatrixType, Scalar>(A, config, true);
     }
 
     int eff_threads = config.threads;
@@ -301,37 +316,102 @@ SVDResult<Scalar> krylov_constrained_svd_impl(
 #endif
 
     // ====================================================================
-    // PHASE 1: Unconstrained Lanczos seed
+    // Missing entries and row statistics over observed entries
+    // ====================================================================
+    MaskedEntries<Scalar> masked;
+    if (need_mask) {
+        masked = build_masked_entries<MatrixType, Scalar>(A, config);
+    }
+    const bool use_mask = masked.count > 0;
+
+    DenseVector<Scalar> row_means, row_sds, row_inv_sds;
+    double total_ss = 0.0, n_observed = 0.0;
+    {
+        int stat_threads = config.threads;
+#ifdef _OPENMP
+        if (stat_threads <= 0) stat_threads = omp_get_max_threads();
+#else
+        stat_threads = 1;
+#endif
+        masked_row_stats<MatrixType, Scalar>(A, masked, config.center, config.scale,
+                                             row_means, row_sds, total_ss, n_observed,
+                                             stat_threads);
+    }
+
+    const DenseVector<Scalar>* rm_ptr = nullptr;
+    const DenseVector<Scalar>* sd_ptr = nullptr;
+    if (config.center) rm_ptr = &row_means;
+    if (config.scale) {
+        row_inv_sds = row_sds.cwiseInverse();
+        sd_ptr = &row_inv_sds;
+    }
+
+    if (config.verbose && use_mask) {
+        KSVD_PRINT("  Krylov SVD: %d entries treated as missing (%d held out for CV)\n",
+                   masked.count, masked.n_test);
+    }
+
+    // ====================================================================
+    // PHASE 1: Unconstrained Lanczos seed (missing entries at the row mean)
     // ====================================================================
 
     if (config.verbose) {
         KSVD_PRINT("  Krylov SVD: Phase 1 — Lanczos seed (k=%d)\n", k);
     }
 
-    SVDConfig<Scalar> lanczos_config;
-    lanczos_config.k_max = k;
-    lanczos_config.tol = config.tol;
-    lanczos_config.max_iter = 0;
-    lanczos_config.center = config.center;
-    lanczos_config.scale = config.scale;
-    lanczos_config.verbose = false;  // suppress Lanczos verbosity
-    lanczos_config.seed = config.seed;
-    lanczos_config.threads = config.threads;
-
     auto t_phase1_start = Clock::now();
-    SVDResult<Scalar> lanczos_result = lanczos_svd<TrainMatrix, Scalar>(A_train, lanczos_config);
+
+    DenseMatrix<Scalar> W;   // m × k (unit-norm columns)
+    DenseMatrix<Scalar> V;   // n × k (unit-norm columns)
+    DenseVector<Scalar> d;   // k
+    {
+        SpmvWorkspace<Scalar> ws;
+        if constexpr (is_sparse_matrix<MatrixType>::value) {
+            ws.init(m, eff_threads);
+        }
+        auto fwd = [&](const DenseVector<Scalar>& x, DenseVector<Scalar>& out) {
+            spmv_forward(A, x, out, rm_ptr, eff_threads, &ws, sd_ptr);
+            if (use_mask) masked.add_forward(x, out);
+        };
+        auto trn = [&](const DenseVector<Scalar>& x, DenseVector<Scalar>& out) {
+            spmv_transpose(A, x, out, rm_ptr, eff_threads, sd_ptr);
+            if (use_mask) masked.add_transpose(x, out);
+        };
+        int seed_steps = 0, seed_unconv = 0;
+        detail::lanczos_bidiag_core<Scalar>(
+            m, n, k, config.tol, 0, config.seed, false, false,
+            fwd, trn, W, d, V, seed_steps, seed_unconv);
+    }
+
     auto t_phase1_end = Clock::now();
+
+    const int k_actual = static_cast<int>(d.size());
 
     if (config.verbose) {
         KSVD_PRINT("  Krylov SVD: Phase 1 done: %.1f ms, k_actual=%d\n",
-                   Ms(t_phase1_end - t_phase1_start).count(),
-                   lanczos_result.k_selected);
+                   Ms(t_phase1_end - t_phase1_start).count(), k_actual);
     }
 
-    const int k_actual = lanczos_result.k_selected;
+    SVDResult<Scalar> result;
+    result.centered = config.center;
+    if (config.center) result.row_means = row_means;
+    if (config.scale) {
+        result.scaled = true;
+        result.row_sds = row_sds;
+    }
+    {
+        const double n_cells = static_cast<double>(m) * static_cast<double>(n);
+        result.frobenius_norm_sq =
+            (n_observed > 0.0) ? total_ss * (n_cells / n_observed) : 0.0;
+    }
+
     if (k_actual == 0) {
-        lanczos_result.wall_time_ms = Ms(Clock::now() - t_start).count();
-        return lanczos_result;
+        result.U.resize(m, 0);
+        result.V.resize(n, 0);
+        result.d.resize(0);
+        result.k_selected = 0;
+        result.wall_time_ms = Ms(Clock::now() - t_start).count();
+        return result;
     }
 
     // ====================================================================
@@ -339,97 +419,27 @@ SVDResult<Scalar> krylov_constrained_svd_impl(
     //
     // Key insight: The Gram matrix G=V'V (or W'W) provides component
     // decoupling — preventing all vectors from collapsing to the dominant
-    // direction. The Cholesky direct solve is O(k³ + k²·dim) per update,
-    // versus CD solver at O(cd_iters · k² · dim). For cd_iters=20, this
-    // is 20× cheaper while producing identical unconstrained solutions.
-    //
-    // After the Cholesky solve, element-wise constraint projection
-    // (nonneg, L1, L2, bounds) is applied. This "solve-then-project"
+    // direction. After the Cholesky solve, element-wise constraint
+    // projection (nonneg, L1) is applied. This "solve-then-project"
     // approach is suboptimal vs iterative CD but works well starting
     // from a near-optimal Lanczos seed.
     //
-    // Per pass: 2 SpMMs + 2 Grams + 2 Cholesky solves + 2 projections
-    //   SpMM: O(nnz · k) each
-    //   Gram: O(k² · dim) each
-    //   Cholesky: O(k³) factorize + O(k² · dim) backsolve each
-    //   Project: O(k · dim) each
-    // Total: O(2·nnz·k + 4·k²·dim + 2·k³) — much cheaper than CD
+    // W and V are ALWAYS unit-norm columns; d tracks the scale, so the
+    // current model is W diag(d) V'.
     // ====================================================================
 
     auto t_phase2_start = Clock::now();
 
-    // Row means for PCA centering
-    DenseVector<Scalar> row_means;
-    const DenseVector<Scalar>* rm_ptr = nullptr;
-    if (config.center) {
-        if (lanczos_result.row_means.size() > 0) {
-            row_means = lanczos_result.row_means;
-        } else {
-            row_means = compute_row_means<TrainMatrix, Scalar>(A_train, eff_threads);
-        }
-        rm_ptr = &row_means;
-    }
-
-    // Row inv-SDs for correlation PCA scaling
-    DenseVector<Scalar> row_inv_sds;
-    const DenseVector<Scalar>* sd_ptr = nullptr;
-    if (config.scale) {
-        if (lanczos_result.row_sds.size() > 0) {
-            row_inv_sds = lanczos_result.row_sds.cwiseInverse();
-        } else {
-            DenseVector<Scalar> row_sds = compute_row_sds<TrainMatrix, Scalar>(A_train, row_means, eff_threads);
-            row_inv_sds = row_sds.cwiseInverse();
-        }
-        sd_ptr = &row_inv_sds;
-    }
-
-    // --- Initialize W (m × k) and V (n × k) from Lanczos ---
-    // W and V are unit-norm; d carries the singular value scaling.
-    // The first ALS pass will naturally incorporate constraints.
-    DenseMatrix<Scalar> W = lanczos_result.U.leftCols(k_actual);   // m × k (unit-norm)
-    DenseMatrix<Scalar> V = lanczos_result.V.leftCols(k_actual);   // n × k (unit-norm)
-    DenseVector<Scalar> d = lanczos_result.d.head(k_actual);       // k (singular values)
-
-    // CV denominator correction: when holdout entries are zeroed in A_train,
-    // the Gram matrix (V'V or W'W) overcounts by including contributions from
-    // rows/columns whose data was held out. Scale the data-term of the Gram
-    // by (1 - effective_holdout_fraction) to correct.
-    Scalar cv_denom_correction = Scalar(1);
-    if (config.is_cv()) {
-        if (config.mask_zeros) {
-            int64_t nnz_est = 0;
-            if constexpr (is_sparse_matrix<OrigMatrix>::value) {
-                nnz_est = A_orig.nonZeros();
-            } else {
-                nnz_est = static_cast<int64_t>(m) * n;
-            }
-            Scalar density = static_cast<Scalar>(nnz_est) /
-                            (static_cast<Scalar>(m) * static_cast<Scalar>(n));
-            cv_denom_correction = Scalar(1) - static_cast<Scalar>(config.test_fraction) * density;
-        } else {
-            cv_denom_correction = Scalar(1) - static_cast<Scalar>(config.test_fraction);
-        }
-        if (config.verbose) {
-            KSVD_PRINT("  Krylov CV: denom_correction=%.4f\n",
-                       static_cast<double>(cv_denom_correction));
-        }
-    }
-    const bool do_cv = config.is_cv();
-
-    // --- Gram-solve-then-project refinement passes ---
-    //
-    // Key design:
-    //   - W and V are ALWAYS unit-norm columns; d tracks the scale
-    //   - Before SpMM/Gram: scale V (or W) by d to include singular values
-    //   - After Cholesky solve: normalize → project constraints → re-normalize
-    //   - L1/L2/nonneg applied to UNIT-NORM values (same scale as deflation)
-    //   - d-scaled Gram prevents L2 compounding through normalization
-    //
+    // Imputation of missing entries with the current model takes more passes
+    // than the constraint projection alone.
     const int max_passes = config.max_iter > 0
         ? config.max_iter
-        : std::max(10, static_cast<int>(std::ceil(std::log2(
-              static_cast<double>(k_actual)))) * 2 + 3);
-    const Scalar refine_tol = config.tol;
+        : (use_mask ? 100
+                    : std::max(10, static_cast<int>(std::ceil(std::log2(
+                          static_cast<double>(k_actual)))) * 2 + 3));
+    // A tolerance below single-precision resolution is raised to it
+    const Scalar refine_tol = std::max(config.tol,
+        static_cast<Scalar>(16) * std::numeric_limits<Scalar>::epsilon());
     const Scalar eps100 = std::numeric_limits<Scalar>::epsilon() * 100;
 
     DenseMatrix<Scalar> prev_W;
@@ -444,83 +454,82 @@ SVDResult<Scalar> krylov_constrained_svd_impl(
 
     // Pre-allocate SpMM workspace to avoid ~115MB/call thread-local allocs
     SpmmWorkspace<Scalar> spmm_ws;
-    if constexpr (is_sparse_matrix<TrainMatrix>::value) {
+    if constexpr (is_sparse_matrix<MatrixType>::value) {
         spmm_ws.init(m, k_actual, eff_threads);
     }
 
-    // Pre-allocate Cholesky solve buffers (k × m and k × n) to avoid per-pass
-    // heap allocation.  Reused each W-update and V-update respectively.
+    // Pre-allocate Cholesky solve buffers (k × m and k × n)
     DenseMatrix<Scalar> Bt_u(k_actual, m);  // k × m — W-update Cholesky buffer
     DenseMatrix<Scalar> Bt_v(k_actual, n);  // k × n — V-update Cholesky buffer
 
+    // E-step: set every missing entry to the current model W diag(d) V'
+    auto update_fill = [&]() {
+        for (int e = 0; e < masked.count; ++e) {
+            const int i = masked.rows[e], j = masked.cols[e];
+            Scalar pred = 0;
+            for (int c = 0; c < k_actual; ++c) pred += W(i, c) * d(c) * V(j, c);
+            masked.fill[e] = pred;
+        }
+    };
+
+    bool refine_converged = false;
+    int passes_done = 0;
+
     for (int pass = 0; pass < max_passes; ++pass) {
         KSVD_CHECK_INTERRUPT();
+        passes_done = pass + 1;
 
         // ==============================================================
         // W-update: W_new = A · V · (V'V)⁻¹  then project constraints
-        //
-        // This matches deflation's math:
-        //   deflation:  w_j = (A·v) / (v'v)  then  apply_reg(w, L1, L2, nn, v'v)
-        //   krylov:     W   = A·V · (V'V)⁻¹   then  project_constraints(W, L1, L2, nn, diag(V'V))
-        //
-        // No d-scaling of V. The Gram V'V directly encodes the squared
-        // norms of each component. After Cholesky solve, SpMM_result/G has
-        // values at the SAME scale as deflation's (spmv_result / norm_sq).
         // ==============================================================
         auto t_w_start = Clock::now();
 
+        if (use_mask) update_fill();
+
         // Gram: G = V' · V  (k × k) — unscaled, natural squared norms
         G.noalias() = V.transpose() * V;
-        if (do_cv) G *= cv_denom_correction;
         G.diagonal().array() += static_cast<Scalar>(1e-12);
         // L2 goes into the Gram to regularize the solve — this IS the L2 effect
         if (config.L2_u > 0) G.diagonal().array() += config.L2_u;
 
         // Tier 2: Gram-level regularization using current W (k × m when transposed)
-        // Compute Wt once and reuse for all Gram-level features
         const bool need_Wt = (config.L21_u > 0) || (config.angular_u > 0) ||
                              (config.graph_u && config.graph_u_lambda > 0);
         DenseMatrix<Scalar> Wt;
         if (need_Wt) Wt = W.transpose();  // k × m — computed once
 
-        // L21: group sparsity — drives entire components of W to zero
         if (config.L21_u > 0) {
             features::apply_L21(G, Wt, config.L21_u);
         }
-        // Angular: decorrelates W components — penalizes overlap
         if (config.angular_u > 0) {
             features::apply_angular(G, Wt, config.angular_u);
         }
-        // Graph Laplacian: smoothness of W along feature graph
         if (config.graph_u && config.graph_u_lambda > 0) {
             features::apply_graph_reg(G, *config.graph_u, Wt, config.graph_u_lambda);
         }
 
-        // SpMM forward: B (m × k) = A · V
-        spmm_forward<TrainMatrix, Scalar>(A_train, V, SpMM_result, rm_ptr, eff_threads, &spmm_ws, sd_ptr);
+        // SpMM forward: B (m × k) = X · V, missing entries imputed
+        spmm_forward<MatrixType, Scalar>(A, V, SpMM_result, rm_ptr, eff_threads, &spmm_ws, sd_ptr);
+        if (use_mask) masked.add_forward_block(V, SpMM_result);
 
         auto t_w_spmm = Clock::now();
         t_spmm_ms += Ms(t_w_spmm - t_w_start).count();
 
         // Cholesky solve: W_raw = B · G⁻¹
-        // After solve, W_raw(:,c) ≈ deflation's (A·v_c) / (v_c'v_c)
-        // but accounting for inter-component coupling via off-diagonal G
         {
             Eigen::LLT<DenseMatrix<Scalar>> llt(G);
-            Bt_u.noalias() = SpMM_result.transpose();  // k × m — no alloc (pre-allocated)
+            Bt_u.noalias() = SpMM_result.transpose();  // k × m
             llt.solveInPlace(Bt_u);
             W = Bt_u.transpose();  // m × k
         }
 
         // Project constraints + normalize W — fused single pass per column.
-        // norm_sq_vec(c) = ||V[:,c]||² for L1 threshold scaling.
         // L2 is ALREADY in the Gram solve — pass 0 to avoid double-counting.
         for (int c = 0; c < k_actual; ++c) {
             norm_sq_vec(c) = V.col(c).squaredNorm();
         }
-        if (do_cv) norm_sq_vec *= cv_denom_correction;
         detail::project_and_normalize(W,
-            config.L1_u, static_cast<Scalar>(0), config.nonneg_u, config.upper_bound_u,
+            config.L1_u, static_cast<Scalar>(0), config.nonneg_u, static_cast<Scalar>(0),
             norm_sq_vec, d, eps100);
 
         auto t_w_solve = Clock::now();
@@ -531,14 +540,13 @@ SVDResult<Scalar> krylov_constrained_svd_impl(
         // ==============================================================
         auto t_v_start = Clock::now();
 
+        if (use_mask) update_fill();
+
         // Gram: G = W' · W
         G.noalias() = W.transpose() * W;
-        if (do_cv) G *= cv_denom_correction;
         G.diagonal().array() += static_cast<Scalar>(1e-12);
         if (config.L2_v > 0) G.diagonal().array() += config.L2_v;
 
-        // Tier 2: Gram-level regularization using current V (k × n when transposed)
-        // Compute Vt once and reuse for all Gram-level features
         const bool need_Vt = (config.L21_v > 0) || (config.angular_v > 0) ||
                              (config.graph_v && config.graph_v_lambda > 0);
         DenseMatrix<Scalar> Vt;
@@ -554,8 +562,9 @@ SVDResult<Scalar> krylov_constrained_svd_impl(
             features::apply_graph_reg(G, *config.graph_v, Vt, config.graph_v_lambda);
         }
 
-        // SpMM transpose: B (n × k) = A' · W
-        spmm_transpose<TrainMatrix, Scalar>(A_train, W, SpMM_result, rm_ptr, eff_threads, sd_ptr);
+        // SpMM transpose: B (n × k) = X' · W, missing entries imputed
+        spmm_transpose<MatrixType, Scalar>(A, W, SpMM_result, rm_ptr, eff_threads, sd_ptr);
+        if (use_mask) masked.add_transpose_block(W, SpMM_result);
 
         auto t_v_spmm = Clock::now();
         t_spmm_ms += Ms(t_v_spmm - t_v_start).count();
@@ -563,20 +572,16 @@ SVDResult<Scalar> krylov_constrained_svd_impl(
         // Cholesky solve: V_raw = B · G⁻¹
         {
             Eigen::LLT<DenseMatrix<Scalar>> llt(G);
-            Bt_v.noalias() = SpMM_result.transpose();  // k × n — no alloc (pre-allocated)
+            Bt_v.noalias() = SpMM_result.transpose();  // k × n
             llt.solveInPlace(Bt_v);
             V = Bt_v.transpose();  // n × k
         }
 
-        // Project constraints + normalize V — fused single pass per column.
-        // norm_sq_vec(c) = ||W[:,c]||² for L1 threshold scaling.
-        // L2 already in Gram solve, pass 0 to avoid double-counting.
         for (int c = 0; c < k_actual; ++c) {
             norm_sq_vec(c) = W.col(c).squaredNorm();
         }
-        if (do_cv) norm_sq_vec *= cv_denom_correction;
         detail::project_and_normalize(V,
-            config.L1_v, static_cast<Scalar>(0), config.nonneg_v, config.upper_bound_v,
+            config.L1_v, static_cast<Scalar>(0), config.nonneg_v, static_cast<Scalar>(0),
             norm_sq_vec, d, eps100);
 
         auto t_v_solve = Clock::now();
@@ -590,8 +595,7 @@ SVDResult<Scalar> krylov_constrained_svd_impl(
             bool factor_converged = false;
             bool loss_converged = false;
 
-            // Factor-based: relative change in W (O(m×k) — skip in LOSS-only mode)
-            // Still computed in verbose mode so we can print meaningful diagnostics.
+            // Factor-based: relative change in W
             const bool need_dW = (config.convergence != SVDConvergence::LOSS) || config.verbose;
             Scalar dW = static_cast<Scalar>(0);
             if (need_dW && prev_W.size() > 0) {
@@ -623,6 +627,7 @@ SVDResult<Scalar> krylov_constrained_svd_impl(
             }
 
             if (converged) {
+                refine_converged = true;
                 if (config.verbose) {
                     KSVD_PRINT("  Krylov SVD: converged at pass %d (dW=%.2e, tol=%.2e)\n",
                                pass + 1, static_cast<double>(dW),
@@ -636,8 +641,6 @@ SVDResult<Scalar> krylov_constrained_svd_impl(
                        static_cast<double>(d(k_actual - 1)));
         }
 
-        // Only store prev_W when it will be used next pass (FACTOR or BOTH mode, or verbose).
-        // Avoids an O(m×k) copy in LOSS-only convergence mode.
         if ((config.convergence != SVDConvergence::LOSS) || config.verbose) prev_W = W;
         prev_d = d;
     }
@@ -650,59 +653,67 @@ SVDResult<Scalar> krylov_constrained_svd_impl(
                    t_spmm_ms, t_solve_ms);
     }
 
+    if (!refine_converged) {
+        char wbuf[320];
+        std::snprintf(wbuf, sizeof(wbuf),
+            "svd(method = \"krylov\"): refinement did not reach tol = %.1e in %d "
+            "passes; increase 'maxit' (number of passes) or loosen 'tol'",
+            static_cast<double>(refine_tol), passes_done);
+        add_warning(std::string(wbuf));
+    }
+
     // ====================================================================
     // PHASE 2.5: CV auto-rank selection (post-convergence)
     //
     // After the block has converged, evaluate test MSE at each rank
     // k'=1,...,k_actual and find the best rank via patience-based stopping.
-    // This is cheaper than per-pass evaluation since we only do it once.
     // ====================================================================
-
-    SVDResult<Scalar> result;
-    result.centered = config.center;
-    result.frobenius_norm_sq = static_cast<double>(lanczos_result.frobenius_norm_sq);
-    if (config.center) {
-        result.row_means = row_means;
-    }
 
     int best_k = k_actual;  // default: use all factors
 
-    if (config.is_cv()) {
+    // If hard constraints are active (nonneg, L1, L21, graph), QR extraction
+    // would DESTROY the constraint projections, so those factors are returned
+    // as fitted. Otherwise rotate to proper singular triplets now, so that the
+    // rank-k' truncations evaluated below are the true nested SVD models.
+    const bool has_hard_constraints =
+        config.nonneg_u || config.nonneg_v ||
+        config.L1_u > 0 || config.L1_v > 0 ||
+        config.L21_u > 0 || config.L21_v > 0 ||
+        (config.graph_u != nullptr && config.graph_u_lambda > 0) ||
+        (config.graph_v != nullptr && config.graph_v_lambda > 0);
+
+    if (!has_hard_constraints) {
+        DenseMatrix<Scalar> W_scaled = W;
+        for (int c = 0; c < k_actual; ++c) {
+            W_scaled.col(c) *= d(c);
+        }
+        DenseMatrix<Scalar> U_x(m, k_actual);
+        DenseMatrix<Scalar> V_x(n, k_actual);
+        DenseVector<Scalar> d_x(k_actual);
+        detail::extract_svd_from_factors(W_scaled, V, U_x, d_x, V_x);
+        W = U_x;
+        V = V_x;
+        d = d_x;
+    }
+
+    if (do_cv) {
         // Sort factors by descending d for proper rank truncation
         std::vector<int> cv_order(k_actual);
         std::iota(cv_order.begin(), cv_order.end(), 0);
         std::sort(cv_order.begin(), cv_order.end(),
                   [&](int a, int b) { return d(a) > d(b); });
 
-        // Initialize test entries via speckled mask from ORIGINAL matrix
-        // (not the training copy — test values must reflect true held-out A(i,j))
-        int64_t nnz_est = 0;
-        if constexpr (is_sparse_matrix<OrigMatrix>::value) {
-            nnz_est = A_orig.nonZeros();
-        } else {
-            nnz_est = static_cast<int64_t>(m) * n;
-        }
+        // Held-out entries in the transformed space (true values)
+        TestEntries<Scalar> test_entries = masked.test_entries();
 
-        FactorNet::nmf::LazySpeckledMask<Scalar> mask(m, n, nnz_est,
-                              static_cast<double>(config.test_fraction),
-                              config.effective_cv_seed(),
-                              config.mask_zeros);
-
-        TestEntries<Scalar> test_entries;
-        if constexpr (is_sparse_matrix<OrigMatrix>::value) {
-            test_entries = init_test_entries_sparse<Scalar>(A_orig, mask, rm_ptr);
-        } else {
-            test_entries = init_test_entries_dense<Scalar>(A_orig, mask, rm_ptr);
-        }
-
-        // Incrementally add factors and evaluate test MSE
         Scalar best_test_mse = std::numeric_limits<Scalar>::max();
         int patience_counter = 0;
 
         for (int kk = 0; kk < k_actual; ++kk) {
             int idx = cv_order[kk];
-            // Update test residuals: residual -= sigma_k * u_k(i) * v_k(j)
-            test_entries.update(W.col(idx), d(idx), V.col(idx), config.threads);
+            DenseVector<Scalar> w_col = W.col(idx);
+            DenseVector<Scalar> v_col = V.col(idx);
+            test_entries.update(w_col, d(idx), v_col, config.threads);
             Scalar test_mse = test_entries.compute_mse(config.threads);
 
             if (config.verbose) {
@@ -734,22 +745,10 @@ SVDResult<Scalar> krylov_constrained_svd_impl(
     // PHASE 3: Extract proper U, Σ, V from constrained factors
     // ====================================================================
 
-    // Determine if any hard constraints are active (nonneg, L1, upper_bound, L21, graph).
-    // If so, Phase 3 QR extraction would DESTROY the constraint projections.
-    // Instead, return Phase 2 factors directly with d-ordering.
-    // L2-only and angular-only are fine with QR (L2 only affects scale,
-    // angular encourages decorrelation which QR perfects).
-    const bool has_hard_constraints =
-        config.nonneg_u || config.nonneg_v ||
-        config.L1_u > 0 || config.L1_v > 0 ||
-        config.upper_bound_u > 0 || config.upper_bound_v > 0 ||
-        config.L21_u > 0 || config.L21_v > 0 ||
-        (config.graph_u != nullptr && config.graph_u_lambda > 0) ||
-        (config.graph_v != nullptr && config.graph_v_lambda > 0);
-
-    if (has_hard_constraints) {
-        // --- Constrained path: return Phase 2 factors directly ---
-        // Sort by descending d to match SVD convention, truncate to best_k
+    // Return the best_k leading factors in descending-d order. Constrained
+    // factors are returned as fitted; the others were rotated to singular
+    // triplets above.
+    {
         std::vector<int> order(k_actual);
         std::iota(order.begin(), order.end(), 0);
         std::sort(order.begin(), order.end(),
@@ -763,24 +762,10 @@ SVDResult<Scalar> krylov_constrained_svd_impl(
             result.U.col(i) = W.col(order[i]);
             result.V.col(i) = V.col(order[i]);
         }
-    } else {
-        // --- Unconstrained/L2-only path: QR extraction for perfect orthogonality ---
-        // Scale W by d for extraction: W_scaled (m × k) = W · diag(d)
-        DenseMatrix<Scalar> W_scaled = W;
-        for (int c = 0; c < k_actual; ++c) {
-            W_scaled.col(c) *= d(c);
-        }
-        detail::extract_svd_from_factors(W_scaled, V, result.U, result.d, result.V);
-
-        // Truncate to best_k if CV selected fewer factors
-        if (best_k < k_actual) {
-            result.U = result.U.leftCols(best_k).eval();
-            result.d = result.d.head(best_k).eval();
-            result.V = result.V.leftCols(best_k).eval();
-        }
     }
 
     result.k_selected = best_k;
+    result.iters_per_factor.push_back(passes_done);
 
     auto t_end = Clock::now();
     result.wall_time_ms = Ms(t_end - t_start).count();
@@ -795,65 +780,5 @@ SVDResult<Scalar> krylov_constrained_svd_impl(
     return result;
 }
 
-// ============================================================================
-// Public entry point: krylov_constrained_svd
-//
-// When CV is active, creates a training matrix with holdout entries zeroed
-// so the model never sees the test set during training.
-// ============================================================================
-
-template<typename MatrixType, typename Scalar>
-SVDResult<Scalar> krylov_constrained_svd(const MatrixType& A,
-                                         const SVDConfig<Scalar>& config)
-{
-    using Clock = std::chrono::high_resolution_clock;
-    auto t_start = Clock::now();
-
-    if (config.is_cv()) {
-        // Create training matrix with holdout entries zeroed
-        const int m = static_cast<int>(A.rows());
-        const int n = static_cast<int>(A.cols());
-        int64_t nnz_est = 0;
-        if constexpr (is_sparse_matrix<MatrixType>::value) {
-            nnz_est = A.nonZeros();
-        } else {
-            nnz_est = static_cast<int64_t>(m) * n;
-        }
-
-        FactorNet::nmf::LazySpeckledMask<Scalar> mask(m, n, nnz_est,
-                              static_cast<double>(config.test_fraction),
-                              config.effective_cv_seed(),
-                              config.mask_zeros);
-
-        int n_zeroed = 0;
-        if constexpr (is_sparse_matrix<MatrixType>::value) {
-            // OwnedSparse uses the INPUT matrix's scalar type (e.g. double)
-            // even when Scalar=float, because Eigen forbids mixed-type sparse copy.
-            // SpMV/SpMM handle float↔double via static_cast internally.
-            using MatScalar = typename MatrixType::Scalar;
-            using OwnedSparse = Eigen::SparseMatrix<MatScalar, Eigen::ColMajor,
-                                                     typename MatrixType::StorageIndex>;
-            OwnedSparse A_train = create_training_matrix_sparse<Scalar>(A, mask, n_zeroed);
-            if (config.verbose) {
-                KSVD_PRINT("  Krylov CV: %d entries zeroed in training matrix\n", n_zeroed);
-            }
-            return krylov_constrained_svd_impl<OwnedSparse, MatrixType, Scalar>(
-                A_train, A, config, t_start);
-        } else {
-            DenseMatrix<Scalar> A_train = create_training_matrix_dense<Scalar>(A, mask, n_zeroed);
-            if (config.verbose) {
-                KSVD_PRINT("  Krylov CV: %d entries zeroed in training matrix\n", n_zeroed);
-            }
-            return krylov_constrained_svd_impl<DenseMatrix<Scalar>, MatrixType, Scalar>(
-                A_train, A, config, t_start);
-        }
-    } else {
-        // No CV — use original matrix directly (no copy needed)
-        return krylov_constrained_svd_impl<MatrixType, MatrixType, Scalar>(
-            A, A, config, t_start);
-    }
-}
-
 }  // namespace svd
 }  // namespace FactorNet
-

@@ -62,7 +62,7 @@ face_img <- matrix(olivetti[1,], nrow=64, ncol=64, byrow=TRUE)
 image(t(face_img)[,64:1], col=grey.colors(256))
 
 # Run NMF to discover face components (small k for speed)
-model <- nmf(t(olivetti), k = 5, maxit = 10)
+model <- nmf(t(olivetti), k = 5, maxit = 10, seed = 1, threads = 2)
 }
 
 }

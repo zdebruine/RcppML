@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 # Tests for multi-rank cross-validation
 # Verifies nmf(A, k = c(2, 3, 4, 5), test_fraction = 0.1) returns a proper
 # nmfCrossValidate data.frame.

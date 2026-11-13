@@ -38,20 +38,12 @@ nmf_layer(
 
 \item{upper_bound}{Box constraint. Default 0.}
 
-\item{mask}{Masking mode: NULL (none), \code{"zeros"}, \code{"NA"}, or
-a sparse mask matrix. See \code{\link{nmf}} for details.}
-
-\item{zi}{Zero-inflation mode: \code{"none"}, \code{"row"}, or \code{"col"}.
-Requires \code{loss = "gp"} or \code{"nb"} in
-\code{factor_config()}. Default \code{"none"}.}
-
-\item{projective}{Use projective NMF (W is reused as H). Default FALSE.}
-
-\item{symmetric}{Use symmetric NMF (W == H). Default FALSE.}
-
-\item{robust}{Robustness control: \code{FALSE} (default, no robustness),
-\code{TRUE} (Huber delta=1.345), \code{"mae"} (near-MAE, delta=1e-4),
-or a positive numeric Huber delta. See \code{\link{nmf}} for details.}
+\item{mask, zi, projective, symmetric, robust}{Not implemented for factor
+networks. They are accepted by the constructor for forward
+compatibility, but \code{\link{fit}} raises an error when any of them
+is set to a non-default value (they were silently ignored before).
+Use \code{\link{nmf}} directly for masking, zero inflation, projective,
+symmetric or robust fits.}
 
 \item{W}{Optional \code{W()} config to override W-specific settings.}
 
@@ -59,13 +51,9 @@ or a positive numeric Huber delta. See \code{\link{nmf}} for details.}
 
 \item{name}{Optional layer name (for results access).}
 
-\item{...}{Additional arguments forwarded to \code{\link{nmf}} at fit
-time. Supports all advanced parameters: distribution tuning
-(\code{dispersion}, \code{theta_init}, etc.), IRLS control
-(\code{irls_max_iter}, \code{irls_tol}), solver tuning
-(\code{cd_tol}, \code{cd_maxit}), streaming (\code{streaming},
-\code{panel_cols}), callbacks (\code{on_iteration}), and more.
-See \code{?nmf} for the complete list.}
+\item{...}{Not implemented for factor networks: \code{\link{fit}} raises
+an error when additional arguments are supplied (they were silently
+ignored before).}
 }
 \value{
 An \code{fn_node} of type "nmf_layer".
@@ -86,9 +74,8 @@ data(aml)
 inp <- factor_input(aml)
 layer <- nmf_layer(inp, k = 5)
 
-# With zero-inflation and distribution-specific tuning
-layer_gp <- nmf_layer(inp, k = 5, zi = "row",
-                      dispersion = "per_col", theta_init = 0.5)
+# Per-factor settings
+layer_sparse <- nmf_layer(inp, k = 5, W = W(L1 = 0.05), H = H(L2 = 0.01))
 }
 \seealso{
 \code{\link{svd_layer}}, \code{\link{factor_net}}, \code{\link{factor_input}},

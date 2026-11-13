@@ -169,8 +169,12 @@ inline ResourcePlan parse_resource_override(const std::string& override_str,
     if (override_str == "cpu")
         return ResourcePlan::CPU;
     if (override_str == "gpu") {
+        // No usable GPU: run on CPU. The R front end has already warned
+        // ("GPU requested but not available, falling back to CPU"), and the
+        // diagnostics record "no GPUs detected"; throwing here turned that
+        // warning into an error.
         if (r.gpu_count == 0)
-            throw InvalidArgument("resource_override='gpu' but no GPUs available");
+            return ResourcePlan::CPU;
         return ResourcePlan::GPU;
     }
     throw InvalidArgument("resource_override must be 'auto', 'cpu', or 'gpu'");

@@ -1,8 +1,20 @@
 // Automatic rank determination via cross-validation
-// Uses exponential search + golden section refinement
+//
+// Strategy (all evaluations are cached, the same holdout mask is used for
+// every rank):
+//   1. Coarse geometric grid k_min, 2 k_min, 4 k_min, ..., k_max. Expansion
+//      stops once the test loss has risen at two consecutive grid points, or
+//      when the range ends.
+//   2. Refinement between the grid neighbours of the best grid point by
+//      repeated bisection of the two sub-intervals around the current best
+//      rank, until the best rank's integer neighbours have been evaluated
+//      (or the bracket around it is no wider than `tolerance`).
+//   3. The answer is the rank with the lowest test loss among ALL ranks that
+//      were evaluated (ties go to the smaller rank). Any integer in
+//      [k_min, k_max] can be returned.
 //
 // Routes through nmf::nmf() for unified CV infrastructure:
-// - Uses fit_cv_unified with per-column Gram correction
+// - Uses the CV fit with per-column Gram correction
 // - Supports GPU fallback via gateway resource detection
 // - Uses core::NMFConfig and NMFResult types
 //
@@ -14,6 +26,9 @@
 #include <FactorNet/core/result.hpp>
 #include <FactorNet/nmf/fit.hpp>
 #include <cmath>
+#include <limits>
+#include <map>
+#include <stdexcept>
 #include <vector>
 #include <algorithm>
 #include <FactorNet/core/logging.hpp>
@@ -23,7 +38,7 @@ namespace nmf {
 
 /**
  * @brief Cross-validation evaluation for a single rank
- * 
+ *
  * Contains train/test losses at each iteration and final values.
  * Losses are extracted from NMFResult (computed by nmf::fit).
  */
@@ -39,24 +54,30 @@ struct CVEvaluation {
 
 /**
  * @brief Results from automatic rank search
- * 
+ *
  * Contains optimal rank, all evaluations, and search metadata.
+ *
+ * k_optimal             Rank with the lowest test loss among `evaluations`
+ * k_low, k_high         Closest evaluated ranks below and above k_optimal
+ *                       (equal to k_optimal at the ends of the range)
+ * overfitting_detected  True if some evaluated rank above k_optimal has a
+ *                       higher test loss, i.e. the minimum is interior
  */
 template<typename Scalar>
 struct RankSearchResult {
     int k_optimal;
-    std::vector<CVEvaluation<Scalar>> evaluations;  // All tested ranks
-    int k_low;   // Lower bound from exponential search
-    int k_high;  // Upper bound from exponential search
+    std::vector<CVEvaluation<Scalar>> evaluations;  // All tested ranks, in evaluation order
+    int k_low;
+    int k_high;
     bool overfitting_detected;
 };
 
 /**
  * @brief Fit NMF at specified rank with CV tracking
- * 
+ *
  * Routes through nmf::nmf() for unified CV with per-column
  * Gram correction and GPU fallback support.
- * 
+ *
  * @param A Input matrix
  * @param rank Factorization rank to test
  * @param base_config NMF configuration (must have cv_seed and holdout_fraction set)
@@ -70,27 +91,28 @@ CVEvaluation<Scalar> evaluate_rank_with_cv(
 {
     CVEvaluation<Scalar> result;
     result.rank = rank;
-    
+
     // Build config for this rank
     ::FactorNet::NMFConfig<Scalar> config = base_config;
     config.rank = rank;
     config.track_loss_history = true;  // Need per-iteration losses
-    
+
     // Use rank-dependent seed for initialization diversity
     if (config.seed > 0) {
         config.seed = base_config.seed + static_cast<uint32_t>(rank);
     }
-    
+
     // Route through gateway (handles resource detection, GPU fallback, etc.)
     auto nmf_result = nmf::nmf(A, config);
-    
-    // Map NMFResult to CVEvaluation
+
+    // Map NMFResult to CVEvaluation. test_loss describes the returned model
+    // (the best test iteration when early stopping is on).
     result.iterations = nmf_result.iterations;
     result.train_loss_final = nmf_result.train_loss;
     result.test_loss_final = nmf_result.test_loss;
     result.train_loss_history = nmf_result.loss_history;
     result.test_loss_history = nmf_result.test_loss_history;
-    
+
     // Fallback if loss history is empty
     if (result.train_loss_history.empty()) {
         result.train_loss_history.push_back(result.train_loss_final);
@@ -98,147 +120,110 @@ CVEvaluation<Scalar> evaluate_rank_with_cv(
     if (result.test_loss_history.empty()) {
         result.test_loss_history.push_back(result.test_loss_final);
     }
-    
+
     return result;
 }
 
+namespace rank_detail {
+
 /**
- * @brief Phase 1: Exponential search to find overfitting boundary
- * 
- * Tests ranks: k_init, k_init*2, k_init*4, ... until overfitting detected.
- * Overfitting = test loss increases while train loss converged.
- * 
- * @return RankSearchResult with k_low, k_high bracket if overfitting found
+ * @brief Cached rank evaluator: each rank is fitted at most once.
  */
 template<typename Scalar, typename MatrixType>
-RankSearchResult<Scalar> exponential_search(
-    const MatrixType& A,
-    int k_init,
-    int max_k,
-    const ::FactorNet::NMFConfig<Scalar>& config,
-    bool verbose = false)
-{
-    RankSearchResult<Scalar> result;
-    result.k_optimal = k_init;
-    result.k_low = -1;
-    result.k_high = -1;
-    result.overfitting_detected = false;
-    
-    int k_current = k_init;
-    
-    while (k_current <= max_k) {
-        FACTORNET_LOG_INFO(verbose, "Testing rank %d... ", k_current);
-        
-        // Evaluate this rank using masked CV
-        CVEvaluation<Scalar> eval = evaluate_rank_with_cv(A, k_current, config);
-        result.evaluations.push_back(eval);
-        
-        FACTORNET_LOG_INFO(verbose, "train=%g, test=%g\n", 
-                       static_cast<double>(eval.train_loss_final),
-                       static_cast<double>(eval.test_loss_final));
-        
-        // Check for overfitting (need at least 2 evaluations)
-        if (result.evaluations.size() >= 2) {
-            const auto& prev = result.evaluations[result.evaluations.size() - 2];
-            const auto& curr = result.evaluations[result.evaluations.size() - 1];
-            
-            // Train loss converged?
-            Scalar train_rel_change = std::abs(curr.train_loss_final - prev.train_loss_final) 
-                                     / (prev.train_loss_final + tiny_num<Scalar>());
-            bool train_converged = train_rel_change < Scalar(0.01);
-            
-            // Test loss increased?
-            bool test_increased = curr.test_loss_final > prev.test_loss_final;
-            
-            if (train_converged && test_increased) {
-                FACTORNET_LOG_INFO(verbose, "Overfitting detected!\n");
-                result.k_low = prev.rank;
-                result.k_high = curr.rank;
-                result.overfitting_detected = true;
-                return result;
+class RankEvaluator {
+public:
+    RankEvaluator(const MatrixType& A,
+                  const ::FactorNet::NMFConfig<Scalar>& config,
+                  std::vector<CVEvaluation<Scalar>>& evaluations,
+                  bool verbose)
+        : A_(A), config_(config), evaluations_(evaluations), verbose_(verbose) {}
+
+    /// Test loss at rank k (+infinity when it is not finite)
+    double loss(int k) {
+        auto it = cache_.find(k);
+        if (it != cache_.end()) return it->second;
+
+        CVEvaluation<Scalar> eval = evaluate_rank_with_cv(A_, k, config_);
+        double value = static_cast<double>(eval.test_loss_final);
+        if (!std::isfinite(value)) value = std::numeric_limits<double>::infinity();
+
+        FACTORNET_LOG_INFO(verbose_, "Rank %d: train=%g, test=%g\n", k,
+                           static_cast<double>(eval.train_loss_final),
+                           static_cast<double>(eval.test_loss_final));
+
+        evaluations_.push_back(eval);
+        cache_[k] = value;
+        return value;
+    }
+
+    bool evaluated(int k) const { return cache_.find(k) != cache_.end(); }
+
+    /// Rank with the lowest test loss among all evaluated ranks
+    /// (ties go to the smaller rank; std::map iterates in increasing rank)
+    int argmin() const {
+        int best_k = cache_.begin()->first;
+        double best_v = cache_.begin()->second;
+        for (const auto& kv : cache_) {
+            if (kv.second < best_v) {
+                best_v = kv.second;
+                best_k = kv.first;
             }
         }
-        
-        // Next power of 2
-        if (k_current * 2 > max_k && k_current < max_k) {
-            k_current = max_k;  // Test max_k before stopping
-        } else {
-            k_current *= 2;
-        }
+        return best_k;
     }
-    
-    // No overfitting detected - use highest tested rank
-    if (!result.evaluations.empty()) {
-        result.k_optimal = result.evaluations.back().rank;
-    }
-    
-    return result;
-}
 
-/**
- * @brief Phase 2: Golden section search to refine rank selection
- * 
- * Narrows down [k_low, k_high] bracket using golden ratio.
- * 
- * @return Optimal rank (conservative choice = lower bound)
- */
-template<typename Scalar, typename MatrixType>
-int golden_section_search(
-    const MatrixType& A,
-    int k_low,
-    int k_high,
-    int tolerance,
-    const ::FactorNet::NMFConfig<Scalar>& config,
-    std::vector<CVEvaluation<Scalar>>& evaluations,
-    bool verbose = false)
-{
-    const Scalar phi = (Scalar(1) + std::sqrt(Scalar(5))) / Scalar(2);  // Golden ratio
-    
-    FACTORNET_LOG_INFO(verbose, "\nRefining search in [%d, %d]...\n", k_low, k_high);
-    
-    while ((k_high - k_low) > tolerance) {
-        int k1 = static_cast<int>(k_high - (k_high - k_low) / phi + Scalar(0.5));
-        int k2 = static_cast<int>(k_low + (k_high - k_low) / phi + Scalar(0.5));
-        
-        // Avoid duplicates and ensure valid range
-        if (k1 <= k_low || k2 >= k_high || k1 >= k2) break;
-        
-        FACTORNET_LOG_INFO(verbose, "Testing ranks %d and %d... ", k1, k2);
-        
-        // Evaluate both ranks using masked CV
-        CVEvaluation<Scalar> eval1 = evaluate_rank_with_cv(A, k1, config);
-        CVEvaluation<Scalar> eval2 = evaluate_rank_with_cv(A, k2, config);
-        
-        evaluations.push_back(eval1);
-        evaluations.push_back(eval2);
-        
-        FACTORNET_LOG_INFO(verbose, "test[%d]=%g, test[%d]=%g\n", 
-                       k1, static_cast<double>(eval1.test_loss_final),
-                       k2, static_cast<double>(eval2.test_loss_final));
-        
-        // Update bracket
-        if (eval1.test_loss_final < eval2.test_loss_final) {
-            k_high = k2;  // Optimal is in [k_low, k2]
-        } else {
-            k_low = k1;   // Optimal is in [k1, k_high]
+    /// Closest evaluated rank strictly below k (k itself if none)
+    int lower_neighbour(int k) const {
+        int out = k;
+        for (const auto& kv : cache_) {
+            if (kv.first < k) out = kv.first;
+            else break;
         }
+        return out;
     }
-    
-    // Return conservative choice (lower bound)
-    return k_low;
-}
+
+    /// Closest evaluated rank strictly above k (k itself if none)
+    int upper_neighbour(int k) const {
+        for (const auto& kv : cache_) {
+            if (kv.first > k) return kv.first;
+        }
+        return k;
+    }
+
+    /// True if some evaluated rank above k has a strictly higher loss than k
+    bool rises_above(int k) const {
+        auto it = cache_.find(k);
+        if (it == cache_.end()) return false;
+        for (const auto& kv : cache_) {
+            if (kv.first > k && kv.second > it->second) return true;
+        }
+        return false;
+    }
+
+private:
+    const MatrixType& A_;
+    const ::FactorNet::NMFConfig<Scalar>& config_;
+    std::vector<CVEvaluation<Scalar>>& evaluations_;
+    bool verbose_;
+    std::map<int, double> cache_;
+};
+
+}  // namespace rank_detail
 
 /**
  * @brief Main entry point: automatic rank determination via CV
- * 
- * Uses exponential search followed by golden section refinement.
- * Leverages existing 2D speckled mask infrastructure for CV.
- * 
+ *
+ * Coarse geometric grid followed by bisection refinement around the best
+ * grid point; returns the rank with the lowest test loss among all ranks
+ * evaluated. The same holdout mask (config.cv_seed) is used for every rank.
+ *
  * @param A Input matrix
- * @param k_init Starting rank for exponential search
- * @param max_k Maximum rank to test
- * @param tolerance Stop refining when bracket narrows to this size
- * @param config NMF configuration (should have cv_seed and holdout_fraction set)
+ * @param k_init Smallest rank to consider (k_min)
+ * @param max_k Largest rank to consider (k_max); capped at min(nrow, ncol)
+ * @param tolerance Allowed width of the final bracket [k_low, k_high] around
+ *                  the best rank. Values <= 3 refine until both integer
+ *                  neighbours of the best rank have been evaluated
+ * @param config NMF configuration (must have holdout_fraction in (0,1))
  * @param verbose Print progress
  * @return RankSearchResult with optimal rank and all evaluations
  */
@@ -251,25 +236,92 @@ RankSearchResult<Scalar> find_optimal_rank(
     const ::FactorNet::NMFConfig<Scalar>& config = ::FactorNet::NMFConfig<Scalar>(),
     bool verbose = false)
 {
-    // Phase 1: Exponential search
-    auto result = exponential_search(A, k_init, max_k, config, verbose);
-    
-    // Phase 2: Golden section refinement (if overfitting detected)
+    if (!config.is_cv()) {
+        throw std::invalid_argument(
+            "Automatic rank selection requires cross-validation: "
+            "holdout_fraction (test_fraction) must be in (0, 1).");
+    }
+
+    const int dim_cap = static_cast<int>(std::min(A.rows(), A.cols()));
+    const int k_min = std::max(1, std::min(k_init, dim_cap));
+    const int k_max = std::max(k_min, std::min(max_k, dim_cap));
+    // tolerance is the allowed width of the final bracket [k_low, k_high];
+    // each side of the best rank may therefore be tolerance / 2 away.
+    const int gap_tol = std::max(1, tolerance / 2);
+
+    RankSearchResult<Scalar> result;
+    result.k_optimal = k_min;
+    result.k_low = k_min;
+    result.k_high = k_min;
+    result.overfitting_detected = false;
+
+    rank_detail::RankEvaluator<Scalar, MatrixType> eval(
+        A, config, result.evaluations, verbose);
+
+    // ------------------------------------------------------------------
+    // Phase 1: coarse geometric grid
+    // ------------------------------------------------------------------
+    int consecutive_rises = 0;
+    double prev_loss = eval.loss(k_min);
+    int k_current = k_min;
+    while (k_current < k_max && consecutive_rises < 2) {
+        // Next grid point: double, at least +1, never beyond k_max
+        int k_next = (k_current > k_max / 2) ? k_max : std::max(k_current + 1, 2 * k_current);
+        if (k_next > k_max) k_next = k_max;
+
+        const double loss_next = eval.loss(k_next);
+        if (loss_next > prev_loss) {
+            ++consecutive_rises;
+        } else {
+            consecutive_rises = 0;
+        }
+        prev_loss = loss_next;
+        k_current = k_next;
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 2: refine around the best evaluated rank
+    // ------------------------------------------------------------------
+    // Invariant: lo < best < hi are evaluated ranks (lo == best or hi == best
+    // at the ends of the range). Each pass evaluates the midpoints of
+    // [lo, best] and [best, hi]; the gaps at least halve until they close.
+    int best = eval.argmin();
+    for (;;) {
+        const int lo = eval.lower_neighbour(best);
+        const int hi = eval.upper_neighbour(best);
+        const bool left_open = (best - lo) > gap_tol;
+        const bool right_open = (hi - best) > gap_tol;
+        if (!left_open && !right_open) break;
+
+        if (left_open) {
+            const int mid = lo + (best - lo) / 2;
+            if (mid > lo && mid < best) eval.loss(mid);
+        }
+        if (right_open) {
+            const int mid = best + (hi - best + 1) / 2;
+            if (mid > best && mid < hi) eval.loss(mid);
+        }
+        best = eval.argmin();
+    }
+
+    // ------------------------------------------------------------------
+    // Result: argmin of the test loss over everything that was evaluated
+    // ------------------------------------------------------------------
+    result.k_optimal = eval.argmin();
+    result.k_low = eval.lower_neighbour(result.k_optimal);
+    result.k_high = eval.upper_neighbour(result.k_optimal);
+    result.overfitting_detected = eval.rises_above(result.k_optimal);
+
     if (result.overfitting_detected) {
-        result.k_optimal = golden_section_search(
-            A, result.k_low, result.k_high, tolerance,
-            config, result.evaluations, verbose
-        );
-        
         FACTORNET_LOG_INFO(verbose, "Optimal rank: %d\n", result.k_optimal);
     } else {
-        FACTORNET_LOG_INFO(verbose, "No overfitting detected. Using rank: %d\n", 
-                       result.k_optimal);
+        FACTORNET_LOG_INFO(verbose,
+            "Optimal rank: %d (test loss did not rise within the range searched)\n",
+            result.k_optimal);
     }
-    
+
     return result;
 }
 
 } // namespace nmf
 }  // namespace FactorNet
-

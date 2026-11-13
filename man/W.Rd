@@ -49,7 +49,9 @@ H(
 \item{graph_lambda}{Graph regularization strength. Default 0.}
 
 \item{target}{Target matrix for regularization (k x n for H, k x m for W).
-See \code{\link{compute_target}} for constructing targets from labels.}
+See \code{\link{compute_target}} for constructing targets from labels.
+Targets are supported for single-layer networks on in-memory data;
+\code{\link{fit}} raises an error for a target in a multi-layer network.}
 
 \item{target_lambda}{Target regularization strength. Default 0.}
 }

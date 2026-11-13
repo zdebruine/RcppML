@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 test_that("plot.nmf returns ggplot for loss type", {
   skip_if_not_installed("ggplot2")
   data(hawaiibirds, package = "RcppML")

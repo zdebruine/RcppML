@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 # Test GPU Feature Parity
 #
 # Tests GPU NMF with advanced features:
@@ -426,39 +430,26 @@ test_that("GPU supports semi-NMF (unconstrained W)", {
 # GPU Non-MSE Loss Tests (IRLS)
 # ============================================================================
 
-test_that("GPU supports robust='mae' via host-mediated IRLS", {
+test_that("robust = 'mae' requested on GPU runs on CPU and says so", {
   skip_if_no_gpu()
 
   m <- load_pbmc3k_matrix()
   A <- m[1:500, 1:200]
   A <- as(A, "dgCMatrix")
 
-  k <- 5; seed <- 42L; maxit <- 20; tol <- 1e-10
-
-  options(RcppML.gpu = TRUE)
-  on.exit(options(RcppML.gpu = "auto"), add = TRUE)
-
-  result <- tryCatch(
-    nmf(A, k = k, robust = "mae", maxit = maxit, tol = tol,
-        seed = seed, verbose = FALSE),
-    error = function(e) {
-      skip(paste("GPU MAE loss not supported:", e$message))
-    }
-  )
-
-  if (!is.null(result)) {
-    expect_true(is(result, "nmf") || is.list(result))
-    W <- get_W(result); H <- get_H(result)
-    expect_true(all(is.finite(W)))
-    expect_true(all(is.finite(H)))
-    expect_true(all(W >= 0))
-    expect_true(all(H >= 0))
-    # MSE should be reasonable (not diverged)
-    # MAE-optimal factors may have higher MSE than MSE-optimal ones
-    # Per-entry MSE ~3 is typical for k=5, 20 iters on this sparse data
-    mse <- compute_mse(A, result)
-    expect_true(mse < 5.0, label = sprintf("MAE-loss MSE=%.6e (should be < 5)", mse))
-  }
+  # Robust losses are not on the GPU in this release: the gateway routes the
+  # fit to CPU with a warning, and the result is the CPU fit.
+  cpu <- nmf(A, k = 5, robust = "mae", maxit = 20, tol = 1e-10, seed = 42L,
+             solver = "cd", resource = "cpu", verbose = FALSE)
+  expect_warning(
+    gpu <- nmf(A, k = 5, robust = "mae", maxit = 20, tol = 1e-10, seed = 42L,
+               solver = "cd", resource = "gpu", verbose = FALSE),
+    "robust")
+  expect_equal(gpu@w, cpu@w, tolerance = 1e-6)
+  expect_equal(gpu@d, cpu@d, tolerance = 1e-6)
+  expect_equal(gpu@h, cpu@h, tolerance = 1e-6)
+  expect_true(all(is.finite(gpu@w)) && all(gpu@w >= 0))
+  expect_true(all(is.finite(gpu@h)) && all(gpu@h >= 0))
 })
 
 test_that("GPU supports robust=TRUE (Huber) via host-mediated IRLS", {

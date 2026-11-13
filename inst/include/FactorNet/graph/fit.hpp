@@ -248,9 +248,19 @@ GraphResult<Scalar> fit_single_layer(
 /**
  * @brief Fit a multi-layer FactorGraph using outer alternating least squares
  *
- * Iterates over all layers, fixing all but one and running a single
- * NMF iteration on each. Converges when the total reconstruction loss
- * stabilizes below tolerance.
+ * Iterates over all layers and runs a single NMF iteration on each.
+ *
+ * NOTE: this is a greedy, layer-wise fit, not a joint optimization. Layer i
+ * factorizes its own effective input (the data for the first layer, the
+ * transposed unit-scaled H of the upstream layer(s) for deeper layers) and
+ * is never updated to improve the fit of a later layer. The first layer
+ * therefore converges to the ordinary factorization of the data. The
+ * tracked loss is the sum of the per-layer mean squared errors, each against
+ * that layer's own (moving) input; it drives the stopping rule and is not
+ * guaranteed to decrease monotonically.
+ *
+ * All layers read the single `data` matrix passed in; graphs whose branches
+ * start from different inputs are rejected by the caller.
  *
  * Inner layers operate on dense t(H) matrices, so GPU/sparse backends
  * are used only for the first layer (which sees the original data).

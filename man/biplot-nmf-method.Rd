@@ -26,8 +26,8 @@ Produces a biplot from the output of \code{\link{nmf}}
 \examples{
 \donttest{
 library(Matrix)
-A <- rsparsematrix(100, 50, 0.1)
-model <- nmf(A, k = 3, seed = 42, tol = 1e-2, maxit = 10)
+A <- abs(rsparsematrix(100, 50, 0.1))
+model <- nmf(A, k = 3, seed = 42, tol = 1e-2, maxit = 10, threads = 2)
 if (requireNamespace("ggplot2", quietly = TRUE)) {
   biplot(model, factors = c(1, 2))
 }

@@ -24,9 +24,30 @@
 // Only use dlsym when NOT compiled with nvcc (CPU-only build)
 #ifndef FACTORNET_HAS_GPU
 
-#include <dlfcn.h>
+#include <cstddef>
 #include <cstdio>
 #include <string>
+
+#if defined(_WIN32)
+
+// The GPU library is not built on Windows and <dlfcn.h> does not exist there:
+// report "no bridge" so every caller takes the CPU path.
+namespace FactorNet {
+namespace gpu {
+
+template<typename FnPtr>
+FnPtr resolve(const char*) { return nullptr; }
+
+inline bool bridge_available() { return false; }
+
+inline bool detect_gpus_via_bridge(int&, size_t&) { return false; }
+
+}  // namespace gpu
+}  // namespace FactorNet
+
+#else  // !_WIN32
+
+#include <dlfcn.h>
 
 namespace FactorNet {
 namespace gpu {
@@ -93,5 +114,7 @@ inline bool detect_gpus_via_bridge(int& gpu_count, size_t& total_mem) {
 
 }  // namespace gpu
 }  // namespace FactorNet
+
+#endif  // _WIN32
 
 #endif  // !FACTORNET_HAS_GPU

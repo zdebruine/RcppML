@@ -67,8 +67,8 @@ AIC = \eqn{2 \times \text{NLL} + 2 \times \text{df}}.
 \donttest{
 library(Matrix)
 set.seed(42)
-A <- abs(rsparsematrix(100, 50, 0.3))
-result <- auto_nmf_distribution(A, k = 5)
+A <- round(10 * abs(rsparsematrix(100, 50, 0.3)))  # counts
+result <- auto_nmf_distribution(A, k = 5, maxit = 20, seed = 1, threads = 2)
 print(result$comparison)
 cat("Best distribution:", result$loss, "\n")
 }

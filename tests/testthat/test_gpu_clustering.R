@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 # GPU Clustering Parity Tests
 # Tests: dclust (auto GPU dispatch), consensus_nmf with resource="gpu"
 
@@ -59,12 +63,12 @@ test_that("consensus_nmf runs on GPU and returns valid structure", {
   expect_true("clusters" %in% names(con))
   expect_true("cophenetic" %in% names(con))
 
-  # Consensus matrix should be n_samples x n_samples
-  expect_equal(nrow(con$consensus), 300)
-  expect_equal(ncol(con$consensus), 300)
+  # consensus_nmf clusters the rows of its input
+  expect_equal(nrow(con$consensus), nrow(A))
+  expect_equal(ncol(con$consensus), nrow(A))
 
-  # All cluster assignments should exist
-  expect_equal(length(con$clusters), 300)
+  # One cluster assignment per row
+  expect_equal(length(con$clusters), nrow(A))
 })
 
 test_that("GPU consensus_nmf produces similar clusters to CPU", {

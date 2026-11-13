@@ -31,6 +31,8 @@
 #' @param graph_lambda Graph regularization strength. Default 0.
 #' @param target Target matrix for regularization (k x n for H, k x m for W).
 #'   See \code{\link{compute_target}} for constructing targets from labels.
+#'   Targets are supported for single-layer networks on in-memory data;
+#'   \code{\link{fit}} raises an error for a target in a multi-layer network.
 #' @param target_lambda Target regularization strength. Default 0.
 #' @return An \code{fn_factor_config} object.
 #' @seealso \code{\link{factor_config}}, \code{\link{nmf_layer}}, \code{\link{factor_net}}
@@ -100,12 +102,9 @@ H <- function(L1 = NULL, L2 = NULL, L21 = NULL, angular = NULL,
 #'   zeros may appear in the test set. Default FALSE.
 #' @param patience Number of iterations without test-loss improvement
 #'   before early stopping during CV. Default 5.
-#' @param ... Additional arguments applied network-wide. These are forwarded
-#'   to the underlying \code{\link{nmf}} or \code{\link{svd}} call at fit
-#'   time as lowest-priority defaults (layer-level \code{...} overrides
-#'   these). Supports distribution tuning (\code{dispersion},
-#'   \code{theta_init}, etc.), IRLS control, solver tuning, and more.
-#'   See \code{?nmf} or \code{?svd} for the complete list.
+#' @param ... Not implemented for factor networks: \code{\link{fit}} raises
+#'   an error when additional arguments are supplied (they were silently
+#'   ignored before).
 #' @details
 #' \strong{Unsupported combinations:}
 #' \itemize{
@@ -144,7 +143,7 @@ factor_config <- function(maxit = 100, tol = 1e-4,
     loss = loss,
     verbose = verbose,
     seed = seed,
-    threads = as.integer(threads),
+    threads = .resolve_threads(threads),
     norm = norm,
     solver = solver,
     resource = resource,
@@ -211,35 +210,26 @@ factor_input <- function(data, name = NULL) {
 #' @param L21 Group sparsity penalty. Default 0.
 #' @param angular Orthogonality penalty. Default 0.
 #' @param upper_bound Box constraint. Default 0.
-#' @param mask Masking mode: NULL (none), \code{"zeros"}, \code{"NA"}, or
-#'   a sparse mask matrix. See \code{\link{nmf}} for details.
-#' @param zi Zero-inflation mode: \code{"none"}, \code{"row"}, or \code{"col"}.
-#'   Requires \code{loss = "gp"} or \code{"nb"} in
-#'   \code{factor_config()}. Default \code{"none"}.
-#' @param projective Use projective NMF (W is reused as H). Default FALSE.
-#' @param symmetric Use symmetric NMF (W == H). Default FALSE.
-#' @param robust Robustness control: \code{FALSE} (default, no robustness),
-#'   \code{TRUE} (Huber delta=1.345), \code{"mae"} (near-MAE, delta=1e-4),
-#'   or a positive numeric Huber delta. See \code{\link{nmf}} for details.
+#' @param mask,zi,projective,symmetric,robust Not implemented for factor
+#'   networks. They are accepted by the constructor for forward
+#'   compatibility, but \code{\link{fit}} raises an error when any of them
+#'   is set to a non-default value (they were silently ignored before).
+#'   Use \code{\link{nmf}} directly for masking, zero inflation, projective,
+#'   symmetric or robust fits.
 #' @param W Optional \code{W()} config to override W-specific settings.
 #' @param H Optional \code{H()} config to override H-specific settings.
 #' @param name Optional layer name (for results access).
-#' @param ... Additional arguments forwarded to \code{\link{nmf}} at fit
-#'   time. Supports all advanced parameters: distribution tuning
-#'   (\code{dispersion}, \code{theta_init}, etc.), IRLS control
-#'   (\code{irls_max_iter}, \code{irls_tol}), solver tuning
-#'   (\code{cd_tol}, \code{cd_maxit}), streaming (\code{streaming},
-#'   \code{panel_cols}), callbacks (\code{on_iteration}), and more.
-#'   See \code{?nmf} for the complete list.
+#' @param ... Not implemented for factor networks: \code{\link{fit}} raises
+#'   an error when additional arguments are supplied (they were silently
+#'   ignored before).
 #' @return An \code{fn_node} of type "nmf_layer".
 #' @examples
 #' data(aml)
 #' inp <- factor_input(aml)
 #' layer <- nmf_layer(inp, k = 5)
 #'
-#' # With zero-inflation and distribution-specific tuning
-#' layer_gp <- nmf_layer(inp, k = 5, zi = "row",
-#'                       dispersion = "per_col", theta_init = 0.5)
+#' # Per-factor settings
+#' layer_sparse <- nmf_layer(inp, k = 5, W = W(L1 = 0.05), H = H(L2 = 0.01))
 #' @seealso \code{\link{svd_layer}}, \code{\link{factor_net}}, \code{\link{factor_input}},
 #'   \code{\link{nmf}}
 #' @export
@@ -277,12 +267,17 @@ nmf_layer <- function(input, k, L1 = 0, L2 = 0, L21 = 0, angular = 0,
 
 #' Create an SVD/PCA factorization layer
 #'
-#' Creates an unconstrained (SVD/PCA) factorization layer. No
-#' non-negativity constraint by default; factors are signed.
+#' Creates an unconstrained factorization layer. No non-negativity
+#' constraint by default; factors are signed.
 #'
-#' SVD-specific parameters (\code{center}, \code{scale}, \code{method})
-#' control the SVD algorithm directly. Regularization parameters
-#' and \code{...} are forwarded to \code{\link{svd}} at fit time.
+#' Inside a factor network this layer is fit by the same alternating least
+#' squares solver as \code{nmf_layer()}, with the non-negativity
+#' constraints switched off. At convergence \code{W diag(d) H} is a best
+#' rank-\code{k} approximation of the layer input (the same subspace as a
+#' truncated SVD), but the factors are \strong{not} orthogonal, \code{d} are
+#' scaling factors and not singular values, and the factors are not ordered
+#' by explained variance. Use \code{\link{svd}} or \code{\link{pca}} when
+#' singular vectors, centering or scaling are needed.
 #'
 #' @param input An \code{fn_node} (input, shared, condition, or another layer).
 #' @param k Factorization rank.
@@ -291,21 +286,14 @@ nmf_layer <- function(input, k, L1 = 0, L2 = 0, L21 = 0, angular = 0,
 #' @param L21 Group sparsity penalty. Default 0.
 #' @param angular Orthogonality penalty. Default 0.
 #' @param upper_bound Box constraint. Default 0.
-#' @param center Center columns before factorization (PCA mode). Default FALSE.
-#' @param scale Scale columns to unit variance. Default FALSE.
-#' @param method SVD algorithm: \code{"auto"}, \code{"deflation"},
-#'   \code{"krylov"}, \code{"lanczos"}, \code{"irlba"}, or
-#'   \code{"randomized"}. Default \code{"auto"}.
-#' @param mask Masking mode: NULL (none), \code{"zeros"}, or a sparse
-#'   mask matrix. See \code{\link{svd}} for details.
-#' @param robust Use robust loss. Default FALSE.
+#' @param center,scale,method,mask,robust Not implemented for factor
+#'   networks. \code{\link{fit}} raises an error when any of them is set to
+#'   a non-default value (they were silently ignored before).
 #' @param W Optional \code{W()} config to override U-specific settings.
 #' @param H Optional \code{H()} config to override V-specific settings.
 #' @param name Optional layer name (for results access).
-#' @param ... Additional arguments forwarded to \code{\link{svd}} at fit
-#'   time. Supports: \code{convergence}, \code{cv_seed}, \code{patience},
-#'   \code{k_max}, \code{graph_U}, \code{graph_V}, \code{graph_lambda},
-#'   \code{threads}. See \code{?svd} for the complete list.
+#' @param ... Not implemented for factor networks: \code{\link{fit}} raises
+#'   an error when additional arguments are supplied.
 #' @return An \code{fn_node} of type "svd_layer".
 #' @seealso \code{\link{nmf_layer}}, \code{\link{factor_input}},
 #'   \code{\link{factor_net}}, \code{\link{svd}}
@@ -314,8 +302,8 @@ nmf_layer <- function(input, k, L1 = 0, L2 = 0, L21 = 0, angular = 0,
 #' inp <- factor_input(aml)
 #' layer <- svd_layer(inp, k = 5)
 #'
-#' # PCA with centering and scaling
-#' pca_layer <- svd_layer(inp, k = 10, center = TRUE, scale = TRUE)
+#' # Signed factors with a ridge penalty
+#' ridge_layer <- svd_layer(inp, k = 10, L2 = 0.01)
 #' @export
 svd_layer <- function(input, k, L1 = 0, L2 = 0, L21 = 0, angular = 0,
                       upper_bound = 0,
@@ -358,6 +346,11 @@ svd_layer <- function(input, k, L1 = 0, L2 = 0, L21 = 0, angular = 0,
 #'
 #' Execution concatenates inputs row-wise and runs a single NMF:
 #' \code{rbind(X1, X2, ...) = rbind(W1, W2, ...) * diag(d) * H}.
+#' The fitted \code{W} is returned as a named list with one block per input,
+#' in the order the inputs were given. The inputs are not reweighted: an
+#' input with more rows or larger values has more influence on \code{H}.
+#' Only \code{factor_input()} nodes with unique names can be shared, and a
+#' shared node is supported as the input of a single-layer network only.
 #'
 #' @param ... Two or more \code{fn_node} objects (inputs or layers).
 #' @return An \code{fn_node} of type "shared".
@@ -451,9 +444,19 @@ factor_add <- function(...) {
 
 #' Concatenate conditioning metadata to a layer's H
 #'
-#' Appends columns from a metadata matrix Z to the H factor before
-#' passing downstream. The next layer's W learns to factor out the
-#' conditioning variables.
+#' Appends the metadata matrix Z to the embedding of a layer before it is
+#' passed downstream: the next layer factorizes \code{cbind(t(H), t(Z))}
+#' (samples in rows) instead of \code{t(H)}.
+#'
+#' The conditioning variables therefore become additional columns that the
+#' next layer has to \emph{reconstruct}; they are not regressed out of
+#' \code{H}, and no batch correction of the upstream layer takes place.
+#' \code{t(H)} has unit-sum columns (entries of order \code{1/n}), so
+#' unscaled covariates such as 0/1 indicators dominate the next layer's
+#' loss; scale \code{Z} to a comparable magnitude if the embedding should
+#' still matter. With a non-negative next layer \code{Z} must be
+#' non-negative. Conditioning is only supported on the output of a layer,
+#' not directly on a \code{factor_input()}.
 #'
 #' @param input An \code{fn_node} (typically an nmf_layer output).
 #' @param Z Conditioning matrix (n x p) or (p x n). Will be oriented
@@ -490,6 +493,10 @@ factor_condition <- function(input, Z) {
 #'
 #' Validates the graph topology, resolves config inheritance, and
 #' returns a compiled network ready for \code{fit()}.
+#'
+#' Multi-layer networks are fit greedily layer by layer, not by minimizing
+#' a joint objective; see the Details of \code{\link{fit}} for what each
+#' layer factorizes and for the options that are not supported.
 #'
 #' @param inputs A single \code{fn_node} (input) or a list of input nodes.
 #' @param output The output \code{fn_node} (typically a layer).

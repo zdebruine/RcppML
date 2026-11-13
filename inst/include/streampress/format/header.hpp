@@ -12,6 +12,8 @@
 #include <cstring>
 #include <stdexcept>
 
+#include <streampress/core/checks.hpp>
+
 namespace streampress {
 
 // ============================================================================
@@ -109,6 +111,7 @@ struct FileHeader {
 
     // Deserialize from 64 bytes
     static FileHeader deserialize(const uint8_t* buf) {
+        require_little_endian();
         FileHeader h;
         const uint8_t* p = buf;
 

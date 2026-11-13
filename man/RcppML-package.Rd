@@ -79,6 +79,19 @@ matrices, powered by Rcpp and Eigen.
 }
 }
 
+\section{Options}{
+
+\describe{
+  \item{\code{RcppML.threads}}{Default number of OpenMP threads for every
+    function (\code{0} = all cores). A non-zero \code{threads} argument
+    takes precedence. Capped at 2 under \code{R CMD check} and at
+    \code{OMP_THREAD_LIMIT} when that is set.}
+  \item{\code{RcppML.verbose}}{Print additional diagnostics (default \code{FALSE}).}
+  \item{\code{RcppML.gpu}}{\code{TRUE}, \code{FALSE} or \code{"auto"}:
+    whether to use the optional GPU library when it is installed.}
+}
+}
+
 \section{Utilities}{
 
 \describe{
@@ -97,5 +110,17 @@ Useful links:
 }
 \author{
 \strong{Maintainer}: Zachary DeBruine \email{zacharydebruine@gmail.com} (\href{https://orcid.org/0000-0003-2234-4827}{ORCID})
+
+Authors:
+\itemize{
+  \item Zachary DeBruine \email{zacharydebruine@gmail.com} (\href{https://orcid.org/0000-0003-2234-4827}{ORCID})
+}
+
+Other contributors:
+\itemize{
+  \item Markus Buehren (Hungarian algorithm implementation in inst/include/RcppHungarian.h) [contributor, copyright holder]
+  \item Cong Ma (C++ port of the Hungarian algorithm in inst/include/RcppHungarian.h) [contributor, copyright holder]
+  \item Justin Silverman (Single-header adaptation RcppHungarian.h) [contributor, copyright holder]
+}
 
 }

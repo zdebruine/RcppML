@@ -20,6 +20,11 @@ each input gets its own W.
 \details{
 Execution concatenates inputs row-wise and runs a single NMF:
 \code{rbind(X1, X2, ...) = rbind(W1, W2, ...) * diag(d) * H}.
+The fitted \code{W} is returned as a named list with one block per input,
+in the order the inputs were given. The inputs are not reweighted: an
+input with more rows or larger values has more influence on \code{H}.
+Only \code{factor_input()} nodes with unique names can be shared, and a
+shared node is supported as the input of a single-layer network only.
 }
 \examples{
 data(aml)

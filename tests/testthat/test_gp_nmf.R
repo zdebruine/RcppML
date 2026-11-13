@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 # Test: GP (Generalized Poisson) NMF
 # Tests for GP loss, theta estimation, ZIGP, and CV with GP loss
 
@@ -58,6 +62,18 @@ test_that("GP-NMF with per_row dispersion recovers theta distribution", {
   skip_on_cran()
   theta_true <- 2.0
   sim <- simulate_gp_data(m = 100, n = 80, k = 3, theta = theta_true, seed = 77)
+
+  # simulate_gp_data() gives means near 0.03, i.e. two or three counts in a
+  # whole row. A row whose counts are all 0 or 1 carries no information on
+  # overdispersion and its maximum-likelihood theta is exactly 0, so the
+  # median over such rows is 0 for a correct fit. Per-row dispersion is only
+  # identifiable with enough counts per row: redraw the same model with the
+  # means scaled up (variance = mean * (1 + theta) as in the helper).
+  set.seed(78)
+  mu_big <- sim$mu * 200
+  A_big <- matrix(rnbinom(length(mu_big), size = mu_big / theta_true, mu = mu_big),
+                  nrow(mu_big), ncol(mu_big))
+  sim$A <- Matrix::Matrix(A_big, sparse = TRUE)
 
   model <- nmf(sim$A, 3, loss = "gp", dispersion = "per_row",
                maxit = 100, tol = 1e-8, seed = 42, verbose = FALSE)

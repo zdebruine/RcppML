@@ -7,21 +7,45 @@
  */
 
 
-// GPU primitives (alive headers only — dead dispatch layer removed 2026-02)
-#include "../inst/include/FactorNet/gpu/bipartition.cuh"
-#include "../inst/include/FactorNet/gpu/dclust.cuh"
-#include "../inst/include/FactorNet/nmf/fit_gpu.cuh"
-#include "../inst/include/FactorNet/nmf/fit_gpu_dense.cuh"
-#include "../inst/include/FactorNet/nmf/fit_cv_gpu.cuh"
-#include "../inst/include/FactorNet/svd/deflation_gpu.cuh"
-#include "../inst/include/FactorNet/svd/randomized_gpu.cuh"
-#include "../inst/include/FactorNet/svd/irlba_gpu.cuh"
-#include "../inst/include/FactorNet/svd/lanczos_gpu.cuh"
-#include "../inst/include/FactorNet/svd/krylov_gpu.cuh"
+// Interface version of RcppML_gpu.so. R/gpu_backend.R (.GPU_ABI_VERSION)
+// refuses to use a library whose version differs. Bump both whenever the
+// signature of any extern "C" entry point changes.
+#define RCPPML_GPU_ABI_VERSION 2
+
+// GPU primitives (alive headers only — dead dispatch layer removed 2026-02).
+// Resolved through the include path (-I<package>/include) so the bridge
+// sources build both from a source checkout and from an installed package.
+#include <FactorNet/gpu/bipartition.cuh>
+#include <FactorNet/gpu/dclust.cuh>
+#include <FactorNet/nmf/fit_gpu.cuh>
+#include <FactorNet/nmf/fit_gpu_dense.cuh>
+#include <FactorNet/nmf/fit_cv_gpu.cuh>
+#include <FactorNet/svd/deflation_gpu.cuh>
+#include <FactorNet/svd/randomized_gpu.cuh>
+#include <FactorNet/svd/irlba_gpu.cuh>
+#include <FactorNet/svd/lanczos_gpu.cuh>
+#include <FactorNet/svd/krylov_gpu.cuh>
+#include <climits>
 #include <cstring>
 #include <cstdio>
 #include <numeric>
+#include <stdexcept>
 #include <FactorNet/core/logging.hpp>
+
+// The GPU kernels index factor matrices (and dense input) with 32-bit ints.
+// Reject sizes that would overflow instead of corrupting memory.
+inline void rcppml_check_gpu_dims(long long m, long long n, long long k,
+                                  bool dense_input) {
+    if (m < 0 || n < 0 || k < 0)
+        throw std::runtime_error("GPU backend: negative dimension");
+    const long long lim = static_cast<long long>(INT_MAX);
+    if (m * k > lim || n * k > lim)
+        throw std::runtime_error(
+            "GPU backend: rows*k and cols*k must each be below 2^31");
+    if (dense_input && m * n > lim)
+        throw std::runtime_error(
+            "GPU backend: dense input must have fewer than 2^31 entries");
+}
 
 using namespace FactorNet::gpu;
 

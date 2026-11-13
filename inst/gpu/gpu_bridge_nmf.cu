@@ -79,6 +79,7 @@ void rcppml_gpu_nmf_unified_double(
     double* out_tol)
 {
     try {
+        rcppml_check_gpu_dims(*m, *n, *k, false);
         // Build unified config
         FactorNet::NMFConfig<double> config;
         config.rank = *k;
@@ -255,6 +256,7 @@ void rcppml_gpu_nmf_cv_unified_double(
     int* out_status)
 {
     try {
+        rcppml_check_gpu_dims(*m, *n, *k, false);
         FactorNet::NMFConfig<double> config;
         config.rank = *k;
         config.projective = (*projective != 0);
@@ -362,6 +364,7 @@ void rcppml_gpu_nmf_cv_unified_float(
     int* out_status)
 {
     try {
+        rcppml_check_gpu_dims(*m, *n, *k, false);
         FactorNet::NMFConfig<float> config;
         config.rank = *k;
         config.projective = (*projective != 0);
@@ -497,6 +500,7 @@ void rcppml_gpu_nmf_unified_float(
     double* out_tol)
 {
     try {
+        rcppml_check_gpu_dims(*m, *n, *k, false);
         // Build config in float precision
         FactorNet::NMFConfig<float> config;
         config.rank = *k;
@@ -661,6 +665,7 @@ void rcppml_gpu_nmf_dense_unified_double(
     double* out_tol)
 {
     try {
+        rcppml_check_gpu_dims(*m, *n, *k, true);
         FactorNet::NMFConfig<double> config;
         config.rank = *k;
         config.max_iter = *max_iter;
@@ -774,6 +779,7 @@ void rcppml_gpu_nmf_dense_unified_float(
     double* out_tol)
 {
     try {
+        rcppml_check_gpu_dims(*m, *n, *k, true);
         FactorNet::NMFConfig<float> config;
         config.rank = *k;
         config.max_iter = *max_iter;
@@ -896,6 +902,7 @@ void rcppml_gpu_nmf_zerocopy_double(
     double* out_tol)
 {
     try {
+        rcppml_check_gpu_dims(*m, *n, *k, false);
         // Reconstruct device pointers from double-encoded addresses
         auto to_ptr = [](double addr) -> void* {
             return reinterpret_cast<void*>(static_cast<uintptr_t>(addr));
@@ -904,6 +911,9 @@ void rcppml_gpu_nmf_zerocopy_double(
         int* dev_row_idx = static_cast<int*>(to_ptr(*d_row_idx_addr));
         double* dev_values = static_cast<double*>(to_ptr(*d_values_addr));
 
+        if (!(*nnz_d >= 0.0) || *nnz_d > static_cast<double>(INT_MAX))
+            throw std::runtime_error(
+                "GPU backend: number of non-zeros must be below 2^31");
         int nnz = static_cast<int>(*nnz_d);
 
         // Build unified config
@@ -1027,6 +1037,7 @@ void rcppml_gpu_nmf_aligned_double(
     int* out_status, double* out_tol)
 {
     try {
+        rcppml_check_gpu_dims(*m, *n, *k, false);
         // Build unified config
         FactorNet::NMFConfig<double> config;
         config.rank = *k;

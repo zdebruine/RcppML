@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 # Tests that streaming SPZ NMF correctly handles non-MSE losses.
 # Streaming IRLS uses weight_zeros=true so that zero entries get correct
 # distribution-derived weights instead of unit weights.
@@ -6,7 +10,7 @@ options(RcppML.verbose = FALSE)
 options(RcppML.threads = 1)
 
 test_that("streaming SPZ NMF runs with GP loss", {
-  skip(".st_dispatch not yet re-implemented")
+  skip_streaming_dispatch()
   skip_on_cran()
   skip_if_not_installed("Matrix")
   data(movielens, package = "RcppML")
@@ -30,7 +34,7 @@ test_that("streaming SPZ NMF runs with GP loss", {
 })
 
 test_that("streaming SPZ NMF runs with NB loss", {
-  skip(".st_dispatch not yet re-implemented")
+  skip_streaming_dispatch()
   skip_on_cran()
   skip_if_not_installed("Matrix")
   data(movielens, package = "RcppML")
@@ -52,7 +56,7 @@ test_that("streaming SPZ NMF runs with NB loss", {
 })
 
 test_that("streaming SPZ NMF runs with robust MSE", {
-  skip(".st_dispatch not yet re-implemented")
+  skip_streaming_dispatch()
   skip_on_cran()
   skip_if_not_installed("Matrix")
   data(movielens, package = "RcppML")
@@ -74,7 +78,7 @@ test_that("streaming SPZ NMF runs with robust MSE", {
 })
 
 test_that("streaming SPZ NMF with MSE loss still works", {
-  skip(".st_dispatch not yet re-implemented")
+  skip_streaming_dispatch()
   skip_on_cran()
   skip_if_not_installed("Matrix")
   data(movielens, package = "RcppML")

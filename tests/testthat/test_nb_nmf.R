@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 # Test: NB (Negative Binomial) NMF
 # Tests for NB loss, dispersion estimation, ZINB, and loss monotonicity
 

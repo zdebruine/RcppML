@@ -59,6 +59,17 @@
 #'   \item{\code{\link{gpu_info}}}{Get GPU device details}
 #' }
 #'
+#' @section Options:
+#' \describe{
+#'   \item{\code{RcppML.threads}}{Default number of OpenMP threads for every
+#'     function (\code{0} = all cores). A non-zero \code{threads} argument
+#'     takes precedence. Capped at 2 under \code{R CMD check} and at
+#'     \code{OMP_THREAD_LIMIT} when that is set.}
+#'   \item{\code{RcppML.verbose}}{Print additional diagnostics (default \code{FALSE}).}
+#'   \item{\code{RcppML.gpu}}{\code{TRUE}, \code{FALSE} or \code{"auto"}:
+#'     whether to use the optional GPU library when it is installed.}
+#' }
+#'
 #' @section Utilities:
 #' \describe{
 #'   \item{\code{\link{cosine}}}{Cosine similarity}
@@ -71,5 +82,6 @@
 #' @import Matrix
 #' @importFrom Rcpp evalCpp
 #' @importFrom methods as canCoerce
+#' @importFrom stats biplot
 #' @useDynLib RcppML, .registration = TRUE
 NULL

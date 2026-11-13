@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 # Test GPU Distribution NMF Parity
 #
 # Verifies that GPU distribution NMF (GP, NB, Gamma, InvGauss, Tweedie, robust)
@@ -86,7 +90,9 @@ test_that("GPU Gamma NMF runs and produces valid output", {
   # Gamma deviance is numerically unstable under fp32 (inverse-square link
   # amplifies rounding), so we only verify both backends converge to finite,
   # positive losses with non-negative factors.  Full parity requires fp64 GPU.
-  A <- make_sparse_nonneg(100, 80, density = 0.15, seed = 42)
+  # Gamma rejects zeros, so the data are strictly positive (dense)
+  set.seed(42)
+  A <- matrix(rgamma(100 * 80, shape = 2, rate = 1) + 0.1, 100, 80)
 
   cpu <- nmf(A, k = 3, loss = "gamma", dispersion = "per_row",
              maxit = 30, tol = 1e-10, seed = 42, resource = "cpu", verbose = FALSE)
@@ -109,7 +115,9 @@ test_that("GPU InvGauss NMF runs and produces valid output", {
 
   # Inverse-Gaussian deviance uses cubic inverse-link, making fp32 losses
   # highly sensitive to rounding.  Smoke test only; parity needs fp64 GPU.
-  A <- make_sparse_nonneg(100, 80, density = 0.15, seed = 42)
+  # Inverse Gaussian rejects zeros, so the data are strictly positive (dense)
+  set.seed(42)
+  A <- matrix(rgamma(100 * 80, shape = 2, rate = 1) + 0.1, 100, 80)
 
   cpu <- nmf(A, k = 3, loss = "inverse_gaussian", dispersion = "per_row",
              maxit = 30, tol = 1e-10, seed = 42, resource = "cpu", verbose = FALSE)

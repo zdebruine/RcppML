@@ -7,11 +7,13 @@
 pca(A, k = 10, ...)
 }
 \arguments{
-\item{A}{Input matrix. May be dense (\code{matrix}), sparse (\code{dgCMatrix}),
+\item{A}{Input matrix with variables (features) in rows and samples in
+columns. May be dense (\code{matrix}), sparse (\code{dgCMatrix}),
 or a path to a \code{.spz} file for out-of-core streaming SVD.}
 
-\item{k}{Number of factors (rank). Use \code{"auto"} for automatic rank selection
-via cross-validation. Default: 10.}
+\item{k}{Number of factors (rank), at most \code{min(dim(A))}. Use
+\code{"auto"} for automatic rank selection via cross-validation.
+Default: 10, or \code{min(dim(A))} if that is smaller.}
 
 \item{...}{Additional arguments passed to \code{\link{svd}}.}
 }
@@ -21,12 +23,27 @@ An S4 object of class \code{svd} (see \code{\link{svd}}).
 \description{
 Convenience wrapper around \code{\link{svd}} with \code{center = TRUE}.
 }
+\details{
+\strong{Rows are variables and columns are samples}, as in
+\code{\link{nmf}}: each row is centered (and, with \code{scale = TRUE},
+divided by its sample standard deviation). This is the transpose of the
+\code{stats::prcomp} convention. For a matrix \code{X} with samples in rows,
+\code{p <- pca(t(X), k)} gives \code{p@d / sqrt(nrow(X) - 1)} equal to
+\code{prcomp(X)$sdev[1:k]}, \code{p@u} equal to the loadings
+(\code{rotation}) and \code{p@v \%*\% diag(p@d)} equal to the scores
+(\code{x}), up to sign.
+}
 \examples{
 \donttest{
 library(Matrix)
-data(aml)
+data(aml)   # variables (regions) in rows, samples in columns
 result <- pca(aml, k = 5)
 result
+
+# A samples-in-rows data set must be transposed first
+X <- as.matrix(iris[, 1:4])
+p <- pca(t(X), k = 2)
+p@d / sqrt(nrow(X) - 1)       # matches prcomp(X)$sdev[1:2]
 }
 }
 \seealso{

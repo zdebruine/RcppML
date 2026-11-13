@@ -62,7 +62,7 @@ table(attr(hawaiibirds, "metadata_w")$status)
 table(attr(hawaiibirds, "metadata_h")$island)
 
 # Run NMF to identify species co-occurrence patterns
-result <- nmf(hawaiibirds, k = 10, maxit = 50)
+result <- nmf(hawaiibirds, k = 10, maxit = 30, seed = 1, threads = 2)
 }
 
 }

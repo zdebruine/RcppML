@@ -64,12 +64,8 @@ test_that("nmf handles sparse matrix with some all-zero columns", {
 
 test_that("nmf handles k larger than min dimension gracefully", {
   A <- matrix(runif(12), nrow = 3, ncol = 4)
-  # k=5 > min(3,4)=3 — should either error or run without crashing
-  tryCatch(
-    nmf(A, k = 5),
-    error = function(e) expect_true(TRUE)  # erroring is acceptable
-  )
-  expect_true(TRUE)  # not crashing is the key requirement
+  # k=5 > min(3,4)=3 is rejected before any computation
+  expect_error(nmf(A, k = 5), "cannot exceed")
 })
 
 test_that("nmf handles 2x2 matrix", {

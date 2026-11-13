@@ -9,12 +9,16 @@ Rcpp_nmf_rank_cv <- function(A_sexp, k_init = 2L, max_k = 50L, tolerance = 2L, h
     .Call(`_RcppML_Rcpp_nmf_rank_cv`, A_sexp, k_init, max_k, tolerance, holdout_fraction, cv_seed, tol, maxit, verbose, L1, L2, threads)
 }
 
-Rcpp_nmf_full <- function(A_sexp, k_vec, k_auto, k_auto_min, k_auto_max, L1, L2, L21, angular, upper_bound, graph_lambda, tol, maxit, cd_maxit, cd_tol, threads, seed, nonneg_w, nonneg_h, sort_model, mask_zeros, track_loss_history, track_train_loss, loss_str, huber_delta, holdout_fraction, cv_seeds, cv_patience, resource_override, norm_str = "L1", graph_W_sexp = NULL, graph_H_sexp = NULL, w_init_sexp = NULL, h_init_sexp = NULL, verbose = FALSE, mask_sexp = NULL, projective = FALSE, symmetric_nmf = FALSE, solver_mode = 0L, init_mode = 0L, irls_max_iter = 20L, irls_tol = 1e-4, gp_dispersion_mode = 1L, gp_theta_init = 0.1, gp_theta_max = 5.0, zi_mode = 0L, zi_em_iters = 1L, gp_theta_min = 0.0, nb_size_init = 10.0, nb_size_max = 1e6, nb_size_min = 0.01, gamma_phi_init = 1.0, gamma_phi_max = 1e4, gamma_phi_min = 1e-6, robust_delta = 0.0, tweedie_power = 1.5, on_iteration_r = NULL, target_H_sexp = NULL, target_lambda = NULL, enable_profiling = FALSE) {
+Rcpp_nmf_full <- function(A_sexp, k_vec, k_auto, k_auto_min, k_auto_max, L1, L2, L21, angular, upper_bound, graph_lambda, tol, maxit, cd_maxit, cd_tol, threads, seed, nonneg_w, nonneg_h, sort_model, mask_zeros, track_loss_history, track_train_loss, loss_str, huber_delta, holdout_fraction, cv_seeds, cv_patience, resource_override, norm_str = "L1", graph_W_sexp = NULL, graph_H_sexp = NULL, w_init_sexp = NULL, h_init_sexp = NULL, verbose = FALSE, mask_sexp = NULL, projective = FALSE, symmetric_nmf = FALSE, solver_mode = 0L, init_mode = 0L, irls_max_iter = 5L, irls_tol = 1e-4, gp_dispersion_mode = 1L, gp_theta_init = 0.1, gp_theta_max = 5.0, zi_mode = 0L, zi_em_iters = 1L, gp_theta_min = 0.0, nb_size_init = 10.0, nb_size_max = 1e6, nb_size_min = 0.01, gamma_phi_init = 1.0, gamma_phi_max = 1e4, gamma_phi_min = 1e-6, robust_delta = 0.0, tweedie_power = 1.5, on_iteration_r = NULL, target_H_sexp = NULL, target_lambda = NULL, enable_profiling = FALSE) {
     .Call(`_RcppML_Rcpp_nmf_full`, A_sexp, k_vec, k_auto, k_auto_min, k_auto_max, L1, L2, L21, angular, upper_bound, graph_lambda, tol, maxit, cd_maxit, cd_tol, threads, seed, nonneg_w, nonneg_h, sort_model, mask_zeros, track_loss_history, track_train_loss, loss_str, huber_delta, holdout_fraction, cv_seeds, cv_patience, resource_override, norm_str, graph_W_sexp, graph_H_sexp, w_init_sexp, h_init_sexp, verbose, mask_sexp, projective, symmetric_nmf, solver_mode, init_mode, irls_max_iter, irls_tol, gp_dispersion_mode, gp_theta_init, gp_theta_max, zi_mode, zi_em_iters, gp_theta_min, nb_size_init, nb_size_max, nb_size_min, gamma_phi_init, gamma_phi_max, gamma_phi_min, robust_delta, tweedie_power, on_iteration_r, target_H_sexp, target_lambda, enable_profiling)
 }
 
 Rcpp_nmf_streaming_spz <- function(path, k, tol, maxit, L1, L2, L21, angular, upper_bound, graph_lambda, nonneg_w, nonneg_h, cd_maxit, cd_tol, threads, seed, verbose, loss_str, huber_delta, holdout_fraction, mask_zeros, cv_seed, norm_str = "L1", mask_sexp = NULL, graph_W_sexp = NULL, graph_H_sexp = NULL, solver_mode = 0L, init_mode = 0L, projective = FALSE, symmetric = FALSE, enable_profiling = FALSE) {
     .Call(`_RcppML_Rcpp_nmf_streaming_spz`, path, k, tol, maxit, L1, L2, L21, angular, upper_bound, graph_lambda, nonneg_w, nonneg_h, cd_maxit, cd_tol, threads, seed, verbose, loss_str, huber_delta, holdout_fraction, mask_zeros, cv_seed, norm_str, mask_sexp, graph_W_sexp, graph_H_sexp, solver_mode, init_mode, projective, symmetric, enable_profiling)
+}
+
+Rcpp_test_sparse_setup <- function(A_s4, threads = 2L) {
+    .Call(`_RcppML_Rcpp_test_sparse_setup`, A_s4, threads)
 }
 
 Rcpp_svd_pca <- function(A_sexp, k_max, tol, max_iter, center, scale, verbose, seed, threads, L1_u, L1_v, L2_u, L2_v, nonneg_u, nonneg_v, upper_bound_u, upper_bound_v, L21_u, L21_v, angular_u, angular_v, graph_u, graph_v, graph_u_lambda, graph_v_lambda, test_fraction, cv_seed, patience, mask_zeros, obs_mask, convergence = "factor", method = "deflation", robust_delta = 0.0, irls_max_iter = 5L, irls_tol = 1e-4) {
@@ -25,8 +29,8 @@ Rcpp_svd_streaming_spz <- function(path, k_max, tol, max_iter, center, scale, ve
     .Call(`_RcppML_Rcpp_svd_streaming_spz`, path, k_max, tol, max_iter, center, scale, verbose, seed, threads, L1_u, L1_v, L2_u, L2_v, nonneg_u, nonneg_v, upper_bound_u, upper_bound_v, L21_u, L21_v, angular_u, angular_v, graph_u, graph_v, graph_u_lambda, graph_v_lambda, test_fraction, cv_seed, patience, mask_zeros, obs_mask, convergence, method, robust_delta, irls_max_iter, irls_tol)
 }
 
-Rcpp_predict <- function(A_sexp, mask, w, L1, L2, threads, mask_zeros, upper_bound = 0) {
-    .Call(`_RcppML_Rcpp_predict`, A_sexp, mask, w, L1, L2, threads, mask_zeros, upper_bound)
+Rcpp_predict <- function(A_sexp, mask, w, L1, L2, threads, mask_zeros, upper_bound = 0, nonneg = TRUE) {
+    .Call(`_RcppML_Rcpp_predict`, A_sexp, mask, w, L1, L2, threads, mask_zeros, upper_bound, nonneg)
 }
 
 Rcpp_evaluate_loss <- function(A_sexp, mask, w, d, h, loss_type, huber_delta, threads, mask_zeros) {

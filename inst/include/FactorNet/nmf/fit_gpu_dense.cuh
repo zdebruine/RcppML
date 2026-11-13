@@ -303,6 +303,11 @@ template<typename Scalar>
 
     const bool use_irls = config.requires_irls();
     const bool use_mask = config.has_mask();
+    // Masked fits run on CPU (the gateway routes them there). The host-side
+    // masked branches below are kept compiling but are not a supported path.
+    if (use_mask)
+        throw std::runtime_error(
+            "masked NMF is not supported on the GPU backend");
 
     // Create Eigen wraps of host data for IRLS
     Eigen::Map<const DenseMatrix<Scalar>> h_A_map(A_data, m, n);
@@ -430,7 +435,8 @@ template<typename Scalar>
 
             nmf::mask_detail::masked_nnls_h<Scalar>(
                 h_A_map, h_W_T, G_base, h_H, *config.mask, config,
-                config.threads > 0 ? config.threads : 1, iter > 0);
+                config.threads > 0 ? config.threads : 1, iter > 0,
+                config.H);
 
             if (config.H.upper_bound > 0)
                 features::apply_upper_bound(h_H, config.H.upper_bound);
@@ -619,7 +625,8 @@ template<typename Scalar>
 
             nmf::mask_detail::masked_nnls_w<Scalar>(
                 h_A_map, h_H, G_base, h_W_T, h_mask_T, config,
-                config.threads > 0 ? config.threads : 1, iter > 0);
+                config.threads > 0 ? config.threads : 1, iter > 0,
+                config.W);
 
             if (config.W.upper_bound > 0)
                 features::apply_upper_bound(h_W_T, config.W.upper_bound);
