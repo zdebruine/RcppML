@@ -1,0 +1,153 @@
+"file","test","nb","failed","skipped","error","warning","real"
+"test_gpu_accuracy.R","GPU produces same results as CPU (standard NMF)",5,0,FALSE,0,0,0.235
+"test_gpu_accuracy.R","GPU produces same results for k=2",3,0,FALSE,0,0,0.208
+"test_gpu_accuracy.R","GPU fp32 converges to similar solution as fp64",2,0,FALSE,0,0,0.28
+"test_gpu_accuracy.R","GPU auto-dispatch respects RcppML.gpu option",2,0,FALSE,0,0,0.211
+"test_gpu_accuracy.R","Multi-GPU produces valid results",2,0,FALSE,0,0,0.123
+"test_gpu_accuracy.R","GPU sparse NMF tightly matches CPU (loss <10%, factor agreement >0.95)",2,0,FALSE,0,0,0.177
+"test_gpu_clustering.R","dclust produces valid clusters on GPU node",80,0,FALSE,0,0,0.387
+"test_gpu_clustering.R","dclust cluster IDs are unique and zero-indexed",2,0,FALSE,0,0,0.103
+"test_gpu_clustering.R","consensus_nmf runs on GPU and returns valid structure",8,0,FALSE,0,0,0.203
+"test_gpu_clustering.R","GPU consensus_nmf produces similar clusters to CPU",3,0,FALSE,0,0,0.371999999999999
+"test_gpu_cv.R","GPU MSE CV speckled matches CPU (test_loss parity)",6,0,FALSE,0,1,0.0270000000000001
+"test_gpu_cv.R","GPU MSE CV full-mask matches CPU (test_loss parity)",4,0,FALSE,0,1,0.0200000000000005
+"test_gpu_cv.R","GPU MSE CV with dense input matches CPU",4,0,FALSE,0,1,0.0200000000000005
+"test_gpu_cv.R","GPU GP CV runs and produces valid output",9,0,FALSE,0,3,0.04
+"test_gpu_cv.R","GPU NB CV matches CPU (test_loss parity)",6,0,FALSE,0,3,0.0350000000000001
+"test_gpu_cv.R","GPU multi-rank CV produces valid data.frame",10,0,FALSE,0,4,0.0810000000000004
+"test_gpu_dense.R","GPU NMF works on dense matrix input",5,0,FALSE,0,0,0.0299999999999994
+"test_gpu_dense.R","GPU dense NMF accuracy matches CPU within tolerance",2,0,FALSE,0,0,0.0229999999999997
+"test_gpu_dense.R","GPU dense NMF supports L1/L2 regularization",5,0,FALSE,0,2,0.0170000000000003
+"test_gpu_dense.R","GPU dense NMF works with fp32 precision",2,0,FALSE,0,0,0.0129999999999999
+"test_gpu_dense.R","GPU dense NMF handles k=1",4,0,FALSE,0,0,0.0179999999999998
+"test_gpu_dense.R","GPU dense NMF handles large rank (k=32)",3,0,FALSE,0,0,0.0609999999999999
+"test_gpu_dense.R","GPU dense NMF loss within 5% of CPU dense NMF",2,0,FALSE,0,0,0.0419999999999998
+"test_gpu_dense.R","GPU dense CD solver loss within 5% of CPU",1,0,FALSE,0,0,0.138
+"test_gpu_dense.R","GPU dense CD solver produces valid non-negative factors",6,0,FALSE,0,0,0.133999999999999
+"test_gpu_dense.R","GPU dense GP loss matches CPU within 5%",6,0,FALSE,0,3,0.315
+"test_gpu_dense.R","GPU dense NB loss matches CPU within 5%",6,0,FALSE,0,3,0.365
+"test_gpu_dense.R","GPU dense Gamma loss matches CPU within 5%",2,0,FALSE,0,1,0.294
+"test_gpu_dense.R","GPU dense InvGauss loss matches CPU within 5%",2,0,FALSE,0,1,0.247
+"test_gpu_dense.R","GPU dense Tweedie loss matches CPU within 5%",2,0,FALSE,0,1,0.735
+"test_gpu_dense.R","GPU dense robust MSE matches CPU within 5%",2,0,FALSE,0,1,0.313000000000001
+"test_gpu_dense.R","GPU dense robust GP matches CPU within 5%",4,0,FALSE,0,3,0.454
+"test_gpu_dense.R","GPU dense CV selects same optimal rank as CPU",4,0,FALSE,0,3,0.0439999999999996
+"test_gpu_dense.R","GPU dense single-rank CV test loss within 10% of CPU",2,0,FALSE,0,1,0.0270000000000001
+"test_gpu_dense.R","GPU dense CV with GP loss matches CPU",4,0,FALSE,0,3,0.0980000000000008
+"test_gpu_dense.R","GPU dense CV with NB loss matches CPU",4,0,FALSE,0,3,0.0970000000000004
+"test_gpu_dense.R","GPU dense CV with Gamma loss matches CPU",2,0,FALSE,0,1,0.0800000000000001
+"test_gpu_dense.R","GPU dense CV with InvGauss loss matches CPU",2,0,FALSE,0,1,0.0640000000000001
+"test_gpu_dense.R","GPU dense CV with Tweedie loss matches CPU",2,0,FALSE,0,1,0.163999999999999
+"test_gpu_dense.R","GPU dense multi-rank CV with GP selects same rank as CPU",6,0,FALSE,0,5,0.376999999999999
+"test_gpu_dense.R","GPU dense projective NMF enforces H = normalize(d*Wt*A)",3,0,FALSE,0,1,0.0199999999999996
+"test_gpu_dense.R","GPU dense symmetric NMF enforces H = Wt",3,0,FALSE,0,1,0.0149999999999988
+"test_gpu_dense.R","projective NMF with cross-validation is rejected",2,0,FALSE,0,0,0.0190000000000001
+"test_gpu_dense.R","GPU dense symmetric CV test loss within 5% of CPU",2,0,FALSE,0,1,0.0140000000000011
+"test_gpu_dense.R","GPU dense CD IRLS GP matches CPU within 1%",4,0,FALSE,0,3,0.286
+"test_gpu_dense.R","GPU Cholesky MSE matches CPU within 5%",1,0,FALSE,0,0,0.0170000000000012
+"test_gpu_dense.R","GPU dense ZI-ROW GP matches CPU",4,0,FALSE,0,3,0.323
+"test_gpu_dense.R","GPU dense ZI-ROW NB matches CPU",4,0,FALSE,0,3,0.426
+"test_gpu_dense.R","GPU dense Semi-NMF allows negative W",2,0,FALSE,0,0,0.0169999999999995
+"test_gpu_dense.R","GPU dense seeded NMF (seed W) matches CPU within 1%",1,0,FALSE,0,0,0.0169999999999995
+"test_gpu_dense.R","GPU dense mask NA matches CPU within 1%",4,0,FALSE,0,3,0.0370000000000008
+"test_gpu_dense.R","GPU dense mask zeros matches CPU within 1%",2,0,FALSE,0,1,0.0500000000000007
+"test_gpu_dense.R","GPU SVD auto-select matches CPU singular values",1,0,FALSE,0,0,0.0289999999999999
+"test_gpu_dense.R","GPU SVD krylov matches CPU singular values",1,0,FALSE,0,0,0.0400000000000009
+"test_gpu_distributions.R","GPU GP NMF matches CPU GP NMF",10,0,FALSE,0,3,0.111000000000001
+"test_gpu_distributions.R","GPU NB NMF matches CPU NB NMF",8,0,FALSE,0,3,0.162000000000001
+"test_gpu_distributions.R","GPU Gamma NMF runs and produces valid output",7,0,FALSE,0,1,0.202
+"test_gpu_distributions.R","GPU InvGauss NMF runs and produces valid output",7,0,FALSE,0,1,0.167999999999999
+"test_gpu_distributions.R","GPU Tweedie NMF runs and produces valid output",7,0,FALSE,0,1,0.135999999999999
+"test_gpu_distributions.R","GPU robust MSE NMF runs and produces valid output",9,0,FALSE,0,1,0.0939999999999994
+"test_gpu_features.R","GPU cross-validation runs for multiple ranks",11,0,FALSE,0,5,0.177999999999999
+"test_gpu_features.R","GPU CV matches CPU CV approximately",3,0,FALSE,0,1,0.131
+"test_gpu_features.R","GPU NMF with L1 regularization",3,0,FALSE,0,0,0.116000000000001
+"test_gpu_features.R","GPU NMF with L2 regularization",5,0,FALSE,0,0,0.243
+"test_gpu_features.R","GPU NMF with L21 regularization (Tier 2)",3,0,FALSE,0,1,0.114000000000001
+"test_gpu_features.R","GPU NMF with angular regularization (Tier 2)",3,0,FALSE,0,1,0.119999999999999
+"test_gpu_features.R","GPU NMF with upper bounds (Tier 2)",3,0,FALSE,0,1,0.116000000000001
+"test_gpu_features.R","GPU NMF with graph regularization (Tier 2)",3,0,FALSE,0,1,0.231
+"test_gpu_features.R","GPU bipartition produces valid partition",2,0,FALSE,0,0,0.101999999999999
+"test_gpu_features.R","GPU bipartition matches CPU bipartition",2,0,FALSE,0,0,0.112
+"test_gpu_features.R","GPU dclust produces valid hierarchical clustering",1,0,FALSE,0,0,0.101000000000001
+"test_gpu_features.R","Multi-GPU with different max_gpus settings",5,0,FALSE,0,0,0.243
+"test_gpu_features.R","GPU supports semi-NMF (unconstrained W)",4,0,FALSE,0,0,0.116999999999999
+"test_gpu_features.R","robust = 'mae' requested on GPU runs on CPU and says so",6,0,FALSE,0,0,0.66
+"test_gpu_features.R","GPU supports robust=TRUE (Huber) via host-mediated IRLS",7,0,FALSE,0,1,0.378
+"test_gpu_features.R","GPU Semi-NMF with robust='mae' works together",5,0,FALSE,0,1,0.517999999999999
+"test_gpu_features.R","GPU precision option controls fp32 vs fp64",3,0,FALSE,0,0,0.125
+"test_gpu_features.R","GPU L1-W loss within 10% of CPU L1-W",2,0,FALSE,0,0,0.101000000000001
+"test_gpu_features.R","GPU L1-H loss within 10% of CPU L1-H",2,0,FALSE,0,0,0.110000000000001
+"test_gpu_features.R","GPU L2-W loss within 15% of CPU L2-W",1,0,FALSE,0,0,0.218
+"test_gpu_features.R","GPU L2-H loss within 10% of CPU L2-H",1,0,FALSE,0,0,0.0970000000000013
+"test_gpu_features.R","GPU scale=L2 loss within 5% of CPU",2,0,FALSE,0,0,0.0990000000000002
+"test_gpu_features.R","GPU scale=none loss within 5% of CPU",2,0,FALSE,0,0,0.23
+"test_gpu_features.R","GPU mask='zeros' loss within 5% of CPU",2,0,FALSE,0,1,0.125
+"test_gpu_features.R","GPU default mask loss within 5% of CPU",1,0,FALSE,0,0,0.115
+"test_gpu_features.R","GPU sparse loss eval matches CPU",3,0,FALSE,0,0,0.115
+"test_gpu_features.R","GPU dense loss eval matches CPU",3,0,FALSE,0,0,0.250999999999999
+"test_gpu_features.R","GPU per-iteration loss history or final loss is valid",2,0,FALSE,0,0,0.106999999999999
+"test_gpu_graph.R","GPU graph NMF runs without error",7,0,FALSE,0,1,0.121999999999998
+"test_gpu_graph.R","GPU graph NMF loss decreases from initial",3,0,FALSE,0,2,0.102
+"test_gpu_graph.R","GPU deep graph NMF runs with both graph_W and graph_H",5,0,FALSE,0,1,0.221999999999998
+"test_gpu_init.R","GPU lanczos init loss within 5% of CPU",1,0,FALSE,0,0,0.111999999999998
+"test_gpu_init.R","GPU lanczos init produces valid factors",5,0,FALSE,0,0,0.119
+"test_gpu_init.R","GPU random init loss within 5% of CPU",1,0,FALSE,0,0,0.117999999999999
+"test_gpu_init.R","GPU user-supplied init loss within 5% of CPU",1,0,FALSE,0,0,0.218999999999998
+"test_gpu_init.R","GPU user init produces non-negative factors",4,0,FALSE,0,0,0.114999999999998
+"test_gpu_init.R","GPU dense random init loss within 5% of CPU",1,0,FALSE,0,0,0.140000000000001
+"test_gpu_init.R","GPU dense lanczos init loss within 5% of CPU",1,0,FALSE,0,0,0.250999999999998
+"test_gpu_init.R","GPU dense user init loss within 5% of CPU",1,0,FALSE,0,0,0.131999999999998
+"test_gpu_oom.R","GPU streaming mode activates for large matrices",12,0,FALSE,0,0,16.8
+"test_gpu_oom.R","GPU CPU fallback produces valid results",5,0,FALSE,0,0,0.117000000000004
+"test_gpu_oom.R","GPU handles medium-scale matrix correctly",3,0,FALSE,0,0,0.803000000000004
+"test_gpu_oom.R","GPU NMF with large k succeeds or falls back gracefully",5,0,FALSE,0,0,0.326000000000001
+"test_gpu_oom.R","GPU ZI NMF memory guard passes on normal-sized input",2,0,FALSE,0,1,0.392000000000003
+"test_gpu_streaming.R","GPU streaming NMF returns valid result on large sparse matrix",5,0,FALSE,0,0,0.0760000000000005
+"test_gpu_streaming.R","GPU NMF on large sparse matches CPU within tolerance",3,0,FALSE,0,0,0.116999999999997
+"test_gpu_streaming.R","GPU NMF handles large rank on large sparse matrix",4,0,FALSE,0,0,0.0850000000000009
+"test_gpu_streaming.R","Streaming NMF correctly restricts to MSE loss",1,0,TRUE,0,0,0.00399999999999778
+"test_gpu_streaming.R","GPU NMF works on very wide sparse matrix (n >> m)",3,0,FALSE,0,0,0.0230000000000032
+"test_gpu_streaming.R","GPU NMF with L1 regularization on large sparse matrix",2,0,FALSE,0,0,0.0179999999999936
+"test_gpu_streaming.R","TEST-GPU-STREAMING-MSE: streaming GPU NMF vs in-memory GPU parity",2,0,FALSE,0,0,0.0499999999999972
+"test_gpu_streaming.R","TEST-GPU-STREAMING-GP: streaming GPU GP loss produces valid results",5,0,FALSE,0,2,0.408000000000001
+"test_gpu_streaming.R","TEST-GPU-STREAMING-NB: streaming GPU NB loss produces valid results",5,0,FALSE,0,2,0.524000000000001
+"test_gpu_streaming.R","TEST-GPU-STREAMING-REG: streaming GPU regularization parity",4,0,FALSE,0,0,0.0419999999999945
+"test_gpu_streaming.R","TEST-GPU-STREAMING-SCALE: streaming GPU reconstruction parity",3,0,FALSE,0,0,0.0429999999999993
+"test_gpu_streaming.R","TEST-GPU-STREAMING-LOSS: streaming GPU loss is finite and positive",2,0,FALSE,0,0,0.0279999999999987
+"test_gpu_streaming.R","TEST-GPU-STREAMING-INIT: streaming GPU 1-iter init produces valid W,H",5,0,FALSE,0,0,0.0279999999999987
+"test_gpu_streaming.R","TEST-SPZ-AUTO-CHUNK-GPU: GPU SPZ auto-chunking matches in-memory GPU",2,0,FALSE,0,0,0.054000000000002
+"test_gpu_svd.R","TEST-GPU-SVD-DEFLATION: GPU deflation matches CPU (sparse)",2,0,FALSE,0,0,0.0159999999999982
+"test_gpu_svd.R","TEST-GPU-SVD-KRYLOV: GPU krylov matches ground truth (sparse)",2,0,FALSE,0,0,0.00900000000000034
+"test_gpu_svd.R","TEST-GPU-SVD-LANCZOS: GPU lanczos matches ground truth (sparse)",2,0,FALSE,0,0,0.00900000000000034
+"test_gpu_svd.R","TEST-GPU-SVD-IRLBA: GPU irlba matches CPU (sparse)",2,0,FALSE,0,0,0.00600000000000023
+"test_gpu_svd.R","TEST-GPU-SVD-RANDOMIZED: GPU randomized matches CPU (sparse)",2,0,FALSE,0,0,0.0229999999999961
+"test_gpu_svd.R","TEST-GPU-SVD-DEFLATION-DENSE: GPU deflation matches CPU (dense)",2,0,FALSE,0,0,0.0139999999999958
+"test_gpu_svd.R","TEST-GPU-SVD-LANCZOS-DENSE: GPU lanczos matches CPU (dense)",2,0,FALSE,0,0,0.00900000000000034
+"test_gpu_svd.R","TEST-GPU-SVD-IRLBA-DENSE: GPU irlba matches CPU (dense)",2,0,FALSE,0,0,0.007000000000005
+"test_gpu_svd.R","TEST-GPU-SVD-RANDOMIZED-DENSE: GPU randomized matches CPU (dense)",2,0,FALSE,0,0,0.0129999999999981
+"test_gpu_utils.R","gpu_available returns FALSE on non-GPU nodes",2,0,FALSE,0,0,0.00500000000000256
+"test_gpu_utils.R","gpu_info returns NULL when no GPU is available",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_utils.R","gpu_info returns data.frame when GPU is available",6,0,FALSE,0,0,0.0129999999999981
+"test_gpu_utils.R","gpu_available is idempotent",1,0,FALSE,0,0,0.00300000000000011
+"test_gpu_utils.R","gpu_available with force_recheck",2,0,FALSE,0,0,0.0069999999999979
+"test_gpu_variants.R","GPU projective NMF loss within 15% of CPU",8,0,FALSE,0,1,0.556000000000004
+"test_gpu_variants.R","GPU symmetric NMF loss within 15% of CPU",7,0,FALSE,0,1,0.836000000000006
+"test_gpu_zi.R","GPU ZIGP-row accepts zi param and produces valid factors",7,0,FALSE,0,1,0.0370000000000061
+"test_gpu_zi.R","GPU ZIGP-col accepts zi param and produces valid factors",5,0,FALSE,0,1,0.036999999999999
+"test_gpu_zi.R","CPU ZIGP-row returns pi_row and has different loss than non-ZI",5,0,FALSE,0,0,0.0390000000000015
+"test_gpu_zi.R","GPU ZINB-row accepts zi param and produces valid factors",6,0,FALSE,0,1,0.0480000000000018
+"test_gpu_zi.R","GPU ZINB-col accepts zi param and produces valid factors",5,0,FALSE,0,1,0.0240000000000009
+"test_gpu_zi.R","CPU ZINB-row returns pi_row and has different loss than non-ZI",5,0,FALSE,0,0,0.0519999999999996
+"test_ref_gpu.R","TEST-REF-GPU-SEARCH: the GPU library is never looked up in the working directory",3,0,FALSE,0,0,0.00999999999999801
+"test_ref_gpu.R","TEST-REF-GPU-STATUS: gpu_status() reports every step",7,0,FALSE,0,0,0.027000000000001
+"test_ref_gpu.R","TEST-REF-GPU-ARCH: architecture flags are well formed",3,0,FALSE,0,0,0.0110000000000028
+"test_ref_gpu.R","TEST-REF-GPU-INSTALL: install_gpu() fails clearly without a toolchain",1,0,FALSE,0,0,0.00600000000000023
+"test_ref_gpu.R","TEST-REF-GPU-SPZ: GPU .spz decoding reports that it is unavailable",2,0,FALSE,0,0,0.00999999999999801
+"test_ref_gpu.R","TEST-REF-GPU-SVD-GUARD: unsupported SVD requests are named",15,0,FALSE,0,0,0.0210000000000008
+"test_ref_gpu.R","TEST-REF-GPU-NO-DEVICE: resource = 'gpu' without a GPU warns and fits on CPU",1,0,TRUE,0,0,0.00300000000000011
+"test_ref_gpu.R","TEST-REF-GPU-FALLBACK: routed options warn and return the CPU fit",69,0,FALSE,0,0,1.01000000000001
+"test_ref_gpu.R","TEST-REF-GPU-MSE: the supported Gaussian path matches CPU and plain R",58,0,FALSE,0,0,0.289000000000001
+"test_ref_gpu.R","TEST-REF-GPU-EXACT: one iteration matches exact double-precision ALS",6,0,FALSE,0,0,0.356999999999999
+"test_ref_gpu.R","TEST-REF-GPU-SVD-FLAT: Lanczos and Krylov resolve a flat spectrum",2,0,FALSE,0,0,0.238999999999997
+"test_ref_gpu.R","TEST-REF-GPU-SVD-RANK: Lanczos and Krylov recover an exactly rank-k matrix",10,0,FALSE,0,0,0.0409999999999968

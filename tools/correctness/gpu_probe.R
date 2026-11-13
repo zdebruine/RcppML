@@ -1,0 +1,5 @@
+library(RcppML)
+cat("gpu_available():", gpu_available(), "\n")
+str(tryCatch(gpu_info(), error = function(e) conditionMessage(e)))
+cat("lib dir:", list.files(system.file("lib", package = "RcppML")), "\n")
+cat(readLines(system.file("build_config", package = "RcppML")), sep = "\n")
