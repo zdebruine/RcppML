@@ -16,12 +16,16 @@ on:
   push:
     branches: [main, master]
     paths:
-      - 'inst/include/FactorNet/nmf/fit_gpu*'
-      - 'inst/include/FactorNet/nmf/fit_cv_gpu*'
+      - 'inst/include/FactorNet/gpu/**'
       - 'inst/include/FactorNet/primitives/gpu/**'
-      - 'src/Makefile.gpu'
-      - 'src/gpu_*.cu'
+      - 'inst/include/FactorNet/**/*.cuh'
+      - 'inst/gpu/Makefile.gpu'
+      - 'src/*.cu'
+      - 'src/*.cuh'
+      - 'R/gpu_backend.R'
+      - 'R/sp_gpu.R'
       - 'tests/testthat/test_gpu*'
+      - 'tests/testthat/test_chunked_gpu.R'
 
 permissions: read-all
 
@@ -33,6 +37,8 @@ jobs:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
       OMP_NUM_THREADS: 4
+      # GPU test files are outside the CRAN subset
+      NOT_CRAN: true
       R_LIBS_USER: ${{ github.workspace }}/.r-libs
 
     steps:
@@ -64,7 +70,7 @@ jobs:
 
       - name: Build GPU shared library
         run: |
-          cd src
+          cd inst/gpu
           make -f Makefile.gpu clean
           make -f Makefile.gpu
           make -f Makefile.gpu install
@@ -77,8 +83,10 @@ jobs:
             .libPaths(c(Sys.getenv("R_LIBS_USER"), .libPaths()))
             library(testthat)
             library(RcppML)
-            cat("GPU available:", tryCatch(RcppML:::gpu_available(), error=function(e) FALSE), "\n")
-            test_dir("tests/testthat", filter="gpu", reporter="summary")
+            ok <- tryCatch(RcppML::gpu_available(), error=function(e) FALSE)
+            cat("GPU available:", ok, "\n")
+            if (!isTRUE(ok)) stop("GPU library did not load; every GPU test would be skipped")
+            test_dir("tests/testthat", filter="gpu", reporter="summary", stop_on_failure=TRUE)
           '
 
       - name: Run GPU benchmarks (smoke test)
@@ -93,7 +101,7 @@ jobs:
             t0 <- proc.time()["elapsed"]
             res <- nmf(A, k=16, tol=1e-10, maxit=20, seed=42, resource="gpu")
             t1 <- proc.time()["elapsed"]
-            cat(sprintf("GPU NMF (1000x500, k=16): %.3f sec, loss=%.4f\n", t1-t0, res@loss))
+            cat(sprintf("GPU NMF (1000x500, k=16): %.3f sec, loss=%.4f\n", t1-t0, res@misc$loss))
           '
 
       - name: Run C++ unit tests

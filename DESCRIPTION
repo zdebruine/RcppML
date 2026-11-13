@@ -2,11 +2,18 @@ Package: RcppML
 Type: Package
 Title: Fast Non-Negative Matrix Factorization and Divisive Clustering
 Version: 1.0.0
-Date: 2026-03-10
-Authors@R: person("Zachary", "DeBruine", 
-    email = "zacharydebruine@gmail.com", 
-    role = c("aut", "cre"), 
-    comment = c(ORCID = "0000-0003-2234-4827"))
+Date: 2026-11-13
+Authors@R: c(
+    person("Zachary", "DeBruine",
+           email = "zacharydebruine@gmail.com",
+           role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0003-2234-4827")),
+    person("Markus", "Buehren", role = c("ctb", "cph"),
+           comment = "Hungarian algorithm implementation in inst/include/RcppHungarian.h"),
+    person("Cong", "Ma", role = c("ctb", "cph"),
+           comment = "C++ port of the Hungarian algorithm in inst/include/RcppHungarian.h"),
+    person("Justin", "Silverman", role = c("ctb", "cph"),
+           comment = "Single-header adaptation RcppHungarian.h"))
 Description: High-performance non-negative matrix factorization (NMF),
     singular value decomposition (SVD), and divisive clustering for large
     sparse and dense matrices. Implements alternating least squares with
@@ -24,16 +31,21 @@ Depends:
     R (>= 4.1.0),
     Matrix
 License: GPL (>= 3)
+Copyright: See the file inst/COPYRIGHTS for the copyright holders of
+    bundled third-party code.
 Imports:
     Rcpp,
+    graphics,
+    grDevices,
     methods,
     stats,
+    tools,
     utils
-LinkingTo: 
+LinkingTo:
     Rcpp,
     RcppEigen
 RoxygenNote: 7.3.3
-Suggests: 
+Suggests:
     ggplot2,
     hdf5r,
     jsonlite,
@@ -45,9 +57,6 @@ Suggests:
     patchwork,
     plotly,
     scales,
-    Seurat,
-    SeuratData,
-    SeuratObject,
     testthat (>= 3.0.0),
     uwot,
     viridis
@@ -57,5 +66,5 @@ LazyData: true
 LazyDataCompression: xz
 URL: https://github.com/zdebruine/RcppML
 BugReports: https://github.com/zdebruine/RcppML/issues
-SystemRequirements: CUDA Toolkit >= 11.0 (optional, for GPU acceleration)
+SystemRequirements: C++17, CUDA Toolkit >= 11.0 (optional, for GPU acceleration)
 Encoding: UTF-8

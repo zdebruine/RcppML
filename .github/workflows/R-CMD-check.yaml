@@ -4,7 +4,6 @@ on:
   push:
     branches: [main, master]
   pull_request:
-    branches: [main, master]
 
 name: R-CMD-check
 
@@ -29,8 +28,9 @@ jobs:
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
-      # Skip GPU tests in CI (no hardware available)
-      RCPPML_SKIP_GPU: true
+      # CRAN allows at most two cores; the package honors both variables.
+      _R_CHECK_LIMIT_CORES_: true
+      OMP_THREAD_LIMIT: 2
 
     steps:
       - uses: actions/checkout@v4
@@ -51,4 +51,5 @@ jobs:
       - uses: r-lib/actions/check-r-package@v2
         with:
           upload-snapshots: true
-          args: '"--no-manual", "--as-cran"'
+          args: 'c("--no-manual", "--as-cran")'
+          build_args: 'c("--no-manual", "--compact-vignettes=gs+qpdf")'
