@@ -9,6 +9,7 @@ vignette: >
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(
+  dpi = 72, fig.retina = 1,   # keep the built vignettes small (CRAN size limit)
   collapse = TRUE,
   comment = "#>",
   fig.width = 7,
@@ -17,7 +18,17 @@ knitr::opts_chunk$set(
   warning = FALSE
 )
 library(RcppML)
-library(ggplot2)
+# CRAN allows at most two cores
+options(RcppML.threads = 2)
+# Chunks run only when NOT_CRAN is "true" (set when the package tarball and
+# the pkgdown site are built) and the suggested packages are installed.
+# CRAN's checks then rebuild the text without refitting the models.
+run_chunks <- identical(Sys.getenv("NOT_CRAN"), "true") &&
+  all(vapply(c("ggplot2"), requireNamespace, logical(1), quietly = TRUE))
+knitr::opts_chunk$set(eval = run_chunks)
+if (run_chunks) {
+  library(ggplot2)
+}
 ```
 
 ## Motivation
@@ -314,9 +325,9 @@ plot(cv) +
 
 The plot reveals the classic **bias–variance tradeoff**:
 
-- **Underfitting** ($k < `r best_k`$): Both training and test MSE are high. The model lacks capacity to capture all five true factors, so it cannot represent the data's structure and performs poorly on both seen and unseen entries.
-- **Optimal rank** ($k = `r best_k`$): Test MSE reaches its minimum. The model has exactly enough factors to capture the true structure without fitting noise.
-- **Overfitting** ($k > `r best_k`$): Training MSE continues to decrease — the model fits the training entries ever more closely — but test MSE *increases*. Extra factors fit noise in the training set that does not generalize to held-out entries.
+- **Underfitting** ($k < `r if (run_chunks) best_k else "(not evaluated)"`$): Both training and test MSE are high. The model lacks capacity to capture all five true factors, so it cannot represent the data's structure and performs poorly on both seen and unseen entries.
+- **Optimal rank** ($k = `r if (run_chunks) best_k else "(not evaluated)"`$): Test MSE reaches its minimum. The model has exactly enough factors to capture the true structure without fitting noise.
+- **Overfitting** ($k > `r if (run_chunks) best_k else "(not evaluated)"`$): Training MSE continues to decrease — the model fits the training entries ever more closely — but test MSE *increases*. Extra factors fit noise in the training set that does not generalize to held-out entries.
 
 > **How it works:** `nmf(data, k = 1:15, test_fraction = 0.2)` randomly masks 20% of matrix entries before fitting. At each iteration the model is trained only on the visible 80%; the masked entries are predicted from the current $W \cdot \text{diag}(d) \cdot H$ and scored against their true values. The rank with the lowest test MSE is selected.
 
@@ -371,7 +382,7 @@ model_aml <- nmf(aml, k = 6, seed = 42, tol = 1e-5)
 
 Since AML features are genomic coordinate ranges (e.g., `chr1:847816-848609`) rather than gene names, a table of top loadings per factor is not directly interpretable without external annotation databases. Instead, we visualize the H matrix (sample embeddings) — where the factor structure maps directly to AML subtypes — using `pheatmap`, which handles clustering and annotation alignment automatically:
 
-```{r aml-heatmap, fig.height = 6, eval = requireNamespace("pheatmap", quietly = TRUE)}
+```{r aml-heatmap, fig.height = 6, eval = run_chunks && all(vapply(c("pheatmap", "RColorBrewer", "viridis"), requireNamespace, logical(1), quietly = TRUE))}
 library(pheatmap)
 
 H <- model_aml$h

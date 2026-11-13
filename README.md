@@ -41,8 +41,10 @@ install.packages("RcppML")
 devtools::install_github("zdebruine/RcppML")
 ```
 
-**GPU support** (optional): Requires CUDA Toolkit ≥ 11.0 installed on the system.
-See `vignette("gpu-acceleration")` for build instructions.
+**GPU support** (optional): a normal install builds the CPU package only, even
+when CUDA is on the `PATH`. With the CUDA Toolkit (≥ 11.0) installed, build the
+GPU library once with `RcppML::install_gpu()`, then check it with
+`gpu_status()` and `gpu_available()`. See `vignette("gpu-acceleration")`.
 
 ---
 
@@ -511,7 +513,7 @@ all(model@h >= 0)  # TRUE — H remains non-negative
 
 3. **Initialization**: `seed = "lanczos"` provides better starting points and can reduce iteration count by 30–50%, but adds upfront SVD cost.
 
-4. **Threads**: RcppML uses OpenMP. Set `options(RcppML.threads = 4)` to control parallelism, or `threads = 0` for all available cores.
+4. **Threads**: RcppML uses OpenMP and all available cores by default. Set `options(RcppML.threads = 4)` once, or pass `threads = 4` to a single call; a non-zero `threads` argument takes precedence over the option.
 
 5. **GPU**: For matrices with > 10K rows and k > 8, GPU acceleration provides significant speedup. Use `resource = "gpu"`.
 
