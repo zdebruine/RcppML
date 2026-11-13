@@ -17,7 +17,8 @@ consensus_nmf(
 )
 }
 \arguments{
-\item{data}{input matrix (samples x features for clustering samples)}
+\item{data}{input matrix with the items to cluster ("samples") in \strong{rows}
+and features in columns. Pass \code{t(data)} if samples are in columns.}
 
 \item{k}{rank of factorization}
 
@@ -48,19 +49,26 @@ List with:
 }
 \description{
 Run multiple NMF replicates and compute consensus matrix showing 
-co-clustering frequency of samples.
+co-clustering frequency of the \strong{rows} of \code{data}.
 }
 \details{
+\strong{Orientation.} \code{consensus_nmf()} clusters the rows of \code{data}
+(called "samples" on this page), using the \code{w} matrix of each replicate.
+This is unlike \code{\link{nmf}}, which treats columns as samples. If your
+samples are in columns, pass \code{t(data)}. The consensus matrix has
+\code{nrow(data)} rows and columns, so keep the clustered dimension small.
+
+
 Consensus clustering runs NMF multiple times with different random initializations.
 
 **Hard clustering method** (method = "hard"):
-For each run, samples are clustered based on their dominant factor in W.
+For each run, samples (rows) are clustered based on their dominant factor in W.
 The consensus matrix C[i,j] gives the proportion of runs where samples i and j 
 were assigned to the same cluster. This is the traditional consensus clustering approach.
 
 **KNN Jaccard method** (method = "knn_jaccard"):
 For each run, the k-nearest neighbors of each sample are computed based on 
-factor loadings (W matrix). The consensus matrix C[i,j] is the average Jaccard 
+factor loadings (rows of the W matrix). The consensus matrix C[i,j] is the average Jaccard 
 similarity between the KNN sets of samples i and j across all replicates.
 This approach is more robust to ambiguous cluster assignments and captures 
 neighborhood structure rather than hard cluster membership.

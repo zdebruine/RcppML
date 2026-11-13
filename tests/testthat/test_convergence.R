@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 # Test NMF convergence behavior to prevent regression
 # These tests ensure the warm-start fix is working correctly
 
@@ -241,76 +245,16 @@ test_that("NMF handles very sparse matrices", {
 })
 
 # ============================================================================
-# Factor convergence mode tests
+# 'convergence' was accepted and ignored by nmf(); it is now rejected
 # ============================================================================
 
-test_that("convergence='factor' mode converges on sparse", {
-  skip_on_cran()
-  set.seed(42)
-  A <- rsparsematrix(50, 30, density = 0.3)
-  A@x <- abs(A@x)
-  
-  result <- nmf(A, k = 3, seed = 1, maxit = 200, tol = 1e-4,
-                convergence = "factor", verbose = FALSE)
-  expect_s4_class(result, "nmf")
-  # Factor convergence should terminate before maxit with reasonable tol
-  expect_lt(result@misc$iter, 200)
+test_that("nmf() rejects the removed 'convergence' argument", {
+  A <- abs(matrix(rnorm(20 * 10), 20, 10))
+  expect_error(nmf(A, k = 2, convergence = "factor"), "convergence")
 })
 
-test_that("convergence='factor' mode converges on dense", {
-  skip_on_cran()
-  set.seed(42)
-  A <- abs(matrix(rnorm(50 * 30), 50, 30))
-  
-  result <- nmf(A, k = 3, seed = 1, maxit = 200, tol = 1e-4,
-                convergence = "factor", verbose = FALSE)
-  expect_s4_class(result, "nmf")
-  expect_lt(result@misc$iter, 200)
-})
 
-test_that("convergence='both' mode works", {
-  skip_on_cran()
-  set.seed(42)
-  A <- rsparsematrix(50, 30, density = 0.3)
-  A@x <- abs(A@x)
-  
-  result <- nmf(A, k = 3, seed = 1, maxit = 200, tol = 1e-4,
-                convergence = "both", verbose = FALSE)
-  expect_s4_class(result, "nmf")
-  # Should converge, though potentially takes more iterations than single-mode
-  expect_true(result@misc$iter <= 200)
-})
 
-test_that("convergence='loss' gives same result as default", {
-  skip_on_cran()
-  set.seed(42)
-  A <- rsparsematrix(50, 30, density = 0.3)
-  A@x <- abs(A@x)
-  
-  r1 <- nmf(A, k = 3, seed = 1, maxit = 100, tol = 1e-4, verbose = FALSE)
-  r2 <- nmf(A, k = 3, seed = 1, maxit = 100, tol = 1e-4,
-            convergence = "loss", verbose = FALSE)
-  
-  # Same seed, same convergence mode → same result
-  expect_equal(r1@misc$iter, r2@misc$iter)
-  expect_equal(r1@w, r2@w, tolerance = 1e-10)
-})
 
-test_that("convergence modes all produce valid factorizations", {
-  skip_on_cran()
-  set.seed(42)
-  A <- rsparsematrix(40, 25, density = 0.3)
-  A@x <- abs(A@x)
-  
-  for (mode in c("loss", "factor", "both")) {
-    result <- nmf(A, k = 3, seed = 1, maxit = 100, tol = 1e-4,
-                  convergence = mode, verbose = FALSE)
-    # All factors should be non-negative
-    expect_true(all(result@w >= 0), info = paste("mode:", mode))
-    expect_true(all(result@h >= 0), info = paste("mode:", mode))
-    expect_true(all(result@d >= 0), info = paste("mode:", mode))
-    # Reconstruction should be reasonable
-    mse <- compute_mse(A, result)
-    expect_true(is.finite(mse), info = paste("mode:", mode))
-  }
-})
+
+

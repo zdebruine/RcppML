@@ -20,6 +20,14 @@
  *
  * The columns are independent — OpenMP parallelizes over columns.
  *
+ * The batch entry points (nnls_batch_irls_sparse / nnls_batch_irls_dense) use
+ * the unified column solver detail::irls_solve_col_core: warm start from the
+ * current factor, the distribution's own treatment of zero entries (identical
+ * for sparse and dense input), and step control so that a column update never
+ * increases the penalised deviance. The older per-column functions
+ * (irls_nnls_col_sparse / irls_nnls_col_dense) are kept for the streaming
+ * callers.
+ *
  * @author Zach DeBruine
  * @date 2026-02-10
  */
@@ -35,6 +43,8 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
+#include <stdexcept>
+#include <string>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -88,8 +98,8 @@ inline Scalar distribution_weight(Scalar predicted,
  * @brief Compute IRLS weight: distribution weight × optional robust modifier
  *
  * For the new API (distribution + robust), the weight is decomposed:
- *   w = w_distribution(μ, θ) × w_robust(r_P)
- * where r_P = (y − μ) / √(1/w_dist) is the Pearson residual.
+ *   w = w_distribution(μ, θ) × w_robust(r_D)
+ * where r_D = sqrt(d(y, μ)) is the deviance residual of the working model.
  *
  * For legacy MAE/HUBER loss types, falls back to the original behavior.
  */
@@ -111,10 +121,15 @@ inline Scalar compute_irls_weight(Scalar residual, Scalar predicted,
 
     // Apply robust modifier if active
     if (loss.robust_delta > static_cast<Scalar>(0)) {
-        // Pearson residual: r_P = residual / √V(μ) = residual × √w_dist
-        Scalar sd_inv = std::sqrt(std::max(w_dist, tiny_num<Scalar>()));
-        Scalar pearson_r = residual * sd_inv;
-        Scalar w_robust = robust_huber_modifier(pearson_r, loss.robust_delta);
+        // Deviance residual of the working model: sqrt(d(y, μ)), with
+        // y = residual + predicted. Equal to |y − μ| for MSE. The product
+        // w_dist × min(1, δ / sqrt(d)) reproduces the gradient of the
+        // Huberised deviance that compute_robust_loss() reports.
+        (void)observed;
+        const Scalar y = residual + predicted;
+        const Scalar dev_r = static_cast<Scalar>(
+            std::sqrt(unit_deviance(y, predicted, loss, theta)));
+        Scalar w_robust = robust_huber_modifier(dev_r, loss.robust_delta);
         return w_dist * w_robust;
     }
 
@@ -449,6 +464,720 @@ void irls_nnls_col_dense(
     }
 }
 
+// ========================================================================
+// Unified IRLS column solver (sparse and dense input share this code)
+// ========================================================================
+//
+// For one column of A with model value mu_i = W_T.col(i) . x, the solver
+// minimises
+//
+//   F(x) = sum_i f(y_i, mu_i) + L1 sum(x) + (L2/2) |x|^2
+//          + (1/2) x' G_penalty x - B_penalty.col(j)' x
+//
+// with f = unit_deviance / 2 (or the Huber function of the deviance residual
+// when robust_delta > 0). Each IRLS iteration builds a quadratic model whose
+// gradient at the current x equals the gradient of F, solves it by
+// coordinate descent, and accepts the result only if F did not increase;
+// otherwise it re-solves the model with a proximal term
+// (lam/2) (x - x_cur)' diag(G) (x - x_cur), doubling 1 + lam each time (at
+// most IRLS_MAX_HALVINGS times) and, failing that, keeps the current x.
+// A damped re-solve shortens the step like step-halving does, but the result
+// is still a coordinate-descent solution, so L1 and the non-negativity bound
+// keep producing exact zeros; a straight line back to x_cur would not.
+// L1 is handled inside coordinate descent (shift for x >= 0, soft threshold
+// otherwise) and is part of F.
+//
+// What L1 does here. The penalty is absolute: L1 * sum(x). When the fixed
+// factor W_T is non-negative with unit row sums (the default L1
+// normalisation), sum_f x_f = sum_i mu_i, so the penalty is L1 * sum(mu), a
+// charge on the total fitted mean. For least squares that subtracts L1 from
+// every target and thresholds small entries to exact zeros. For a Poisson
+// likelihood, sum(mu - y log mu) + L1 sum(mu) is minimised by the unpenalised
+// solution divided by (1 + L1): the fit is rescaled and its zero pattern does
+// not depend on L1. Negative binomial and Tweedie (1 < p < 2) lie in between
+// and have no thresholding at y > 0 either. With an estimated NB size the
+// shrunken mean under-predicts, the moment estimator reads the bias as extra
+// variance and lowers the size, the weights move toward 1 / mu^2, and the
+// factors become denser as L1 grows. The KKT conditions of F hold in every
+// case; a rising count of exact zeros is a property of least squares only.
+//
+// Entries are split into P (y != 0) and Z (y == 0). The same split is used
+// for sparse and dense input, so the two give the same fit. P always
+// contributes w_i (y_i - mu_i)^2 / 2 with the Fisher weight w_i = 1 / V(mu_i).
+// Z is handled according to IRLSZeroMode:
+//
+//   NONE          the support excludes zero (gamma, inverse Gaussian,
+//                 Tweedie p >= 2); the batch entry point rejects data with
+//                 zeros, so Z is empty.
+//   LINEAR_CONST  Poisson-type losses (KL, GP, NB without a size, Tweedie
+//                 p = 1). f(0, mu) = q mu is linear in x, so Z contributes
+//                 the exact linear term c' x with c = sum_Z q_i W_T.col(i),
+//                 obtained from the row sums of W_T minus the P rows. No
+//                 work proportional to m.
+//   LINEAR_MU     NB with a size and Tweedie 1 < p < 2. f(0, mu) is concave
+//                 in mu, so its tangent at the current mu is a majoriser: Z
+//                 contributes c' x with c = sum_Z f'(0, mu_i) W_T.col(i).
+//                 Needs mu at every row: two matrix-vector products, O(m k).
+//   FULL          everything else (robust weights, or factors that are not
+//                 constrained non-negative): every row gets its own weight
+//                 and the full weighted Gram is formed, O(m k^2).
+//
+// The linear modes need x >= 0 and W_T >= 0, which keeps c >= 0 and the
+// subproblem bounded below.
+
+enum class IRLSZeroMode { NONE = 0, LINEAR_CONST = 1, LINEAR_MU = 2, FULL = 3 };
+
+/// Maximum number of damped re-solves per IRLS iteration (step factor 1/2 ... 1/64).
+constexpr int IRLS_MAX_HALVINGS = 6;
+
+/// Data support required by a loss: 0 = any real, 1 = non-negative, 2 = strictly positive.
+template<typename Scalar>
+inline int irls_support_class(const LossConfig<Scalar>& loss) {
+    switch (loss.type) {
+        case LossType::KL:
+        case LossType::GP:
+        case LossType::NB:
+            return 1;
+        case LossType::GAMMA:
+        case LossType::INVGAUSS:
+            return 2;
+        case LossType::TWEEDIE:
+            return (static_cast<double>(loss.power_param) < 2.0 - 1e-6) ? 1 : 2;
+        default:
+            return 0;
+    }
+}
+
+/// Name of a loss type for error messages.
+template<typename Scalar>
+inline const char* irls_loss_name(const LossConfig<Scalar>& loss) {
+    switch (loss.type) {
+        case LossType::KL:       return "kl";
+        case LossType::GP:       return "gp";
+        case LossType::NB:       return "nb";
+        case LossType::GAMMA:    return "gamma";
+        case LossType::INVGAUSS: return "inverse_gaussian";
+        case LossType::TWEEDIE:  return "tweedie";
+        default:                 return "mse";
+    }
+}
+
+/// Throw if the data lie outside the support of the loss (serial code only).
+template<typename Scalar>
+inline void irls_check_support(const LossConfig<Scalar>& loss,
+                               bool any_negative, bool any_zero) {
+    const int support = irls_support_class(loss);
+    if (support >= 1 && any_negative)
+        throw std::invalid_argument(
+            std::string("loss = \"") + irls_loss_name(loss) +
+            "\" requires non-negative data, but negative values were found.");
+    if (support == 2 && any_zero)
+        throw std::invalid_argument(
+            std::string("loss = \"") + irls_loss_name(loss) +
+            "\" requires strictly positive data, but zeros were found "
+            "(for a sparse matrix every structural zero counts). Zero is "
+            "outside the support of this distribution; use loss = \"tweedie\" "
+            "with 1 < tweedie_power < 2 for non-negative data with zeros, or "
+            "mask the zeros.");
+}
+
+/// Choose how zero entries are treated (see the block comment above).
+template<typename Scalar>
+inline IRLSZeroMode irls_select_zero_mode(const LossConfig<Scalar>& loss,
+                                          bool nonneg,
+                                          const DenseMatrix<Scalar>& W_T,
+                                          bool has_theta) {
+    if (loss.type == LossType::MAE || loss.type == LossType::HUBER)
+        return IRLSZeroMode::FULL;
+    const int support = irls_support_class(loss);
+    if (support == 2) return IRLSZeroMode::NONE;
+    if (support == 0) return IRLSZeroMode::FULL;
+    if (loss.robust_delta > static_cast<Scalar>(0)) return IRLSZeroMode::FULL;
+    if (!nonneg) return IRLSZeroMode::FULL;
+    if (W_T.size() > 0 && W_T.minCoeff() < static_cast<Scalar>(0))
+        return IRLSZeroMode::FULL;
+    if (loss.type == LossType::NB)
+        return has_theta ? IRLSZeroMode::LINEAR_MU : IRLSZeroMode::LINEAR_CONST;
+    if (loss.type == LossType::TWEEDIE)
+        return (std::abs(static_cast<double>(loss.power_param) - 1.0) < 1e-6)
+            ? IRLSZeroMode::LINEAR_CONST : IRLSZeroMode::LINEAR_MU;
+    return IRLSZeroMode::LINEAR_CONST;  // KL, GP
+}
+
+/// d/dmu of f(0, mu) for the LINEAR_CONST losses (independent of mu).
+template<typename Scalar>
+inline Scalar irls_zero_slope_const(const LossConfig<Scalar>& loss, Scalar theta) {
+    if (loss.type == LossType::GP) {
+        const double c = 1.0 + std::max(static_cast<double>(theta), 0.0);
+        return static_cast<Scalar>(1.0 / (c * c));
+    }
+    return static_cast<Scalar>(1);
+}
+
+/// d/dmu of f(0, mu) at the current mu for the LINEAR_MU losses.
+template<typename Scalar>
+inline Scalar irls_zero_slope_mu(Scalar predicted, const LossConfig<Scalar>& loss,
+                                 Scalar theta) {
+    const double mu = std::max(static_cast<double>(predicted), loss_detail::mu_floor());
+    if (loss.type == LossType::NB) {
+        const double r = static_cast<double>(theta);
+        if (!(r > 0.0)) return static_cast<Scalar>(1);
+        return static_cast<Scalar>(r / (r + mu));
+    }
+    if (loss.type == LossType::TWEEDIE) {
+        const double p = static_cast<double>(loss.power_param);
+        return static_cast<Scalar>(std::min(std::pow(mu, 1.0 - p), 1e6));
+    }
+    return static_cast<Scalar>(1);
+}
+
+/// Per-entry value of the function the IRLS step control monitors.
+template<typename Scalar>
+inline double irls_entry_merit(Scalar observed, Scalar predicted,
+                               const LossConfig<Scalar>& loss, Scalar theta) {
+    const double d = unit_deviance(observed, predicted, loss, theta);
+    if (loss.robust_delta > static_cast<Scalar>(0))
+        return loss_detail::huber_rho(std::sqrt(d),
+                                      static_cast<double>(loss.robust_delta));
+    return 0.5 * d;
+}
+
+/// Read-only settings shared by every column of one batch solve.
+template<typename Scalar>
+struct IRLSColContext {
+    const DenseMatrix<Scalar>* W_T = nullptr;        // k x m
+    const DenseMatrix<Scalar>* G_base = nullptr;     // k x k, unweighted Gram
+    const LossConfig<Scalar>* loss = nullptr;
+    Scalar L1 = 0;
+    Scalar L2 = 0;
+    bool nonneg = true;
+    int cd_maxit = 100;
+    Scalar cd_tol = 0;
+    int irls_max_iter = 5;
+    Scalar irls_tol = 0;
+    IRLSZeroMode zero_mode = IRLSZeroMode::FULL;
+    bool step_control = true;
+    const Scalar* theta_per_row = nullptr;
+    const Scalar* theta_per_col = nullptr;
+    const DenseMatrix<Scalar>* G_penalty = nullptr;  // k x k or null
+    const DenseMatrix<Scalar>* B_penalty = nullptr;  // k x ncols or null
+    const Eigen::Matrix<Scalar, Eigen::Dynamic, 1>* s_plain = nullptr;  // row sums of W_T (k)
+    const Eigen::Matrix<Scalar, Eigen::Dynamic, 1>* s_zero = nullptr;   // sum_i q_i W_T.col(i), or null
+
+    Scalar theta_at(int row, int col) const {
+        return theta_per_col ? theta_per_col[col]
+             : (theta_per_row ? theta_per_row[row] : static_cast<Scalar>(0));
+    }
+};
+
+/// Per-thread buffers for irls_solve_col_core.
+template<typename Scalar>
+struct IRLSColWork {
+    typedef Eigen::Matrix<Scalar, Eigen::Dynamic, 1> Vec;
+
+    DenseMatrix<Scalar> G;      // k x k
+    Vec b, b_res, x_old, x_try, c_lin, tmp_k, diag0, r0;   // k
+
+    std::vector<int> rows;      // cap: rows of the entries in P
+    Vec y, mu_p, w_p, wy;       // cap
+    DenseMatrix<Scalar> Wp;     // k x cap: W_T columns at the P rows
+    DenseMatrix<Scalar> Wp_s;   // k x cap: the same, scaled by the weights
+
+    Vec recon, w_full;          // m (LINEAR_MU and FULL)
+    double last_zero = 0.0;     // zero-entry part of the last irls_col_merit value
+    DenseMatrix<Scalar> W_s;    // k x m (FULL)
+
+    void init(int k, int cap, int m, IRLSZeroMode mode) {
+        if (cap < 1) cap = 1;
+        G.resize(k, k);
+        b.resize(k);
+        b_res.resize(k);
+        x_old.resize(k);
+        x_try.resize(k);
+        c_lin.resize(k);
+        tmp_k.resize(k);
+        diag0.resize(k);
+        r0.resize(k);
+        rows.resize(static_cast<size_t>(cap));
+        y.resize(cap);
+        mu_p.resize(cap);
+        w_p.resize(cap);
+        wy.resize(cap);
+        Wp.resize(k, cap);
+        Wp_s.resize(k, cap);
+        if (mode == IRLSZeroMode::LINEAR_MU || mode == IRLSZeroMode::FULL) {
+            recon.resize(m);
+            w_full.resize(m);
+        }
+        if (mode == IRLSZeroMode::FULL) W_s.resize(k, m);
+    }
+};
+
+/**
+ * @brief Tangent slopes d/dmu f(0, mu) at every row (LINEAR_MU), single
+ *        precision, with the loss and dispersion layout resolved outside
+ *        the loop.
+ */
+template<typename Scalar>
+inline void irls_fill_zero_slopes(
+    const IRLSColContext<Scalar>& ctx, int col_j,
+    const Eigen::Matrix<Scalar, Eigen::Dynamic, 1>& recon,
+    Eigen::Matrix<Scalar, Eigen::Dynamic, 1>& out)
+{
+    const LossConfig<Scalar>& loss = *ctx.loss;
+    const int m = static_cast<int>(recon.size());
+    const Scalar floor_mu = static_cast<Scalar>(loss_detail::mu_floor());
+    const Scalar one = static_cast<Scalar>(1);
+    if (loss.type == LossType::NB) {
+        if (ctx.theta_per_col) {
+            const Scalar r = ctx.theta_per_col[col_j];
+            if (!(r > static_cast<Scalar>(0))) {
+                out.setOnes();
+            } else {
+                for (int i = 0; i < m; ++i)
+                    out(i) = r / (r + std::max(recon(i), floor_mu));
+            }
+        } else if (ctx.theta_per_row) {
+            const Scalar* th = ctx.theta_per_row;
+            for (int i = 0; i < m; ++i) {
+                const Scalar r = th[i];
+                out(i) = (r > static_cast<Scalar>(0))
+                    ? r / (r + std::max(recon(i), floor_mu)) : one;
+            }
+        } else {
+            out.setOnes();
+        }
+    } else if (loss.type == LossType::TWEEDIE) {
+        const Scalar e = one - loss.power_param;
+        out = recon.array().max(floor_mu).pow(e).min(static_cast<Scalar>(1e6)).matrix();
+    } else {
+        out.setOnes();
+    }
+}
+
+/**
+ * @brief Value of the penalised column objective F(x) (double precision).
+ *
+ * Uses ws.rows / ws.y / ws.Wp (the P entries of the column). Overwrites
+ * ws.mu_p (model value at the P rows for this x), ws.tmp_k and, for
+ * zero_kind 2, ws.recon (model value at every row). Stores the zero-entry
+ * part of the returned value in ws.last_zero.
+ *
+ * @param zero_kind how the zero entries are counted:
+ *   0  not at all (returns the P part plus penalties);
+ *   1  by the linear term ws.c_lin' x. Exact for LINEAR_CONST. For LINEAR_MU
+ *      it is the tangent majoriser built at the current iterate: the value
+ *      is an upper bound of F that is tight at that iterate, so a step that
+ *      does not increase it does not increase F. O(k), no pass over m.
+ *   2  exactly, from the model value at every row. O(m k) plus one deviance
+ *      evaluation per row.
+ */
+template<typename Scalar>
+inline double irls_col_merit(const IRLSColContext<Scalar>& ctx,
+                             IRLSColWork<Scalar>& ws,
+                             int nnz, int col_j, const Scalar* x,
+                             int zero_kind)
+{
+    typedef Eigen::Matrix<Scalar, Eigen::Dynamic, 1> Vec;
+    const DenseMatrix<Scalar>& W_T = *ctx.W_T;
+    const LossConfig<Scalar>& loss = *ctx.loss;
+    const int k = static_cast<int>(W_T.rows());
+    const int m = static_cast<int>(W_T.cols());
+    Eigen::Map<const Vec> xm(x, k);
+
+    double total = 0.0;
+
+    if (nnz > 0) {
+        ws.mu_p.head(nnz).noalias() = ws.Wp.leftCols(nnz).transpose() * xm;
+        for (int idx = 0; idx < nnz; ++idx) {
+            total += irls_entry_merit(ws.y(idx), ws.mu_p(idx), loss,
+                                      ctx.theta_at(ws.rows[idx], col_j));
+        }
+    }
+
+    double zero_part = 0.0;
+    if (zero_kind == 1) {
+        zero_part = static_cast<double>(ws.c_lin.dot(xm));
+    } else if (zero_kind == 2) {
+        ws.recon.noalias() = W_T.transpose() * xm;
+        double z = 0.0;
+        for (int i = 0; i < m; ++i) {
+            z += irls_entry_merit(static_cast<Scalar>(0), ws.recon(i), loss,
+                                  ctx.theta_at(i, col_j));
+        }
+        for (int idx = 0; idx < nnz; ++idx) {
+            const int row = ws.rows[idx];
+            z -= irls_entry_merit(static_cast<Scalar>(0), ws.recon(row), loss,
+                                  ctx.theta_at(row, col_j));
+        }
+        zero_part = z;
+    }
+    ws.last_zero = zero_part;
+    total += zero_part;
+
+    if (ctx.L1 != static_cast<Scalar>(0)) {
+        const Scalar l1norm = ctx.nonneg ? xm.sum() : xm.cwiseAbs().sum();
+        total += static_cast<double>(ctx.L1) * static_cast<double>(l1norm);
+    }
+    if (ctx.L2 != static_cast<Scalar>(0)) {
+        total += 0.5 * static_cast<double>(ctx.L2) *
+                 static_cast<double>(xm.squaredNorm());
+    }
+    if (ctx.G_penalty) {
+        ws.tmp_k.noalias() = (*ctx.G_penalty) * xm;
+        total += 0.5 * static_cast<double>(xm.dot(ws.tmp_k));
+    }
+    if (ctx.B_penalty) {
+        total -= static_cast<double>(ctx.B_penalty->col(col_j).dot(xm));
+    }
+    return total;
+}
+
+/**
+ * @brief Solve one column by IRLS with warm start and step control.
+ *
+ * On entry ws.rows[0..nnz), ws.y[0..nnz) hold the rows and values of the
+ * non-zero entries of the column and ws.Wp.leftCols(nnz) the matching
+ * columns of W_T; x holds the starting point (all zeros = cold start).
+ */
+template<typename Scalar>
+inline void irls_solve_col_core(const IRLSColContext<Scalar>& ctx,
+                                IRLSColWork<Scalar>& ws,
+                                int nnz, int col_j, Scalar* x)
+{
+    typedef Eigen::Matrix<Scalar, Eigen::Dynamic, 1> Vec;
+    const DenseMatrix<Scalar>& W_T = *ctx.W_T;
+    const LossConfig<Scalar>& loss = *ctx.loss;
+    const int k = static_cast<int>(W_T.rows());
+    const int m = static_cast<int>(W_T.cols());
+    const IRLSZeroMode mode = ctx.zero_mode;
+    Eigen::Map<Vec> xm(x, k);
+
+    // How irls_col_merit counts the zero entries:
+    //   kind_true  the exact value of F (used to compare starting points);
+    //   kind_step  the value tested by the step control. For LINEAR_MU this
+    //              is the tangent majoriser, which needs no pass over m;
+    //   kind_base  what F_old carries between iterations (for LINEAR_MU the
+    //              P part and penalties only; the tangent term is added once
+    //              the tangent at the current iterate is known).
+    const int kind_true = (mode == IRLSZeroMode::NONE) ? 0
+                        : (mode == IRLSZeroMode::LINEAR_CONST) ? 1 : 2;
+    const int kind_step = (mode == IRLSZeroMode::LINEAR_MU) ? 1 : kind_true;
+    const int kind_base = (mode == IRLSZeroMode::LINEAR_MU) ? 0 : kind_true;
+
+    // ---- Exact linear term of the zero entries (LINEAR_CONST) ----
+    if (mode == IRLSZeroMode::LINEAR_CONST) {
+        if (ctx.s_zero) {
+            ws.c_lin = *ctx.s_zero;
+        } else {
+            const Scalar q_col = irls_zero_slope_const(
+                loss, ctx.theta_per_col ? ctx.theta_per_col[col_j]
+                                        : static_cast<Scalar>(0));
+            ws.c_lin = (*ctx.s_plain) * q_col;
+        }
+        if (nnz > 0) {
+            for (int idx = 0; idx < nnz; ++idx) {
+                ws.w_p(idx) = irls_zero_slope_const(
+                    loss, ctx.theta_at(ws.rows[idx], col_j));
+            }
+            ws.c_lin.noalias() -= ws.Wp.leftCols(nnz) * ws.w_p.head(nnz);
+        }
+        // c >= 0 in exact arithmetic; remove rounding noise.
+        ws.c_lin = ws.c_lin.cwiseMax(static_cast<Scalar>(0));
+    }
+
+    // ---- Starting point ----
+    bool cold = true;
+    for (int f = 0; f < k; ++f) {
+        if (x[f] != static_cast<Scalar>(0)) { cold = false; break; }
+    }
+    if (cold) {
+        // Unweighted non-negative least squares gives the first iterate.
+        ws.G = *ctx.G_base;
+        if (ctx.L2 > static_cast<Scalar>(0)) ws.G.diagonal().array() += ctx.L2;
+        if (ctx.G_penalty) ws.G += *ctx.G_penalty;
+        if (nnz > 0) {
+            ws.b.noalias() = ws.Wp.leftCols(nnz) * ws.y.head(nnz);
+        } else {
+            ws.b.setZero();
+        }
+        if (ctx.B_penalty) ws.b += ctx.B_penalty->col(col_j);
+        ws.b_res = ws.b;
+        cd_nnls_col_fixed(ws.G, ws.b_res.data(), x, k,
+                          ctx.L1, static_cast<Scalar>(0),
+                          ctx.nonneg, ctx.cd_maxit,
+                          static_cast<Scalar>(0), ctx.cd_tol);
+    } else if (ctx.step_control && nnz > 0) {
+        // The caller may hand over a factor that is missing the diagonal
+        // scaling. Match the column total if that lowers the objective.
+        const double sum_y = static_cast<double>(ws.y.head(nnz).sum());
+        const double sum_mu = static_cast<double>(ctx.s_plain->dot(xm));
+        if (sum_y > 0.0 && sum_mu > 0.0) {
+            const double scale = sum_y / sum_mu;
+            if (std::isfinite(scale) && std::abs(scale - 1.0) > 0.05) {
+                const double F_a = irls_col_merit(ctx, ws, nnz, col_j, x, kind_true);
+                ws.x_try = xm * static_cast<Scalar>(scale);
+                const double F_b = irls_col_merit(ctx, ws, nnz, col_j,
+                                                  ws.x_try.data(), kind_true);
+                if (F_b < F_a) xm = ws.x_try;
+            }
+        }
+    }
+
+    double F_old = ctx.step_control
+        ? irls_col_merit(ctx, ws, nnz, col_j, x, kind_base) : 0.0;
+
+    // With step control the last irls_col_merit call is always made at the
+    // accepted iterate, so ws.mu_p (and ws.recon for kind 2) already hold the
+    // model value at the current x and are not recomputed.
+    const bool mu_cached = ctx.step_control;
+    const bool recon_cached = ctx.step_control && (kind_base == 2);
+
+    for (int irls_iter = 0; irls_iter < ctx.irls_max_iter; ++irls_iter) {
+
+        // ---- Weights at the non-zero entries ----
+        if (nnz > 0) {
+            if (!mu_cached)
+                ws.mu_p.head(nnz).noalias() = ws.Wp.leftCols(nnz).transpose() * xm;
+            for (int idx = 0; idx < nnz; ++idx) {
+                const Scalar mu = ws.mu_p(idx);
+                const Scalar yv = ws.y(idx);
+                const Scalar w = compute_irls_weight(
+                    yv - mu, mu, loss, yv, ctx.theta_at(ws.rows[idx], col_j));
+                ws.w_p(idx) = w;
+                ws.wy(idx) = w * yv;
+            }
+            ws.b.noalias() = ws.Wp.leftCols(nnz) * ws.wy.head(nnz);
+        } else {
+            ws.b.setZero();
+        }
+
+        // ---- Weighted Gram ----
+        if (mode == IRLSZeroMode::FULL) {
+            if (!recon_cached) ws.recon.noalias() = W_T.transpose() * xm;
+            for (int i = 0; i < m; ++i) {
+                ws.w_full(i) = compute_irls_weight(
+                    -ws.recon(i), ws.recon(i), loss,
+                    static_cast<Scalar>(0), ctx.theta_at(i, col_j));
+            }
+            for (int idx = 0; idx < nnz; ++idx)
+                ws.w_full(ws.rows[idx]) = ws.w_p(idx);
+            ws.W_s.array() = W_T.array().rowwise() * ws.w_full.transpose().array();
+            ws.G.noalias() = ws.W_s * W_T.transpose();
+        } else if (nnz > 0) {
+            // G = Wp diag(w) Wp' as a symmetric rank update: one triangle
+            // is computed from Wp scaled by sqrt(w), then mirrored.
+            for (int idx = 0; idx < nnz; ++idx)
+                ws.Wp_s.col(idx) = ws.Wp.col(idx) * std::sqrt(ws.w_p(idx));
+            ws.G.setZero();
+            ws.G.template selfadjointView<Eigen::Lower>().rankUpdate(
+                ws.Wp_s.leftCols(nnz));
+            ws.G.template triangularView<Eigen::StrictlyUpper>() = ws.G.transpose();
+        } else {
+            ws.G.setZero();
+        }
+
+        // ---- Linear term of the zero entries ----
+        if (mode == IRLSZeroMode::LINEAR_MU) {
+            ws.recon.noalias() = W_T.transpose() * xm;
+            irls_fill_zero_slopes(ctx, col_j, ws.recon, ws.w_full);
+            for (int idx = 0; idx < nnz; ++idx)
+                ws.w_full(ws.rows[idx]) = static_cast<Scalar>(0);
+            ws.c_lin.noalias() = W_T * ws.w_full;
+            ws.b -= ws.c_lin;
+        } else if (mode == IRLSZeroMode::LINEAR_CONST) {
+            ws.b -= ws.c_lin;
+        }
+
+        // ---- Penalties ----
+        if (ctx.L2 > static_cast<Scalar>(0)) ws.G.diagonal().array() += ctx.L2;
+        if (ctx.G_penalty) ws.G += *ctx.G_penalty;
+        if (ctx.B_penalty) ws.b += ctx.B_penalty->col(col_j);
+
+        ws.x_old = xm;
+        // Residual of the unpenalised model at the current x (L1 is applied
+        // by coordinate descent).
+        ws.r0 = ws.b;
+        ws.r0.noalias() -= ws.G * ws.x_old;
+
+        // A factor with no curvature (it does not load on any weighted row,
+        // so its row and column of G are zero) and a negative gradient term
+        // is optimal at zero; coordinate descent skips zero-diagonal
+        // coordinates, so set it here.
+        if (ctx.nonneg) {
+            for (int f = 0; f < k; ++f) {
+                if (ws.G(f, f) <= static_cast<Scalar>(0) &&
+                    ws.b(f) - ctx.L1 < static_cast<Scalar>(0)) {
+                    x[f] = static_cast<Scalar>(0);
+                }
+            }
+        }
+
+        // ---- Solve the quadratic model, warm-started at x ----
+        ws.b_res = ws.r0;
+        cd_nnls_col_fixed(ws.G, ws.b_res.data(), x, k,
+                          ctx.L1, static_cast<Scalar>(0),
+                          ctx.nonneg, ctx.cd_maxit,
+                          static_cast<Scalar>(0), ctx.cd_tol);
+
+        // ---- Step control: never accept an increase of F ----
+        if (ctx.step_control) {
+            // Reference value at x_old. For LINEAR_MU add the tangent term
+            // at x_old, where the majoriser equals F.
+            double F_ref = F_old;
+            if (mode == IRLSZeroMode::LINEAR_MU)
+                F_ref += static_cast<double>(ws.c_lin.dot(ws.x_old));
+            double F_new = irls_col_merit(ctx, ws, nnz, col_j, x, kind_step);
+            const double slack = 1e-6 * (std::abs(F_ref) + 1e-12);
+            if (!(F_new <= F_ref + slack)) {
+                // Damped re-solves from x_old. With D = diag(G) the damped
+                // model has Gram G + lam D and right-hand side b + lam D x_old,
+                // so its residual at x_old is still r0.
+                ws.diag0 = ws.G.diagonal();
+                const Scalar dmax = ws.diag0.maxCoeff();
+                const Scalar dfloor = (dmax > static_cast<Scalar>(0))
+                    ? dmax * static_cast<Scalar>(1e-6) : static_cast<Scalar>(1);
+                bool accepted = false;
+                Scalar mult = static_cast<Scalar>(1);
+                for (int h = 0; h < IRLS_MAX_HALVINGS; ++h) {
+                    mult *= static_cast<Scalar>(2);
+                    for (int f = 0; f < k; ++f) {
+                        ws.G(f, f) = ws.diag0(f) + (mult - static_cast<Scalar>(1)) *
+                                     std::max(ws.diag0(f), dfloor);
+                    }
+                    xm = ws.x_old;
+                    ws.b_res = ws.r0;
+                    cd_nnls_col_fixed(ws.G, ws.b_res.data(), x, k,
+                                      ctx.L1, static_cast<Scalar>(0),
+                                      ctx.nonneg, ctx.cd_maxit,
+                                      static_cast<Scalar>(0), ctx.cd_tol);
+                    F_new = irls_col_merit(ctx, ws, nnz, col_j, x, kind_step);
+                    if (F_new <= F_ref + slack) { accepted = true; break; }
+                }
+                if (!accepted) {
+                    xm = ws.x_old;
+                    break;
+                }
+            }
+            // Carry the part that does not depend on the tangent.
+            F_old = (mode == IRLSZeroMode::LINEAR_MU)
+                ? F_new - ws.last_zero : F_new;
+        }
+
+        // ---- IRLS convergence check ----
+        Scalar max_change = 0;
+        for (int i = 0; i < k; ++i) {
+            Scalar rel = std::abs(x[i] - ws.x_old(i)) /
+                         (std::abs(ws.x_old(i)) + static_cast<Scalar>(1e-12));
+            if (rel > max_change) max_change = rel;
+        }
+        if (max_change < ctx.irls_tol) break;
+    }
+}
+
+/**
+ * @brief Shared driver: validates, prepares the context and runs all columns.
+ *
+ * @param gather  callable (int j, IRLSColWork<Scalar>& ws) -> int: writes the
+ *                rows and values of the non-zero entries of column j into
+ *                ws.rows / ws.y and returns their count (at most `cap`).
+ */
+template<typename Scalar, typename GatherFn>
+inline void irls_batch_run(
+    int n, int cap,
+    const DenseMatrix<Scalar>& W_T,
+    const DenseMatrix<Scalar>& G_base,
+    DenseMatrix<Scalar>& H,
+    const LossConfig<Scalar>& loss,
+    Scalar L1, Scalar L2,
+    bool nonneg,
+    int cd_maxit, Scalar cd_tol,
+    int irls_max_iter, Scalar irls_tol,
+    int threads,
+    const Scalar* theta_per_row,
+    const Scalar* theta_per_col,
+    const DenseMatrix<Scalar>* G_penalty,
+    const DenseMatrix<Scalar>* B_penalty,
+    const GatherFn& gather)
+{
+    typedef Eigen::Matrix<Scalar, Eigen::Dynamic, 1> Vec;
+    const int k = static_cast<int>(W_T.rows());
+    const int m = static_cast<int>(W_T.cols());
+
+    if (G_penalty && (G_penalty->rows() != k || G_penalty->cols() != k))
+        throw std::invalid_argument("IRLS: G_penalty must be k x k.");
+    if (B_penalty && (B_penalty->rows() != k || B_penalty->cols() != n))
+        throw std::invalid_argument("IRLS: B_penalty must be k x ncol.");
+
+    // Warm start: keep the current factor when it has the right shape and
+    // is finite; otherwise start cold from zero.
+    if (H.rows() != k || H.cols() != n || !H.allFinite()) {
+        H.resize(k, n);
+        H.setZero();
+    }
+
+    const bool has_theta = (theta_per_row != nullptr) || (theta_per_col != nullptr);
+
+    IRLSColContext<Scalar> ctx;
+    ctx.W_T = &W_T;
+    ctx.G_base = &G_base;
+    ctx.loss = &loss;
+    ctx.L1 = L1;
+    ctx.L2 = L2;
+    ctx.nonneg = nonneg;
+    ctx.cd_maxit = cd_maxit;
+    ctx.cd_tol = cd_tol;
+    ctx.irls_max_iter = irls_max_iter;
+    ctx.irls_tol = irls_tol;
+    ctx.zero_mode = irls_select_zero_mode(loss, nonneg, W_T, has_theta);
+    ctx.step_control = !(loss.type == LossType::MAE || loss.type == LossType::HUBER);
+    ctx.theta_per_row = theta_per_row;
+    ctx.theta_per_col = theta_per_col;
+    ctx.G_penalty = G_penalty;
+    ctx.B_penalty = B_penalty;
+
+    Vec s_plain = W_T.rowwise().sum();
+    ctx.s_plain = &s_plain;
+
+    Vec s_zero;
+    if (ctx.zero_mode == IRLSZeroMode::LINEAR_CONST &&
+        loss.type == LossType::GP && theta_per_row && !theta_per_col) {
+        Vec q(m);
+        for (int i = 0; i < m; ++i)
+            q(i) = irls_zero_slope_const(loss, theta_per_row[i]);
+        s_zero = W_T * q;
+        ctx.s_zero = &s_zero;
+    }
+
+#ifdef _OPENMP
+    int n_threads = (threads > 0) ? threads : omp_get_max_threads();
+#else
+    int n_threads = 1;
+    (void)threads;
+#endif
+    if (n_threads < 1) n_threads = 1;
+
+    std::vector<IRLSColWork<Scalar>> workspaces(static_cast<size_t>(n_threads));
+    for (int t = 0; t < n_threads; ++t)
+        workspaces[static_cast<size_t>(t)].init(k, cap, m, ctx.zero_mode);
+
+#ifdef _OPENMP
+    #pragma omp parallel for schedule(dynamic, 8) num_threads(n_threads)
+#endif
+    for (int j = 0; j < n; ++j) {
+#ifdef _OPENMP
+        int tid = omp_get_thread_num();
+#else
+        int tid = 0;
+#endif
+        IRLSColWork<Scalar>& ws = workspaces[static_cast<size_t>(tid)];
+        const int nnz = gather(j, ws);
+        for (int idx = 0; idx < nnz; ++idx)
+            ws.Wp.col(idx) = W_T.col(ws.rows[static_cast<size_t>(idx)]);
+        irls_solve_col_core(ctx, ws, nnz, j, H.col(j).data());
+    }
+}
+
 }  // namespace detail
 
 // ========================================================================
@@ -458,9 +1187,26 @@ void irls_nnls_col_dense(
 /**
  * @brief CPU batch IRLS NNLS for sparse A
  *
- * Parallelized over columns with OpenMP. Pre-allocates per-thread
- * workspaces to avoid heap allocation churn in the inner loop.
- * Uses sparse-Gram trick: O(nnz_j · k²) per column instead of O(m · k²).
+ * Parallelized over columns with OpenMP. Stored zeros and structural zeros
+ * are treated alike and get the distribution's own treatment (see the block
+ * comment above detail::IRLSZeroMode), so a matrix gives the same fit as
+ * sparse or dense input.
+ *
+ * H is the starting point when it is k x n and finite (warm start);
+ * otherwise it is resized and the solve starts cold.
+ *
+ * Cost per IRLS iteration, per column with nnz_j non-zeros:
+ *   Poisson-type losses (KL/GP, NB without size, Tweedie p = 1): O(nnz_j k^2)
+ *   NB with size, Tweedie 1 < p < 2:                           O(nnz_j k^2 + m k)
+ *   robust weights or unconstrained factors:                   O(m k^2)
+ *   gamma, inverse Gaussian, Tweedie p >= 2 (no zeros allowed): O(m k^2)
+ *
+ * @param G_penalty optional k x k matrix added to every weighted Gram
+ * @param B_penalty optional k x ncol matrix; column j is added to the
+ *                  right-hand side of column j
+ *
+ * @throws std::invalid_argument for an unsupported Tweedie power, data
+ *         outside the support of the loss, or mis-sized penalties
  */
 template<typename Scalar, typename SparseMatType>
 void nnls_batch_irls_sparse(
@@ -475,52 +1221,57 @@ void nnls_batch_irls_sparse(
     int irls_max_iter, Scalar irls_tol,
     int threads,
     const Scalar* theta_per_row = nullptr,
-    const Scalar* theta_per_col = nullptr)
+    const Scalar* theta_per_col = nullptr,
+    const DenseMatrix<Scalar>* G_penalty = nullptr,
+    const DenseMatrix<Scalar>* B_penalty = nullptr)
 {
-    const int k = static_cast<int>(W_T.rows());
     const int n = static_cast<int>(A.cols());
-    H.resize(k, n);
-    H.setZero();
+    const int m = static_cast<int>(A.rows());
 
-    // Find max nnz per column for workspace sizing
+    validate_loss_config(loss);
+    if (static_cast<int>(W_T.cols()) != m)
+        throw std::invalid_argument("IRLS: factor and data dimensions do not match.");
+
+    // Support check and workspace sizing in one pass over the stored entries.
     int max_nnz = 0;
+    bool any_negative = false;
+    bool any_zero = false;
     for (int j = 0; j < n; ++j) {
-        int col_nnz = static_cast<int>(A.outerIndexPtr()[j + 1] - A.outerIndexPtr()[j]);
+        int col_nnz = 0;
+        for (typename SparseMatType::InnerIterator it(A, j); it; ++it) {
+            const Scalar v = static_cast<Scalar>(it.value());
+            if (v < static_cast<Scalar>(0)) any_negative = true;
+            if (v != static_cast<Scalar>(0)) ++col_nnz;
+        }
+        if (col_nnz < m) any_zero = true;
         if (col_nnz > max_nnz) max_nnz = col_nnz;
     }
-    if (max_nnz == 0) max_nnz = 1;
+    detail::irls_check_support(loss, any_negative, any_zero);
 
-#ifdef _OPENMP
-    int n_threads = (threads > 0) ? threads : omp_get_max_threads();
-#else
-    int n_threads = 1;
-#endif
+    auto gather = [&A](int j, detail::IRLSColWork<Scalar>& ws) -> int {
+        int nnz = 0;
+        for (typename SparseMatType::InnerIterator it(A, j); it; ++it) {
+            const Scalar v = static_cast<Scalar>(it.value());
+            if (v == static_cast<Scalar>(0)) continue;
+            ws.rows[static_cast<size_t>(nnz)] = static_cast<int>(it.row());
+            ws.y(nnz) = v;
+            ++nnz;
+        }
+        return nnz;
+    };
 
-    // Pre-allocate per-thread workspaces (avoids per-column heap allocation)
-    std::vector<detail::IRLSWorkspace<Scalar>> workspaces(n_threads);
-    for (int t = 0; t < n_threads; ++t) {
-        workspaces[t].init_sparse(k, max_nnz);
-    }
-
-#ifdef _OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(n_threads)
-#endif
-    for (int j = 0; j < n; ++j) {
-#ifdef _OPENMP
-        int tid = omp_get_thread_num();
-#else
-        int tid = 0;
-#endif
-        detail::irls_nnls_col_sparse_ws(
-            A, W_T, j, H.col(j).data(), G_base, loss,
-            L1, L2, nonneg, cd_maxit, cd_tol,
-            irls_max_iter, irls_tol, false, theta_per_row, theta_per_col,
-            workspaces[tid]);
-    }
+    detail::irls_batch_run(
+        n, max_nnz, W_T, G_base, H, loss, L1, L2, nonneg,
+        cd_maxit, cd_tol, irls_max_iter, irls_tol, threads,
+        theta_per_row, theta_per_col, G_penalty, B_penalty, gather);
 }
 
 /**
  * @brief CPU batch IRLS NNLS for dense A
+ *
+ * Same algorithm and options as nnls_batch_irls_sparse: entries equal to
+ * zero are handled by the zero rule of the loss, all others by their
+ * Fisher weight.
  */
 template<typename Scalar, typename DenseMatType>
 void nnls_batch_irls_dense(
@@ -535,25 +1286,47 @@ void nnls_batch_irls_dense(
     int irls_max_iter, Scalar irls_tol,
     int threads,
     const Scalar* theta_per_row = nullptr,
-    const Scalar* theta_per_col = nullptr)
+    const Scalar* theta_per_col = nullptr,
+    const DenseMatrix<Scalar>* G_penalty = nullptr,
+    const DenseMatrix<Scalar>* B_penalty = nullptr)
 {
-    const int k = static_cast<int>(W_T.rows());
     const int n = static_cast<int>(A.cols());
-    H.resize(k, n);
-    H.setZero();
+    const int m = static_cast<int>(A.rows());
 
-#ifdef _OPENMP
-    int n_threads = (threads > 0) ? threads : omp_get_max_threads();
-    #pragma omp parallel for schedule(dynamic) num_threads(n_threads)
-#endif
-    for (int j = 0; j < n; ++j) {
-        detail::irls_nnls_col_dense(
-            A, W_T, j, H.col(j).data(), G_base, loss,
-            L1, L2, nonneg, cd_maxit, cd_tol,
-            irls_max_iter, irls_tol, theta_per_row, theta_per_col);
+    validate_loss_config(loss);
+    if (static_cast<int>(W_T.cols()) != m)
+        throw std::invalid_argument("IRLS: factor and data dimensions do not match.");
+
+    bool any_negative = false;
+    bool any_zero = false;
+    if (detail::irls_support_class(loss) > 0) {
+        for (int j = 0; j < n; ++j) {
+            for (int i = 0; i < m; ++i) {
+                const Scalar v = static_cast<Scalar>(A(i, j));
+                if (v < static_cast<Scalar>(0)) any_negative = true;
+                if (v == static_cast<Scalar>(0)) any_zero = true;
+            }
+        }
     }
+    detail::irls_check_support(loss, any_negative, any_zero);
+
+    auto gather = [&A, m](int j, detail::IRLSColWork<Scalar>& ws) -> int {
+        int nnz = 0;
+        for (int i = 0; i < m; ++i) {
+            const Scalar v = static_cast<Scalar>(A(i, j));
+            if (v == static_cast<Scalar>(0)) continue;
+            ws.rows[static_cast<size_t>(nnz)] = i;
+            ws.y(nnz) = v;
+            ++nnz;
+        }
+        return nnz;
+    };
+
+    detail::irls_batch_run(
+        n, m, W_T, G_base, H, loss, L1, L2, nonneg,
+        cd_maxit, cd_tol, irls_max_iter, irls_tol, threads,
+        theta_per_row, theta_per_col, G_penalty, B_penalty, gather);
 }
 
 }  // namespace primitives
 }  // namespace FactorNet
-

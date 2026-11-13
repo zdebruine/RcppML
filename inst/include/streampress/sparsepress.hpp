@@ -17,6 +17,7 @@
 #include <streampress/model/predictor.hpp>
 #include <streampress/transform/delta.hpp>
 #include <streampress/transform/value_map.hpp>
+#include <streampress/core/checks.hpp>
 
 #include <chrono>
 #include <cstdio>
@@ -446,6 +447,37 @@ inline CSCMatrix decompress(const std::vector<uint8_t>& data,
     if (expected_crc != actual_crc)
         throw std::runtime_error("CRC32 mismatch: data corrupted");
 
+    // Sizes and counts come from the file. Check them against the bytes
+    // present before anything is allocated or indexed with them.
+    {
+        const uint64_t body = data.size() - HEADER_SIZE;
+        const uint64_t sections =
+            static_cast<uint64_t>(header.model_size) + header.col_counts_size +
+            header.struct_k_size + header.struct_size;
+        if (sections > body)
+            spz_corrupt("section sizes exceed the file");
+        if (header.m > 0x7FFFFFFFu || header.n > 0x7FFFFFFFu)
+            spz_corrupt("matrix dimensions exceed 2^31 - 1");
+        if (header.nnz > 0xFFFFFFFFull ||
+            header.nnz > static_cast<uint64_t>(header.m) * header.n)
+            spz_corrupt("non-zero count is inconsistent with the dimensions");
+        // One varint (at least one byte) per column
+        if (header.n > header.col_counts_size)
+            spz_corrupt("column-count section is too small");
+    }
+    const uint8_t* const data_end = data.data() + data.size();
+    // Little-endian uint32 from a section, bounds-checked
+    auto read_le32 = [](const uint8_t*& q, const uint8_t* end) -> uint32_t {
+        if (static_cast<size_t>(end - q) < 4)
+            spz_corrupt("section is truncated");
+        const uint32_t v = static_cast<uint32_t>(q[0])
+                         | (static_cast<uint32_t>(q[1]) << 8)
+                         | (static_cast<uint32_t>(q[2]) << 16)
+                         | (static_cast<uint32_t>(q[3]) << 24);
+        q += 4;
+        return v;
+    };
+
     bool use_delta_pred  = (header.flags & FLAG_DELTA_PREDICTION) != 0;
     bool use_value_pred  = (header.flags & FLAG_VALUE_PREDICTION) != 0;
     bool is_integer      = (header.flags & FLAG_INTEGER_VALUES) != 0;
@@ -487,10 +519,13 @@ inline CSCMatrix decompress(const std::vector<uint8_t>& data,
     ValuePredictor value_pred;
 
     if (use_delta_pred) {
-        density_model = DensityModel::deserialize(mp);
+        density_model = DensityModel::deserialize(mp, col_counts_ptr);
     }
     if (use_value_pred) {
-        value_pred = ValuePredictor::deserialize(mp);
+        value_pred = ValuePredictor::deserialize(mp, col_counts_ptr);
+        // predict() indexes the row means by row
+        if (value_pred.row_mean_q.size() < header.m)
+            spz_corrupt("value model has fewer rows than the matrix");
     }
 
     // ========================================================================
@@ -499,49 +534,52 @@ inline CSCMatrix decompress(const std::vector<uint8_t>& data,
     {
         const uint8_t* cp = col_counts_ptr;
         mat.p[0] = 0;
+        uint64_t running = 0;
         for (uint32_t j = 0; j < header.n; ++j) {
-            uint32_t count = static_cast<uint32_t>(varint::decode(cp));
-            mat.p[j + 1] = mat.p[j] + count;
+            running += varint::decode(cp, struct_k_ptr);
+            if (running > header.nnz)
+                spz_corrupt("column counts exceed the non-zero count");
+            mat.p[j + 1] = static_cast<uint32_t>(running);
         }
+        if (running != header.nnz)
+            spz_corrupt("column counts do not sum to the non-zero count");
     }
 
     // ========================================================================
     // Phase 4: Decode structure (row index gaps) via rANS + escape
     // ========================================================================
-    {
+    if (header.nnz > 0) {
         // The struct_k_size field is 0 (no separate k data for rANS mode)
         // The structure data contains: rANS table + enc_size(4) + encoded +
         //                              overflow_size(4) + overflow
         const uint8_t* sp = struct_data_ptr;
+        const uint8_t* const sp_end = values_ptr;   // end of structure section
 
         // Read rANS table
-        RansTable struct_table = RansTable::deserialize(sp);
+        RansTable struct_table = RansTable::deserialize(sp, sp_end);
 
         // Read encoded data
-        uint32_t enc_sz = static_cast<uint32_t>(sp[0])
-                        | (static_cast<uint32_t>(sp[1]) << 8)
-                        | (static_cast<uint32_t>(sp[2]) << 16)
-                        | (static_cast<uint32_t>(sp[3]) << 24);
-        sp += 4;
+        uint32_t enc_sz = read_le32(sp, sp_end);
+        if (enc_sz > static_cast<size_t>(sp_end - sp))
+            spz_corrupt("structure payload extends past its section");
 
         std::vector<uint32_t> rans_syms(header.nnz);
         rans::decode_array(sp, enc_sz, rans_syms.data(), header.nnz, struct_table);
         sp += enc_sz;
 
         // Read overflow data
-        uint32_t ov_sz = static_cast<uint32_t>(sp[0])
-                       | (static_cast<uint32_t>(sp[1]) << 8)
-                       | (static_cast<uint32_t>(sp[2]) << 16)
-                       | (static_cast<uint32_t>(sp[3]) << 24);
-        sp += 4;
+        uint32_t ov_sz = read_le32(sp, sp_end);
+        if (ov_sz > static_cast<size_t>(sp_end - sp))
+            spz_corrupt("structure escape data extends past its section");
         const uint8_t* ov_ptr = sp;
+        const uint8_t* const ov_end = sp + ov_sz;
 
         // Reconstruct structure symbols with escape decoding
         constexpr uint32_t STRUCT_ESCAPE = 255;
         std::vector<uint32_t> structure_symbols(header.nnz);
         for (uint64_t k = 0; k < header.nnz; ++k) {
             if (rans_syms[k] == STRUCT_ESCAPE && ov_sz > 0) {
-                structure_symbols[k] = static_cast<uint32_t>(varint::decode(ov_ptr));
+                structure_symbols[k] = static_cast<uint32_t>(varint::decode(ov_ptr, ov_end));
             } else {
                 structure_symbols[k] = rans_syms[k];
             }
@@ -560,9 +598,13 @@ inline CSCMatrix decompress(const std::vector<uint8_t>& data,
                     int32_t residual = static_cast<int32_t>((zz >> 1) ^ -(zz & 1));
                     // Add prediction
                     int32_t predicted = density_model.predict_gap(current_row);
-                    int32_t gap_signed = residual + predicted;
+                    // 64-bit sum: the two terms can overflow int32 on bad input
+                    const int64_t gap_signed =
+                        static_cast<int64_t>(residual) + predicted;
                     // Gap must be non-negative
-                    gaps[k] = static_cast<uint32_t>(std::max(0, gap_signed));
+                    gaps[k] = static_cast<uint32_t>(
+                        std::min<int64_t>(std::max<int64_t>(0, gap_signed),
+                                          0xFFFFFFFFll));
                     current_row += gaps[k] + 1;
                 }
             }
@@ -572,6 +614,15 @@ inline CSCMatrix decompress(const std::vector<uint8_t>& data,
 
         // Reconstruct row indices from gaps
         delta::decode_all(gaps.data(), mat.p.data(), header.n, mat.i.data());
+
+        // Row indices must be in range and strictly increasing per column
+        for (uint32_t j = 0; j < header.n; ++j) {
+            for (uint32_t k = mat.p[j]; k < mat.p[j + 1]; ++k) {
+                if (mat.i[k] >= header.m ||
+                    (k > mat.p[j] && mat.i[k] <= mat.i[k - 1]))
+                    spz_corrupt("row index out of range");
+            }
+        }
     }
 
     // ========================================================================
@@ -581,14 +632,12 @@ inline CSCMatrix decompress(const std::vector<uint8_t>& data,
         const uint8_t* vp = values_ptr;
 
         // Read rANS table
-        RansTable table = RansTable::deserialize(vp);
+        RansTable table = RansTable::deserialize(vp, data_end);
 
         // Read encoded data size
-        uint32_t enc_size = static_cast<uint32_t>(vp[0])
-                          | (static_cast<uint32_t>(vp[1]) << 8)
-                          | (static_cast<uint32_t>(vp[2]) << 16)
-                          | (static_cast<uint32_t>(vp[3]) << 24);
-        vp += 4;
+        uint32_t enc_size = read_le32(vp, data_end);
+        if (enc_size > static_cast<size_t>(data_end - vp))
+            spz_corrupt("value payload extends past the file");
 
         // Decode rANS symbols
         std::vector<uint32_t> rans_symbols(header.nnz);
@@ -596,20 +645,19 @@ inline CSCMatrix decompress(const std::vector<uint8_t>& data,
         vp += enc_size;
 
         // Read overflow data size
-        uint32_t ov_size = static_cast<uint32_t>(vp[0])
-                         | (static_cast<uint32_t>(vp[1]) << 8)
-                         | (static_cast<uint32_t>(vp[2]) << 16)
-                         | (static_cast<uint32_t>(vp[3]) << 24);
-        vp += 4;
+        uint32_t ov_size = read_le32(vp, data_end);
+        if (ov_size > static_cast<size_t>(data_end - vp))
+            spz_corrupt("value escape data extends past the file");
 
         // Decode overflow values
         const uint8_t* ov_ptr = vp;
+        const uint8_t* const ov_end = vp + ov_size;
         std::vector<uint32_t> value_symbols(header.nnz);
 
         constexpr uint32_t ESCAPE_SYMBOL = 255;
         for (uint64_t k = 0; k < header.nnz; ++k) {
             if (rans_symbols[k] == ESCAPE_SYMBOL && ov_size > 0) {
-                value_symbols[k] = static_cast<uint32_t>(varint::decode(ov_ptr));
+                value_symbols[k] = static_cast<uint32_t>(varint::decode(ov_ptr, ov_end));
             } else {
                 value_symbols[k] = rans_symbols[k];
             }
@@ -628,8 +676,9 @@ inline CSCMatrix decompress(const std::vector<uint8_t>& data,
                     int32_t residual = static_cast<int32_t>((zz >> 1) ^ -(zz & 1));
                     // Add prediction
                     uint32_t predicted = value_pred.predict(mat.i[k], col_nnz_);
-                    int32_t actual = residual + static_cast<int32_t>(predicted);
-                    mat.x[k] = static_cast<double>(std::max(0, actual));
+                    const int64_t actual =
+                        static_cast<int64_t>(residual) + static_cast<int64_t>(predicted);
+                    mat.x[k] = static_cast<double>(std::max<int64_t>(0, actual));
                 }
             }
         } else {
@@ -643,7 +692,11 @@ inline CSCMatrix decompress(const std::vector<uint8_t>& data,
         const uint8_t* vp = values_ptr;
         uint64_t N = header.nnz;
 
+        if (vp >= data_end) spz_corrupt("value section is missing");
         uint8_t n_streams = *vp++;
+        // One stream per byte of a double; more would write past the buffer
+        if (n_streams > 8)
+            spz_corrupt("value stream count does not match the value type");
 
         // Decode byte streams into XOR'd representation
         std::vector<uint64_t> xor_vals(N, 0);
@@ -651,20 +704,14 @@ inline CSCMatrix decompress(const std::vector<uint8_t>& data,
 
         for (int s = 0; s < n_streams; ++s) {
             // Read table_size + table
-            uint32_t table_sz = static_cast<uint32_t>(vp[0])
-                              | (static_cast<uint32_t>(vp[1]) << 8)
-                              | (static_cast<uint32_t>(vp[2]) << 16)
-                              | (static_cast<uint32_t>(vp[3]) << 24);
+            uint32_t table_sz = read_le32(vp, data_end);
             (void)table_sz;  // size embedded in table; deserialize advances vp
-            vp += 4;
-            RansTable table = RansTable::deserialize(vp);
+            RansTable table = RansTable::deserialize(vp, data_end);
 
             // Read enc_size + encoded
-            uint32_t enc_sz = static_cast<uint32_t>(vp[0])
-                            | (static_cast<uint32_t>(vp[1]) << 8)
-                            | (static_cast<uint32_t>(vp[2]) << 16)
-                            | (static_cast<uint32_t>(vp[3]) << 24);
-            vp += 4;
+            uint32_t enc_sz = read_le32(vp, data_end);
+            if (enc_sz > static_cast<size_t>(data_end - vp))
+                spz_corrupt("value payload extends past the file");
 
             std::vector<uint32_t> stream(N);
             rans::decode_array(vp, enc_sz, stream.data(), N, table);
@@ -676,18 +723,19 @@ inline CSCMatrix decompress(const std::vector<uint8_t>& data,
             }
         }
 
-        // Undo column-aware XOR-delta
-        uint64_t* out64 = reinterpret_cast<uint64_t*>(mat.x.data());
+        // Undo column-aware XOR-delta in place (first entry of a column is
+        // stored raw), then copy the bit patterns into the doubles. memcpy
+        // avoids reading doubles through a uint64_t pointer.
         for (uint32_t j = 0; j < header.n; ++j) {
             uint32_t col_start = mat.p[j];
             uint32_t col_end = mat.p[j + 1];
-            if (col_start < col_end) {
-                out64[col_start] = xor_vals[col_start]; // first in column: raw
-                for (uint32_t k = col_start + 1; k < col_end; ++k) {
-                    out64[k] = xor_vals[k] ^ out64[k - 1];
-                }
+            for (uint32_t k = col_start + 1; k < col_end; ++k) {
+                xor_vals[k] ^= xor_vals[k - 1];
             }
         }
+        if (N > 0)
+            std::memcpy(mat.x.data(), xor_vals.data(),
+                        static_cast<size_t>(N) * sizeof(uint64_t));
     }
 
     auto t1 = std::chrono::high_resolution_clock::now();
@@ -715,11 +763,13 @@ inline void write_compressed(const std::string& path,
 inline std::vector<uint8_t> read_compressed(const std::string& path) {
     FILE* f = fopen(path.c_str(), "rb");
     if (!f) throw std::runtime_error("Cannot open for reading: " + path);
-    fseek(f, 0, SEEK_END);
-    long size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    std::vector<uint8_t> data(size);
-    if (fread(data.data(), 1, size, f) != static_cast<size_t>(size)) {
+    const long long size = spz_file_size(f);
+    if (size < 0) {
+        fclose(f);
+        throw std::runtime_error("Cannot determine file size: " + path);
+    }
+    std::vector<uint8_t> data(static_cast<size_t>(size));
+    if (size > 0 && fread(data.data(), 1, data.size(), f) != data.size()) {
         fclose(f);
         throw std::runtime_error("Failed to read file: " + path);
     }

@@ -18,7 +18,10 @@
 #'
 #' Set \code{options(RcppML.verbose = TRUE)} to print model tolerances to the console after each iteration.
 #'
-#' Parallelization is applied with OpenMP using the number of threads in \code{getOption("RcppML.threads")} and set by \code{option(RcppML.threads = 0)}, for example. \code{0} corresponds to all threads, let OpenMP decide.
+#' Parallelization uses OpenMP. The number of threads is the \code{threads} argument if it is non-zero, otherwise \code{getOption("RcppML.threads")}, otherwise all available cores (\code{0}). For example, \code{options(RcppML.threads = 2)} limits every RcppML function to two threads. The count is capped at 2 under \code{R CMD check} (\code{_R_CHECK_LIMIT_CORES_}) and at \code{OMP_THREAD_LIMIT} when that environment variable is set.
+#'
+#' @section Input requirements:
+#' \code{data} must be finite (\code{Inf} is an error; \code{NA} and \code{NaN} are masked, see \code{mask}) and must contain at least one non-zero value. \code{k} cannot exceed \code{min(nrow(data), ncol(data))}. Losses other than \code{"mse"} require non-negative data; \code{"gamma"}, \code{"inverse_gaussian"} and \code{"tweedie"} with \code{tweedie_power >= 2} require strictly positive data (zeros can be treated as missing with \code{mask = "zeros"} under cross-validation); \code{"gp"} and \code{"nb"} warn when the data are not integer counts.
 #'
 #' @section Cross-Validation:
 #' When \code{k} is a vector, the function performs cross-validation to find the optimal rank:
@@ -82,8 +85,8 @@
 #'   \item{\code{theta_init}, \code{theta_max}, \code{theta_min}}{GP theta bounds}
 #'   \item{\code{nb_size_init}, \code{nb_size_max}, \code{nb_size_min}}{NB dispersion bounds}
 #'   \item{\code{gamma_phi_init}, \code{gamma_phi_max}, \code{gamma_phi_min}}{Gamma/IG dispersion bounds}
-#'   \item{\code{tweedie_power}}{Tweedie variance power (default 1.5)}
-#'   \item{\code{irls_max_iter}, \code{irls_tol}}{IRLS convergence parameters}
+#'   \item{\code{tweedie_power}}{Tweedie variance power in \code{[1, 3]} (default 1.5)}
+#'   \item{\code{irls_max_iter}, \code{irls_tol}}{IRLS inner iterations (default 5) and tolerance (default 1e-4)}
 #' }
 #'
 #' \strong{Zero-Inflation:}
@@ -93,10 +96,21 @@
 #'
 #' \strong{Solver:}
 #' \describe{
-#'   \item{\code{solver}}{NNLS solver: \code{"auto"}, \code{"cholesky"}, \code{"cd"}}
+#'   \item{\code{solver}}{Least-squares solver for each factor update.
+#'     \code{"cd"} is sequential coordinate descent, which handles every
+#'     penalty and is required for non-MSE losses and \code{robust} fits.
+#'     \code{"cholesky"} is a direct Cholesky solve of the normal equations
+#'     followed by a correction that enforces the non-negativity conditions;
+#'     it is available for MSE loss only. \code{"auto"} (default) picks
+#'     \code{"cholesky"} on CPU when \code{k < 32} and \code{L1 = 0}, and
+#'     \code{"cd"} otherwise.}
 #'   \item{\code{cd_tol}}{CD convergence tolerance (default 1e-8)}
 #'   \item{\code{cd_maxit}}{CD max iterations (default 100)}
-#'   \item{\code{h_init}}{Custom initial H matrix}
+#'   \item{\code{w_init}}{Initial W matrix (\code{nrow(data) x k}); equivalent to a matrix \code{seed}}
+#'   \item{\code{h_init}}{Initial H matrix (\code{k x ncol(data)}). Because
+#'     the first update recomputes H from W, the starting W is obtained by
+#'     solving for W given \code{h_init}. Requires a single rank and cannot
+#'     be combined with a W initialization or an SVD-based \code{seed}.}
 #' }
 #'
 #' \strong{Cross-Validation:}
@@ -104,12 +118,13 @@
 #'   \item{\code{cv_seed}}{Separate seed(s) for CV holdout pattern}
 #'   \item{\code{patience}}{Early stopping patience (default 5)}
 #'   \item{\code{cv_k_range}}{Auto-rank search range (default \code{c(2, 50)})}
-#'   \item{\code{track_train_loss}}{Track training loss in CV (default TRUE)}
+#'   \item{\code{track_train_loss}}{Track training loss in CV (default TRUE).
+#'     When \code{FALSE}, \code{train_mse} is reported as \code{NA}.}
 #' }
 #'
 #' \strong{Resources & Output:}
 #' \describe{
-#'   \item{\code{threads}}{OpenMP threads (default 0 = all)}
+#'   \item{\code{threads}}{OpenMP threads (default 0: use \code{getOption("RcppML.threads")}, else all cores)}
 #'   \item{\code{resource}}{Compute backend: \code{"auto"}, \code{"cpu"}, \code{"gpu"}}
 #'   \item{\code{norm}}{Factor normalization: \code{"L1"}, \code{"L2"}, \code{"none"}}
 #'   \item{\code{sort_model}}{Sort factors by diagonal (default TRUE)}
@@ -117,8 +132,9 @@
 #'
 #' \strong{Streaming:}
 #' \describe{
-#'   \item{\code{streaming}}{SPZ streaming mode: \code{"auto"}, \code{TRUE}, \code{FALSE}}
-#'   \item{\code{panel_cols}}{Panel size for streaming (default 0 = auto)}
+#'   \item{\code{streaming}}{SPZ streaming mode: \code{"auto"}, \code{TRUE}, \code{FALSE}.
+#'     Chunked streaming is not available in this version: a \code{.spz}
+#'     path is loaded into memory, and \code{streaming = TRUE} says so once.}
 #'   \item{\code{dispatch}}{StreamPress dispatch override}
 #' }
 #'
@@ -153,22 +169,34 @@
 #' @param L1 LASSO penalties in the range (0, 1], single value or array of length two for \code{c(w, h)}
 #' @param L2 Ridge penalties greater than zero, single value or array of length two for \code{c(w, h)}
 #' @param seed initialization control. Accepts:
-#'   \code{NULL} for random init, an integer for reproducible random init,
+#'   \code{NULL} for random init, an integer for reproducible random init
+#'   (the caller's random number stream is left unchanged),
 #'   a matrix (m x k) for custom W initialization, a list of matrices for multi-init,
-#'   or a string: \code{"lanczos"}, \code{"irlba"}, \code{"randomized"}, or \code{"svd"}
-#'   (auto-select) for SVD-based initialization.
+#'   or a string for SVD-based initialization (W and H start from the absolute
+#'   values of the leading singular vectors): \code{"lanczos"} or
+#'   \code{"irlba"}. \code{"svd"} and \code{"randomized"} are aliases of
+#'   \code{"lanczos"}.
 #' @param mask missing data mask. Accepts:
-#'   \code{NULL} (no masking), \code{"zeros"} (mask zeros), \code{"NA"} (mask NAs),
-#'   a dgCMatrix/matrix (custom mask), or \code{list("zeros", <matrix>)} to mask
-#'   zeros and use a custom mask simultaneously.
+#'   \code{NULL} (no masking), \code{"zeros"} (treat zeros as missing),
+#'   \code{"NA"} (mask NA/NaN entries; this happens automatically, with a
+#'   warning, whenever the data contain them),
+#'   a dgCMatrix/matrix of the same dimensions as \code{data} whose non-zero
+#'   entries mark missing values, or \code{list("zeros", <matrix>)} to mask
+#'   zeros and use a custom mask simultaneously. NA/NaN positions are always
+#'   added to a custom mask.
 #' @param loss loss function: \code{"mse"} (default), \code{"gp"},
 #'   \code{"nb"}, \code{"gamma"}, \code{"inverse_gaussian"}, or \code{"tweedie"}.
 #'   For robust loss (Huber/MAE), use the \code{robust} parameter instead.
 #' @param nonneg logical vector of length 2 for \code{c(w, h)} specifying non-negativity constraints (default \code{c(TRUE, TRUE)}).
 #' @param test_fraction fraction of entries to hold out for cross-validation (default 0 = disabled).
 #' @param verbose print progress information during fitting (default FALSE)
-#' @param projective if \code{TRUE}, use projective NMF (default \code{FALSE}).
+#' @param projective if \code{TRUE}, use projective NMF, where H is computed
+#'   as \eqn{W^T A} (default \code{FALSE}). H-side penalties,
+#'   \code{nonneg[2] = FALSE} and masks do not apply and are an error.
 #' @param symmetric if \code{TRUE}, use symmetric NMF where H = W^T (default \code{FALSE}).
+#'   Requires \code{loss = "mse"} and no mask. Only W-side settings act, so an
+#'   H-side setting that differs from the W side (\code{graph_H},
+#'   \code{target_H}, \code{angular[2]}, \code{upper_bound[2]}, ...) is an error.
 #' @param zi zero-inflation mode: \code{"none"} (default), \code{"row"}, or \code{"col"}.
 #'   Requires \code{loss="gp"} or \code{loss="nb"}.
 #' @param robust robustness control. \code{FALSE} (default), \code{TRUE} (Huber delta=1.345),
@@ -188,7 +216,9 @@
 #'     \code{loss} (final loss value), \code{loss_type} (loss function used), and \code{runtime} (seconds).}
 #' }
 #' When \code{k} is a vector: a \code{data.frame} of class \code{nmfCrossValidate} with columns
-#' \code{k}, \code{rep}, \code{train_loss}, \code{test_loss}, and \code{best_iter}.
+#' \code{rep}, \code{k}, \code{train_mse}, \code{test_mse}, \code{best_iter}
+#' (1-based iteration with the lowest test loss) and \code{total_iter}.
+#' \code{train_mse} is \code{NA} when \code{track_train_loss = FALSE}.
 #' @importFrom methods is
 #' @importFrom stats runif sd setNames var
 #' @references
@@ -204,17 +234,18 @@
 #' @examples
 #' \donttest{
 #' # basic NMF
-#' model <- nmf(Matrix::rsparsematrix(1000, 100, 0.1), k = 10)
+#' A <- abs(Matrix::rsparsematrix(500, 100, 0.1))
+#' model <- nmf(A, k = 10, seed = 1, threads = 2)
 #'
 #' # cross-validation to find optimal rank
-#' sim <- simulateNMF(200, 80, k = 5, noise = 3.0, seed = 42)
-#' cv <- nmf(sim$A, k = 2:10, test_fraction = 0.05, cv_seed = 1:3,
-#'           tol = 1e-5, maxit = 200)
-#' plot(cv)
+#' sim <- simulateNMF(100, 60, k = 4, noise = 3.0, seed = 42)
+#' cv <- nmf(sim$A, k = 2:6, test_fraction = 0.05, cv_seed = 1:2,
+#'           maxit = 50, threads = 2)
+#' if (requireNamespace("ggplot2", quietly = TRUE)) plot(cv)
 #' optimal_k <- cv$k[which.min(cv$test_mse)]
 #' 
 #' # fit final model with optimal rank
-#' model <- nmf(sim$A, optimal_k)
+#' model <- nmf(sim$A, optimal_k, seed = 1, threads = 2)
 #' }
 nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0),
                 seed = NULL, mask = NULL,
@@ -232,6 +263,35 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0),
   
   # --- Parse advanced parameters from ... ---
   dots <- .parse_nmf_dots(list(...))
+
+  # --- Deprecated 0.3.7 arguments ---
+  if (!is.null(dots$A)) {
+    if (!missing(data)) {
+      # nmf(A = x, 5): the rank was matched positionally to 'data'
+      if (!missing(k))
+        stop("Both 'data' and the deprecated argument 'A' were supplied to nmf()",
+             call. = FALSE)
+      k <- data
+    }
+    .Deprecated(msg = "nmf(A = ...) is deprecated; the first argument is now 'data'.")
+    data <- dots$A
+  }
+  if (!is.null(dots$mask_zeros)) {
+    .Deprecated(msg = "'mask_zeros' is deprecated; use mask = \"zeros\" instead.")
+    if (isTRUE(dots$mask_zeros)) {
+      if (is.null(mask)) {
+        mask <- "zeros"
+      } else if (!is.character(mask) && !(is.list(mask) && !inherits(mask, "Matrix"))) {
+        mask <- list("zeros", mask)
+      }
+    }
+  }
+
+  # --- Keep the caller's RNG stream intact when we call set.seed() ---
+  if (is.numeric(seed) && !is.matrix(seed)) {
+    rng_state <- .get_rng_state()
+    on.exit(.set_rng_state(rng_state), add = TRUE)
+  }
   
   # Extract to local variables for downstream code
   L21           <- dots$L21
@@ -264,14 +324,14 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0),
   cv_seed       <- dots$cv_seed
   patience      <- dots$patience
   cv_k_range    <- dots$cv_k_range
-  track_train_loss <- dots$track_train_loss
-  threads       <- dots$threads
+  track_train_loss <- isTRUE(dots$track_train_loss)
+  threads       <- .resolve_threads(dots$threads)
   resource      <- dots$resource
   norm          <- dots$norm
   sort_model    <- dots$sort_model
   streaming     <- dots$streaming
-  panel_cols    <- dots$panel_cols
   dispatch      <- dots$dispatch
+  skip_rank_check <- isTRUE(dots$.skip_rank_check)
   on_iteration  <- dots$on_iteration
   profile       <- dots$profile
   
@@ -280,8 +340,12 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0),
     if (length(data) < 2)
       stop("Multi-modal NMF requires a list of 2+ matrices with the same number of columns")
     nms <- names(data)
-    if (is.null(nms) || any(nms == "") || anyDuplicated(nms))
-      stop("Multi-modal NMF requires a named list with unique names")
+    if (is.null(nms)) nms <- rep("", length(data))
+    unnamed <- is.na(nms) | nms == ""
+    nms[unnamed] <- as.character(seq_along(data))[unnamed]
+    if (anyDuplicated(nms))
+      stop("Multi-modal NMF requires unique names for the input matrices")
+    names(data) <- nms
     # All matrices must have the same number of columns (shared samples)
     ncols <- vapply(data, ncol, integer(1))
     if (length(unique(ncols)) != 1)
@@ -298,7 +362,7 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0),
                              angular = angular[2], nonneg = nonneg[2],
                              upper_bound = upper_bound[2]))
     cfg <- factor_config(maxit = maxit, tol = tol, seed = seed,
-                         verbose = verbose)
+                         verbose = verbose, threads = threads)
     net <- factor_net(inputs = inputs, output = layer, config = cfg)
     return(fit(net))
   }
@@ -360,20 +424,10 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0),
       stop("zi != 'none' requires loss='gp' or loss='nb'.", call. = FALSE)
   }
 
-  # Auto solver selection
+  # Auto solver selection (single rule, see .auto_solver)
   if (solver == "auto") {
-    needs_irls <- (loss != "mse") || (robust_delta > 0)
-    if (needs_irls) {
-      solver <- "cd"
-    } else if (use_gpu) {
-      solver <- if (max(k) <= 32) "cd" else "cholesky"
-    } else {
-      if (max(k) < 32 && all(L1 == 0)) {
-        solver <- "cholesky"
-      } else {
-        solver <- "cd"
-      }
-    }
+    solver <- .auto_solver(needs_irls = (loss != "mse") || (robust_delta > 0),
+                           use_gpu = use_gpu, k = k, L1 = L1)
   }
   if (solver == "cholesky" && loss != "mse" && robust_delta == 0) {
     stop("solver='cholesky' is not supported with non-MSE distributions (got '", loss, "'). ",
@@ -427,7 +481,14 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0),
     if (is.null(dispatch) || identical(dispatch, "auto")) {
       mode_info <- .st_dispatch(data, k, resource = resource)
       if (verbose) message("StreamPress auto-dispatch: ", mode_info$mode)
-      resource <- mode_info$resource
+      if (isTRUE(streaming) && !isTRUE(mode_info$streaming)) {
+        .message_once("streaming_stub",
+          "RcppML: chunked streaming from .spz files is not available in this ",
+          "version; the file is loaded into memory (streaming = TRUE has no effect).")
+      }
+      # The dispatcher is a stub that always answers "in-core CPU"; do not let
+      # it override an explicit resource request.
+      if (identical(resource, "auto")) resource <- mode_info$resource
       streaming <- mode_info$streaming
     } else {
       message(
@@ -638,6 +699,10 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0),
     has_na   <- vd$has_na
   }
   
+  data_dims <- if (is_gpu_sparse) c(data$m, data$n) else dim(data)
+  if (length(data_dims) != 2L || any(data_dims < 1L))
+    stop("'data' must have at least one row and one column", call. = FALSE)
+
   # --- Validate penalties ---
   vp <- validate_all_penalties(L1, L2, L21, angular, graph_lambda, upper_bound)
   L1 <- vp$L1; L2 <- vp$L2; L21 <- vp$L21; angular <- vp$angular
@@ -672,7 +737,7 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0),
   test_fraction <- vc$test_fraction; patience <- vc$patience
   
   # --- Validate graphs ---
-  vg <- validate_graphs(graph_W, graph_H, dim(data), graph_lambda)
+  vg <- validate_graphs(graph_W, graph_H, data_dims, graph_lambda)
   graph_W <- vg$graph_W; graph_H <- vg$graph_H
 
   # Build graph_lambda_vec used by GPU dispatch and other paths
@@ -683,42 +748,109 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0),
     } else 0
   )
 
-  # --- Handle NA values ---
+  # --- Handle NA / NaN values: record their positions in a real mask ---
+  na_mask <- NULL
   if (has_na) {
-    if (is_sparse) {
-      na_count <- sum(is.na(data@x))
-      data@x[is.na(data@x)] <- 0
-    } else {
-      na_count <- sum(is.na(data))
-      data[is.na(data)] <- 0
-    }
+    na_mask <- .na_mask_matrix(data)
+    data <- .zero_na(data)
     if (is.null(mask)) mask <- "NA"
   }
-  
-  # --- Handle mask → mask_zeros flag ---
-  vm <- validate_mask(mask, has_na)
+
+  # --- Handle mask: mask_zeros flag + mask matrix (non-zero = missing) ---
+  vm <- validate_mask(mask, has_na, dims = data_dims)
   mask_zeros <- vm$mask_zeros
-  mask <- vm$mask_matrix
-  
+  mask <- if (is.null(na_mask)) vm$mask_matrix else .mask_union(vm$mask_matrix, na_mask)
+  has_mask_matrix <- length(mask@x) > 0L
+
+  # --- Validate data against the loss (sign, support, counts) ---
+  if (!is_gpu_sparse)
+    validate_data_for_loss(data, loss, mask_zeros = mask_zeros,
+                           tweedie_power = tweedie_power)
+
+  # --- Variants that ignore part of the configuration: refuse it ---
+  if (projective) {
+    ignored <- c(
+      if (L1[2] != 0) "L1[2]", if (L2[2] != 0) "L2[2]",
+      if (L21[2] != 0) "L21[2]", if (angular[2] != 0) "angular[2]",
+      if (upper_bound[2] != 0) "upper_bound[2]",
+      if (!is.null(graph_H)) "graph_H",
+      if (!is.null(target_H) && any(target_lambda != 0)) "target_H",
+      if (!nonneg[2]) "nonneg[2] = FALSE",
+      if (has_mask_matrix || mask_zeros) "mask")
+    if (length(ignored) > 0)
+      stop("projective = TRUE computes H as t(W) %*% data, so H-side settings ",
+           "have no effect and are not allowed: ",
+           paste(ignored, collapse = ", "),
+           ". Give penalties as c(w, 0) and remove the mask.", call. = FALSE)
+  }
+  if (symmetric) {
+    if (loss != "mse")
+      stop("symmetric = TRUE supports loss = \"mse\" only (got '", loss, "')",
+           call. = FALSE)
+    if (has_mask_matrix || mask_zeros)
+      stop("symmetric = TRUE does not support masks or missing values",
+           call. = FALSE)
+    # H is W transposed, so only the W-side settings act. A single value
+    # recycled to both sides is fine; an H-side setting of its own is not.
+    ignored <- c(
+      if (L1[2] != L1[1]) "L1[2]", if (L2[2] != L2[1]) "L2[2]",
+      if (L21[2] != L21[1]) "L21[2]",
+      if (angular[2] != angular[1]) "angular[2]",
+      if (upper_bound[2] != upper_bound[1]) "upper_bound[2]",
+      if (nonneg[2] != nonneg[1]) "nonneg[2]",
+      if (!is.null(graph_H)) "graph_H",
+      if (!is.null(target_H)) "target_H")
+    if (length(ignored) > 0)
+      stop("symmetric = TRUE sets H = t(W), so H-side settings have no effect ",
+           "and are not allowed: ", paste(ignored, collapse = ", "),
+           ". Use the W-side arguments (first element, graph_W) instead.",
+           call. = FALSE)
+  }
+
   # --- Handle k ---
   k_auto <- FALSE
-  k_auto_min <- cv_k_range[1]
-  k_auto_max <- cv_k_range[2]
   is_cv <- FALSE
-  
-  if (is.character(k) && k == "auto") {
+
+  if (is.character(k)) {
+    if (!identical(k, "auto"))
+      stop("'k' must be a positive integer, a vector of ranks, or \"auto\"",
+           call. = FALSE)
+    if (!is.numeric(cv_k_range) || length(cv_k_range) != 2 || any(is.na(cv_k_range)))
+      stop("'cv_k_range' must be a numeric vector c(min, max)", call. = FALSE)
     k_auto <- TRUE
-    k_vec <- as.integer(cv_k_range[1])
+    k_auto_max <- as.integer(min(max(cv_k_range), min(data_dims)))
+    k_auto_min <- as.integer(max(1L, min(min(cv_k_range), k_auto_max)))
+    k_vec <- k_auto_min
     if (test_fraction == 0) test_fraction <- 0.1
     is_cv <- TRUE
   } else {
+    if (!is.numeric(k))
+      stop("'k' must be a positive integer, a vector of ranks, or \"auto\"",
+           call. = FALSE)
     k_vec <- as.integer(k)
+    if (skip_rank_check) {
+      if (length(k_vec) == 0L || any(is.na(k_vec)) || any(k_vec < 1))
+        stop("'k' must be a positive integer", call. = FALSE)
+    } else {
+      validate_rank(k_vec, data_dims)
+    }
+    k_auto_min <- as.integer(cv_k_range[1])
+    k_auto_max <- as.integer(cv_k_range[2])
     if (length(k_vec) > 1) is_cv <- TRUE
   }
-  
+
   if (test_fraction > 0) is_cv <- TRUE
-  
-  n_features <- nrow(data)
+
+  n_features <- data_dims[1]
+  n_samples <- data_dims[2]
+
+  # --- Validate target_H (k x n) ---
+  if (!is.null(target_H)) {
+    if (k_auto || any(k_vec != k_vec[1]))
+      stop("'target_H' requires a single fixed rank 'k' equal to nrow(target_H)",
+           call. = FALSE)
+    target_H <- validate_factor_matrix(target_H, "target_H", k_vec[1], n_samples)
+  }
   
   # --- Handle seed → w_init + seed_int ---
   # For random init (init_mode == 0L): use R's RNG for initialization (matching legacy behavior)
@@ -812,17 +944,45 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0),
   }
   
   # --- Handle explicit w_init from ... ---
+  w_init_explicit <- is.matrix(seed) || is.list(seed) || !is.null(w_init_arg)
   if (!is.null(w_init_arg)) {
-    if (!is.matrix(w_init_arg)) stop("w_init must be a matrix")
-    if (nrow(w_init_arg) == n_features && ncol(w_init_arg) == k_vec[1]) {
-      w_init_mat <- w_init_arg
-    } else if (ncol(w_init_arg) == n_features && nrow(w_init_arg) == k_vec[1]) {
-      w_init_mat <- t(w_init_arg)
-    } else {
-      stop("w_init dimensions incompatible with data and k")
-    }
+    if (k_auto || length(k_vec) > 1)
+      stop("'w_init' requires a single fixed rank 'k'", call. = FALSE)
+    w_init_mat <- validate_factor_matrix(w_init_arg, "w_init", n_features, k_vec[1],
+                                         allow_transpose = TRUE)
+    w_init_list <- NULL
     if (seed_int == 0L)
       seed_int <- abs(as.integer(sum(w_init_mat[1:min(10, length(w_init_mat))]) * 1e8) %% .Machine$integer.max)
+  }
+  if (!is.null(w_init_mat) && any(!is.finite(w_init_mat)))
+    stop("The W initialization must not contain NA, NaN or infinite values",
+         call. = FALSE)
+
+  # --- Handle h_init ---
+  # Every fit path updates H first (from W), so an H start on its own would be
+  # overwritten before it is used. It is honored by deriving the W it implies:
+  # W0 = argmin_W ||A - W h_init||, which then seeds the usual iteration.
+  if (!is.null(h_init)) {
+    if (k_auto || length(k_vec) > 1)
+      stop("'h_init' requires a single fixed rank 'k'", call. = FALSE)
+    if (is_gpu_sparse)
+      stop("'h_init' is not supported for gpu_sparse_matrix input", call. = FALSE)
+    if (w_init_explicit)
+      stop("'h_init' cannot be combined with a W initialization (matrix 'seed' or ",
+           "'w_init'): the first update recomputes H from W, so 'h_init' would ",
+           "be ignored. Supply only one of them.", call. = FALSE)
+    if (init_mode != 0L)
+      stop("'h_init' cannot be combined with an SVD-based 'seed' string",
+           call. = FALSE)
+    h_init <- validate_factor_matrix(h_init, "h_init", k_vec[1], n_samples,
+                                     allow_transpose = TRUE)
+    w_from_h <- t(c_nnls(t(h_init), if (is_sparse) Matrix::t(data) else t(data),
+                         as.integer(cd_maxit), cd_tol, 0, 0, 0,
+                         nonneg[1], as.integer(threads), NULL))
+    dead <- colSums(abs(w_from_h)) == 0
+    if (any(dead)) w_from_h[, dead] <- 1 / n_features
+    w_init_mat <- w_from_h
+    w_init_list <- NULL
   }
 
   # --- Multiple initializations: run each, pick best ---
@@ -859,7 +1019,7 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0),
         w_init_sexp = w_init_list[[i]],
         h_init_sexp = h_init,
         verbose = FALSE,
-        mask_sexp = if (inherits(mask, "sparseMatrix")) mask else NULL,
+        mask_sexp = if (has_mask_matrix) mask else NULL,
         projective = projective,
         symmetric_nmf = symmetric,
         solver_mode = solver_mode,
@@ -921,18 +1081,71 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0),
   
   # --- k = "auto": automatic rank search using C++ rank search engine ---
   if (k_auto) {
+    if (is_gpu_sparse)
+      stop("k = \"auto\" is not supported for gpu_sparse_matrix input", call. = FALSE)
     cv_seed_auto <- if (length(cv_seeds) > 0) cv_seeds[1] else seed_int
-    rank_result <- .Call(`_RcppML_Rcpp_nmf_rank_cv`,
-      data, as.integer(k_auto_min), as.integer(k_auto_max), 1L,
-      test_fraction, as.integer(cv_seed_auto),
-      tol, as.integer(maxit), verbose,
-      as.double(L1), as.double(L2), as.integer(threads))
+    # The rank search receives the complete configuration (loss, masks, all
+    # penalties, solver, seeds), so the selected rank refers to the model that
+    # is fitted afterwards.
+    rank_result <- Rcpp_nmf_full(
+      A_sexp = data, k_vec = as.integer(k_auto_min), k_auto = TRUE,
+      k_auto_min = as.integer(k_auto_min), k_auto_max = as.integer(k_auto_max),
+      L1 = as.double(L1), L2 = as.double(L2),
+      L21 = as.double(L21), angular = as.double(angular),
+      upper_bound = as.double(upper_bound),
+      graph_lambda = as.double(graph_lambda),
+      tol = tol, maxit = as.integer(maxit),
+      cd_maxit = as.integer(cd_maxit), cd_tol = cd_tol,
+      threads = as.integer(threads),
+      seed = as.integer(seed_int),
+      nonneg_w = nonneg[1], nonneg_h = nonneg[2],
+      sort_model = sort_model, mask_zeros = mask_zeros,
+      track_loss_history = TRUE, track_train_loss = track_train_loss,
+      loss_str = loss, huber_delta = huber_delta,
+      holdout_fraction = test_fraction,
+      cv_seeds = as.integer(cv_seed_auto),
+      cv_patience = as.integer(patience),
+      resource_override = resource,
+      norm_str = norm,
+      graph_W_sexp = graph_W, graph_H_sexp = graph_H,
+      w_init_sexp = NULL,
+      h_init_sexp = NULL,
+      verbose = verbose,
+      mask_sexp = if (has_mask_matrix) mask else NULL,
+      projective = projective,
+      symmetric_nmf = symmetric,
+      solver_mode = solver_mode,
+      init_mode = init_mode,
+      irls_max_iter = as.integer(irls_max_iter),
+      irls_tol = irls_tol,
+      gp_dispersion_mode = dispersion_mode,
+      gp_theta_init = theta_init,
+      gp_theta_max = theta_max,
+      zi_mode = zi_mode,
+      zi_em_iters = as.integer(zi_em_iters),
+      gp_theta_min = theta_min,
+      nb_size_init = nb_size_init,
+      nb_size_max = nb_size_max,
+      nb_size_min = nb_size_min,
+      gamma_phi_init = gamma_phi_init,
+      gamma_phi_max = gamma_phi_max,
+      gamma_phi_min = gamma_phi_min,
+      robust_delta = robust_delta,
+      tweedie_power = tweedie_power,
+      target_H_sexp = NULL,
+      target_lambda = c(0, 0),
+      enable_profiling = FALSE
+    )
     
     # Fit final model at optimal rank
     k_vec <- as.integer(rank_result$k_optimal)
     
-    # Generate fresh W_init for optimal rank
-    if (is.null(w_init_mat) || ncol(w_init_mat) != k_vec[1]) {
+    # Generate W_init for the selected rank. A numeric seed stays
+    # reproducible; an SVD-based seed string leaves the start to C++.
+    if (init_mode != 0L) {
+      w_init_mat <- NULL
+    } else if (is.null(w_init_mat) || ncol(w_init_mat) != k_vec[1]) {
+      if (is.numeric(seed) && !is.matrix(seed)) set.seed(seed_int)
       w_init_mat <- matrix(runif(n_features * k_vec[1]), n_features, k_vec[1])
     }
     
@@ -958,7 +1171,7 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0),
       w_init_sexp = w_init_mat,
       h_init_sexp = h_init,
       verbose = verbose,
-      mask_sexp = if (!is.null(mask) && inherits(mask, "sparseMatrix")) mask else NULL,
+      mask_sexp = if (has_mask_matrix) mask else NULL,
       projective = projective,
       symmetric_nmf = symmetric,
       solver_mode = solver_mode,
@@ -1046,7 +1259,7 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0),
           w_init_sexp = NULL,
           h_init_sexp = NULL,
           verbose = FALSE,
-          mask_sexp = if (!is.null(mask) && inherits(mask, "sparseMatrix")) mask else NULL,
+          mask_sexp = if (has_mask_matrix) mask else NULL,
           projective = projective,
           symmetric_nmf = symmetric,
           solver_mode = solver_mode,
@@ -1076,9 +1289,10 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0),
         results[[idx]] <- data.frame(
           rep = rep,
           k = rank,
-          train_mse = if (!is.null(result_i$train_loss)) result_i$train_loss else NA_real_,
+          train_mse = if (track_train_loss && !is.null(result_i$train_loss)) result_i$train_loss else NA_real_,
           test_mse = if (!is.null(result_i$best_test_loss)) result_i$best_test_loss else NA_real_,
-          best_iter = if (!is.null(result_i$best_iter)) result_i$best_iter + 1L else NA_integer_,
+          # best_iter is already 1-based (converted once, in the C++ bridge)
+          best_iter = if (!is.null(result_i$best_iter)) as.integer(result_i$best_iter) else NA_integer_,
           total_iter = if (!is.null(result_i$iter)) result_i$iter else NA_integer_,
           mean_theta = if (!is.null(result_i$theta)) mean(result_i$theta) else NA_real_,
           mean_dispersion = if (!is.null(result_i$dispersion)) mean(result_i$dispersion) else NA_real_
@@ -1141,7 +1355,7 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0),
   result <- Rcpp_nmf_full(
     A_sexp = data,
     k_vec = k_vec,
-    k_auto = k_auto,
+    k_auto = FALSE,
     k_auto_min = as.integer(k_auto_min),
     k_auto_max = as.integer(k_auto_max),
     L1 = as.double(L1),
@@ -1174,7 +1388,7 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0),
     w_init_sexp = w_init_mat,
     h_init_sexp = h_init,
     verbose = verbose,
-    mask_sexp = if (!is.null(mask) && inherits(mask, "sparseMatrix")) mask else NULL,
+    mask_sexp = if (has_mask_matrix) mask else NULL,
     projective = projective,
     symmetric_nmf = symmetric,
     solver_mode = solver_mode,
@@ -1253,10 +1467,10 @@ nmf <- function(data, k, tol = 1e-4, maxit = 100, L1 = c(0, 0), L2 = c(0, 0),
   
   # CV outputs
   if (test_fraction > 0 && !k_auto) {
-    misc$train_loss <- result$train_loss
+    misc$train_loss <- if (track_train_loss) result$train_loss else NA_real_
     misc$test_loss <- result$best_test_loss
     misc$best_iter <- result$best_iter
-    misc$loss <- result$train_loss
+    misc$loss <- misc$train_loss
   } else {
     misc$loss <- result$loss
   }

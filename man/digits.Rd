@@ -38,7 +38,7 @@ stroke variations and writing styles within digits.
 \donttest{
 data(digits)
 dim(digits)
-model <- nmf(digits, k = 10, maxit = 50)
+model <- nmf(digits, k = 10, maxit = 20, seed = 1, threads = 2)
 }
 
 }

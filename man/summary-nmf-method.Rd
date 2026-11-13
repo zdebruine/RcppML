@@ -39,8 +39,8 @@ s <- summary(model, group_by = groups)
 
 \donttest{
 library(Matrix)
-A <- rsparsematrix(100, 50, 0.1)
-model <- nmf(A, k = 3, seed = 42, tol = 1e-2, maxit = 10)
+A <- abs(rsparsematrix(100, 50, 0.1))
+model <- nmf(A, k = 3, seed = 42, tol = 1e-2, maxit = 10, threads = 2)
 groups <- factor(sample(c("A", "B"), 50, replace = TRUE))
 s <- summary(model, group_by = groups)
 if (requireNamespace("ggplot2", quietly = TRUE)) {

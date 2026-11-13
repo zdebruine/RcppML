@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 library(testthat)
 library(RcppML)
 library(Matrix)
@@ -52,12 +56,14 @@ test_that("NMF with mixed penalty combinations (L1 + L21 + graph)", {
   A <- rsparsematrix(50, 40, 0.3)
   A <- abs(A)
 
-  # Construct graph adjacency
+  # Construct a symmetric chain-graph adjacency (zero diagonal).  nmf() takes
+  # a graph Laplacian or a symmetric adjacency matrix, which it converts to
+  # L = D - A; an asymmetric matrix is rejected.
   n <- ncol(A)
   graph_H <- Matrix::sparseMatrix(
-    i = c(1:n, 1:(n-1)),
-    j = c(1:n, 2:n),
-    x = c(rep(1, n), rep(0.1, n-1)),
+    i = c(1:(n-1), 2:n),
+    j = c(2:n, 1:(n-1)),
+    x = rep(0.1, 2 * (n-1)),
     dims = c(n, n)
   )
 

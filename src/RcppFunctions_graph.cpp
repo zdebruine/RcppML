@@ -13,6 +13,8 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <set>
+#include <sstream>
 
 using namespace FactorNet;
 using namespace FactorNet::graph;
@@ -62,6 +64,31 @@ LossConfig<float> parse_loss(const std::string& loss_str, double huber_delta,
     else Rcpp::stop("Unknown loss type: '" + loss_str + "' (supported: mse, gp, nb, gamma, inverse_gaussian, tweedie)");
     loss.robust_delta = static_cast<float>(robust_delta);
     return loss;
+}
+
+/// Split "a,b,c" into its comma-separated names (surrounding blanks removed)
+std::vector<std::string> split_csv_names(const std::string& s) {
+    std::vector<std::string> out;
+    std::istringstream iss(s);
+    std::string token;
+    while (std::getline(iss, token, ',')) {
+        const size_t start = token.find_first_not_of(" \t");
+        const size_t end = token.find_last_not_of(" \t");
+        if (start != std::string::npos)
+            out.push_back(token.substr(start, end - start + 1));
+    }
+    return out;
+}
+
+/// Read an optional target matrix and its strength from a per-factor R list
+void parse_target(Rcpp::List fc, Eigen::MatrixXf& storage, FactorDesc<float>& desc) {
+    if (!fc.containsElementNamed("target") || Rf_isNull(fc["target"])) return;
+    Eigen::MatrixXd t = Rcpp::as<Eigen::MatrixXd>(fc["target"]);
+    storage = t.cast<float>();
+    desc.target = &storage;
+    desc.target_lambda =
+        (fc.containsElementNamed("target_lambda") && !Rf_isNull(fc["target_lambda"]))
+        ? static_cast<float>(Rcpp::as<double>(fc["target_lambda"])) : 0.0f;
 }
 
 }  // anonymous namespace
@@ -183,6 +210,10 @@ Rcpp::List Rcpp_factor_net_fit(Rcpp::List descriptor) {
     // Storage for graph Laplacians (must outlive the graph)
     std::vector<Eigen::SparseMatrix<float>> w_graph_storage(layers_list.size());
     std::vector<Eigen::SparseMatrix<float>> h_graph_storage(layers_list.size());
+    // Storage for target matrices (must outlive the graph; sized up front so
+    // that the addresses handed to the layer descriptors stay valid)
+    std::vector<Eigen::MatrixXf> w_target_storage(layers_list.size());
+    std::vector<Eigen::MatrixXf> h_target_storage(layers_list.size());
 
     for (int i = 0; i < layers_list.size(); ++i) {
         Rcpp::List layer = Rcpp::as<Rcpp::List>(layers_list[i]);
@@ -204,6 +235,7 @@ Rcpp::List Rcpp_factor_net_fit(Rcpp::List descriptor) {
                 w_graph_storage[i] = gd.cast<float>();
                 ldesc.W_config.graph = &w_graph_storage[i];
             }
+            parse_target(wc, w_target_storage[i], ldesc.W_config);
         } else {
             ldesc.W_config.nonneg = default_nonneg;
         }
@@ -218,6 +250,7 @@ Rcpp::List Rcpp_factor_net_fit(Rcpp::List descriptor) {
                 h_graph_storage[i] = gd.cast<float>();
                 ldesc.H_config.graph = &h_graph_storage[i];
             }
+            parse_target(hc, h_target_storage[i], ldesc.H_config);
         } else {
             ldesc.H_config.nonneg = default_nonneg;
         }
@@ -242,6 +275,41 @@ Rcpp::List Rcpp_factor_net_fit(Rcpp::List descriptor) {
     // -------------------------------------------------------------------
     auto instance = GraphInstance<float>::build(gdesc);
     auto& graph = instance.graph();
+
+    // --- Refuse graphs that the engine cannot execute faithfully ---
+    {
+        std::set<std::string> distinct_inputs;
+        for (const auto& idesc : gdesc.inputs) distinct_inputs.insert(idesc.name);
+        if (graph.n_layers() > 1 && distinct_inputs.size() > 1)
+            Rcpp::stop("Multi-layer factor networks with more than one input are not "
+                       "supported: every branch would be fit to the first input.");
+        if (graph.n_layers() == 1 && !gdesc.conditions.empty())
+            Rcpp::stop("factor_condition() directly on an input is not supported.");
+    }
+
+    bool any_target = false;
+    for (const auto& ld : gdesc.layers)
+        if (ld.W_config.target || ld.H_config.target) any_target = true;
+    if (any_target && (graph.n_layers() != 1 || instance.is_streaming()))
+        Rcpp::stop("Target regularization in a factor network is supported for "
+                   "single-layer networks on in-memory data only.");
+
+    // Dimension checks for the single-layer path (m x n is the matrix that
+    // the layer factorizes; for shared inputs m is the total row count)
+    auto check_single_layer_dims = [&](int m, int n) {
+        if (graph.n_layers() != 1) return;
+        const auto& l0 = gdesc.layers[0];
+        if (l0.H_config.target &&
+            (l0.H_config.target->rows() != l0.k || l0.H_config.target->cols() != n))
+            Rcpp::stop("H(target) must be a k x n matrix (%d x %d)", l0.k, n);
+        if (l0.W_config.target &&
+            (l0.W_config.target->rows() != l0.k || l0.W_config.target->cols() != m))
+            Rcpp::stop("W(target) must be a k x m matrix (%d x %d)", l0.k, m);
+        if (w_init_ptr && (w_init_ptr->rows() != m || w_init_ptr->cols() != l0.k))
+            Rcpp::stop("internal error: w_init is %d x %d but the layer input has %d rows and rank %d",
+                       static_cast<int>(w_init_ptr->rows()), static_cast<int>(w_init_ptr->cols()),
+                       m, l0.k);
+    };
 
     GraphResult<float> result;
 
@@ -272,28 +340,44 @@ Rcpp::List Rcpp_factor_net_fit(Rcpp::List descriptor) {
     } else if (instance.has_concatenated()) {
         // Multi-modal shared-H path
         if (instance.concat_is_sparse()) {
+            check_single_layer_dims(static_cast<int>(instance.concatenated_sparse().rows()),
+                                    static_cast<int>(instance.concatenated_sparse().cols()));
             result = fit(graph, instance.concatenated_sparse(), w_init_ptr);
         } else {
+            check_single_layer_dims(static_cast<int>(instance.concatenated_data().rows()),
+                                    static_cast<int>(instance.concatenated_data().cols()));
             result = fit(graph, instance.concatenated_data(), w_init_ptr);
         }
     } else if (instance.first_input_is_sparse()) {
+        check_single_layer_dims(static_cast<int>(instance.first_sparse().rows()),
+                                static_cast<int>(instance.first_sparse().cols()));
         result = fit(graph, instance.first_sparse(), w_init_ptr);
     } else {
+        check_single_layer_dims(static_cast<int>(instance.first_dense().rows()),
+                                static_cast<int>(instance.first_dense().cols()));
         result = fit(graph, instance.first_dense(), w_init_ptr);
     }
 
     // -------------------------------------------------------------------
     // 7. Package results as R list
     // -------------------------------------------------------------------
+    // Layers are returned in declared (topological) order. GraphResult keeps
+    // them in a std::map, whose iteration order is alphabetical by name.
     Rcpp::List layers_result;
     Rcpp::CharacterVector layer_names;
+    bool is_multi_modal = false;
+    bool first_layer = true;
 
-    for (const auto& kv : result.layers) {
-        const std::string& name = kv.first;
-        const LayerResult<float>& lr = kv.second;
+    for (const auto& ldesc_out : gdesc.layers) {
+        auto found = result.layers.find(ldesc_out.name);
+        if (found == result.layers.end()) continue;
+        const std::string& name = found->first;
+        const LayerResult<float>& lr = found->second;
+
+        Eigen::MatrixXd W_full = lr.W.template cast<double>();
 
         Rcpp::List lr_list = Rcpp::List::create(
-            Rcpp::Named("W") = lr.W.template cast<double>(),
+            Rcpp::Named("W") = W_full,
             Rcpp::Named("d") = lr.d.template cast<double>(),
             Rcpp::Named("H") = lr.H.template cast<double>(),
             Rcpp::Named("iterations") = lr.iterations,
@@ -303,47 +387,44 @@ Rcpp::List Rcpp_factor_net_fit(Rcpp::List descriptor) {
             Rcpp::Named("converged") = lr.converged
         );
 
-        // Add W_splits for multi-modal
-        if (!lr.W_splits.empty()) {
-            Rcpp::List splits;
-            for (const auto& sp : lr.W_splits) {
-                splits[sp.first] = sp.second.template cast<double>();
+        // Multi-modal: split the rows of the concatenated W back into one
+        // block per input, in CONCATENATION order (the order of the names in
+        // the "shared:a,b,..." reference), not in std::map (alphabetical) order.
+        if (first_layer && instance.has_concatenated() &&
+            ldesc_out.input_ref.size() > 7 &&
+            ldesc_out.input_ref.substr(0, 7) == "shared:") {
+            const std::vector<std::string> shared_names =
+                split_csv_names(ldesc_out.input_ref.substr(7));
+            const auto& row_counts = instance.input_row_counts();
+            const int n_shared = static_cast<int>(shared_names.size());
+
+            Rcpp::List splits(n_shared);
+            Rcpp::CharacterVector split_names(n_shared);
+            int row_offset = 0;
+            for (int si = 0; si < n_shared; ++si) {
+                auto rc = row_counts.find(shared_names[si]);
+                if (rc == row_counts.end())
+                    Rcpp::stop("internal error: shared input '" + shared_names[si] + "' not found");
+                const int nr = rc->second;
+                if (row_offset + nr > static_cast<int>(W_full.rows()))
+                    Rcpp::stop("internal error: shared inputs have more rows than W");
+                Eigen::MatrixXd block = W_full.middleRows(row_offset, nr);
+                splits[si] = Rcpp::wrap(block);
+                split_names[si] = shared_names[si];
+                row_offset += nr;
             }
-            lr_list["W_splits"] = splits;
+            if (row_offset != static_cast<int>(W_full.rows()))
+                Rcpp::stop("internal error: rows of W do not match the shared inputs");
+            splits.attr("names") = split_names;
+            lr_list.push_back(splits, "W_splits");
+            is_multi_modal = true;
         }
 
         layers_result.push_back(lr_list);
         layer_names.push_back(name);
+        first_layer = false;
     }
     layers_result.attr("names") = layer_names;
-
-    // Handle multi-modal W splits at top level
-    bool is_multi_modal = false;
-    if (!result.layers.empty()) {
-        const auto& first_lr = result.layers.begin()->second;
-        is_multi_modal = !first_lr.W_splits.empty();
-    }
-
-    // For multi-modal: split W by input row counts
-    if (instance.has_concatenated() && !is_multi_modal) {
-        // The graph's single layer result has a full concatenated W
-        // Split it by input row counts
-        Rcpp::List lr_mod = Rcpp::as<Rcpp::List>(layers_result[0]);
-        Eigen::MatrixXd W_full = Rcpp::as<Eigen::MatrixXd>(lr_mod["W"]);
-
-        Rcpp::List splits;
-        int row_offset = 0;
-        for (const auto& kv : instance.input_row_counts()) {
-            int nr = kv.second;
-            if (nr > 0 && row_offset + nr <= W_full.rows()) {
-                splits[kv.first] = W_full.middleRows(row_offset, nr);
-                row_offset += nr;
-            }
-        }
-        lr_mod["W_splits"] = splits;
-        is_multi_modal = true;
-        layers_result[0] = lr_mod;
-    }
 
     return Rcpp::List::create(
         Rcpp::Named("layers") = layers_result,

@@ -4,7 +4,10 @@
 \name{svd-class}
 \alias{svd-class}
 \alias{[,svd,ANY,ANY,ANY-method}
+\alias{head.svd}
+\alias{tail.svd}
 \alias{head,svd-method}
+\alias{tail,svd-method}
 \alias{show,svd-method}
 \alias{dim,svd-method}
 \alias{reconstruct}
@@ -14,9 +17,15 @@
 \alias{variance_explained,svd-method}
 \title{svd S4 Class}
 \usage{
-\S4method{[}{svd,ANY,ANY,ANY}(x, i)
+\S4method{[}{svd,ANY,ANY,ANY}(x, i, j, ..., drop = TRUE)
 
-\S4method{head}{svd}(x, n = getOption("digits"), ...)
+\method{head}{svd}(x, n = getOption("digits"), ...)
+
+\method{tail}{svd}(x, n = getOption("digits"), ...)
+
+\S4method{head}{svd}(x, ...)
+
+\S4method{tail}{svd}(x, ...)
 
 \S4method{show}{svd}(object)
 
@@ -37,39 +46,68 @@ variance_explained(object, ...)
 
 \item{i}{indices for subsetting factors}
 
-\item{n}{number of rows/columns to show}
+\item{j}{not used}
 
 \item{...}{Ignored.}
 
+\item{drop}{not used; the result is always an \code{svd} object}
+
+\item{n}{number of rows/columns to show}
+
 \item{object}{An \code{svd} object}
 
-\item{newdata}{A numeric matrix of new samples (rows = samples,
-columns = features). Must have the same number of features as the
-original data (\code{ncol(newdata) == nrow(object@v)}).}
+\item{newdata}{A numeric matrix or \code{dgCMatrix} of new rows, with the
+same columns as the training data
+(\code{ncol(newdata) == nrow(object@v)}).}
 }
 \value{
 A subsetted \code{svd} object containing only the selected factors.
 
-Invisibly returns the \code{svd} object \code{x}.
+\code{head} and \code{tail} print the first or last \code{n} rows of
+  \code{u} and \code{v} and invisibly return the \code{svd} object \code{x}.
 
 Invisibly returns the \code{svd} object.
 
 Integer vector of length 3: \code{c(m, n, k)} where m is the number of
   rows, n the number of columns, and k the rank.
 
-Dense matrix: \eqn{U \cdot diag(d) \cdot V'} (plus row means if centered)
+Dense matrix on the scale of the original data:
+  \eqn{U \cdot diag(d) \cdot V'}, multiplied row-wise by the row standard
+  deviations if the model was scaled, plus the row means if it was centered.
 
-A numeric matrix of scores with \code{nrow(newdata)} rows and
-  \code{length(object@d)} columns (i.e., same \eqn{k} as the model).
-  Each row is the projection of one new sample onto the singular space.
+A numeric matrix with \code{nrow(newdata)} rows and
+  \code{length(object@d)} columns, comparable to rows of \code{object@u}.
 
 Numeric vector of proportion of variance explained by each factor
 }
 \description{
 S4 class for deflation SVD/PCA results.
 
-Computes scores for new samples by projecting \code{newdata} onto the right
-singular vectors. Equivalent to PCA "out-of-sample prediction".
+Computes \code{u}-type coordinates for new rows by projecting them onto the
+right singular vectors: \code{newdata \%*\% v \%*\% diag(1/d)}.
+}
+\details{
+The model treats rows as variables and columns as samples (see
+\code{\link{svd}}). \code{newdata} therefore holds \strong{new rows measured
+on the same columns (samples) as the training data}. Each new row receives
+the same transformation the model applied to its own rows: it is centered by
+its own mean if the model was centered and divided by its own sample
+standard deviation if the model was scaled. For orthonormal \code{v} this is
+the least-squares projection; for constrained (non-orthogonal) factors it is
+an approximation.
+
+To place new \emph{samples} (new columns \code{x}, one value per variable)
+in the space of \code{v}, use
+\code{crossprod(object@u, (x - object@misc$row_means) / object@misc$row_sds) / object@d}
+(dropping the terms that do not apply).
+
+For orthogonal factors this is \eqn{d_i^2 / \|A_c\|_F^2}, where \eqn{A_c}
+is the centered (and scaled) matrix. Constrained factors (\code{nonneg},
+\code{L1} with \code{method = "deflation"}) are not orthogonal, so
+\eqn{d_i^2} does not partition the variance; for those models the value is
+the drop in residual variance when component \code{i} is added and the
+scales are refit by least squares, which sums to the variance explained by
+\code{\link{reconstruct}}.
 }
 \section{Slots}{
 

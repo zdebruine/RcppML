@@ -33,11 +33,15 @@
 #include <FactorNet/svd/spmv.hpp>
 #include <FactorNet/primitives/cpu/gram.hpp>
 #include <FactorNet/rng/rng.hpp>
+#include <FactorNet/svd/lanczos.hpp>   // detail::lanczos_random_orth
 
 #include <cmath>
 #include <algorithm>
 #include <chrono>
 #include <limits>
+#include <string>
+#include <stdexcept>
+#include <cstdio>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -122,12 +126,304 @@ inline bool conv_test(int work, int n_wanted, Scalar tol, Scalar svtol,
 }  // namespace detail
 
 // ============================================================================
+// IRLBA core, written against abstract matrix-vector products
+// ============================================================================
+
+namespace detail {
+
+/**
+ * @brief Augmented implicitly restarted Lanczos bidiagonalization.
+ *
+ * Conventions (as in Baglama & Reichel and the irlba C code): B is UPPER
+ * bidiagonal with
+ *   A  V = W B,          A' W = V B' + F e_work'
+ * so B(j, j) = S_j and B(j, j+1) = R_j. With B = Ub S Vb', the left Ritz
+ * vectors are W Ub, the right Ritz vectors are V Vb, and the residual of
+ * triplet i is R_F * Ub(work-1, i).
+ *
+ * After a restart that keeps k Ritz triplets and appends the residual
+ * direction f as V[:, k]:
+ *   A v_i = s_i w_i,   A' w_i = s_i v_i + res_i f      (i < k)
+ * hence W' A f has entries res_i, i.e. B(i, i) = s_i and B(i, k) = res_i.
+ * The same upper convention is used before and after restarts, so B always
+ * equals W' A V.
+ *
+ * Breakdown thresholds are relative to a running estimate of ||A||.
+ */
+template<typename Scalar, typename FwdOp, typename TrnOp>
+inline void irlba_core(const int m, const int n, const int nu_in,
+                       const Scalar tol_in, const int maxit_in,
+                       const uint32_t seed, const bool verbose,
+                       FwdOp&& forward_vec, TrnOp&& transpose_vec,
+                       DenseMatrix<Scalar>& U_out,
+                       DenseVector<Scalar>& d_out,
+                       DenseMatrix<Scalar>& V_out,
+                       int& iters_out, int& mprod_out, int& n_unconverged_out)
+{
+    const int mn_min = std::min(m, n);
+    const int nu = std::max(0, std::min(nu_in, mn_min));
+    iters_out = 0;
+    mprod_out = 0;
+    n_unconverged_out = 0;
+    if (nu == 0) {
+        U_out.resize(m, 0);
+        V_out.resize(n, 0);
+        d_out.resize(0);
+        return;
+    }
+
+    const int work = std::min(nu + 15, mn_min);
+    const int maxit = maxit_in > 0 ? maxit_in : 1000;
+
+    const Scalar eps = std::numeric_limits<Scalar>::epsilon();
+    const Scalar tol = std::max(tol_in > 0 ? tol_in : static_cast<Scalar>(1e-5),
+                                static_cast<Scalar>(16) * eps);
+    const Scalar svtol = tol;
+    const Scalar eps23 = std::pow(eps, static_cast<Scalar>(2.0 / 3.0));
+
+    DenseMatrix<Scalar> V(n, work);
+    DenseMatrix<Scalar> W(m, work);
+    DenseMatrix<Scalar> V1(n, work);
+    DenseMatrix<Scalar> W1(m, work);
+    DenseVector<Scalar> F(n), xm(m), xn(n);
+    DenseMatrix<Scalar> B = DenseMatrix<Scalar>::Zero(work, work);
+
+    DenseVector<Scalar> sv_prev = DenseVector<Scalar>::Zero(work);
+    DenseVector<Scalar> svratio(work);
+    DenseVector<Scalar> residuals(work);
+    DenseVector<Scalar> signed_res(work);
+
+    rng::SplitMix64 gen(seed == 0 ? 42ULL : static_cast<uint64_t>(seed));
+    for (int i = 0; i < n; ++i)
+        xn(i) = static_cast<Scalar>(gen.uniform<double>() - 0.5);
+    {
+        Scalar nrm = xn.norm();
+        if (nrm > 0) { xn /= nrm; } else { xn.setZero(); xn(0) = static_cast<Scalar>(1); }
+    }
+    V.col(0) = xn;
+
+    int k = nu;
+    int iter = 0;
+    int mprod = 0;
+    Scalar Smax = 0;
+    Scalar anorm = 0;
+    bool converged = false;
+    int n_conv_top = 0;
+
+    DenseVector<Scalar> BS;
+    DenseMatrix<Scalar> BU, BV;
+
+    auto check_finite = [](Scalar x) {
+        if (!std::isfinite(x))
+            throw std::runtime_error("svd: non-finite values in a matrix-vector product (does the input contain NA/NaN/Inf?)");
+    };
+
+    if (verbose) {
+        IRLBA_PRINT("  IRLBA: k=%d, work=%d, tol=%.1e, maxit=%d\n",
+                     nu, work, static_cast<double>(tol), maxit);
+    }
+
+    while (iter < maxit) {
+        IRLBA_CHECK_INTERRUPT();
+
+        int j = (iter == 0) ? 0 : k;
+
+        // W[:, j] = A V[:, j], orthogonalized against the kept left vectors
+        xn = V.col(j);
+        forward_vec(xn, xm);
+        mprod++;
+        {
+            const Scalar nr = xm.norm();
+            check_finite(nr);
+            if (nr > anorm) anorm = nr;
+        }
+        if (j > 0) orthog(W, xm, j);
+
+        Scalar S = xm.norm();
+        if (!(S > eps23 * anorm)) {
+            if (!lanczos_random_orth(W, j, xm, gen)) xm.setZero();
+            S = 0;
+        } else {
+            xm /= S;
+        }
+        W.col(j) = xm;
+
+        while (j < work) {
+            // F = A' W[:, j] - S V[:, j]
+            xm = W.col(j);
+            transpose_vec(xm, F);
+            mprod++;
+            {
+                const Scalar nr = F.norm();
+                check_finite(nr);
+                if (nr > anorm) anorm = nr;
+            }
+            if (S != 0) F.noalias() -= S * V.col(j);
+            orthog(V, F, j + 1);
+
+            if (j + 1 < work) {
+                Scalar R_F = F.norm();
+                if (!(R_F > eps23 * anorm)) {
+                    if (!lanczos_random_orth(V, j + 1, xn, gen)) xn.setZero();
+                    R_F = 0;
+                } else {
+                    xn = F / R_F;
+                }
+                V.col(j + 1) = xn;
+
+                B(j, j) = S;
+                B(j, j + 1) = R_F;      // upper bidiagonal
+
+                // W[:, j+1] = A V[:, j+1] - R_F W[:, j]
+                forward_vec(xn, xm);
+                mprod++;
+                {
+                    const Scalar nr = xm.norm();
+                    check_finite(nr);
+                    if (nr > anorm) anorm = nr;
+                }
+                if (R_F != 0) xm.noalias() -= R_F * W.col(j);
+                orthog(W, xm, j + 1);
+
+                S = xm.norm();
+                if (!(S > eps23 * anorm)) {
+                    if (!lanczos_random_orth(W, j + 1, xm, gen)) xm.setZero();
+                    S = 0;
+                } else {
+                    xm /= S;
+                }
+                W.col(j + 1) = xm;
+            } else {
+                B(j, j) = S;
+            }
+            j++;
+        }
+
+        // SVD of the projected matrix B = W' A V (upper form)
+        Eigen::JacobiSVD<DenseMatrix<Scalar>> svd_b(
+            B, Eigen::ComputeFullU | Eigen::ComputeFullV);
+        BS = svd_b.singularValues();
+        BU = svd_b.matrixU();     // left rotation:  U ~ W * BU
+        BV = svd_b.matrixV();     // right rotation: V ~ V * BV
+
+        Scalar R_F = F.norm();
+        const bool invariant = !(R_F > eps23 * anorm);
+        if (invariant) { R_F = 0; } else { F /= R_F; }
+
+        if (work >= m && !invariant) {
+            // Left space is complete (wide matrix, k near m): the factorization
+            // A = W [B | R_F e_work] [V f]' is exact, so finish from it.
+            DenseMatrix<Scalar> Bext = DenseMatrix<Scalar>::Zero(work, work + 1);
+            Bext.leftCols(work) = B;
+            Bext(work - 1, work) = R_F;
+            Eigen::JacobiSVD<DenseMatrix<Scalar>> svd_e(
+                Bext, Eigen::ComputeThinU | Eigen::ComputeThinV);
+            DenseMatrix<Scalar> Vext(n, work + 1);
+            Vext.leftCols(work) = V;
+            Vext.col(work) = F;
+            DenseMatrix<Scalar> Ue = svd_e.matrixU().leftCols(nu);
+            DenseMatrix<Scalar> Ve = svd_e.matrixV().leftCols(nu);
+            U_out.noalias() = W * Ue;
+            V_out.noalias() = Vext * Ve;
+            d_out = svd_e.singularValues().head(nu);
+            iters_out = iter + 1;
+            mprod_out = mprod;
+            n_unconverged_out = 0;
+            return;
+        }
+
+        if (BS(0) > Smax) Smax = BS(0);
+
+        for (int i = 0; i < work; ++i) {
+            signed_res(i) = R_F * BU(work - 1, i);
+            residuals(i) = std::abs(signed_res(i));
+        }
+        for (int i = 0; i < work; ++i) {
+            if (sv_prev(i) > 0 && BS(i) > 0) {
+                svratio(i) = std::abs(sv_prev(i) - BS(i)) / BS(i);
+            } else {
+                svratio(i) = static_cast<Scalar>(1);
+            }
+        }
+
+        int n_conv = 0;
+        n_conv_top = 0;
+        for (int i = 0; i < work; ++i) {
+            if (residuals(i) < tol * Smax && svratio(i) < svtol) {
+                n_conv++;
+                if (i < nu) n_conv_top++;
+            }
+        }
+
+        if (verbose) {
+            IRLBA_PRINT("    iter %d: sigma_1=%.6e, |res_1|=%.2e, converged=%d/%d, mprod=%d\n",
+                         iter + 1, static_cast<double>(BS(0)),
+                         static_cast<double>(residuals(0)), n_conv_top, nu, mprod);
+        }
+
+        // Done when the wanted triplets converged, the matrix is zero, or the
+        // whole working subspace is invariant (all residuals vanish).
+        if (n_conv_top >= nu || !(Smax > 0) || invariant) {
+            converged = true;
+            n_conv_top = nu;
+            iter++;
+            break;
+        }
+        if (iter >= maxit - 1) {
+            iter++;
+            break;
+        }
+
+        // Restart dimension (irlba): wanted + converged, leaving room to expand
+        k = nu + n_conv;
+        if (k > work - 3) k = work - 3;
+        if (k < 1) k = 1;
+        if (k > work - 1) k = work - 1;
+
+        sv_prev = BS;
+
+        // Thick restart: keep k Ritz triplets, append the residual direction
+        V1.leftCols(k).noalias() = V * BV.leftCols(k);
+        V.leftCols(k) = V1.leftCols(k);
+        V.col(k) = F;
+        W1.leftCols(k).noalias() = W * BU.leftCols(k);
+        W.leftCols(k) = W1.leftCols(k);
+
+        B.setZero();
+        for (int i = 0; i < k; ++i) {
+            B(i, i) = BS(i);
+            B(i, k) = signed_res(i);    // W' A f, same upper convention
+        }
+
+        iter++;
+    }
+
+    DenseMatrix<Scalar> BU_k = BU.leftCols(nu);
+    DenseMatrix<Scalar> BV_k = BV.leftCols(nu);
+    U_out.noalias() = W * BU_k;
+    V_out.noalias() = V * BV_k;
+    d_out = BS.head(nu);
+
+    iters_out = iter;
+    mprod_out = mprod;
+    n_unconverged_out = converged ? 0 : (nu - n_conv_top);
+}
+
+}  // namespace detail
+
+// ============================================================================
 // Main IRLBA implementation
 // ============================================================================
 
+/**
+ * @param warn_unconverged  record a deferred warning (see spmv.hpp) when the
+ *                          restart limit is reached before all wanted values
+ *                          meet tol. Off by default (NMF initialization).
+ */
 template<typename MatrixType, typename Scalar>
 SVDResult<Scalar> irlba_svd(const MatrixType& A,
-                            const SVDConfig<Scalar>& config)
+                            const SVDConfig<Scalar>& config,
+                            bool warn_unconverged = false)
 {
     using FactorNet::primitives::CPU;
     using Clock = std::chrono::high_resolution_clock;
@@ -137,21 +433,6 @@ SVDResult<Scalar> irlba_svd(const MatrixType& A,
 
     const int m = static_cast<int>(A.rows());
     const int n = static_cast<int>(A.cols());
-    const int nu = config.k_max;  // number of wanted singular triplets
-    const int mn_min = std::min(m, n);
-
-    // Working subspace dimension: k + 15, capped at min(m, n)
-    // Larger work dimension gives more Ritz vectors per restart,
-    // reducing restart count and total matrix-vector products.
-    const int work = std::min(nu + 15, mn_min);
-
-    // Max outer restart iterations
-    const int maxit = config.max_iter > 0 ? config.max_iter : 1000;
-
-    const Scalar tol = config.tol > 0 ? config.tol : static_cast<Scalar>(1e-5);
-    const Scalar svtol = tol;  // relative SV change tolerance (same as tol)
-    const Scalar eps = std::numeric_limits<Scalar>::epsilon();
-    const Scalar eps23 = std::pow(eps, static_cast<Scalar>(2.0 / 3.0));
 
     SVDResult<Scalar> result;
     result.centered = config.center;
@@ -163,360 +444,54 @@ SVDResult<Scalar> irlba_svd(const MatrixType& A,
     eff_threads = 1;
 #endif
 
-    // --- Row means for PCA centering ---
-    DenseVector<Scalar> mu;
+    // --- Row means, sample SDs and ||X||^2_F in one parallel pass (double) ---
+    DenseVector<Scalar> mu, row_sds_vec, row_inv_sds;
     const DenseVector<Scalar>* mu_ptr = nullptr;
+    const DenseVector<Scalar>* sd_ptr = nullptr;
+    result.frobenius_norm_sq = row_stats_one_pass<MatrixType, Scalar>(
+        A, config.center, config.scale, eff_threads, mu, row_sds_vec);
     if (config.center) {
-        mu = compute_row_means<MatrixType, Scalar>(A, eff_threads);
         result.row_means = mu;
         mu_ptr = &mu;
     }
-
-    // --- Row SDs for correlation PCA scaling ---
-    DenseVector<Scalar> row_inv_sds;
-    const DenseVector<Scalar>* sd_ptr = nullptr;
     if (config.scale) {
-        DenseVector<Scalar> row_sds = compute_row_sds<MatrixType, Scalar>(A, mu, eff_threads);
-        row_inv_sds = row_sds.cwiseInverse();
-        result.row_sds = row_sds;
+        row_inv_sds = row_sds_vec.cwiseInverse();
+        result.row_sds = row_sds_vec;
         result.scaled = true;
         sd_ptr = &row_inv_sds;
     }
 
-    // --- ||A||²_F ---
-    Scalar A_norm_sq;
-    if constexpr (is_sparse_matrix<MatrixType>::value) {
-        SparseMatrix<Scalar> A_cast = A.template cast<Scalar>();
-        A_cast.makeCompressed();
-        A_norm_sq = primitives::trace_AtA<CPU, Scalar, SparseMatrix<Scalar>>(A_cast);
-    } else {
-        A_norm_sq = primitives::trace_AtA<CPU, Scalar, MatrixType>(A);
-    }
-    if (config.center) {
-        A_norm_sq -= static_cast<Scalar>(n) * mu.squaredNorm();
-    }
-    if (config.scale) {
-        A_norm_sq = static_cast<Scalar>(m) * static_cast<Scalar>(n);
-    }
-    result.frobenius_norm_sq = static_cast<double>(A_norm_sq);
-
-    // --- SpMV helpers using OpenMP-parallel spmv.hpp routines ---
-    // Pre-allocate workspace for forward SpMV (avoids malloc per call)
     SpmvWorkspace<Scalar> ws;
     if constexpr (is_sparse_matrix<MatrixType>::value) {
         ws.init(m, eff_threads);
     }
-    // We use temporary buffers because spmv takes DenseVector& (not column exprs)
-    DenseVector<Scalar> spmv_out_m(m), spmv_in_vec;
 
-    // ========================================================================
-    // Allocate working storage
-    // ========================================================================
-    DenseMatrix<Scalar> V(n, work);           // Right Lanczos vectors (n × work)
-    DenseMatrix<Scalar> W(m, work);           // Left Lanczos vectors  (m × work)
-    DenseVector<Scalar> F(n);                 // Residual vector (length n)
-    DenseMatrix<Scalar> B = DenseMatrix<Scalar>::Zero(work, work);  // Bidiagonal matrix
+    auto forward_vec = [&](const DenseVector<Scalar>& v, DenseVector<Scalar>& out) {
+        spmv_forward(A, v, out, mu_ptr, eff_threads, &ws, sd_ptr);
+    };
+    auto transpose_vec = [&](const DenseVector<Scalar>& u, DenseVector<Scalar>& out) {
+        spmv_transpose(A, u, out, mu_ptr, eff_threads, sd_ptr);
+    };
 
-    // Restart compression workspaces
-    DenseMatrix<Scalar> V1(n, work);
-    DenseMatrix<Scalar> W1(m, work);
+    int iter = 0, mprod = 0, n_unconv = 0;
+    detail::irlba_core<Scalar>(
+        m, n, config.k_max, config.tol, config.max_iter,
+        config.seed, config.verbose,
+        forward_vec, transpose_vec,
+        result.U, result.d, result.V, iter, mprod, n_unconv);
 
-    // Convergence tracking
-    DenseVector<Scalar> svratio_prev = DenseVector<Scalar>::Zero(work);  // Previous BS values
-    DenseVector<Scalar> svratio_comp(work);                               // Computed ratios
-    DenseVector<Scalar> residuals(work);         // Unsigned residuals for convergence test
-    DenseVector<Scalar> signed_res(work);        // Signed residuals for restart B matrix
-
-    // ========================================================================
-    // Initialize V[:, 0] = random unit vector
-    // ========================================================================
-    {
-        DenseMatrix<Scalar> v0_mat(n, 1);
-        rng::SplitMix64 rng(config.seed == 0 ? 42ULL : static_cast<uint64_t>(config.seed));
-        rng.fill_uniform(v0_mat.data(), v0_mat.rows(), v0_mat.cols());
-        V.col(0) = v0_mat.col(0);
-        V.col(0).array() -= static_cast<Scalar>(0.5);
-        V.col(0).normalize();
-    }
-
-    int k = nu;       // Adaptive restart dimension (starts at nu)
-    int iter = 0;     // Outer restart iteration counter
-    int mprod = 0;    // Total matrix-vector products
-    Scalar Smax = 0;  // Largest singular value seen
-    bool converged = false;
-
-    // SVD of B results (persist across iterations for final extraction)
-    DenseVector<Scalar> BS;     // Singular values of B
-    DenseMatrix<Scalar> BU;     // Left singular vectors of B
-    DenseMatrix<Scalar> BV_mat; // Right singular vectors of B
-
-    if (config.verbose) {
-        IRLBA_PRINT("  IRLBA: k=%d, work=%d, tol=%.1e, maxit=%d\n",
-                     nu, work, static_cast<double>(tol), maxit);
-    }
-
-    // ========================================================================
-    // Main IRLBA loop
-    // ========================================================================
-    while (iter < maxit) {
-        IRLBA_CHECK_INTERRUPT();
-
-        // Starting column index for Lanczos expansion
-        int j_start = (iter == 0) ? 0 : k;
-        int j = j_start;
-
-        // ==========================================================
-        // Step 1: First forward multiply  W[:, j] = A * V[:, j]
-        // ==========================================================
-        spmv_in_vec = V.col(j);  // copy col to DenseVector for spmv
-        spmv_forward(A, spmv_in_vec, spmv_out_m, mu_ptr, eff_threads, &ws, sd_ptr);
-        W.col(j) = spmv_out_m;
-        mprod++;
-
-        // Reorthogonalize W[:, j] against previous W columns
-        if (j > 0) {
-            auto w_col = W.col(j);
-            detail::orthog(W, w_col, j);
-        }
-
-        Scalar S = W.col(j).norm();
-
-        // Invariant subspace check
-        if (S < eps23 && j == 0) {
-            // Starting vector is in null space — fatal at first iteration
-            if (config.verbose) {
-                IRLBA_PRINT("    Starting vector near null space (S=%.2e)\n",
-                             static_cast<double>(S));
-            }
-            break;
-        }
-        if (S < eps23) {
-            // Replace with random vector, orthogonalize
-            DenseMatrix<Scalar> r_mat(m, 1);
-            rng::SplitMix64 rng2(config.seed + iter * 1000 + 1);
-            rng2.fill_uniform(r_mat.data(), r_mat.rows(), r_mat.cols());
-            W.col(j) = r_mat.col(0);
-            W.col(j).array() -= static_cast<Scalar>(0.5);
-            auto w_col = W.col(j);
-            detail::orthog(W, w_col, j);
-            W.col(j).normalize();
-            S = 0;
-        } else {
-            W.col(j) /= S;
-        }
-
-        // ==========================================================
-        // Step 2: Inner Lanczos bidiagonalization loop  (j → work)
-        // ==========================================================
-        while (j < work) {
-            // --- Transpose multiply: F = A' * W[:, j] ---
-            spmv_in_vec = W.col(j);
-            spmv_transpose(A, spmv_in_vec, F, mu_ptr, eff_threads, sd_ptr);
-            mprod++;
-
-            // Three-term recurrence
-            F -= S * V.col(j);
-
-            // Reorthogonalize F against V[:, 0:j]
-            detail::orthog(V, F, j + 1);
-
-            if (j + 1 < work) {
-                Scalar R_F = F.norm();
-
-                // Invariant subspace check
-                if (R_F < eps23) {
-                    DenseMatrix<Scalar> f_mat(n, 1);
-                    rng::SplitMix64 rng3(config.seed + iter * 1000 + j + 2);
-                    rng3.fill_uniform(f_mat.data(), f_mat.rows(), f_mat.cols());
-                    F = f_mat.col(0);
-                    F.array() -= static_cast<Scalar>(0.5);
-                    detail::orthog(V, F, j + 1);
-                    R_F = F.norm();
-                    V.col(j + 1) = F / R_F;
-                    R_F = 0;  // Signal invariant subspace
-                } else {
-                    V.col(j + 1) = F / R_F;
-                }
-
-                // Fill bidiagonal entries
-                B(j, j) = S;
-                B(j + 1, j) = R_F;  // Lower bidiagonal (irlba convention)
-
-                // --- Forward multiply: W[:, j+1] = A * V[:, j+1] ---
-                spmv_in_vec = V.col(j + 1);
-                spmv_forward(A, spmv_in_vec, spmv_out_m, mu_ptr, eff_threads, &ws, sd_ptr);
-                W.col(j + 1) = spmv_out_m;
-                mprod++;
-
-                // Classical Gram-Schmidt step (three-term recurrence)
-                W.col(j + 1) -= R_F * W.col(j);
-
-                // Full reorthogonalization against W[:, 0:j]
-                {
-                    auto w_col = W.col(j + 1);
-                    detail::orthog(W, w_col, j + 1);
-                }
-
-                S = W.col(j + 1).norm();
-                if (S < eps23) {
-                    DenseMatrix<Scalar> w_mat(m, 1);
-                    rng::SplitMix64 rng4(config.seed + iter * 1000 + j + 3);
-                    rng4.fill_uniform(w_mat.data(), w_mat.rows(), w_mat.cols());
-                    W.col(j + 1) = w_mat.col(0);
-                    W.col(j + 1).array() -= static_cast<Scalar>(0.5);
-                    auto w_col2 = W.col(j + 1);
-                    detail::orthog(W, w_col2, j + 1);
-                    W.col(j + 1).normalize();
-                    S = 0;
-                } else {
-                    W.col(j + 1) /= S;
-                }
-            } else {
-                // Last step: only set diagonal, no subdiagonal
-                B(j, j) = S;
-            }
-            j++;
-        }
-
-        // ==========================================================
-        // Step 3: SVD of bidiagonal B (work × work)
-        // ==========================================================
-        // Use JacobiSVD for small matrices (work is typically k+7)
-        //
-        // CRITICAL: B is stored as LOWER bidiagonal, but the actual
-        // Lanczos relation is A*V = W*B_upper where B_upper = B_lower^T.
-        // Since B_lower = matrixU() * S * matrixV()^T, we have
-        //   B_upper = matrixV() * S * matrixU()^T
-        // Therefore:
-        //   Right SVs of A ≈ V * matrixU()  (left SVs of B_lower)
-        //   Left SVs of A  ≈ W * matrixV()  (right SVs of B_lower)
-        //   Residuals use last row of matrixV()
-        //
-        // We assign BU = matrixV() and BV_mat = matrixU() so that the
-        // rest of the code (restart V with BV_mat, restart W with BU,
-        // residuals from BU) all use the correct components.
-        Eigen::JacobiSVD<DenseMatrix<Scalar>> svd_b(
-            B.topLeftCorner(work, work),
-            Eigen::ComputeFullU | Eigen::ComputeFullV);
-
-        BS = svd_b.singularValues();
-        BU = svd_b.matrixV();       // RIGHT SVs of B_lower → for W compression + residuals
-        BV_mat = svd_b.matrixU();   // LEFT SVs of B_lower → for V compression
-
-        // Normalize the residual vector
-        Scalar R_F = F.norm();
-        if (R_F > eps) {
-            F /= R_F;
-        } else {
-            R_F = 0;
-        }
-
-        // ==========================================================
-        // Step 4: Convergence test
-        // ==========================================================
-        Smax = std::max(Smax, BS(0));
-
-        // Residual bounds: signed for restart, unsigned for convergence
-        for (int i = 0; i < work; ++i) {
-            signed_res(i) = R_F * BU(work - 1, i);     // Signed: for B restart
-            residuals(i) = std::abs(signed_res(i));      // Unsigned: for convergence
-        }
-
-        // SV ratio: relative change from previous iteration
-        for (int i = 0; i < work; ++i) {
-            if (svratio_prev(i) > 0 && BS(i) > eps) {
-                svratio_comp(i) = std::abs(svratio_prev(i) - BS(i)) / BS(i);
-            } else {
-                svratio_comp(i) = static_cast<Scalar>(1.0);  // Not converged yet
-            }
-        }
-
-        // CRITICAL: k must be re-initialized to work before conv_test,
-        // matching irlba C code's "kk = j" (j=work). conv_test then
-        // clamps it to work-3, which keeps more Ritz vectors during
-        // restart and prevents spurious singular values.
-        k = work;
-        converged = detail::conv_test(work, nu, tol, svtol, Smax,
-                                       svratio_comp, residuals, k, S);
-
-        if (config.verbose) {
-            int n_conv = 0;
-            for (int i = 0; i < work; ++i) {
-                if (std::abs(residuals(i)) < tol * Smax && svratio_comp(i) < svtol)
-                    n_conv++;
-            }
-            IRLBA_PRINT("    iter %d: sigma_1=%.6e, |res_1|=%.2e, converged=%d/%d, mprod=%d\n",
-                         iter + 1, static_cast<double>(BS(0)),
-                         static_cast<double>(std::abs(residuals(0))),
-                         n_conv, nu, mprod);
-        }
-
-        if (converged) {
-            iter++;
-            break;
-        }
-
-        if (iter >= maxit - 1) {
-            iter++;
-            if (config.verbose) {
-                IRLBA_PRINT("    IRLBA: reached maxit=%d without full convergence\n", maxit);
-            }
-            break;
-        }
-
-        // ==========================================================
-        // Step 5: Store current BS for svratio computation next iter
-        // ==========================================================
-        for (int i = 0; i < work; ++i) {
-            svratio_prev(i) = BS(i);
-        }
-
-        // ==========================================================
-        // Step 6: Implicit restart — compress to k directions
-        //
-        // Matches irlba C code: use TRUNCATED BV/BU blocks (k×k),
-        // not the full work×k rectangular blocks. This is the
-        // "thick restart" truncation that the algorithm requires.
-        // ==========================================================
-
-        // V1[:, 0:k] = V * BV[:, 0:k]    (full right Ritz vectors)
-        V1.leftCols(k).noalias() = V.leftCols(work) * BV_mat.topLeftCorner(work, k);
-        V.leftCols(k) = V1.leftCols(k);
-        V.col(k) = F;  // Append normalized residual as next starting vector
-
-        // W1[:, 0:k] = W * BU[:, 0:k]    (full left Ritz vectors)
-        W1.leftCols(k).noalias() = W.leftCols(work) * BU.topLeftCorner(work, k);
-        W.leftCols(k) = W1.leftCols(k);
-
-        // Rebuild B: diagonal with converged SVs + last column with residuals
-        B.setZero();
-        for (int i = 0; i < k; ++i) {
-            B(i, i) = BS(i);                  // Diagonal: converged singular values
-            B(i, k) = signed_res(i);           // Last column (col k): SIGNED residuals
-        }
-
-        iter++;
-    }
-
-    // ========================================================================
-    // Extract final results
-    // ========================================================================
-    int k_actual = std::min(nu, work);
-
-    if (BS.size() >= k_actual && BU.rows() >= work && BV_mat.rows() >= work) {
-        // Final singular vectors: rotate Lanczos vectors by Ritz vectors
-        result.U = W.leftCols(work) * BU.leftCols(k_actual);   // m × k_actual
-        result.V = V.leftCols(work) * BV_mat.leftCols(k_actual); // n × k_actual
-        result.d = BS.head(k_actual);
-    } else {
-        // Fallback: shouldn't happen, but be safe
-        result.U = DenseMatrix<Scalar>::Zero(m, k_actual);
-        result.V = DenseMatrix<Scalar>::Zero(n, k_actual);
-        result.d = DenseVector<Scalar>::Zero(k_actual);
-    }
-
-    result.k_selected = k_actual;
+    result.k_selected = static_cast<int>(result.d.size());
     result.iters_per_factor.push_back(iter);
+
+    if (warn_unconverged && n_unconv > 0) {
+        char wbuf[320];
+        std::snprintf(wbuf, sizeof(wbuf),
+            "svd(method = \"irlba\"): %d of %d singular values did not reach "
+            "tol = %.1e after %d restarts; increase 'maxit' (number of restarts) "
+            "or loosen 'tol'",
+            n_unconv, result.k_selected, static_cast<double>(config.tol), iter);
+        add_warning(std::string(wbuf));
+    }
 
     auto t_end = Clock::now();
     result.wall_time_ms = Ms(t_end - t_start).count();
@@ -524,7 +499,7 @@ SVDResult<Scalar> irlba_svd(const MatrixType& A,
     if (config.verbose) {
         IRLBA_PRINT("  IRLBA done: %d restarts, %d matvecs, %.1f ms, %s\n",
                      iter, mprod, result.wall_time_ms,
-                     converged ? "converged" : "NOT converged");
+                     n_unconv == 0 ? "converged" : "NOT converged");
     }
 
     return result;
@@ -532,4 +507,3 @@ SVDResult<Scalar> irlba_svd(const MatrixType& A,
 
 }  // namespace svd
 }  // namespace FactorNet
-

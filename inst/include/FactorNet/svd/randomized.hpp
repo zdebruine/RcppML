@@ -68,12 +68,16 @@ SVDResult<Scalar> randomized_svd(const MatrixType& A,
 
     const int m = static_cast<int>(A.rows());
     const int n = static_cast<int>(A.cols());
-    const int k = config.k_max;
+    const int k = std::min(config.k_max, std::min(m, n));
     // Oversampling: max(10, k/5) — scales gracefully for larger k
     const int p = std::min(std::max(10, k / 5), std::min(m, n) - k);
     const int l = k + std::max(p, 0);                   // sketch dimension
-    // Power iterations: default 3 (q=3 gives <1% tail SV error for scRNA-seq)
-    const int q = (config.max_iter <= 0) ? 3 : std::min(config.max_iter, 10);
+    // Power iterations: default 3. Accuracy depends on spectral decay: with a
+    // decaying spectrum q = 3 is accurate to well under 1%, but on a flat
+    // spectrum (e.g. a random matrix) singular values come out a few percent
+    // low and more iterations help only slowly; use lanczos/irlba there.
+    // config.tol is not used: the method has no convergence test.
+    const int q = (config.max_iter <= 0) ? 3 : std::min(config.max_iter, 100);
 
     SVDResult<Scalar> result;
     result.centered = config.center;
@@ -85,42 +89,22 @@ SVDResult<Scalar> randomized_svd(const MatrixType& A,
     eff_threads = 1;
 #endif
 
-    // --- Row means for PCA centering ---
-    DenseVector<Scalar> mu;
+    // --- Row means, sample SDs and ||X||^2_F in one parallel pass (double) ---
+    DenseVector<Scalar> mu, row_sds_vec, row_inv_sds;
     const DenseVector<Scalar>* mu_ptr = nullptr;
+    const DenseVector<Scalar>* sd_ptr = nullptr;
+    result.frobenius_norm_sq = row_stats_one_pass<MatrixType, Scalar>(
+        A, config.center, config.scale, eff_threads, mu, row_sds_vec);
     if (config.center) {
-        mu = compute_row_means<MatrixType, Scalar>(A, eff_threads);
         result.row_means = mu;
         mu_ptr = &mu;
     }
-
-    // --- Row SDs for correlation PCA scaling ---
-    DenseVector<Scalar> row_inv_sds;
-    const DenseVector<Scalar>* sd_ptr = nullptr;
     if (config.scale) {
-        DenseVector<Scalar> row_sds = compute_row_sds<MatrixType, Scalar>(A, mu, eff_threads);
-        row_inv_sds = row_sds.cwiseInverse();
-        result.row_sds = row_sds;
+        row_inv_sds = row_sds_vec.cwiseInverse();
+        result.row_sds = row_sds_vec;
         result.scaled = true;
         sd_ptr = &row_inv_sds;
     }
-
-    // --- ||A||²_F ---
-    Scalar A_norm_sq;
-    if constexpr (is_sparse_matrix<MatrixType>::value) {
-        SparseMatrix<Scalar> A_cast = A.template cast<Scalar>();
-        A_cast.makeCompressed();
-        A_norm_sq = primitives::trace_AtA<CPU, Scalar, SparseMatrix<Scalar>>(A_cast);
-    } else {
-        A_norm_sq = primitives::trace_AtA<CPU, Scalar, MatrixType>(A);
-    }
-    if (config.center) {
-        A_norm_sq -= static_cast<Scalar>(n) * mu.squaredNorm();
-    }
-    if (config.scale) {
-        A_norm_sq = static_cast<Scalar>(m) * static_cast<Scalar>(n);
-    }
-    result.frobenius_norm_sq = static_cast<double>(A_norm_sq);
 
     // Pre-allocate SpMM workspace to avoid repeated thread-local allocs
     SpmmWorkspace<Scalar> spmm_ws;

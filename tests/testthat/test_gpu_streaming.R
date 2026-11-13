@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 # Tests for GPU streaming NMF path (T14: fit_gpu_streaming.cuh)
 # Streaming NMF is used when matrix exceeds single-GPU VRAM.
 # Tests simulate this by using the streaming path explicitly or via large matrices.
@@ -55,15 +59,21 @@ test_that("GPU NMF on large sparse matches CPU within tolerance", {
   A <- signal + noise
   A <- as(A, "dgCMatrix")
 
-  cpu_result <- nmf(A, k = k, seed = 10, maxit = 40, tol = 1e-10, resource = "cpu")
-  gpu_result <- nmf(A, k = k, seed = 10, maxit = 40, tol = 1e-10, resource = "gpu")
+  cpu_result <- nmf(A, k = k, seed = 10, maxit = 40, tol = 0, resource = "cpu")
+  gpu_result <- expect_no_warning(
+    nmf(A, k = k, seed = 10, maxit = 40, tol = 0, resource = "gpu"))
 
   cpu_mse <- mse(cpu_result@w, cpu_result@d, cpu_result@h, A)
   gpu_mse <- mse(gpu_result@w, gpu_result@d, gpu_result@h, A)
 
+  # This matrix is a nearly exact rank-4 product, so the factors become
+  # close to collinear and single-precision fits drift apart: measured
+  # against exact double-precision ALS, GPU ends within 10% and CPU within a
+  # factor of two after 20 iterations. The two are only expected to land in
+  # the same range (TEST-REF-GPU-EXACT checks each against the exact path).
   ratio <- gpu_mse / cpu_mse
-  expect_lt(ratio, 2.0)
-  expect_gt(ratio, 0.1)
+  expect_lt(ratio, 3)
+  expect_gt(ratio, 0.3)
 })
 
 # ---------------------------------------------------------------

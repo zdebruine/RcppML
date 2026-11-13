@@ -9,6 +9,7 @@ vignette: >
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(
+  dpi = 72, fig.retina = 1,   # keep the built vignettes small (CRAN size limit)
   collapse = TRUE,
   comment = "#>",
   fig.width = 7,
@@ -17,7 +18,17 @@ knitr::opts_chunk$set(
   warning = FALSE
 )
 library(RcppML)
-library(ggplot2)
+# CRAN allows at most two cores
+options(RcppML.threads = 2)
+# Chunks run only when NOT_CRAN is "true" (set when the package tarball and
+# the pkgdown site are built) and the suggested packages are installed.
+# CRAN's checks then rebuild the text without refitting the models.
+run_chunks <- identical(Sys.getenv("NOT_CRAN"), "true") &&
+  all(vapply(c("ggplot2"), requireNamespace, logical(1), quietly = TRUE))
+knitr::opts_chunk$set(eval = run_chunks)
+if (run_chunks) {
+  library(ggplot2)
+}
 library(Matrix)
 ```
 
@@ -41,10 +52,10 @@ svd(A, k = 10, tol = 1e-5, maxit = 200,
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `A` | — | Input matrix (features × samples), dense or sparse |
+| `A` | — | Input matrix, dense or sparse. Rows are features and columns are samples, as in `nmf()` |
 | `k` | 10 | Number of components to extract |
 | `center` | FALSE | Subtract row means (converts SVD to PCA) |
-| `scale` | FALSE | Scale rows to unit variance |
+| `scale` | FALSE | Scale rows to unit variance, using the sample standard deviation (divisor $n - 1$) |
 | `L1` | 0 | L1 penalty on loadings (induces sparsity) |
 | `nonneg` | FALSE | Constrain loadings to be nonneg |
 | `method` | "auto" | Solver: "auto", "deflation", "krylov", "lanczos", "irlba", "randomized" |
@@ -111,7 +122,7 @@ RcppML provides five SVD solvers spanning different tradeoffs between speed, con
 
 ### Deflation (Sequential Rank-1 ALS)
 
-Extracts one component at a time: compute rank-1 factors (u, v), deflate the matrix ($A \leftarrow A - \sigma u v^T$), repeat. Each rank-1 subproblem alternates least-squares updates with constraint projection (L1 soft-thresholding, nonneg clamping, etc.). After convergence, Gram-Schmidt reorthogonalization ensures orthogonality across factors.
+Extracts one component at a time: compute rank-1 factors (u, v), deflate the matrix ($A \leftarrow A - \sigma u v^T$), repeat. Each rank-1 subproblem alternates least-squares updates with constraint projection (L1 soft-thresholding, nonneg clamping, etc.). Unconstrained factors are reorthogonalized against the earlier ones. Constrained factors (`nonneg`, `L1`) are fitted with the earlier constrained directions projected out and are returned as fitted, so they satisfy the constraint exactly and are not mutually orthogonal.
 
 - **Strengths**: Supports all constraints (L1, L2, nonneg, bounds, L21, angular, graph) plus robust SVD via Huber-weighted IRLS. Stable for small k.
 - **Weakness**: Sequential extraction makes it $O(k)$ times slower than block methods. Each component pays the full cost of matrix-vector products.
@@ -122,7 +133,7 @@ Extracts one component at a time: compute rank-1 factors (u, v), deflate the mat
 A two-phase block method. **Phase 1** runs Lanczos bidiagonalization to compute an unconstrained seed for the top-k subspace. **Phase 2** iteratively refines via Gram-solve-then-project: solve the $k \times k$ normal equations, then project solutions onto constraint sets. All k factors are computed simultaneously.
 
 - **Strengths**: Much faster than deflation for large k (block matrix-matrix products instead of sequential matrix-vector). Supports all regularization except robust IRLS. Falls back to pure Lanczos when no constraints are active.
-- **Weakness**: No robust (Huber) loss support — IRLS reweighting requires per-observation weights incompatible with block SpMM. Post-convergence Gram-Schmidt reorthogonalization may slightly loosen nonneg constraints at lower components.
+- **Weakness**: No robust (Huber) loss support — IRLS reweighting requires per-observation weights incompatible with block SpMM. With `nonneg` or `L1` and more than one component, the block solve-then-project step can return redundant or all-zero components; use deflation for those constraints.
 - **Use when**: k ≥ 8 with constraints, or any unconstrained problem (reverts to Lanczos internally).
 
 ### Lanczos (Golub-Kahan Bidiagonalization)
@@ -153,10 +164,12 @@ Draws a random Gaussian matrix, projects the data to a low-dimensional subspace 
 
 When `method = "auto"` (default), RcppML picks:
 
-- **Constrained + k ≥ 8**: krylov (block speed advantage)
-- **Constrained + k < 8**: deflation (fewer factors, block overhead doesn't pay off)
-- **Unconstrained + large matrix**: irlba or lanczos depending on dimensions
-- **Unconstrained + small matrix**: lanczos
+- **`nonneg` or `L1`**: deflation at every k. Krylov's block solve-then-project step can return redundant or all-zero components under these constraints, and asking for it with `k > 1` gives a warning.
+- **Robust, masked or cross-validated fits, and `k = "auto"`**: deflation.
+- **Other penalties (L2, L21, angular, graph)**: krylov for k ≥ 8, deflation below.
+- **Unconstrained**: lanczos, or irlba when k is large (≥ 64) or the matrix is small relative to k.
+
+`"lanczos"`, `"irlba"` and `"randomized"` fit complete data only. A `mask` or a `test_fraction` with one of these methods is an error; use `"deflation"` or `"krylov"`, which treat masked and held-out entries as missing.
 
 ### Runtime Comparison
 
@@ -227,7 +240,7 @@ Key takeaways:
 | `center` | Row means (PCA) | Use when features have nonzero means |
 | `scale` | Unit variance | Use when features have different scales |
 | `L1` | Sparsity penalty | `c(0, value)` for sparse loadings only. Increase until desired sparsity. |
-| `nonneg` | Non-negativity | Parts-like loadings. Use `"krylov"` for strict enforcement. |
+| `nonneg` | Non-negativity | Parts-like loadings. Fitted by `"deflation"`; the factors are not orthogonal. |
 
 ## Worked Examples
 
@@ -354,8 +367,8 @@ The sparse PCA loadings show a clear spike at zero (zeroed-out features) with a 
 Nonneg SVD constrains factors to be non-negative, producing parts-like components similar to NMF. How do the two approaches compare?
 
 ```{r nonneg-comparison}
-# Nonneg SVD via krylov (strict nonneg enforcement)
-nn_svd <- RcppML::svd(aml, k = 5, nonneg = TRUE, method = "krylov", seed = 42)
+# Nonneg SVD (method = "auto" picks deflation for constrained problems)
+nn_svd <- RcppML::svd(aml, k = 5, nonneg = TRUE, seed = 42)
 
 # Standard NMF for comparison
 nn_nmf <- nmf(aml, k = 5, seed = 42, tol = 1e-5, maxit = 200)
@@ -372,7 +385,7 @@ nn_tbl <- data.frame(
     sprintf("%.4f", min(nn_svd@v, nn_svd@u)),
     sprintf("%.1f%%", 100 * mean(abs(nn_svd@v) < 1e-8)),
     sprintf("%.4f", sum((A_mat - svd_recon)^2) / prod(dim(aml))),
-    "Yes (by design)"
+    "No"
   ),
   NMF = c(
     sprintf("%.4f", min(nn_nmf@w, nn_nmf@h)),
@@ -382,34 +395,32 @@ nn_tbl <- data.frame(
   ),
   check.names = FALSE
 )
-knitr::kable(nn_tbl, caption = "Nonneg SVD (krylov) vs NMF on AML data (k = 5).")
+knitr::kable(nn_tbl, caption = "Nonneg SVD (deflation) vs NMF on AML data (k = 5).")
 ```
 
 Both approaches produce non-negative factors, but they solve fundamentally different optimization problems:
 
-- **Nonneg SVD** maximizes variance explained subject to non-negativity and orthogonality. The orthogonality constraint means factors cannot overlap — each feature belongs primarily to one component. This gives higher sparsity but potentially lower reconstruction quality.
-- **NMF** minimizes reconstruction error subject only to non-negativity. Factors can freely overlap, which usually gives better reconstruction but less interpretable (less orthogonal) components.
+- **Nonneg SVD** extracts one non-negative rank-1 component at a time, each fitted to what the earlier components leave unexplained. The components are ordered by the variance they add, and they are not orthogonal: non-negative vectors can only be orthogonal when their supports do not overlap, so the constraint takes priority.
+- **NMF** fits all k non-negative factors jointly to minimize reconstruction error. For the same k it usually reconstructs the data better, and its factors have no natural order.
 
 **When to use each**:
 
-- **Nonneg SVD**: When you want orthogonal, non-overlapping components — e.g., each genomic region assigned to exactly one program. Good for visualization and when components should represent distinct, non-redundant signals.
-- **NMF**: When you want the best possible reconstruction with nonneg parts. Components may overlap (same feature active in multiple factors), which is appropriate when biological programs share genes.
+- **Nonneg SVD**: When you want components ranked by importance, or want to add components one at a time without refitting the earlier ones.
+- **NMF**: When you want the best possible reconstruction with nonneg parts for a fixed k. Components may overlap (same feature active in multiple factors), which is appropriate when biological programs share genes.
 
 ### Example 4: Method Choice for Constrained Problems
 
-Only `"deflation"` and `"krylov"` support regularization. For nonneg constraints, krylov enforces non-negativity strictly (all values ≥ 0), while deflation may have small violations due to post-convergence Gram-Schmidt reorthogonalization.
+Only `"deflation"` and `"krylov"` support regularization. For `nonneg` and `L1`, use deflation, which `method = "auto"` selects: every factor satisfies the constraint exactly, and the price is that the factors are not orthogonal.
 
 ```{r constrained-methods}
-# Krylov: strict nonneg enforcement
-kry_nn <- RcppML::svd(aml, k = 5, nonneg = TRUE, method = "krylov", seed = 42)
-cat("Krylov nonneg — min(V):", min(kry_nn@v), " min(U):", min(kry_nn@u), "\n")
-
-# Deflation: nonneg + GS reorthogonalization may introduce small negatives
 defl_nn <- RcppML::svd(aml, k = 5, nonneg = TRUE, method = "deflation", seed = 42)
 cat("Deflation nonneg — min(V):", min(defl_nn@v), " min(U):", min(defl_nn@u), "\n")
+
+# The factors are non-negative, so they overlap instead of being orthogonal
+round(crossprod(defl_nn@v), 2)
 ```
 
-For strict non-negativity, prefer `method = "krylov"`. The deflation method's Gram-Schmidt step projects factors onto the orthogonal complement of previously extracted components, which can introduce small negative values — a fundamental tension between orthogonality and non-negativity that krylov's block-solve approach avoids.
+Krylov remains the block method for the penalties that act on the Gram matrix (L2, L21, angular, graph). With `nonneg` or `L1` and more than one component it can return redundant or all-zero components, which is why it warns in that case.
 
 ## Next Steps
 

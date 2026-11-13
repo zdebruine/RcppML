@@ -13,26 +13,26 @@
 #' @section Advanced Parameters:
 #' Several parameters may be specified in the \code{...} argument:
 #'
-#' * \code{diag = TRUE}: scale factors in \eqn{w} and \eqn{h} to sum to 1 by introducing a diagonal, \eqn{d}. This should generally never be set to \code{FALSE}. Diagonalization enables symmetry of models in factorization of symmetric matrices, convex L1 regularization, and consistent factor scalings.
+#' * \code{diag = TRUE}: accepted for backward compatibility. Factors are always scaled to unit L1 norm with the scale kept in a diagonal, \eqn{d}; \code{diag = FALSE} is not supported and raises an error.
 #' * \code{samples = 1:ncol(A)}: samples to include in bipartition, numbered from 1 to \code{ncol(A)}. Default is all samples.
-#' * \code{calc_dist = TRUE}: calculate the relative cosine distance of samples within a cluster to either cluster centroid. If \code{TRUE}, centers for clusters will also be calculated.
-#' * \code{seed = NULL}: random seed for model initialization, generally not needed for rank-2 factorizations because robust solutions are recovered when \code{diag = TRUE}
+#' * \code{calc_dist = TRUE}: calculate the relative cosine distance of the bipartition (see \strong{Value}). If \code{TRUE}, centers for clusters will also be calculated.
+#' * \code{seed = NULL}: random seed for model initialization. \code{NULL} uses a fixed seed, so results are reproducible either way.
 #' * \code{maxit = 100}: maximum number of alternating updates of \eqn{w} and \eqn{h}. Generally, rank-2 factorizations converge quickly and this should not need to be adjusted.
 #'
 #' @inheritParams nmf
-#' @param nonneg enforce non-negativity of the rank-2 factorization used for bipartitioning
-#' @param threads number of threads for OpenMP parallelization (default 0 = all available)
+#' @param nonneg enforce non-negativity of the rank-2 factorization used for bipartitioning. Each rank-2 least squares problem is solved exactly (closed form), with or without the constraint.
+#' @param threads number of threads (default 0 = \code{getOption("RcppML.threads")}, else all available). The update of the sample loadings is parallel over samples; results do not depend on the number of threads.
 #' @param verbose print progress information (default FALSE)
 #' @param ... additional arguments (see Advanced Parameters section)
 #' @return
 #' A list giving the bipartition and useful statistics:
 #' 	\itemize{
 #'    \item v       : vector giving difference between sample loadings between factors in a rank-2 factorization
-#'    \item dist    : relative cosine distance of samples within a cluster to centroids of assigned vs. not-assigned cluster
+#'    \item dist    : relative cosine distance of the bipartition: the mean over samples of the cosine distance to the center of the other cluster minus the cosine distance to the center of the sample's own cluster, i.e. \code{mean(cos(x, own center) - cos(x, other center))}. It lies in \code{[-1, 1]}, is near 0 for an arbitrary split of a homogeneous sample set and approaches 1 for two clusters with non-overlapping features. It does not depend on the number of features or samples. \code{-1} if \code{calc_dist = FALSE}.
 #'    \item size1   : number of samples in first cluster (positive loadings in 'v')
 #'    \item size2   : number of samples in second cluster (negative loadings in 'v')
-#'    \item samples1: indices of samples in first cluster
-#'    \item samples2: indices of samples in second cluster
+#'    \item samples1: 0-based indices of samples in first cluster (add 1 for R-style indexing)
+#'    \item samples2: 0-based indices of samples in second cluster (add 1 for R-style indexing)
 #'    \item center1 : mean feature loadings across samples in first cluster
 #'    \item center2 : mean feature loadings across samples in second cluster
 #'  }
@@ -71,6 +71,8 @@ bipartition <- function(data, tol = 1e-5, nonneg = TRUE, threads = 0, verbose = 
   data <- data_info$data
 
   if(!is.numeric(p$seed)) p$seed <- 0
+  if(!isTRUE(p$diag)) stop("'diag = FALSE' is not supported: bipartition() always scales factors to unit L1 norm")
+  if(length(p$samples) == 0) stop("'samples' must contain at least one sample index")
   if(min(p$samples) == 0) stop("sample indices must be strictly positive")
   if(max(p$samples) > ncol(data)) stop("sample indices must be strictly less than the number of columns in 'data'")
 
@@ -79,7 +81,7 @@ bipartition <- function(data, tol = 1e-5, nonneg = TRUE, threads = 0, verbose = 
     gpu_result <- .try_gpu_bipartition(data, tol, p, nonneg, verbose)
     if (!is.null(gpu_result)) return(gpu_result)
   }
-  Rcpp_bipartition(data, tol, p$maxit, nonneg, p$samples - 1, p$seed, verbose, p$calc_dist, p$diag, as.integer(threads))
+  Rcpp_bipartition(data, tol, p$maxit, nonneg, p$samples - 1, p$seed, verbose, p$calc_dist, p$diag, .resolve_threads(threads))
 }
 
 #' Try GPU dispatch for bipartition
@@ -124,8 +126,9 @@ bipartition <- function(data, tol = 1e-5, nonneg = TRUE, threads = 0, verbose = 
 
     if (ret$out_status != 0L) return(NULL)
 
-    s1 <- which(ret$partition == 0)
-    s2 <- which(ret$partition == 1)
+    # 0-based sample indices, matching the CPU implementation
+    s1 <- which(ret$partition == 0) - 1L
+    s2 <- which(ret$partition == 1) - 1L
     list(
       v = ret$v,
       dist = ret$dist,

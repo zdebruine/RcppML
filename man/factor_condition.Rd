@@ -16,9 +16,20 @@ to match H dimensions.}
 An \code{fn_node} of type "condition".
 }
 \description{
-Appends columns from a metadata matrix Z to the H factor before
-passing downstream. The next layer's W learns to factor out the
-conditioning variables.
+Appends the metadata matrix Z to the embedding of a layer before it is
+passed downstream: the next layer factorizes \code{cbind(t(H), t(Z))}
+(samples in rows) instead of \code{t(H)}.
+}
+\details{
+The conditioning variables therefore become additional columns that the
+next layer has to \emph{reconstruct}; they are not regressed out of
+\code{H}, and no batch correction of the upstream layer takes place.
+\code{t(H)} has unit-sum columns (entries of order \code{1/n}), so
+unscaled covariates such as 0/1 indicators dominate the next layer's
+loss; scale \code{Z} to a comparable magnitude if the embedding should
+still matter. With a non-negative next layer \code{Z} must be
+non-negative. Conditioning is only supported on the output of a layer,
+not directly on a \code{factor_input()}.
 }
 \examples{
 data(aml)

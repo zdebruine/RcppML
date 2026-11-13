@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 # tests/testthat/test_norm.R
 # Tests for the norm parameter (L1, L2, none) across NMF
 

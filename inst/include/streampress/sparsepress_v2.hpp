@@ -21,6 +21,10 @@
 #include <streampress/codec/varint.hpp>
 #include <streampress/codec/rans.hpp>
 #include <streampress/format/checksum.hpp>
+#include <streampress/core/checks.hpp>
+
+#include <atomic>
+#include <string>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -407,30 +411,40 @@ inline std::vector<uint32_t> decode_rans_escape(
     if (data_size == 0 || expected_count == 0)
         return std::vector<uint32_t>(expected_count, 0);
 
+    // Every read below is bounded by `end`; a short or inconsistent stream
+    // throws. The result always holds exactly expected_count symbols.
+    const uint8_t* const end = data + data_size;
+    const uint8_t* cur = data;
+
     // Deserialize table
-    const uint8_t* tbl_ptr = data;
-    RansTable table = RansTable::deserialize(tbl_ptr);
-    size_t offset = static_cast<size_t>(tbl_ptr - data);
+    RansTable table = RansTable::deserialize(cur, end);
 
     // Read encoded size
-    if (offset + 4 > data_size) return {};
-    uint32_t enc_sz = read_u32(data + offset); offset += 4;
+    if (static_cast<size_t>(end - cur) < 4)
+        spz_corrupt("rANS stream is truncated before its size field");
+    uint32_t enc_sz = read_u32(cur); cur += 4;
+    if (enc_sz > static_cast<size_t>(end - cur))
+        spz_corrupt("rANS payload extends past its stream");
 
     // Decode rANS
     std::vector<uint32_t> symbols(expected_count);
-    rans::decode_array(data + offset, enc_sz, symbols.data(), expected_count, table);
-    offset += enc_sz;
+    rans::decode_array(cur, enc_sz, symbols.data(), expected_count, table);
+    cur += enc_sz;
 
-    // Read overflow size
-    if (offset + 4 > data_size) return symbols;
-    uint32_t ov_sz = read_u32(data + offset); offset += 4;
+    // Read overflow size (absent in streams without an escape section)
+    if (static_cast<size_t>(end - cur) < 4) return symbols;
+    uint32_t ov_sz = read_u32(cur); cur += 4;
+    if (ov_sz > static_cast<size_t>(end - cur))
+        spz_corrupt("escape section extends past its stream");
 
     // Apply escapes
     if (ov_sz > 0) {
-        const uint8_t* ov_scan = data + offset;
+        const uint8_t* ov_scan = cur;
+        const uint8_t* const ov_end = cur + ov_sz;
         for (uint32_t i = 0; i < expected_count; ++i) {
             if (symbols[i] == 255) {
-                symbols[i] = static_cast<uint32_t>(varint::decode(ov_scan));
+                symbols[i] = static_cast<uint32_t>(
+                    varint::decode(ov_scan, ov_end));
             }
         }
     }
@@ -445,29 +459,139 @@ inline void decode_values_byteshuffle(
 {
     if (data_size == 0 || count == 0) return;
 
-    size_t offset = 0;
-    uint8_t n_streams = data[offset++];
+    const uint8_t* const end = data + data_size;
+    const uint8_t* cur = data;
+    uint8_t n_streams = *cur++;
+    // One stream per byte of the value type; more would write past `output`.
+    if (n_streams > bytes_per_value)
+        spz_corrupt("value stream count does not match the value type");
     uint8_t* out = static_cast<uint8_t*>(output);
 
     for (int s = 0; s < n_streams; ++s) {
-        if (offset + 4 > data_size) return;
-        uint32_t table_sz = read_u32(data + offset); offset += 4;
+        if (static_cast<size_t>(end - cur) < 4)
+            spz_corrupt("value stream is truncated");
+        uint32_t table_sz = read_u32(cur); cur += 4;
+        if (table_sz > static_cast<size_t>(end - cur))
+            spz_corrupt("value stream table extends past its stream");
 
-        const uint8_t* tbl_ptr2 = data + offset;
-        RansTable table = RansTable::deserialize(tbl_ptr2);
-        offset += table_sz;
+        const uint8_t* tbl_ptr2 = cur;
+        RansTable table = RansTable::deserialize(tbl_ptr2, cur + table_sz);
+        cur += table_sz;
 
-        if (offset + 4 > data_size) return;
-        uint32_t enc_sz = read_u32(data + offset); offset += 4;
+        if (static_cast<size_t>(end - cur) < 4)
+            spz_corrupt("value stream is truncated");
+        uint32_t enc_sz = read_u32(cur); cur += 4;
+        if (enc_sz > static_cast<size_t>(end - cur))
+            spz_corrupt("value stream payload extends past its stream");
 
         std::vector<uint32_t> stream(count);
-        rans::decode_array(data + offset, enc_sz, stream.data(), count, table);
-        offset += enc_sz;
+        rans::decode_array(cur, enc_sz, stream.data(), count, table);
+        cur += enc_sz;
 
         // De-shuffle: place each byte back
         for (uint32_t k = 0; k < count; ++k) {
-            out[k * bytes_per_value + s] = static_cast<uint8_t>(stream[k]);
+            out[static_cast<size_t>(k) * bytes_per_value + s] =
+                static_cast<uint8_t>(stream[k]);
         }
+    }
+}
+
+// ============================================================================
+// Validation of layout fields read from the file
+// ============================================================================
+
+/// Header fields every reader relies on. `data_size` is the number of bytes
+/// in the caller's buffer. Streaming readers pass a prefix of the file
+/// (header + chunk index + the chunks they need), so only the chunk index
+/// itself must be present here; chunk streams are checked when decoded.
+inline void validate_header_v2(const FileHeader_v2& hdr, size_t data_size) {
+    if (hdr.m > 0x7FFFFFFFu || hdr.n > 0x7FFFFFFFu)
+        spz_corrupt("matrix dimensions exceed 2^31 - 1");
+    if (hdr.nnz > 0xFFFFFFFFull)
+        spz_corrupt("more than 2^32 - 1 non-zeros");
+    if (hdr.nnz > static_cast<uint64_t>(hdr.m) * hdr.n)
+        spz_corrupt("more non-zeros than matrix cells");
+    require_range(hdr.chunk_index_offset,
+                  static_cast<uint64_t>(hdr.num_chunks) * sizeof(ChunkDescriptor_v2),
+                  data_size, "chunk index lies outside the file");
+    if (hdr.data_offset > data_size)
+        spz_corrupt("data section lies outside the file");
+}
+
+/// A chunk index must tile the columns [0, n_cols) in order, and its
+/// non-zero counts must be consistent with the matrix. Called before any
+/// output is allocated or written.
+inline void validate_chunk_index(const std::vector<ChunkDescriptor_v2>& descs,
+                                 uint64_t n_cols, uint64_t n_rows,
+                                 bool check_nnz, uint64_t total_nnz) {
+    uint64_t col = 0, nnz = 0;
+    for (const auto& d : descs) {
+        if (d.col_start != col)
+            spz_corrupt("chunk index is not contiguous");
+        col += d.num_cols;
+        if (col > n_cols)
+            spz_corrupt("chunk index covers more columns than the matrix has");
+        if (static_cast<uint64_t>(d.nnz) >
+            static_cast<uint64_t>(d.num_cols) * n_rows)
+            spz_corrupt("chunk holds more non-zeros than cells");
+        if (d.nnz > 0 && d.stream_size[STREAM_GAPS] < 4)
+            spz_corrupt("chunk with non-zeros has no structure stream");
+        nnz += d.nnz;
+    }
+    if (col != n_cols)
+        spz_corrupt("chunk index does not cover every column");
+    if (check_nnz && nnz != total_nnz)
+        spz_corrupt("chunk non-zero counts do not sum to the header total");
+    if (nnz > 0xFFFFFFFFull)
+        spz_corrupt("more than 2^32 - 1 non-zeros");
+}
+
+/// Both streams of a chunk must lie within the `avail` bytes that follow the
+/// base of the data section in the caller's buffer.
+inline void require_chunk_streams(const ChunkDescriptor_v2& d, uint64_t avail) {
+    require_range(d.stream_offset[STREAM_GAPS], d.stream_size[STREAM_GAPS],
+                  avail, "chunk structure stream lies outside the file");
+    require_range(d.stream_offset[STREAM_VALUES], d.stream_size[STREAM_VALUES],
+                  avail, "chunk value stream lies outside the file");
+}
+
+/// One per-column count from the structure stream.
+inline uint32_t read_col_count(const uint8_t*& ptr, const uint8_t* end,
+                               uint32_t chunk_nnz) {
+    const uint64_t c = varint::decode(ptr, end);
+    if (c > chunk_nnz)
+        spz_corrupt("column count exceeds the chunk's non-zeros");
+    return static_cast<uint32_t>(c);
+}
+
+/// Column counts of a chunk must add up to its non-zero count.
+inline void check_col_counts(const std::vector<uint32_t>& counts,
+                             uint32_t chunk_nnz) {
+    uint64_t total = 0;
+    for (uint32_t c : counts) total += c;
+    if (total != chunk_nnz)
+        spz_corrupt("column counts do not sum to the chunk's non-zeros");
+}
+
+/// Row index from the previous row and a decoded gap, checked against the
+/// number of rows.
+inline uint32_t next_row(uint32_t prev_row, uint32_t gap, uint32_t n_rows) {
+    const uint64_t r = static_cast<uint64_t>(prev_row) + gap;
+    if (r >= n_rows) spz_corrupt("row index out of range");
+    return static_cast<uint32_t>(r);
+}
+
+/// Whole-file checks for full reads: the footer must be present, and the
+/// CRC32 it records (when non-zero) must match the bytes before it.
+inline void verify_footer_v2(const uint8_t* data, size_t data_size,
+                             bool check_crc) {
+    if (data_size < HEADER_SIZE_V2 + FOOTER_SIZE)
+        spz_corrupt("file is shorter than its header and footer");
+    Footer_v2 footer = Footer_v2::deserialize(data + data_size - FOOTER_SIZE);
+    if (check_crc && footer.file_crc32 != 0) {
+        const uint32_t actual = CRC32::compute(data, data_size - FOOTER_SIZE);
+        if (actual != footer.file_crc32)
+            spz_corrupt("CRC32 mismatch");
     }
 }
 
@@ -892,6 +1016,8 @@ struct DecompressConfig_v2 {
     // Partial read: specify column range (0-indexed, -1 = all)
     int  col_start = -1;
     int  col_end = -1;
+    // Full reads check the footer CRC32 against the file contents
+    bool verify_crc = true;
 };
 
 inline CSCMatrix decompress_v2(
@@ -910,13 +1036,16 @@ inline CSCMatrix decompress_v2(
         value_type_name(static_cast<ValueType_v2>(hdr.value_type)));
 
     // Read chunk index
-    if (data_size < hdr.chunk_index_offset + hdr.num_chunks * sizeof(ChunkDescriptor_v2))
-        throw std::runtime_error("Data truncated at chunk index");
+    detail::validate_header_v2(hdr, data_size);
+    // A full read sees the whole file: require the footer and check its CRC
+    if (cfg.col_start < 0 || cfg.col_end < 0)
+        detail::verify_footer_v2(data, data_size, cfg.verify_crc);
 
     std::vector<ChunkDescriptor_v2> chunk_descs(hdr.num_chunks);
     std::memcpy(chunk_descs.data(),
                 data + hdr.chunk_index_offset,
                 hdr.num_chunks * sizeof(ChunkDescriptor_v2));
+    detail::validate_chunk_index(chunk_descs, hdr.n, hdr.m, true, hdr.nnz);
 
     // Determine which chunks to decode
     uint32_t first_chunk = 0, last_chunk = hdr.num_chunks;  // [first, last)
@@ -937,6 +1066,9 @@ inline CSCMatrix decompress_v2(
                 last_chunk = c + 1;
         }
 
+        if (first_chunk >= last_chunk)
+            throw std::runtime_error(
+                "Requested column range is empty or outside the matrix");
         out_col_start = chunk_descs[first_chunk].col_start;
         uint32_t end_chunk = last_chunk - 1;
         out_n = chunk_descs[end_chunk].col_start + chunk_descs[end_chunk].num_cols - out_col_start;
@@ -973,16 +1105,25 @@ inline CSCMatrix decompress_v2(
     num_threads = 1;
     #endif
 
+    // An exception must not leave an OpenMP region (that calls
+    // std::terminate), so the first decode error is recorded and rethrown
+    // after the loop.
+    std::atomic<bool> decode_failed(false);
+    std::string decode_error;
+
     // Decode chunks in parallel
     #ifdef _OPENMP
     #pragma omp parallel for num_threads(num_threads) schedule(dynamic) if(n_decode > 1)
     #endif
     for (uint32_t ci = 0; ci < n_decode; ++ci) {
+        if (decode_failed.load()) continue;
+        try {
         uint32_t c = first_chunk + ci;
         const auto& desc = chunk_descs[c];
         uint64_t out_offset = chunk_nnz_offset[ci];
 
         // Decode gap stream: [cc_size(4)][col_counts varint][rANS table][enc(4)][data][ov(4)][overflow]
+        detail::require_chunk_streams(desc, data_size - hdr.data_offset);
         const uint8_t* gap_ptr = data + hdr.data_offset + desc.stream_offset[STREAM_GAPS];
         size_t gap_size = desc.stream_size[STREAM_GAPS];
 
@@ -991,6 +1132,8 @@ inline CSCMatrix decompress_v2(
         if (gap_size >= 4) {
             // Read col counts section size
             uint32_t cc_size = detail::read_u32(gap_ptr);
+            if (cc_size > gap_size - 4)
+                spz_corrupt("column-count section exceeds its chunk");
             const uint8_t* cc_ptr = gap_ptr + 4;
             const uint8_t* rans_ptr = cc_ptr + cc_size;
             size_t rans_size = gap_size - 4 - cc_size;
@@ -999,7 +1142,7 @@ inline CSCMatrix decompress_v2(
             std::vector<uint32_t> col_counts(desc.num_cols);
             const uint8_t* cc_scan = cc_ptr;
             for (uint32_t j = 0; j < desc.num_cols; ++j) {
-                col_counts[j] = static_cast<uint32_t>(varint::decode(cc_scan));
+                col_counts[j] = detail::read_col_count(cc_scan, rans_ptr, desc.nnz);
             }
 
             // Set column pointers
@@ -1011,6 +1154,7 @@ inline CSCMatrix decompress_v2(
 
             // Decode gaps via rANS
             if (desc.nnz > 0) {
+                detail::check_col_counts(col_counts, desc.nnz);
                 auto gaps = detail::decode_rans_escape(rans_ptr, rans_size, desc.nnz);
 
                 // Reconstruct row indices per column
@@ -1018,7 +1162,7 @@ inline CSCMatrix decompress_v2(
                 for (uint32_t j = 0; j < desc.num_cols; ++j) {
                     uint32_t prev_row = 0;
                     for (uint32_t ki = 0; ki < col_counts[j]; ++ki) {
-                        uint32_t row = prev_row + gaps[gap_idx];
+                        uint32_t row = detail::next_row(prev_row, gaps[gap_idx], hdr.m);
                         result.i[out_offset + gap_idx] = row;
                         prev_row = row + 1;
                         gap_idx++;
@@ -1080,13 +1224,24 @@ inline CSCMatrix decompress_v2(
 
         SPZ2_LOG(cfg.verbose, 3,
             "[spz] Decoded chunk %u: %u nnz\n", c, desc.nnz);
+        } catch (const std::exception& e) {
+            #ifdef _OPENMP
+            #pragma omp critical(spz_decode_error)
+            #endif
+            {
+                if (!decode_failed.load()) decode_error = e.what();
+                decode_failed.store(true);
+            }
+        }
     }
+    if (decode_failed.load()) throw std::runtime_error(decode_error);
 
     // Set final column pointer
     result.p[out_n] = static_cast<uint32_t>(out_nnz);
 
     // Read metadata
-    if (hdr.metadata_offset > 0 && hdr.metadata_offset < data_size) {
+    if (hdr.metadata_offset > 0 && data_size >= FOOTER_SIZE &&
+        hdr.metadata_offset <= data_size - FOOTER_SIZE) {
         size_t meta_avail = data_size - FOOTER_SIZE - hdr.metadata_offset;
         Metadata meta = Metadata::deserialize(data + hdr.metadata_offset, meta_avail);
 
@@ -1097,7 +1252,10 @@ inline CSCMatrix decompress_v2(
             // We need to undo: for each nnz, result.i[k] = inv_perm[result.i[k]]
             for (uint64_t k = 0; k < out_nnz; ++k) {
                 if (result.i[k] < inv_perm.size()) {
-                    result.i[k] = inv_perm[result.i[k]];
+                    const uint32_t orig = inv_perm[result.i[k]];
+                    if (orig >= hdr.m)
+                        spz_corrupt("row permutation entry out of range");
+                    result.i[k] = orig;
                 }
             }
         }
@@ -1133,13 +1291,16 @@ inline CSCMatrixTyped<Scalar> decompress_v2_typed(
     FileHeader_v2 hdr = FileHeader_v2::deserialize(data);
 
     // Read chunk index
-    if (data_size < hdr.chunk_index_offset + hdr.num_chunks * sizeof(ChunkDescriptor_v2))
-        throw std::runtime_error("Data truncated at chunk index");
+    detail::validate_header_v2(hdr, data_size);
+    // A full read sees the whole file: require the footer and check its CRC
+    if (cfg.col_start < 0 || cfg.col_end < 0)
+        detail::verify_footer_v2(data, data_size, cfg.verify_crc);
 
     std::vector<ChunkDescriptor_v2> chunk_descs(hdr.num_chunks);
     std::memcpy(chunk_descs.data(),
                 data + hdr.chunk_index_offset,
                 hdr.num_chunks * sizeof(ChunkDescriptor_v2));
+    detail::validate_chunk_index(chunk_descs, hdr.n, hdr.m, true, hdr.nnz);
 
     // Determine which chunks to decode
     uint32_t first_chunk = 0, last_chunk = hdr.num_chunks;
@@ -1159,6 +1320,9 @@ inline CSCMatrixTyped<Scalar> decompress_v2_typed(
                 last_chunk = c + 1;
         }
 
+        if (first_chunk >= last_chunk)
+            throw std::runtime_error(
+                "Requested column range is empty or outside the matrix");
         out_col_start = chunk_descs[first_chunk].col_start;
         uint32_t end_chunk = last_chunk - 1;
         out_n = (chunk_descs[end_chunk].col_start + chunk_descs[end_chunk].num_cols) - out_col_start;
@@ -1178,12 +1342,15 @@ inline CSCMatrixTyped<Scalar> decompress_v2_typed(
         // Decode structure (col pointers and row indices) — same as decompress_v2
         if (desc.nnz > 0) {
             // Decode gap stream: [cc_size(4)][col_counts varint][rANS table][enc(4)][data][ov(4)][overflow]
+            detail::require_chunk_streams(desc, data_size - hdr.data_offset);
             const uint8_t* gap_ptr = data + hdr.data_offset + desc.stream_offset[STREAM_GAPS];
             size_t gap_size = desc.stream_size[STREAM_GAPS];
 
             if (gap_size >= 4) {
                 // Read col counts section size
                 uint32_t cc_size = detail::read_u32(gap_ptr);
+                if (cc_size > gap_size - 4)
+                    spz_corrupt("column-count section exceeds its chunk");
                 const uint8_t* cc_ptr = gap_ptr + 4;
                 const uint8_t* rans_ptr = cc_ptr + cc_size;
                 size_t rans_size = gap_size - 4 - cc_size;
@@ -1192,7 +1359,7 @@ inline CSCMatrixTyped<Scalar> decompress_v2_typed(
                 std::vector<uint32_t> col_counts(desc.num_cols);
                 const uint8_t* cc_scan = cc_ptr;
                 for (uint32_t j = 0; j < desc.num_cols; ++j) {
-                    col_counts[j] = static_cast<uint32_t>(varint::decode(cc_scan));
+                    col_counts[j] = detail::read_col_count(cc_scan, rans_ptr, desc.nnz);
                 }
 
                 // Set column pointers
@@ -1203,6 +1370,7 @@ inline CSCMatrixTyped<Scalar> decompress_v2_typed(
                 }
 
                 // Decode gaps via rANS
+                detail::check_col_counts(col_counts, desc.nnz);
                 auto gaps = detail::decode_rans_escape(rans_ptr, rans_size, desc.nnz);
 
                 // Reconstruct row indices per column
@@ -1210,7 +1378,7 @@ inline CSCMatrixTyped<Scalar> decompress_v2_typed(
                 for (uint32_t j = 0; j < desc.num_cols; ++j) {
                     uint32_t prev_row = 0;
                     for (uint32_t ki = 0; ki < col_counts[j]; ++ki) {
-                        uint32_t row = prev_row + gaps[gap_idx];
+                        uint32_t row = detail::next_row(prev_row, gaps[gap_idx], hdr.m);
                         result.i[out_offset + gap_idx] = row;
                         prev_row = row + 1;
                         gap_idx++;
@@ -1326,6 +1494,10 @@ inline CSCMatrix decompress_v2_transpose(
 
     if (hdr.transpose_offset == 0)
         throw std::runtime_error("File does not contain a pre-stored transpose");
+    detail::validate_header_v2(hdr, data_size);
+    // This entry point takes the whole file: require the footer and check
+    // its CRC, as the forward reader does
+    detail::verify_footer_v2(data, data_size, cfg.verify_crc);
 
     ValueType_v2 vtype = static_cast<ValueType_v2>(hdr.value_type);
 
@@ -1335,9 +1507,13 @@ inline CSCMatrix decompress_v2_transpose(
 
     // Read transpose section
     const uint8_t* t_section = data + hdr.transpose_offset;
-    size_t t_avail = (hdr.metadata_offset > hdr.transpose_offset)
-        ? (hdr.metadata_offset - hdr.transpose_offset)
-        : (data_size - FOOTER_SIZE - hdr.transpose_offset);
+    // Bytes of the transpose section actually present in the buffer
+    if (hdr.transpose_offset > data_size)
+        spz_corrupt("transpose section lies outside the file");
+    size_t t_avail = data_size - static_cast<size_t>(hdr.transpose_offset);
+    if (hdr.metadata_offset > hdr.transpose_offset &&
+        hdr.metadata_offset - hdr.transpose_offset < t_avail)
+        t_avail = static_cast<size_t>(hdr.metadata_offset - hdr.transpose_offset);
 
     if (t_avail < 4)
         throw std::runtime_error("Transpose section too small");
@@ -1348,14 +1524,22 @@ inline CSCMatrix decompress_v2_transpose(
     const uint8_t* t_idx_ptr = t_section + 4;
 
     // Read transpose chunk descriptors
-    size_t t_idx_size = static_cast<size_t>(num_t_chunks) * sizeof(ChunkDescriptor_v2);
-    if (t_avail < 4 + t_idx_size)
+    const uint64_t t_idx_size64 =
+        static_cast<uint64_t>(num_t_chunks) * sizeof(ChunkDescriptor_v2);
+    if (t_idx_size64 > t_avail - 4)
         throw std::runtime_error("Transpose section truncated at index");
+    size_t t_idx_size = static_cast<size_t>(t_idx_size64);
 
     std::vector<ChunkDescriptor_v2> t_descs(num_t_chunks);
-    std::memcpy(t_descs.data(), t_idx_ptr, t_idx_size);
+    if (t_idx_size > 0)
+        std::memcpy(t_descs.data(), t_idx_ptr, t_idx_size);
+    // Chunks of the transpose tile its columns (the rows of A)
+    detail::validate_chunk_index(t_descs, t_n, t_m, false, 0);
 
     const uint8_t* t_data_base = t_idx_ptr + t_idx_size;
+    // Bytes that follow the transpose index in the buffer
+    const uint64_t t_data_avail =
+        data_size - static_cast<size_t>(t_data_base - data);
 
     // Compute output
     uint64_t t_total_nnz = 0;
@@ -1370,20 +1554,27 @@ inline CSCMatrix decompress_v2_transpose(
         chunk_nnz_off[tc + 1] = chunk_nnz_off[tc] + t_descs[tc].nnz;
 
     // Decode transpose chunks (same logic as main decode)
+    std::atomic<bool> decode_failed(false);
+    std::string decode_error;
     #ifdef _OPENMP
     #pragma omp parallel for schedule(dynamic) if(num_t_chunks > 1)
     #endif
     for (uint32_t tc = 0; tc < num_t_chunks; ++tc) {
+        if (decode_failed.load()) continue;
+        try {
         const auto& desc = t_descs[tc];
         uint64_t out_offset = chunk_nnz_off[tc];
         uint32_t local_col_base = desc.col_start;
 
         // Decode gaps
+        detail::require_chunk_streams(desc, t_data_avail);
         const uint8_t* gap_ptr = t_data_base + desc.stream_offset[STREAM_GAPS];
         size_t gap_size = desc.stream_size[STREAM_GAPS];
 
         if (gap_size >= 4) {
             uint32_t cc_size = detail::read_u32(gap_ptr);
+            if (cc_size > gap_size - 4)
+                spz_corrupt("column-count section exceeds its chunk");
             const uint8_t* cc_ptr = gap_ptr + 4;
             const uint8_t* rans_ptr = cc_ptr + cc_size;
             size_t rans_size = gap_size - 4 - cc_size;
@@ -1391,7 +1582,7 @@ inline CSCMatrix decompress_v2_transpose(
             std::vector<uint32_t> col_counts(desc.num_cols);
             const uint8_t* cc_scan = cc_ptr;
             for (uint32_t j = 0; j < desc.num_cols; ++j)
-                col_counts[j] = static_cast<uint32_t>(varint::decode(cc_scan));
+                col_counts[j] = detail::read_col_count(cc_scan, rans_ptr, desc.nnz);
 
             uint32_t running = static_cast<uint32_t>(out_offset);
             for (uint32_t j = 0; j < desc.num_cols; ++j) {
@@ -1400,13 +1591,16 @@ inline CSCMatrix decompress_v2_transpose(
             }
 
             if (desc.nnz > 0) {
+                detail::check_col_counts(col_counts, desc.nnz);
                 auto gaps = detail::decode_rans_escape(rans_ptr, rans_size, desc.nnz);
                 uint32_t gap_idx = 0;
                 for (uint32_t j = 0; j < desc.num_cols; ++j) {
                     uint32_t prev_row = 0;
                     for (uint32_t ki = 0; ki < col_counts[j]; ++ki) {
-                        result.i[out_offset + gap_idx] = prev_row + gaps[gap_idx];
-                        prev_row = prev_row + gaps[gap_idx] + 1;
+                        const uint32_t row =
+                            detail::next_row(prev_row, gaps[gap_idx], t_m);
+                        result.i[out_offset + gap_idx] = row;
+                        prev_row = row + 1;
                         gap_idx++;
                     }
                 }
@@ -1458,7 +1652,17 @@ inline CSCMatrix decompress_v2_transpose(
                 break;
             }
         }
+        } catch (const std::exception& e) {
+            #ifdef _OPENMP
+            #pragma omp critical(spz_decode_error)
+            #endif
+            {
+                if (!decode_failed.load()) decode_error = e.what();
+                decode_failed.store(true);
+            }
+        }
     }
+    if (decode_failed.load()) throw std::runtime_error(decode_error);
 
     result.p[t_n] = static_cast<uint32_t>(t_total_nnz);
 
@@ -1498,27 +1702,39 @@ public:
         hdr_ = FileHeader_v2::deserialize(data);
         if (hdr_.transpose_offset == 0)
             throw std::runtime_error("File has no transpose section");
+        detail::validate_header_v2(hdr_, data_size);
 
         vtype_ = static_cast<ValueType_v2>(hdr_.value_type);
 
         const uint8_t* t_section = data + hdr_.transpose_offset;
-        size_t t_avail = (hdr_.metadata_offset > hdr_.transpose_offset)
-            ? (hdr_.metadata_offset - hdr_.transpose_offset)
-            : (data_size - FOOTER_SIZE - hdr_.transpose_offset);
+        // Bytes of the transpose section actually present in the buffer
+        if (hdr_.transpose_offset > data_size)
+            spz_corrupt("transpose section lies outside the file");
+        size_t t_avail = data_size - static_cast<size_t>(hdr_.transpose_offset);
+        if (hdr_.metadata_offset > hdr_.transpose_offset &&
+            hdr_.metadata_offset - hdr_.transpose_offset < t_avail)
+            t_avail = static_cast<size_t>(hdr_.metadata_offset - hdr_.transpose_offset);
 
         if (t_avail < 4)
             throw std::runtime_error("Transpose section too small");
 
         std::memcpy(&num_t_chunks_, t_section, 4);
 
-        size_t t_idx_size = static_cast<size_t>(num_t_chunks_) * sizeof(ChunkDescriptor_v2);
-        if (t_avail < 4 + t_idx_size)
+        const uint64_t t_idx_size64 =
+            static_cast<uint64_t>(num_t_chunks_) * sizeof(ChunkDescriptor_v2);
+        if (t_idx_size64 > t_avail - 4)
             throw std::runtime_error("Transpose section truncated at index");
+        size_t t_idx_size = static_cast<size_t>(t_idx_size64);
 
         t_descs_.resize(num_t_chunks_);
-        std::memcpy(t_descs_.data(), t_section + 4, t_idx_size);
+        if (t_idx_size > 0)
+            std::memcpy(t_descs_.data(), t_section + 4, t_idx_size);
+        // Chunks of the transpose tile its columns (the rows of A)
+        detail::validate_chunk_index(t_descs_, hdr_.m, hdr_.n, false, 0);
 
         t_data_base_ = t_section + 4 + t_idx_size;
+        // Bytes that follow the transpose index in the buffer
+        t_data_avail_ = data_size - static_cast<size_t>(t_data_base_ - data);
 
         // Pre-compute cumulative nnz offsets (needed for col pointers)
         chunk_nnz_off_.resize(num_t_chunks_ + 1, 0);
@@ -1556,11 +1772,14 @@ public:
         CSCMatrix result(t_m_, desc.num_cols, desc.nnz);
 
         // Decode gaps → row indices and column pointers
+        detail::require_chunk_streams(desc, t_data_avail_);
         const uint8_t* gap_ptr = t_data_base_ + desc.stream_offset[STREAM_GAPS];
         size_t gap_size = desc.stream_size[STREAM_GAPS];
 
         if (gap_size >= 4 && desc.nnz > 0) {
             uint32_t cc_size = detail::read_u32(gap_ptr);
+            if (cc_size > gap_size - 4)
+                spz_corrupt("column-count section exceeds its chunk");
             const uint8_t* cc_ptr = gap_ptr + 4;
             const uint8_t* rans_ptr = cc_ptr + cc_size;
             size_t rans_size = gap_size - 4 - cc_size;
@@ -1569,7 +1788,7 @@ public:
             std::vector<uint32_t> col_counts(desc.num_cols);
             const uint8_t* cc_scan = cc_ptr;
             for (uint32_t j = 0; j < desc.num_cols; ++j)
-                col_counts[j] = static_cast<uint32_t>(varint::decode(cc_scan));
+                col_counts[j] = detail::read_col_count(cc_scan, rans_ptr, desc.nnz);
 
             // Set column pointers (0-based)
             uint32_t running = 0;
@@ -1580,13 +1799,16 @@ public:
             result.p[desc.num_cols] = running;
 
             // Decode row gaps → row indices
+            detail::check_col_counts(col_counts, desc.nnz);
             auto gaps = detail::decode_rans_escape(rans_ptr, rans_size, desc.nnz);
             uint32_t gap_idx = 0;
             for (uint32_t j = 0; j < desc.num_cols; ++j) {
                 uint32_t prev_row = 0;
                 for (uint32_t ki = 0; ki < col_counts[j]; ++ki) {
-                    result.i[gap_idx] = prev_row + gaps[gap_idx];
-                    prev_row = prev_row + gaps[gap_idx] + 1;
+                    const uint32_t row =
+                        detail::next_row(prev_row, gaps[gap_idx], t_m_);
+                    result.i[gap_idx] = row;
+                    prev_row = row + 1;
                     gap_idx++;
                 }
             }
@@ -1652,6 +1874,7 @@ private:
     std::vector<ChunkDescriptor_v2> t_descs_;
     std::vector<uint64_t> chunk_nnz_off_;
     const uint8_t* t_data_base_;
+    uint64_t t_data_avail_ = 0;
 };
 
 // ============================================================================
@@ -1694,11 +1917,14 @@ inline void write_v2(const std::string& path,
 inline std::vector<uint8_t> read_v2(const std::string& path) {
     FILE* f = std::fopen(path.c_str(), "rb");
     if (!f) throw std::runtime_error("Cannot open file: " + path);
-    std::fseek(f, 0, SEEK_END);
-    long sz = std::ftell(f);
-    std::fseek(f, 0, SEEK_SET);
-    std::vector<uint8_t> data(sz);
-    if (std::fread(data.data(), 1, sz, f) != static_cast<size_t>(sz)) {
+    const long long sz = spz_file_size(f);
+    if (sz < 0) {
+        std::fclose(f);
+        throw std::runtime_error("Cannot determine file size: " + path);
+    }
+    std::vector<uint8_t> data(static_cast<size_t>(sz));
+    if (sz > 0 &&
+        std::fread(data.data(), 1, data.size(), f) != data.size()) {
         std::fclose(f);
         throw std::runtime_error("Read failed: " + path);
     }

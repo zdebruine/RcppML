@@ -74,14 +74,17 @@ inline void apply_angular(DenseMatrix<Scalar>& G,
  * L = Σ_{i<j} cos(w_i, w_j) pushes correlated factors apart.
  *
  * Applied AFTER the NNLS solve, BEFORE extract_scaling.
- * Results are clipped to non-negative.
+ * Results are clipped to non-negative only when the factor is constrained
+ * to be non-negative; a signed factor keeps its signs.
  *
  * @param Factor  Factor matrix (k × cols), modified in-place
  * @param lambda  Angular penalty strength (typical: 0.01–1.0)
+ * @param nonneg  Whether the factor carries a non-negativity constraint
  */
 template<typename Scalar>
 inline void apply_angular_posthoc(DenseMatrix<Scalar>& Factor,
-                                  Scalar lambda)
+                                  Scalar lambda,
+                                  bool nonneg = true)
 {
     if (lambda <= 0) return;
 
@@ -115,9 +118,25 @@ inline void apply_angular_posthoc(DenseMatrix<Scalar>& Factor,
         grad.row(i) *= row_norms(i);
     }
 
-    // 4. Subtract gradient and clip to non-negative
-    Factor -= lambda * grad;
-    Factor = Factor.cwiseMax(Scalar(0));
+    // 4. Step size.  On the unit rows the update is F̂ ← (I − λ·C₀)·F̂ with
+    //    C₀ the off-diagonal cosine matrix.  A shared component with
+    //    eigenvalue μ of C₀ is scaled by (1 − λμ): for λμ > 1 it changes sign
+    //    and for λμ > 2 it grows, so a large λ re-correlates the factors
+    //    instead of separating them.  For a non-negative factor the clip at
+    //    zero below absorbs the overshoot.  A signed factor has no such
+    //    guard, so its step is capped at 1/μ_max, bounded by the largest
+    //    absolute row sum of C₀ (Gershgorin): the most correlated component
+    //    is removed at most completely, never reversed.
+    Scalar step = lambda;
+    if (!nonneg && k > 0) {
+        const Scalar max_row = cos_mat.cwiseAbs().rowwise().sum().maxCoeff();
+        if (max_row > Scalar(0) && step * max_row > Scalar(1))
+            step = Scalar(1) / max_row;
+    }
+
+    // 5. Subtract gradient; clip to non-negative only for a nonneg factor
+    Factor -= step * grad;
+    if (nonneg) Factor = Factor.cwiseMax(Scalar(0));
 }
 
 }  // namespace features

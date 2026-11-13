@@ -29,10 +29,9 @@ evaluate(x, ...)
 \item{data}{dense or sparse matrix of features in rows and samples in columns. Prefer \code{matrix} or \code{Matrix::dgCMatrix}, respectively.
 Also accepts a file path (character string) which will be auto-loaded based on extension.}
 
-\item{mask}{missing data mask. Accepts:
-\code{NULL} (no masking), \code{"zeros"} (mask zeros), \code{"NA"} (mask NAs),
-a dgCMatrix/matrix (custom mask), or \code{list("zeros", <matrix>)} to mask
-zeros and use a custom mask simultaneously.}
+\item{mask}{missing data mask, as in \code{\link{nmf}}: \code{NULL}, \code{"zeros"}, \code{"NA"} or a matrix whose
+non-zero entries mark missing values. Masked entries are excluded from the loss
+(or are the only entries included when \code{missing_only = TRUE}).}
 
 \item{missing_only}{calculate loss only for missing values specified as a matrix in \code{mask}}
 

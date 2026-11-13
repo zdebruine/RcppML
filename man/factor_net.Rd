@@ -21,6 +21,11 @@ A \code{factor_net} object.
 Validates the graph topology, resolves config inheritance, and
 returns a compiled network ready for \code{fit()}.
 }
+\details{
+Multi-layer networks are fit greedily layer by layer, not by minimizing
+a joint objective; see the Details of \code{\link{fit}} for what each
+layer factorizes and for the options that are not supported.
+}
 \examples{
 data(aml)
 inp <- factor_input(aml, "aml")

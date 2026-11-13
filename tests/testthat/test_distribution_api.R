@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 # Test: Distribution API
 # Tests for the new distribution= parameter, gamma, inverse_gaussian,
 # robust+distribution composition, dispersion output, and score_test_distribution

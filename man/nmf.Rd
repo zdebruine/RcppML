@@ -39,15 +39,22 @@ Also accepts a file path (character string) which will be auto-loaded based on e
 \item{L2}{Ridge penalties greater than zero, single value or array of length two for \code{c(w, h)}}
 
 \item{seed}{initialization control. Accepts:
-\code{NULL} for random init, an integer for reproducible random init,
+\code{NULL} for random init, an integer for reproducible random init
+(the caller's random number stream is left unchanged),
 a matrix (m x k) for custom W initialization, a list of matrices for multi-init,
-or a string: \code{"lanczos"}, \code{"irlba"}, \code{"randomized"}, or \code{"svd"}
-(auto-select) for SVD-based initialization.}
+or a string for SVD-based initialization (W and H start from the absolute
+values of the leading singular vectors): \code{"lanczos"} or
+\code{"irlba"}. \code{"svd"} and \code{"randomized"} are aliases of
+\code{"lanczos"}.}
 
 \item{mask}{missing data mask. Accepts:
-\code{NULL} (no masking), \code{"zeros"} (mask zeros), \code{"NA"} (mask NAs),
-a dgCMatrix/matrix (custom mask), or \code{list("zeros", <matrix>)} to mask
-zeros and use a custom mask simultaneously.}
+\code{NULL} (no masking), \code{"zeros"} (treat zeros as missing),
+\code{"NA"} (mask NA/NaN entries; this happens automatically, with a
+warning, whenever the data contain them),
+a dgCMatrix/matrix of the same dimensions as \code{data} whose non-zero
+entries mark missing values, or \code{list("zeros", <matrix>)} to mask
+zeros and use a custom mask simultaneously. NA/NaN positions are always
+added to a custom mask.}
 
 \item{loss}{loss function: \code{"mse"} (default), \code{"gp"},
 \code{"nb"}, \code{"gamma"}, \code{"inverse_gaussian"}, or \code{"tweedie"}.
@@ -59,9 +66,14 @@ For robust loss (Huber/MAE), use the \code{robust} parameter instead.}
 
 \item{verbose}{print progress information during fitting (default FALSE)}
 
-\item{projective}{if \code{TRUE}, use projective NMF (default \code{FALSE}).}
+\item{projective}{if \code{TRUE}, use projective NMF, where H is computed
+as \eqn{W^T A} (default \code{FALSE}). H-side penalties,
+\code{nonneg[2] = FALSE} and masks do not apply and are an error.}
 
-\item{symmetric}{if \code{TRUE}, use symmetric NMF where H = W^T (default \code{FALSE}).}
+\item{symmetric}{if \code{TRUE}, use symmetric NMF where H = W^T (default \code{FALSE}).
+Requires \code{loss = "mse"} and no mask. Only W-side settings act, so an
+H-side setting that differs from the W side (\code{graph_H},
+\code{target_H}, \code{angular[2]}, \code{upper_bound[2]}, ...) is an error.}
 
 \item{zi}{zero-inflation mode: \code{"none"} (default), \code{"row"}, or \code{"col"}.
 Requires \code{loss="gp"} or \code{loss="nb"}.}
@@ -85,7 +97,9 @@ When \code{k} is a single integer: an S4 object of class \code{nmf} with slots:
 \code{loss} (final loss value), \code{loss_type} (loss function used), and \code{runtime} (seconds).}
 }
 When \code{k} is a vector: a \code{data.frame} of class \code{nmfCrossValidate} with columns
-\code{k}, \code{rep}, \code{train_loss}, \code{test_loss}, and \code{best_iter}.
+\code{rep}, \code{k}, \code{train_mse}, \code{test_mse}, \code{best_iter}
+(1-based iteration with the lowest test loss) and \code{total_iter}.
+\code{train_mse} is \code{NA} when \code{track_train_loss = FALSE}.
 }
 \description{
 High-performance NMF of the form \eqn{A = wdh} for large dense or sparse matrices. Supports single-rank fitting or cross-validation across multiple ranks. Returns an \code{nmf} object or \code{nmfCrossValidate} data.frame.
@@ -106,8 +120,13 @@ L1 penalization can be used for increasing the sparsity of factors and assisting
 
 Set \code{options(RcppML.verbose = TRUE)} to print model tolerances to the console after each iteration.
 
-Parallelization is applied with OpenMP using the number of threads in \code{getOption("RcppML.threads")} and set by \code{option(RcppML.threads = 0)}, for example. \code{0} corresponds to all threads, let OpenMP decide.
+Parallelization uses OpenMP. The number of threads is the \code{threads} argument if it is non-zero, otherwise \code{getOption("RcppML.threads")}, otherwise all available cores (\code{0}). For example, \code{options(RcppML.threads = 2)} limits every RcppML function to two threads. The count is capped at 2 under \code{R CMD check} (\code{_R_CHECK_LIMIT_CORES_}) and at \code{OMP_THREAD_LIMIT} when that environment variable is set.
 }
+\section{Input requirements}{
+
+\code{data} must be finite (\code{Inf} is an error; \code{NA} and \code{NaN} are masked, see \code{mask}) and must contain at least one non-zero value. \code{k} cannot exceed \code{min(nrow(data), ncol(data))}. Losses other than \code{"mse"} require non-negative data; \code{"gamma"}, \code{"inverse_gaussian"} and \code{"tweedie"} with \code{tweedie_power >= 2} require strictly positive data (zeros can be treated as missing with \code{mask = "zeros"} under cross-validation); \code{"gp"} and \code{"nb"} warn when the data are not integer counts.
+}
+
 \section{Cross-Validation}{
 
 When \code{k} is a vector, the function performs cross-validation to find the optimal rank:
@@ -175,8 +194,8 @@ See \code{vignette("guided-nmf")} for details.}
 \item{\code{theta_init}, \code{theta_max}, \code{theta_min}}{GP theta bounds}
 \item{\code{nb_size_init}, \code{nb_size_max}, \code{nb_size_min}}{NB dispersion bounds}
 \item{\code{gamma_phi_init}, \code{gamma_phi_max}, \code{gamma_phi_min}}{Gamma/IG dispersion bounds}
-\item{\code{tweedie_power}}{Tweedie variance power (default 1.5)}
-\item{\code{irls_max_iter}, \code{irls_tol}}{IRLS convergence parameters}
+\item{\code{tweedie_power}}{Tweedie variance power in \code{[1, 3]} (default 1.5)}
+\item{\code{irls_max_iter}, \code{irls_tol}}{IRLS inner iterations (default 5) and tolerance (default 1e-4)}
 }
 
 \strong{Zero-Inflation:}
@@ -186,10 +205,21 @@ See \code{vignette("guided-nmf")} for details.}
 
 \strong{Solver:}
 \describe{
-\item{\code{solver}}{NNLS solver: \code{"auto"}, \code{"cholesky"}, \code{"cd"}}
+\item{\code{solver}}{Least-squares solver for each factor update.
+\code{"cd"} is sequential coordinate descent, which handles every
+penalty and is required for non-MSE losses and \code{robust} fits.
+\code{"cholesky"} is a direct Cholesky solve of the normal equations
+followed by a correction that enforces the non-negativity conditions;
+it is available for MSE loss only. \code{"auto"} (default) picks
+\code{"cholesky"} on CPU when \code{k < 32} and \code{L1 = 0}, and
+\code{"cd"} otherwise.}
 \item{\code{cd_tol}}{CD convergence tolerance (default 1e-8)}
 \item{\code{cd_maxit}}{CD max iterations (default 100)}
-\item{\code{h_init}}{Custom initial H matrix}
+\item{\code{w_init}}{Initial W matrix (\code{nrow(data) x k}); equivalent to a matrix \code{seed}}
+\item{\code{h_init}}{Initial H matrix (\code{k x ncol(data)}). Because
+the first update recomputes H from W, the starting W is obtained by
+solving for W given \code{h_init}. Requires a single rank and cannot
+be combined with a W initialization or an SVD-based \code{seed}.}
 }
 
 \strong{Cross-Validation:}
@@ -197,12 +227,13 @@ See \code{vignette("guided-nmf")} for details.}
 \item{\code{cv_seed}}{Separate seed(s) for CV holdout pattern}
 \item{\code{patience}}{Early stopping patience (default 5)}
 \item{\code{cv_k_range}}{Auto-rank search range (default \code{c(2, 50)})}
-\item{\code{track_train_loss}}{Track training loss in CV (default TRUE)}
+\item{\code{track_train_loss}}{Track training loss in CV (default TRUE).
+When \code{FALSE}, \code{train_mse} is reported as \code{NA}.}
 }
 
 \strong{Resources & Output:}
 \describe{
-\item{\code{threads}}{OpenMP threads (default 0 = all)}
+\item{\code{threads}}{OpenMP threads (default 0: use \code{getOption("RcppML.threads")}, else all cores)}
 \item{\code{resource}}{Compute backend: \code{"auto"}, \code{"cpu"}, \code{"gpu"}}
 \item{\code{norm}}{Factor normalization: \code{"L1"}, \code{"L2"}, \code{"none"}}
 \item{\code{sort_model}}{Sort factors by diagonal (default TRUE)}
@@ -210,8 +241,9 @@ See \code{vignette("guided-nmf")} for details.}
 
 \strong{Streaming:}
 \describe{
-\item{\code{streaming}}{SPZ streaming mode: \code{"auto"}, \code{TRUE}, \code{FALSE}}
-\item{\code{panel_cols}}{Panel size for streaming (default 0 = auto)}
+\item{\code{streaming}}{SPZ streaming mode: \code{"auto"}, \code{TRUE}, \code{FALSE}.
+Chunked streaming is not available in this version: a \code{.spz}
+path is loaded into memory, and \code{streaming = TRUE} says so once.}
 \item{\code{dispatch}}{StreamPress dispatch override}
 }
 
@@ -248,17 +280,18 @@ S4 methods available for the \code{nmf} class:
 \examples{
 \donttest{
 # basic NMF
-model <- nmf(Matrix::rsparsematrix(1000, 100, 0.1), k = 10)
+A <- abs(Matrix::rsparsematrix(500, 100, 0.1))
+model <- nmf(A, k = 10, seed = 1, threads = 2)
 
 # cross-validation to find optimal rank
-sim <- simulateNMF(200, 80, k = 5, noise = 3.0, seed = 42)
-cv <- nmf(sim$A, k = 2:10, test_fraction = 0.05, cv_seed = 1:3,
-          tol = 1e-5, maxit = 200)
-plot(cv)
+sim <- simulateNMF(100, 60, k = 4, noise = 3.0, seed = 42)
+cv <- nmf(sim$A, k = 2:6, test_fraction = 0.05, cv_seed = 1:2,
+          maxit = 50, threads = 2)
+if (requireNamespace("ggplot2", quietly = TRUE)) plot(cv)
 optimal_k <- cv$k[which.min(cv$test_mse)]
 
 # fit final model with optimal rank
-model <- nmf(sim$A, optimal_k)
+model <- nmf(sim$A, optimal_k, seed = 1, threads = 2)
 }
 }
 \references{

@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 # =============================================================================
 # TEST-GATE-01: SVD & PCA Baseline Tests
 # Phase 0 safety net — must pass before any restructuring begins.
@@ -314,7 +318,8 @@ test_that("dim() works on svd", {
   s <- RcppML::svd(A_dense, k = 3, method = "deflation", seed = 1, maxit = 50,
                    test_fraction = 0)
   # dim() returns c(nrow(u), ncol(v), length(d)) = c(m, k, k)
-  expect_equal(dim(s), c(m, 3, 3))
+  # dim() is c(rows of A, columns of A, rank)
+  expect_equal(dim(s), c(m, n, 3))
 })
 
 test_that("show() works on svd", {
@@ -485,12 +490,15 @@ test_that("svd(scale=TRUE) sparse and dense agree", {
   expect_equal(s_sp@misc$row_sds, s_de@misc$row_sds, tolerance = 1e-5)
 })
 
-test_that("svd(scale=TRUE) frobenius_norm_sq equals m*n", {
-  # By definition, when each row is standardized: ||A_tilde||_F^2 = m * n
+test_that("svd(scale=TRUE) frobenius_norm_sq equals m*(n-1)", {
+  # Rows are standardized with the sample SD (n - 1 denominator, as prcomp),
+  # so each row has sum of squares n - 1: ||A_tilde||_F^2 = m * (n - 1)
   s <- RcppML::svd(A_dense, k = 3, center = TRUE, scale = TRUE,
                    method = "lanczos", seed = 1)
-  expect_equal(s@misc$frobenius_norm_sq, nrow(A_dense) * ncol(A_dense),
-               tolerance = 0.01)
+  expect_equal(s@misc$frobenius_norm_sq, nrow(A_dense) * (ncol(A_dense) - 1),
+               tolerance = 1e-4)
+  ref <- sum((t(scale(t(A_dense))))^2)
+  expect_equal(s@misc$frobenius_norm_sq, ref, tolerance = 1e-4)
 })
 
 test_that("svd(scale=TRUE) is reproducible", {

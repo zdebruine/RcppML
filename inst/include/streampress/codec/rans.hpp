@@ -17,6 +17,8 @@
 #include <stdexcept>
 #include <cstring>
 
+#include <streampress/core/checks.hpp>
+
 namespace streampress {
 
 // ============================================================================
@@ -128,8 +130,13 @@ struct RansTable {
         cum_to_symbol.resize(RANS_PROB_SCALE);
         for (uint32_t s = 0; s < n_symbols; ++s) {
             if (symbols[s].freq == 0) continue;
-            for (uint16_t k = 0; k < symbols[s].freq; ++k) {
-                cum_to_symbol[symbols[s].cum_freq + k] = static_cast<uint16_t>(s);
+            for (uint32_t k = 0; k < symbols[s].freq; ++k) {
+                const uint32_t idx =
+                    static_cast<uint32_t>(symbols[s].cum_freq) + k;
+                // A well-formed table sums to RANS_PROB_SCALE; never write
+                // past the lookup even if it does not.
+                if (idx >= RANS_PROB_SCALE) break;
+                cum_to_symbol[idx] = static_cast<uint16_t>(s);
             }
         }
     }
@@ -148,21 +155,35 @@ struct RansTable {
         return out;
     }
 
-    // Deserialize
+    // Deserialize (no end bound; only for buffers known to be well formed).
     static RansTable deserialize(const uint8_t*& ptr) {
         RansTable t;
         t.n_symbols = static_cast<uint32_t>(ptr[0]) | (static_cast<uint32_t>(ptr[1]) << 8);
         ptr += 2;
         t.symbols.resize(t.n_symbols);
-        uint16_t cum = 0;
+        uint32_t cum = 0;
         for (uint32_t i = 0; i < t.n_symbols; ++i) {
-            t.symbols[i].freq = static_cast<uint16_t>(ptr[0]) | (static_cast<uint16_t>(ptr[1]) << 8);
-            t.symbols[i].cum_freq = cum;
-            cum += t.symbols[i].freq;
+            const uint32_t f = static_cast<uint32_t>(ptr[0]) | (static_cast<uint32_t>(ptr[1]) << 8);
+            if (cum + f > RANS_PROB_SCALE)
+                spz_corrupt("rANS frequency table exceeds the probability scale");
+            t.symbols[i].freq = static_cast<uint16_t>(f);
+            t.symbols[i].cum_freq = static_cast<uint16_t>(cum);
+            cum += f;
             ptr += 2;
         }
         t.build_lookup();
         return t;
+    }
+
+    // Bounded deserialize: never reads at or past `end`; validates the table.
+    static RansTable deserialize(const uint8_t*& ptr, const uint8_t* end) {
+        if (ptr > end || static_cast<size_t>(end - ptr) < 2)
+            spz_corrupt("rANS table header is truncated");
+        const uint32_t n =
+            static_cast<uint32_t>(ptr[0]) | (static_cast<uint32_t>(ptr[1]) << 8);
+        if (static_cast<size_t>(end - ptr) - 2 < static_cast<size_t>(n) * 2)
+            spz_corrupt("rANS table is truncated");
+        return deserialize(ptr);
     }
 };
 
@@ -223,6 +244,7 @@ public:
     RansDecoder() : state_(0), ptr_(nullptr), end_(nullptr) {}
 
     void init(const uint8_t* data, size_t size) {
+        if (size < 4) spz_corrupt("rANS stream shorter than its 4-byte state");
         ptr_ = data;
         end_ = data + size;
         // Read initial state (4 bytes LE, stored at front after reverse)
@@ -282,6 +304,11 @@ inline std::vector<uint8_t> encode_array(const uint32_t* symbols, size_t count,
 inline void decode_array(const uint8_t* data, size_t size,
                          uint32_t* out, size_t count,
                          const RansTable& table) {
+    if (count == 0) return;
+    // The decoder indexes the lookup with a RANS_PROB_BITS-wide value and the
+    // symbol table with the looked-up symbol; both must be populated.
+    if (table.symbols.empty() || table.cum_to_symbol.size() < RANS_PROB_SCALE)
+        spz_corrupt("rANS stream has an empty frequency table");
     RansDecoder dec;
     dec.init(data, size);
     for (size_t i = 0; i < count; ++i) {

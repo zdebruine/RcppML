@@ -9,6 +9,7 @@ vignette: >
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(
+  dpi = 72, fig.retina = 1,   # keep the built vignettes small (CRAN size limit)
   collapse = TRUE,
   comment = "#>",
   fig.width = 7,
@@ -17,7 +18,17 @@ knitr::opts_chunk$set(
   warning = FALSE
 )
 library(RcppML)
-library(ggplot2)
+# CRAN allows at most two cores
+options(RcppML.threads = 2)
+# Chunks run only when NOT_CRAN is "true" (set when the package tarball and
+# the pkgdown site are built) and the suggested packages are installed.
+# CRAN's checks then rebuild the text without refitting the models.
+run_chunks <- identical(Sys.getenv("NOT_CRAN"), "true") &&
+  all(vapply(c("ggplot2"), requireNamespace, logical(1), quietly = TRUE))
+knitr::opts_chunk$set(eval = run_chunks)
+if (run_chunks) {
+  library(ggplot2)
+}
 ```
 
 ## Motivation
@@ -43,10 +54,11 @@ nmf(data, k = c(2, 4, 6, 8, 10),
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `k` | — | Vector of ranks to evaluate |
-| `test_fraction` | 0 | Fraction of entries held out (set > 0 for CV) |
+| `test_fraction` | 0 | Probability that an entry is held out (set > 0 for CV) |
 | `cv_seed` | NULL | Seed(s) for holdout mask. Vector length = number of replicates. |
 | `mask` | NULL | Missing data mask: `NULL`, `"zeros"`, `"NA"`, a matrix, or `list("zeros", <matrix>)` |
 | `patience` | 5 | Early stopping: stop if test loss hasn't improved in this many iterations |
+| `tol` | 1e-4 | Convergence tolerance. Under CV it is judged on the change in the factors between iterations, as in an ordinary fit |
 | `seed` | NULL | Seed for NMF initialization (separate from CV mask) |
 
 **Return value**: A `data.frame` of class `nmfCrossValidate` with columns:
@@ -55,9 +67,12 @@ nmf(data, k = c(2, 4, 6, 8, 10),
 |--------|-------------|
 | `k` | Rank tested |
 | `rep` | Replicate index (factor) |
-| `train_mse` | Training set loss (named `train_mse` regardless of the loss function used) |
-| `test_mse` | Held-out test set loss (named `test_mse` regardless of the loss function used) |
-| `best_iter` | Iteration with best test loss |
+| `train_mse` | Training set loss (named `train_mse` regardless of the loss function used); `NA` when `track_train_loss = FALSE` |
+| `test_mse` | Held-out test set loss at the best iteration (named `test_mse` regardless of the loss function used) |
+| `best_iter` | Iteration (1-based) with the best test loss |
+| `total_iter` | Number of iterations run |
+
+A single-rank fit with `test_fraction > 0` returns the factors from the best iteration, the one with the lowest test loss, not those of the last iteration.
 
 Use `plot(cv_result)` for a built-in test-loss-vs-rank curve.
 
@@ -66,9 +81,9 @@ Use `plot(cv_result)` for a built-in test-loss-vs-rank curve.
 The `mask` parameter controls both fitting and cross-validation simultaneously — there is no separate CV-specific mask setting. It accepts five forms:
 
 - `mask = NULL` (default): All entries (including zeros) can be held out. Tests full-matrix reconstruction. Appropriate for dense data or applications where zero is a real measurement.
-- `mask = "zeros"`: Only nonzero entries can be held out. Zeros are treated as "unobserved," not "zero-valued." Essential for recommendation data (unrated items) and any domain where zero means "not measured."
+- `mask = "zeros"`: Zeros are missing values. They are left out of the fit, with or without cross-validation, and only nonzero entries can be held out. Essential for recommendation data (unrated items) and any domain where zero means "not measured."
 - `mask = "NA"`: NA entries in the data are treated as missing. If the data contains NAs and no mask is specified, this is set automatically with a warning.
-- `mask = <matrix>`: A custom dgCMatrix or matrix of the same dimensions as `data`. Nonzero entries in the mask mark observed positions; zero entries mark unobserved positions.
+- `mask = <matrix>`: A custom dgCMatrix or matrix of the same dimensions as `data`. Nonzero entries in the mask mark missing positions, which are left out of the fit and of the test set. NA positions in the data are always added to it.
 - `mask = list("zeros", <matrix>)`: Combines zero-masking with a custom mask — zeros are treated as unobserved *and* the custom mask is applied simultaneously.
 
 > **Caution**: Do not compare test loss values across `mask` modes on the same axis. With `mask = "zeros"`, the test set only includes non-zero entries (e.g., actual ratings), producing loss values on their natural scale. With `mask = NULL`, the test set is dominated by zero entries, yielding much smaller absolute loss values. The two scales are fundamentally different and direct comparison is misleading.
@@ -77,7 +92,7 @@ The `mask` parameter controls both fitting and cross-validation simultaneously �
 
 ### Speckled Holdout
 
-For each entry $(i, j)$, include it in the test set with probability `test_fraction`. All other entries form the training set. This preserves matrix structure — every row and column retains most of its entries for training.
+For each entry $(i, j)$, include it in the test set with probability exactly `test_fraction`, independently of the other entries and identically for sparse and dense input. All other entries form the training set.This preserves matrix structure — every row and column retains most of its entries for training.
 
 ### Choosing $k$
 

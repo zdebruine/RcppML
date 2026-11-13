@@ -4,7 +4,10 @@
 \name{subset,nmf-method}
 \alias{subset,nmf-method}
 \alias{[,nmf,ANY,ANY,ANY-method}
+\alias{head.nmf}
+\alias{tail.nmf}
 \alias{head,nmf-method}
+\alias{tail,nmf-method}
 \alias{show,nmf-method}
 \alias{dimnames,nmf-method}
 \alias{dim,nmf-method}
@@ -19,9 +22,15 @@
 \usage{
 \S4method{subset}{nmf}(x, i, ...)
 
-\S4method{[}{nmf,ANY,ANY,ANY}(x, i)
+\S4method{[}{nmf,ANY,ANY,ANY}(x, i, j, ..., drop = FALSE)
 
-\S4method{head}{nmf}(x, n = getOption("digits"), ...)
+\method{head}{nmf}(x, n = getOption("digits"), ...)
+
+\method{tail}{nmf}(x, n = getOption("digits"), ...)
+
+\S4method{head}{nmf}(x, ...)
+
+\S4method{tail}{nmf}(x, ...)
 
 \S4method{show}{nmf}(object)
 
@@ -50,15 +59,18 @@
   upper_bound = NULL,
   threads = 0,
   verbose = FALSE,
+  nonneg = NULL,
   ...
 )
 }
 \arguments{
 \item{x}{object of class \code{nmf}.}
 
-\item{i}{indices}
+\item{i}{indices of the factors to keep}
 
 \item{...}{arguments passed to or from other methods}
+
+\item{j, drop}{ignored (an \code{nmf} object is subset by factor only and always stays an \code{nmf} object)}
 
 \item{n}{number of rows/columns to show}
 
@@ -82,20 +94,26 @@ Also accepts a file path (character string) which will be auto-loaded based on e
 \item{L2}{a single Ridge penalty greater than zero}
 
 \item{mask}{missing data mask. Accepts:
-\code{NULL} (no masking), \code{"zeros"} (mask zeros), \code{"NA"} (mask NAs),
-a dgCMatrix/matrix (custom mask), or \code{list("zeros", <matrix>)} to mask
-zeros and use a custom mask simultaneously.}
+\code{NULL} (no masking), \code{"zeros"} (treat zeros as missing),
+\code{"NA"} (mask NA/NaN entries; this happens automatically, with a
+warning, whenever the data contain them),
+a dgCMatrix/matrix of the same dimensions as \code{data} whose non-zero
+entries mark missing values, or \code{list("zeros", <matrix>)} to mask
+zeros and use a custom mask simultaneously. NA/NaN positions are always
+added to a custom mask.}
 
 \item{upper_bound}{maximum value permitted in least squares solutions, essentially a bounded-variable least squares problem between 0 and \code{upper_bound}}
 
 \item{threads}{number of threads for OpenMP parallelization (default 0 = all available)}
 
 \item{verbose}{print progress information (default FALSE)}
+
+\item{nonneg}{enforce non-negativity of the projected \code{h}. Default \code{NULL} uses the setting the model was fit with (\code{TRUE} when the model does not record it).}
 }
 \value{
 An \code{nmf} object subsetted to the specified factors.
 
-An \code{nmf} object subsetted to the specified factors.
+An \code{nmf} object subsetted to the specified factors. A single factor is kept as a rank-1 model.
 
 Invisibly returns the \code{nmf} object.
 
@@ -112,6 +130,8 @@ An \code{nmf} object with factors reordered by decreasing (or increasing) \code{
 A dense matrix equal to \code{w \%*\% diag(d) \%*\% h}.
 
 Contents of the named slot (\code{w}, \code{d}, \code{h}, or \code{misc}), or the named element from \code{misc}.
+  Names are matched exactly first (so \code{model$L1} returns \code{model@misc$L1}); a case-insensitive match
+  (e.g. \code{model$W}) is used only when no exact match exists.
 
 A named list with elements \code{w}, \code{d}, \code{h}, and \code{misc}.
 
@@ -120,9 +140,16 @@ The element from the \code{misc} list at the given name or index.
 An \code{\link{nmf}} object containing the projected model (with updated \code{h} matrix).
 }
 \description{
+\code{head} and \code{tail} print the first or last \code{n} rows of \code{w}
+and columns of \code{h} (and at most \code{n} factors).
+
 Given an NMF model in the form \eqn{A = wdh}, \code{project} projects \code{w} onto \code{A} to solve for \code{h}.
 }
 \details{
+The S4 generics \code{head} and \code{tail} come from the \pkg{Matrix} import;
+the S3 methods are registered for \code{utils::head} and \code{utils::tail}, so
+\code{head(model)} works whether or not \pkg{Matrix} is attached.
+
 For the alternating least squares matrix factorization update problem \eqn{A = wh}, the updates
 (or projection) of \eqn{h} is given by the equation: \deqn{w^Twh = wA_j}
 which is in the form \eqn{ax = b} where \eqn{a = w^Tw} \eqn{x = h} and \eqn{b = wA_j} for all columns \eqn{j} in \eqn{A}.
@@ -131,6 +158,14 @@ Any L1 penalty is subtracted from \eqn{b} and should generally be scaled to \cod
 
 There are specializations for dense and sparse input matrices, symmetric input matrices, and for rank-1 and rank-2 projections. See documentation for \code{\link{nmf}} for theoretical details and guidance.
 }
+\section{Scaling of the projection}{
+
+\code{predict} solves \eqn{A \approx w x} for \eqn{x} and returns \eqn{h = diag(d)^{-1} x} together with the model's \code{w} and \code{d},
+so that \code{w \%*\% diag(d) \%*\% h} approximates \code{data} and \code{h} is on the same scale as the \code{h} of the fitted model
+(projecting the training data returns approximately the training \code{h}). Penalties and \code{upper_bound} apply to \eqn{x}.
+Entries selected by \code{mask} (and zeros, when \code{mask = "zeros"}) are excluded from the least squares problem of each sample.
+}
+
 \examples{
 \donttest{
 library(Matrix)

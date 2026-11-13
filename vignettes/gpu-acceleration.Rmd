@@ -9,6 +9,7 @@ vignette: >
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(
+  dpi = 72, fig.retina = 1,   # keep the built vignettes small (CRAN size limit)
   collapse = TRUE,
   comment = "#>",
   fig.width = 7,
@@ -16,6 +17,9 @@ knitr::opts_chunk$set(
   message = FALSE,
   warning = FALSE
 )
+# CRAN allows at most two cores
+options(RcppML.threads = 2)
+has_suggests <- requireNamespace("ggplot2", quietly = TRUE)
 ```
 
 ## Motivation
@@ -64,7 +68,7 @@ on two real single-cell RNA-seq datasets.
 ```{r eval = FALSE}
 library(RcppML)
 library(Matrix)
-library(SeuratData)
+library(SeuratData)   # GitHub only: remotes::install_github("satijalab/seurat-data")
 library(Seurat)
 
 # ── hcabm40k: 40,000 bone marrow cells ──
@@ -149,7 +153,7 @@ knitr::kable(
 )
 ```
 
-```{r benchmark-plot, echo = FALSE, fig.width = 7, fig.height = 4.2}
+```{r benchmark-plot, echo = FALSE, fig.width = 7, fig.height = 4.2, eval = has_suggests}
 library(ggplot2)
 
 bench_df$Type <- ifelse(grepl("Cross-validation", bench_df$Operation), "Cross-validation",
@@ -250,23 +254,29 @@ options(RcppML.gpu = FALSE)
 
 ### GPU-Supported Features
 
-| Feature | GPU Support |
-|:--------|:------------|
-| Sparse NMF | Yes |
-| Dense NMF | Yes |
-| Cross-validation NMF | Yes |
-| MSE loss | Yes |
-| MAE / Huber (via `robust`) | Yes |
-| KL / distribution losses | Yes |
-| L1, L2 regularization | Yes |
-| L21, angular regularization | Yes |
-| Graph regularization | CPU only |
-| Upper bound constraints | Yes |
-| Bipartition / dclust | Yes |
-| StreamPress streaming NMF | Yes (CPU decompression → GPU compute) |
+In this release the GPU runs only the configurations that have been checked
+against the same references as the CPU code. Every other request runs on the
+CPU and says so once: a message under `resource = "auto"`, a warning when
+`resource = "gpu"` was asked for. No option is dropped.
 
-When a GPU-unsupported feature is requested, RcppML falls back to CPU
-automatically with no error.
+| Request | Where it runs |
+|:--------|:--------------|
+| `nmf()` on sparse or dense input, Gaussian loss (`loss = "mse"`), with `nonneg`, `norm`, a user or SVD-based start | GPU |
+| ... with `L1` or `L2` on sparse input | GPU |
+| `svd()` / `pca()`: unconstrained `lanczos`, `krylov`, `randomized`, `deflation` | GPU |
+| Bipartition / `dclust()` | GPU |
+| `L1` or `L2` on dense input | CPU |
+| Cross-validation (`test_fraction`, `k = "auto"`) | CPU |
+| Non-Gaussian losses, `robust`, zero inflation | CPU |
+| `mask`, `target_H`, `upper_bound` | CPU |
+| `L21`, `angular`, `graph_W` / `graph_H` | CPU |
+| `projective`, `symmetric` | CPU |
+| `svd()` with constraints, penalties, `mask`, CV, `scale = TRUE`, or `method = "irlba"` | CPU |
+| Reading `.spz` files onto the GPU (`st_read_gpu()`) | not available |
+
+On the GPU, `solver = "cholesky"` is served by coordinate descent, which gives
+the exact non-negative least squares solution. The rows marked CPU are planned
+GPU work; each will move once its kernel matches the CPU result.
 
 ### GPU-Direct StreamPress Reading
 
@@ -283,14 +293,34 @@ See the [StreamPress](streampress.html) vignette for `.spz` format details.
 
 ## Building the GPU Library
 
-The GPU shared library is built separately from the R package using `nvcc`.
+A normal installation (`install.packages("RcppML")` or
+`remotes::install_github("zdebruine/RcppML")`) builds the CPU package only,
+even when the CUDA Toolkit is on the `PATH`. In that state `gpu_available()`
+returns `FALSE` and every function runs on the CPU. The GPU shared library is
+a separate build with `nvcc`, done once per machine after installing or
+updating RcppML:
+
+```{r eval = FALSE}
+library(RcppML)
+install_gpu()   # compiles RcppML_gpu.so with nvcc (a few minutes)
+gpu_status()    # shows what was searched, what loaded, and why not
+gpu_available()
+#> [1] TRUE
+```
+
+`gpu_status()` is the first thing to run when `gpu_available()` is `FALSE`: it
+reports whether `nvcc` was found, where the library was looked for, and the
+reason it was not loaded.
 
 ### Requirements
 
 - **NVIDIA GPU** with compute capability $\geq$ 7.0 (Volta or newer)
-- **CUDA Toolkit** $\geq$ 12.x (cuBLAS and cuSPARSE included)
+- **CUDA Toolkit** $\geq$ 11.0 with cuBLAS and cuSPARSE (12.x recommended)
 
-### Build Steps
+### Building from a source checkout
+
+Developers working in a clone of the repository can use the project Makefile
+instead:
 
 ```{bash eval = FALSE}
 # 1. Load CUDA on your system
@@ -308,7 +338,7 @@ nvcc -O3 \
   -I../inst/include \
   -o ../inst/lib/RcppML_gpu.so \
   gpu_bridge_nmf.cu gpu_bridge_svd.cu gpu_bridge_cluster.cu \
-  gpu_bridge_utils.cu sp_gpu_bridge.cu \
+  gpu_bridge_utils.cu gpu_bridge_assess.cu sp_gpu_bridge.cu \
   -lcublas -lcusparse -lcuda
 
 # 3. Verify
@@ -336,8 +366,8 @@ knitr::kable(arch_df, align = "llr",
 
 ### Library Search Path
 
-RcppML searches for `RcppML_gpu.so` in order:
-`inst/lib/` → `src/` → package `lib/` → working directory root.
+`gpu_status()` lists the locations RcppML searches for `RcppML_gpu.so`, in
+order, and which one it loaded.
 
 ### GPU Memory
 
@@ -370,9 +400,10 @@ Rscript my_analysis.R
 ```{r eval = FALSE}
 gpu_available(force_recheck = TRUE)
 #> [1] FALSE
+gpu_status()
 ```
 
-Common causes: CUDA drivers missing or outdated (`nvidia-smi` to check), GPU
+Common causes: the GPU library has not been built (run `install_gpu()`), CUDA drivers missing or outdated (`nvidia-smi` to check), GPU
 compute capability < 7.0, `RcppML_gpu.so` not on the search path, or architecture
 mismatch (library compiled for `sm_90` won't load on a V100).
 
@@ -386,8 +417,8 @@ floating-point tolerance.
 2. **10–40× speedups** on real single-cell data against a fully-utilized
    56-thread CPU, with SVD randomized and cross-validation showing the largest
    gains. With fewer CPU threads, speedups scale proportionally.
-3. **Automatic fallback**: If GPU is unavailable or a feature is CPU-only,
-   RcppML falls back silently.
+3. **Automatic fallback**: If the GPU is unavailable or a request is outside
+   the supported set above, RcppML runs it on the CPU and tells you.
 4. **Direct disk-to-GPU** via `st_read_gpu()` for very large `.spz` datasets.
 
 *See the [NMF Fundamentals](nmf-fundamentals.html) vignette for comprehensive

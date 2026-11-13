@@ -21,16 +21,30 @@
  * PRNG hash. No mask matrix is ever materialized.
  *
  * Loss computation:
- *   - Train loss: Gram trick using per-column accumulators
  *   - Test loss: explicit reconstruction at held-out entries only
+ *   - Train loss: only when requested (track_train_loss or verbose), NaN
+ *     otherwise. Gram trick (total minus test) for squared error on all
+ *     entries; entry-wise for every other case.
  *
- * This implementation uses the unified config/result types from core/ and
- * reuses CD solvers from solvers/cd_fast.hpp. Features (L1, L2, ortho, L21,
- * graph_reg, bounds) are applied identically to the standard NMF loop.
+ * Conventions:
+ *   - Returned factors follow the non-CV fit: unit-norm W columns and H rows
+ *     with the scale in d, so that A ≈ W · diag(d) · H.
+ *   - mask_zeros = true means zeros are missing, for every loss.
+ *   - With cv_patience > 0 the factors of the best test iteration are
+ *     returned; test_loss, best_test_loss, train_loss and best_iter all
+ *     describe that returned model.
+ *   - Convergence (tol) is judged on 1 - cosine similarity of successive W,
+ *     not on the test loss.
+ *   - Penalties (L2, graph, L21, positive target) are built by
+ *     variant::build_column_penalty(), the routine the non-CV fit uses, from
+ *     the previous iterate before the parallel solves start. The upper bound
+ *     is enforced inside the per-column solver.
+ *   - The IRLS solves warm-start and use the same step control as the
+ *     non-CV IRLS solver.
  *
- * IRLS support: For non-MSE losses (MAE, Huber, KL), per-column/row IRLS
- * loops build weighted Gram and RHS from train entries only. Loss computation
- * uses explicit per-element loss instead of the Gram trick.
+ * IRLS support: For non-MSE losses, per-column/row IRLS loops build weighted
+ * Gram and RHS from train entries only, with weights evaluated at the
+ * observed value and the fitted dispersion.
  *
  * @author Zach DeBruine
  * @date 2026
@@ -84,8 +98,12 @@
 #include <FactorNet/rng/rng.hpp>
 
 #include <cmath>
+#include <cstdint>
+#include <chrono>
 #include <limits>
 #include <algorithm>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 #ifdef _OPENMP
@@ -130,6 +148,47 @@ template<typename Resource, typename Scalar, typename MatrixType>
     const int m = static_cast<int>(A.rows());
     const int n = static_cast<int>(A.cols());
     const int k = config.rank;
+
+    // ------------------------------------------------------------------
+    // 0. Reject configurations the CV path cannot honor
+    // ------------------------------------------------------------------
+
+    if (config.projective) {
+        throw std::invalid_argument(
+            "Projective NMF is not supported with cross-validation "
+            "(test_fraction > 0): the projective H update H = W^T A uses every "
+            "entry of A, including the held-out ones. Fit without "
+            "test_fraction, or use standard NMF for cross-validation.");
+    }
+    if ((config.H.target != nullptr && config.H.target_lambda < 0) ||
+        (config.W.target != nullptr && config.W.target_lambda < 0)) {
+        throw std::invalid_argument(
+            "A negative target_lambda (target removal) is not supported with "
+            "cross-validation (test_fraction > 0). Use a positive "
+            "target_lambda or fit without test_fraction.");
+    }
+    // Positive target: ridge toward the target, G += lambda*I, b += lambda*T,
+    // as in the standard fit.
+    const bool h_target = (config.H.target != nullptr && config.H.target_lambda > 0);
+    const bool w_target = (config.W.target != nullptr && config.W.target_lambda > 0);
+    if (h_target && (config.H.target->rows() != k || config.H.target->cols() != n)) {
+        throw std::invalid_argument(
+            "Cross-validation: the H target must be a k x ncol(A) matrix.");
+    }
+    if (w_target && (config.W.target->rows() != k || config.W.target->cols() != m)) {
+        throw std::invalid_argument(
+            "Cross-validation: the W target must be a k x nrow(A) matrix.");
+    }
+    // Same restriction as the non-CV fit, so that both penalize one objective
+    if (config.requires_irls() && (config.W.L21 > 0 || config.H.L21 > 0)) {
+        throw std::invalid_argument(
+            "L21 is not supported together with a non-Gaussian or robust loss "
+            "(with or without cross-validation). Use loss = \"mse\" without robust.");
+    }
+    if (config.H.graph && config.H.graph_lambda > 0 && !config.symmetric)
+        features::validate_graph(*config.H.graph, n, "graph_H");
+    if (config.W.graph && config.W.graph_lambda > 0)
+        features::validate_graph(*config.W.graph, m, "graph_W");
 
     // ------------------------------------------------------------------
     // 1. Initialize factors
@@ -183,6 +242,30 @@ template<typename Resource, typename Scalar, typename MatrixType>
         static_cast<double>(config.holdout_fraction),
         config.effective_cv_seed(),
         config.mask_zeros);
+    // Data outside the support of the loss is rejected, as in the non-CV fit.
+    // Zeros only count when they are data (no mask of any kind).
+    if (config.requires_irls()) {
+        bool any_negative = false;
+        bool any_zero = false;
+        if constexpr (is_sparse_v<MatrixType>) {
+            for (int j = 0; j < n; ++j) {
+                for (typename MatrixType::InnerIterator it(A, j); it; ++it) {
+                    if (it.value() < 0) any_negative = true;
+                    else if (it.value() == 0) any_zero = true;
+                }
+            }
+            if (nnz < static_cast<int64_t>(m) * static_cast<int64_t>(n)) any_zero = true;
+        } else {
+            any_negative = (A.array() < Scalar(0)).any();
+            any_zero = (nnz < static_cast<int64_t>(m) * static_cast<int64_t>(n));
+        }
+        if (config.mask_zeros || config.has_mask()) any_zero = false;
+        primitives::detail::irls_check_support(config.loss, any_negative, any_zero);
+    }
+
+    // Symmetric NMF fits a symmetric matrix: (i,j) and (j,i) hold the same
+    // value, so they must be held out together or the test entry leaks.
+    mask.set_symmetric(config.symmetric);
 
     // ------------------------------------------------------------------
     // 2b. Initialize theta for GP dispersion (CV path)
@@ -331,29 +414,68 @@ template<typename Resource, typename Scalar, typename MatrixType>
     }
 
     // ------------------------------------------------------------------
-    // 4. Allocate working buffers
+    // 4. Working state
     // ------------------------------------------------------------------
 
     DenseMatrix<Scalar> G(k, k);
-    DenseMatrix<Scalar> G_local(k, k);
-    DenseVector<Scalar> b(k);
-    DenseVector<Scalar> x(k);
 
-    // Estimate max test entries per column for buffer sizing
-    const int est_max_test = static_cast<int>(
-        std::max(m, n) * static_cast<double>(config.holdout_fraction) * 3 + 10);
-    DenseMatrix<Scalar> W_test_buf(k, est_max_test);
+    // Initial width of the per-thread index buffers. They grow on demand, so
+    // this is a starting size only, never a limit.
+    const int est_max_test = static_cast<int>(std::min<double>(
+        static_cast<double>(std::max(m, n)),
+        static_cast<double>(std::max(m, n)) *
+            static_cast<double>(config.holdout_fraction) * 3.0 + 10.0));
 
-    // Previous loss for convergence check (replaces factor-based W_prev)
-    Scalar prev_conv_loss = std::numeric_limits<Scalar>::max();
+    // mask_zeros = true: zeros are MISSING. They enter neither the Gram, the
+    // right-hand side nor any loss, on the Gaussian and the IRLS path alike.
+    const bool missing_zeros = config.mask_zeros;
+    const bool use_irls = config.requires_irls();
+
+    // Train loss is computed only on request.
+    const bool want_train_loss = config.track_train_loss || config.verbose;
+    // Entry-wise loss is needed whenever the train set is not "all entries
+    // minus the test set" or the loss is not squared error.
+    const bool explicit_loss = use_irls || use_mask || missing_zeros;
+    // Otherwise the train loss comes from the Gram trick (total minus test).
+    const bool gram_train_loss = want_train_loss && !explicit_loss;
+
+    // IRLS weights follow the standard (non-CV) fit: the Generalized Poisson
+    // mean update uses Poisson (KL) weights 1/mu, every other distribution its
+    // own variance-function weight evaluated at the observed value and the
+    // fitted dispersion.
+    FactorNet::LossConfig<Scalar> irls_loss = config.loss;
+    if (is_gp) irls_loss.type = LossType::KL;
 
     // Precompute tr(A^T A) — constant across iterations
-    const Scalar trAtA = primitives::trace_AtA<Resource, Scalar, MatrixType>(A);
+    [[maybe_unused]] const Scalar trAtA =
+        primitives::trace_AtA<Resource, Scalar, MatrixType>(A);
 
     ::FactorNet::NMFResult<Scalar> result;
+    const Scalar nan_val = std::numeric_limits<Scalar>::quiet_NaN();
+
+    // Early stopping: with cv_patience > 0 the factors of the iteration with
+    // the lowest test loss are kept and returned. With cv_patience == 0 the
+    // last iterate is returned together with its own test loss.
+    const bool keep_best = config.cv_patience > 0;
     Scalar best_test_loss = std::numeric_limits<Scalar>::max();
-    int best_iter = 0;
+    Scalar best_train_loss = nan_val;
+    int best_iter = -1;
     int patience_count = 0;
+    DenseMatrix<Scalar> best_W_T, best_H;
+    DenseVector<Scalar> best_d, best_theta, best_nb, best_phi, best_pi_row, best_pi_col;
+
+    Scalar last_train_loss = nan_val;
+    Scalar last_test_loss = nan_val;
+
+    // Previous W for the convergence measure
+    DenseMatrix<Scalar> W_prev;
+
+    // Penalty terms, built once per half-update by the same routine as the
+    // non-CV fit: shared k×k terms (L2, target ridge) and per-column terms
+    // (target and graph right-hand side, graph ridge, L21 group norms).
+    DenseMatrix<Scalar> G_reg_H, G_reg_W;
+    nmf::variant::ColumnPenalty<Scalar> cp_H, cp_W;
+
     auto fit_start = std::chrono::high_resolution_clock::now();
     if (config.track_loss_history)
         result.history.reserve(config.max_iter);
@@ -363,6 +485,52 @@ template<typename Resource, typename Scalar, typename MatrixType>
         ? config.threads
         : omp_get_max_threads();
 #endif
+
+    // ------------------------------------------------------------------
+    // 4b. Holdout lists, built once when they fit in memory
+    // ------------------------------------------------------------------
+    // The held-out rows of every column and the held-out columns of every row
+    // are listed once with the same functions the per-iteration (hash) route
+    // uses, so both routes hold out identical entries. Memory is about
+    // 8 bytes × holdout_fraction × (entries that can be held out); above
+    // detail::cv_mask_cache_limit_bytes() (1 GB by default) the lists are
+    // recomputed from the hash on every pass instead.
+    detail::CVMaskCache mask_cache;
+    {
+        const double eligible = config.mask_zeros
+            ? static_cast<double>(nnz)
+            : static_cast<double>(m) * static_cast<double>(n);
+        const double est_bytes = 8.0 * eligible * mask.holdout_fraction();
+        if (est_bytes <= detail::cv_mask_cache_limit_bytes()) {
+            mask_cache.col.resize(static_cast<size_t>(n));
+            mask_cache.row.resize(static_cast<size_t>(m));
+#ifdef _OPENMP
+            #pragma omp parallel num_threads(actual_threads)
+#endif
+            {
+                std::vector<int> tmp;
+#ifdef _OPENMP
+                #pragma omp for schedule(dynamic, 64)
+#endif
+                for (int j = 0; j < n; ++j) {
+                    detail::list_holdout_col(A, j, mask, config.mask_zeros, m, tmp);
+                    mask_cache.col[static_cast<size_t>(j)].assign(tmp.begin(), tmp.end());
+                }
+#ifdef _OPENMP
+                #pragma omp for schedule(dynamic, 64)
+#endif
+                for (int i = 0; i < m; ++i) {
+                    if constexpr (is_sparse_v<MatrixType>) {
+                        detail::list_holdout_row(A_T, i, mask, config.mask_zeros, n, tmp);
+                    } else {
+                        detail::list_holdout_row(A, i, mask, config.mask_zeros, n, tmp);
+                    }
+                    mask_cache.row[static_cast<size_t>(i)].assign(tmp.begin(), tmp.end());
+                }
+            }
+            mask_cache.active = true;
+        }
+    }
 
     // ------------------------------------------------------------------
     // 5. Iteration loop
@@ -379,161 +547,143 @@ template<typename Resource, typename Scalar, typename MatrixType>
 
         auto t_iter_start = tick();
 
+        // ZI: after the first iteration the solves read the imputed matrix
+        const bool use_imputed = is_zi && iter > 0;
+
+        // NB size r, indexed by row of A unless dispersion is per column
+        const Scalar* nb_by_row =
+            (is_nb && config.gp_dispersion != DispersionMode::PER_COL)
+                ? nb_size_vec.data() : nullptr;
+        const Scalar* nb_by_col =
+            (is_nb && config.gp_dispersion == DispersionMode::PER_COL)
+                ? nb_size_vec.data() : nullptr;
+
         // ==============================================================
-        // H UPDATE — variant dispatch
+        // H UPDATE
         // ==============================================================
 
         const auto h_mode = nmf::variant::h_update_mode(config);
 
-        if (h_mode == nmf::variant::HUpdateMode::PROJECTIVE) {
-            // Projective: H = diag(d) · W_T · A (full matrix, no CV holdout for H)
-            nmf::variant::projective_h_update(
-                W_T, H, d,
-                [&](const DenseMatrix<Scalar>& factor, DenseMatrix<Scalar>& result) {
-                    if constexpr (is_sparse_v<MatrixType>) {
-                        result.resize(factor.rows(), n);
-                        result.setZero();
-                        for (int jj = 0; jj < n; ++jj)
-                            for (typename MatrixType::InnerIterator it(A, jj); it; ++it)
-                                result.col(jj).noalias() += it.value() * factor.col(it.row());
-                    } else {
-                        result.noalias() = factor * A;
-                    }
-                },
-                config.norm_type);
-
-        } else if (h_mode == nmf::variant::HUpdateMode::SYMMETRIC_SKIP) {
+        if (h_mode == nmf::variant::HUpdateMode::SYMMETRIC_SKIP) {
             // Symmetric: set H = W_T for use as factor in W-update
             nmf::variant::symmetric_enforce_h(H, W_T);
 
         } else {
-            // Standard CV H-update: per-column with Gram correction
+            // Standard CV H-update: one solve per column on its train entries
 
-        // Full Gram: G = W_T · W_T^T
-        primitives::gram<Resource>(W_T, G);
-        G.diagonal().array() += static_cast<Scalar>(1e-15);
+            // Put H on the scale of the variable being solved (A ≈ W_T^T H):
+            // it is both the warm start and the reference point of the graph
+            // and L21 penalties.
+            nmf::variant::apply_scaling(H, d);
 
-        // Apply CV features (L2 + Tier 2) to the full Gram
-        nmf::variant::apply_h_cv_features(G, H, config);
+            // Penalties from the previous iterate, before any column is
+            // overwritten (no reads of H inside the parallel loop other than
+            // each column's own warm start).
+            G_reg_H.setZero(k, k);
+            nmf::variant::build_column_penalty(G_reg_H, H, config.H, cp_H, true, false);
+
+            if (!use_irls && !missing_zeros) {
+                // Full Gram: G = W_T · W_T^T, corrected per column below
+                primitives::gram<Resource>(W_T, G);
+                G.diagonal().array() += static_cast<Scalar>(1e-15);
+                G += G_reg_H;
+            }
+
+            auto solve_h_col = [&](const auto& M, int j,
+                                   detail::CVWorkspace<Scalar>& ws) {
+                // Held-out rows of this column: cached list, or from the hash.
+                // (The imputed matrix has its own set of observed entries, so
+                // it always takes the hash route.)
+                const std::vector<int>* held = &ws.test_idx;
+                if (mask_cache.active && !use_imputed) {
+                    held = &mask_cache.col[static_cast<size_t>(j)];
+                } else {
+                    detail::list_holdout_col(M, j, mask, config.mask_zeros, m, ws.test_idx);
+                }
+                detail::rhs_excluding_col(M, W_T, j, *held, ws.b);
+
+                // User mask: exclude masked entries from b and from the Gram
+                const std::vector<int>* excl = held;
+                if (use_mask) {
+                    detail::adjust_rhs_for_user_mask_h(
+                        M, W_T, *config.mask, j, ws.b, *held, ws.excluded_idx);
+                    excl = &ws.excluded_idx;
+                }
+
+                ws.x = H.col(j);
+
+                if (use_irls) {
+                    // Target and graph terms enter the weighted system itself
+                    const Scalar* b_reg =
+                        cp_H.has_B() ? cp_H.B_add.col(j).data() : nullptr;
+                    const Scalar ridge_col = cp_H.has_ridge() ? cp_H.ridge(j) : Scalar(0);
+                    const Scalar theta_col = nb_by_col ? nb_by_col[j] : Scalar(0);
+                    detail::irls_solve_col_cv(
+                        M, W_T, j, ws.x, *excl, config.mask_zeros,
+                        irls_loss, config, G_reg_H, b_reg, ridge_col,
+                        theta_col, nb_by_row, m, ws);
+                } else {
+                    bool allow_cholesky = true;
+                    bool has_data = true;
+                    if (missing_zeros) {
+                        const int cnt = detail::gram_from_observed_col(
+                            M, W_T, j, *excl, ws.G_local, ws.buf);
+                        ws.G_local += G_reg_H;
+                        ws.G_local.diagonal().array() += static_cast<Scalar>(1e-15);
+                        allow_cholesky = (cnt >= k);
+                        has_data = (cnt > 0);
+                    } else {
+                        detail::apply_gram_correction(G, W_T, *excl, ws.G_local, ws.buf);
+                    }
+                    // Column-specific penalty terms
+                    if (cp_H.has_B())
+                        ws.b.noalias() += cp_H.B_add.col(j);
+                    Scalar ridge_col = cp_H.has_ridge() ? cp_H.ridge(j) : Scalar(0);
+                    bool is_zero = false;
+                    if (cp_H.has_group()) {
+                        Scalar g_ref = ws.G_local.diagonal().maxCoeff();
+                        if (!(g_ref > Scalar(0))) g_ref = Scalar(1);
+                        ridge_col += features::l21_column_ridge(
+                            ws.b.data(), k, config.H.L1, config.H.nonneg,
+                            config.H.L21, cp_H.group_norm(j), g_ref, is_zero);
+                    }
+
+                    if (is_zero || (!has_data && !cp_H.has_B())) {
+                        ws.x.setZero();
+                    } else {
+                        if (ridge_col > Scalar(0))
+                            ws.G_local.diagonal().array() += ridge_col;
+                        detail::cv_solve_col(ws.G_local, ws.b, ws.x,
+                                             config.H.L1, config.H.nonneg,
+                                             config.H.upper_bound,
+                                             config, ws.scratch, allow_cholesky);
+                    }
+                }
+                H.col(j) = ws.x;
+            };
 
 #ifdef _OPENMP
-        #pragma omp parallel num_threads(actual_threads)
-        {
-            DenseVector<Scalar> b_local(k);
-            DenseVector<Scalar> x_local(k);
-            DenseMatrix<Scalar> G_local_thr(k, k);
-            DenseMatrix<Scalar> W_test_thr(k, est_max_test);
-            std::vector<int> test_rows_local;
-            test_rows_local.reserve(static_cast<size_t>(est_max_test));
-            std::vector<int> excluded_rows_local;
-
-            #pragma omp for schedule(dynamic, 64)
-            for (int j = 0; j < n; ++j) {
-                // ZI path (iter > 0): compute RHS from dense A_imputed
-                if (is_zi && iter > 0) {
-                    detail::compute_train_rhs(A_imputed, W_T, j, mask, b_local, test_rows_local, config.mask_zeros, m);
-                } else {
-                    detail::compute_train_rhs(A, W_T, j, mask, b_local, test_rows_local, config.mask_zeros, m);
-                }
-
-                // User mask adjustment: exclude masked entries from b and extend Gram correction
-                const auto& gram_rows = use_mask
-                    ? (detail::adjust_rhs_for_user_mask_h(
-                           A, W_T, *config.mask, j, b_local, test_rows_local, excluded_rows_local),
-                       excluded_rows_local)
-                    : test_rows_local;
-
-                if (config.requires_irls()) {
-                    // IRLS path: builds weighted Gram per column
-                    x_local = H.col(j);
-                    if (is_zi && iter > 0) {
-                        detail::irls_solve_col_cv(A_imputed, W_T, j, x_local, gram_rows,
-                            config.mask_zeros, config.loss, config, H, m);
-                    } else {
-                        detail::irls_solve_col_cv(A, W_T, j, x_local, gram_rows,
-                            config.mask_zeros, config.loss, config, H, m);
-                    }
-                    H.col(j) = x_local;
-                } else {
-                    // MSE path: Gram correction + solver dispatch
-                    detail::apply_gram_correction(
-                        G, W_T, gram_rows, G_local_thr, W_test_thr);
-
-                    x_local = H.col(j);
-                    if (config.solver_mode == 1) {
-                        primitives::detail::cholesky_clip_col(
-                            G_local_thr, b_local.data(), x_local.data(), k,
-                            config.H.L1, Scalar(0), config.H.nonneg,
-                            config.cd_max_iter, config.cd_tol);
-                    } else {
-                        primitives::detail::cd_nnls_col_fixed(
-                            G_local_thr, b_local.data(), x_local.data(), k,
-                            config.H.L1, Scalar(0), config.H.nonneg,
-                            config.cd_max_iter);
-                    }
-                    H.col(j) = x_local;
-                }
-            }
-        }
-#else
-        std::vector<int> test_rows;
-        test_rows.reserve(static_cast<size_t>(est_max_test));
-        std::vector<int> excluded_rows;
-
-        for (int j = 0; j < n; ++j) {
-            if (is_zi && iter > 0) {
-                detail::compute_train_rhs(A_imputed, W_T, j, mask, b, test_rows, config.mask_zeros, m);
-            } else {
-                detail::compute_train_rhs(A, W_T, j, mask, b, test_rows, config.mask_zeros, m);
-            }
-
-            // User mask adjustment
-            const auto& gram_rows = use_mask
-                ? (detail::adjust_rhs_for_user_mask_h(
-                       A, W_T, *config.mask, j, b, test_rows, excluded_rows),
-                   excluded_rows)
-                : test_rows;
-
-            if (config.requires_irls()) {
-                x = H.col(j);
-                if (is_zi && iter > 0) {
-                    detail::irls_solve_col_cv(A_imputed, W_T, j, x, gram_rows,
-                        config.mask_zeros, config.loss, config, H, m);
-                } else {
-                    detail::irls_solve_col_cv(A, W_T, j, x, gram_rows,
-                        config.mask_zeros, config.loss, config, H, m);
-                }
-                H.col(j) = x;
-            } else {
-                detail::apply_gram_correction(G, W_T, gram_rows, G_local, W_test_buf);
-
-                x = H.col(j);
-                if (config.solver_mode == 1) {
-                    primitives::detail::cholesky_clip_col(
-                        G_local, b.data(), x.data(), k,
-                        config.H.L1, Scalar(0), config.H.nonneg,
-                        config.cd_max_iter, config.cd_tol);
-                } else {
-                    primitives::detail::cd_nnls_col_fixed(
-                        G_local, b.data(), x.data(), k,
-                        config.H.L1, Scalar(0), config.H.nonneg,
-                        config.cd_max_iter);
-                }
-                H.col(j) = x;
-            }
-        }
+            #pragma omp parallel num_threads(actual_threads)
 #endif
+            {
+                detail::CVWorkspace<Scalar> ws(k, est_max_test);
+#ifdef _OPENMP
+                #pragma omp for schedule(dynamic, 16)
+#endif
+                for (int j = 0; j < n; ++j) {
+                    if (use_imputed) {
+                        solve_h_col(A_imputed, j, ws);
+                    } else {
+                        solve_h_col(A, j, ws);
+                    }
+                }
+            }
 
-        // Post-NNLS bounds and angular on H
-        if (config.H.upper_bound > 0)
-            features::apply_upper_bound(H, config.H.upper_bound);
-        if (config.H.angular > 0)
-            features::apply_angular_posthoc(H, config.H.angular);
+            // Angular on H (the upper bound is enforced inside the solver)
+            if (config.H.angular > 0)
+                features::apply_angular_posthoc(H, config.H.angular);
 
-        }  // end standard H update
-
-        // Normalize H → d (skip for projective [done in helper] and symmetric [d from W-norm])
-        if (h_mode == nmf::variant::HUpdateMode::STANDARD) {
+            // Normalize H → d
             if (config.norm_type == NormType::None) {
                 d.setOnes();
             } else {
@@ -545,303 +695,138 @@ template<typename Resource, typename Scalar, typename MatrixType>
                     H.row(i) /= d(i);
                 }
             }
-        }
+        }  // end standard H update
 
         auto t_after_h = tick();
         t_h_update_us += elapsed_us(t_iter_start, t_after_h);
 
         // ==============================================================
-        // W UPDATE — per-row with Gram correction (using A^T)
+        // W UPDATE — one solve per row on its train entries (using A^T)
         // ==============================================================
 
-        // Pre-compute whether we need loss and train loss this iteration
-        // (must know BEFORE W-update to decide whether to accumulate B_W_full)
-        const bool need_loss_this_iter_pre =
-            (config.cv_patience > 0) || config.track_loss_history ||
-            config.verbose || (iter == 0) || (iter == config.max_iter - 1);
-        const bool need_train_loss_pre = need_loss_this_iter_pre &&
-            !config.requires_irls() && !use_mask &&
-            (config.track_train_loss || config.verbose ||
-             iter == 0 || iter == config.max_iter - 1);
+        // Put W on the scale of the variable being solved (A ≈ W^T H with H
+        // normalized): warm start and penalty reference point.
+        nmf::variant::apply_scaling(W_T, d);
 
-        // Use normalized H directly for well-conditioned Gram
+        // Penalties from the previous iterate of W
+        G_reg_W.setZero(k, k);
+        nmf::variant::build_column_penalty(G_reg_W, W_T, config.W, cp_W, true, false);
 
-        // Full Gram: G = H · H^T
-        primitives::gram<Resource>(H, G);
-
-        // Save unmodified G_H for Gram trick loss computation
+        // Unpenalized Gram for the Gram-trick train loss
         DenseMatrix<Scalar> G_H_saved;
-        if (need_train_loss_pre) {
-            G_H_saved = G;  // k×k copy — cheap
+        if (!use_irls && !missing_zeros) {
+            // Full Gram of the (normalized) H: G = H · H^T, corrected per row below
+            primitives::gram<Resource>(H, G);
+            if (gram_train_loss) {
+                G_H_saved = G;  // k×k copy — cheap
+            }
+            G.diagonal().array() += static_cast<Scalar>(1e-15);
+            G += G_reg_W;
         }
 
-        G.diagonal().array() += static_cast<Scalar>(1e-15);
-
-        // Apply CV features (L2 + Tier 2) to the full Gram
-        nmf::variant::apply_w_cv_features(G, W_T, config);
-
-        // Allocate B_W_full for Gram trick loss reuse
-        // B_W_full.col(i) = H · A^T.col(i) = sum_j A(i,j) * H.col(j) (ALL entries)
+        // B_W_full.col(i) = H · A(i,:)^T over ALL entries of row i, reused by
+        // the Gram-trick train loss
         DenseMatrix<Scalar> B_W_full;
-        if (need_train_loss_pre) {
+        if (gram_train_loss) {
             B_W_full.resize(k, m);
             B_W_full.setZero();
         }
 
+        auto solve_w_row = [&](const auto& M, int i,
+                               detail::CVWorkspace<Scalar>& ws) {
+            // Held-out columns of this row: cached list, or from the hash
+            const std::vector<int>* held = &ws.test_idx;
+            if (mask_cache.active && !use_imputed) {
+                held = &mask_cache.row[static_cast<size_t>(i)];
+            } else {
+                detail::list_holdout_row(M, i, mask, config.mask_zeros, n, ws.test_idx);
+            }
+            detail::rhs_excluding_row(M, H, i, *held, ws.b,
+                                      gram_train_loss ? &ws.b_test : nullptr);
+
+            if (gram_train_loss)
+                B_W_full.col(i) = ws.b + ws.b_test;
+
+            const std::vector<int>* excl = held;
+            if (use_mask) {
+                detail::adjust_rhs_for_user_mask_w(
+                    M, H, mask_T, i, ws.b, *held, ws.excluded_idx);
+                excl = &ws.excluded_idx;
+            }
+
+            ws.x = W_T.col(i);
+
+            if (use_irls) {
+                const Scalar* b_reg =
+                    cp_W.has_B() ? cp_W.B_add.col(i).data() : nullptr;
+                const Scalar ridge_col = cp_W.has_ridge() ? cp_W.ridge(i) : Scalar(0);
+                const Scalar theta_row = nb_by_row ? nb_by_row[i] : Scalar(0);
+                detail::irls_solve_row_cv(
+                    M, H, i, ws.x, *excl, config.mask_zeros,
+                    irls_loss, config, G_reg_W, b_reg, ridge_col,
+                    theta_row, nb_by_col, n, ws);
+            } else {
+                bool allow_cholesky = true;
+                bool has_data = true;
+                if (missing_zeros) {
+                    const int cnt = detail::gram_from_observed_row(
+                        M, H, i, *excl, ws.G_local, ws.buf);
+                    ws.G_local += G_reg_W;
+                    ws.G_local.diagonal().array() += static_cast<Scalar>(1e-15);
+                    allow_cholesky = (cnt >= k);
+                    has_data = (cnt > 0);
+                } else {
+                    detail::apply_gram_correction(G, H, *excl, ws.G_local, ws.buf);
+                }
+                // Row-specific penalty terms
+                if (cp_W.has_B())
+                    ws.b.noalias() += cp_W.B_add.col(i);
+                Scalar ridge_col = cp_W.has_ridge() ? cp_W.ridge(i) : Scalar(0);
+                bool is_zero = false;
+                if (cp_W.has_group()) {
+                    Scalar g_ref = ws.G_local.diagonal().maxCoeff();
+                    if (!(g_ref > Scalar(0))) g_ref = Scalar(1);
+                    ridge_col += features::l21_column_ridge(
+                        ws.b.data(), k, config.W.L1, config.W.nonneg,
+                        config.W.L21, cp_W.group_norm(i), g_ref, is_zero);
+                }
+
+                if (is_zero || (!has_data && !cp_W.has_B())) {
+                    ws.x.setZero();
+                } else {
+                    if (ridge_col > Scalar(0))
+                        ws.G_local.diagonal().array() += ridge_col;
+                    detail::cv_solve_col(ws.G_local, ws.b, ws.x,
+                                         config.W.L1, config.W.nonneg,
+                                         config.W.upper_bound,
+                                         config, ws.scratch, allow_cholesky);
+                }
+            }
+            W_T.col(i) = ws.x;
+        };
+
 #ifdef _OPENMP
         #pragma omp parallel num_threads(actual_threads)
-        {
-            DenseVector<Scalar> b_local_W(k);
-            DenseVector<Scalar> x_local_W(k);
-            DenseMatrix<Scalar> G_local_W_thr(k, k);
-            DenseMatrix<Scalar> H_test_thr(k, est_max_test);
-            std::vector<int> test_cols_local;
-            test_cols_local.reserve(static_cast<size_t>(est_max_test));
-            std::vector<int> excluded_cols_local;
-            DenseVector<Scalar> b_full_W(k);  // full RHS (train + test) for B_W_full
-
-            #pragma omp for schedule(dynamic, 64)
-            for (int i = 0; i < m; ++i) {
-                if (is_zi && iter > 0) {
-                    detail::compute_train_rhs_W(
-                        A_imputed, H, i, mask, b_local_W, test_cols_local,
-                        config.mask_zeros, n);
-                } else if constexpr (is_sparse_v<MatrixType>) {
-                    detail::compute_train_rhs_W(
-                        A_T, H, i, mask, b_local_W, test_cols_local,
-                        config.mask_zeros, n);
-                } else {
-                    detail::compute_train_rhs_W(
-                        A, H, i, mask, b_local_W, test_cols_local,
-                        config.mask_zeros, n);
-                }
-
-                // Accumulate full RHS for Gram trick loss (train + test entries)
-                if (need_train_loss_pre && !test_cols_local.empty()) {
-                    b_full_W = b_local_W;
-                    if constexpr (is_sparse_v<MatrixType>) {
-                        // Add back held-out contributions from A_T column i
-                        for (int idx : test_cols_local) {
-                            if (config.mask_zeros) {
-                                for (typename SparseMatrix<Scalar>::InnerIterator it(A_T, i); it; ++it) {
-                                    if (it.row() == idx) {
-                                        b_full_W.noalias() += it.value() * H.col(idx);
-                                        break;
-                                    }
-                                }
-                            } else {
-                                Scalar val = 0;
-                                for (typename SparseMatrix<Scalar>::InnerIterator it(A_T, i); it; ++it) {
-                                    if (it.row() == idx) { val = it.value(); break; }
-                                    if (it.row() > idx) break;
-                                }
-                                if (val != Scalar(0)) {
-                                    b_full_W.noalias() += val * H.col(idx);
-                                }
-                            }
-                        }
-                    } else {
-                        for (int idx : test_cols_local) {
-                            Scalar val = A(i, idx);
-                            if (val != Scalar(0)) {
-                                b_full_W.noalias() += val * H.col(idx);
-                            }
-                        }
-                    }
-                    B_W_full.col(i) = b_full_W;
-                } else if (need_train_loss_pre) {
-                    B_W_full.col(i) = b_local_W;  // no test entries for this row
-                }
-
-                // User mask adjustment for W-update
-                const auto& gram_cols = use_mask
-                    ? (([&]() {
-                           if constexpr (is_sparse_v<MatrixType>) {
-                               detail::adjust_rhs_for_user_mask_w(
-                                   A_T, H, mask_T, i, b_local_W, test_cols_local, excluded_cols_local);
-                           } else {
-                               detail::adjust_rhs_for_user_mask_w(
-                                   A, H, mask_T, i, b_local_W, test_cols_local, excluded_cols_local);
-                           }
-                       }()),
-                       excluded_cols_local)
-                    : test_cols_local;
-
-                if (config.requires_irls()) {
-                    // IRLS path: builds weighted Gram per row
-                    x_local_W = W_T.col(i);
-                    if (is_zi && iter > 0) {
-                        detail::irls_solve_row_cv(
-                            A_imputed, H, i, x_local_W, gram_cols,
-                            config.mask_zeros, config.loss,
-                            config, W_T, n);
-                    } else if constexpr (is_sparse_v<MatrixType>) {
-                        detail::irls_solve_row_cv(
-                            A_T, H, i, x_local_W, gram_cols,
-                            config.mask_zeros, config.loss,
-                            config, W_T, n);
-                    } else {
-                        detail::irls_solve_row_cv(
-                            A, H, i, x_local_W, gram_cols,
-                            config.mask_zeros, config.loss,
-                            config, W_T, n);
-                    }
-                    W_T.col(i) = x_local_W;
-                } else {
-                    // MSE path: Gram correction + solver dispatch
-                    G_local_W_thr = G;
-                    if (!gram_cols.empty()) {
-                        const int n_test = static_cast<int>(gram_cols.size());
-                        for (int idx = 0; idx < n_test; ++idx) {
-                            H_test_thr.col(idx) = H.col(gram_cols[idx]);
-                        }
-                        auto H_sub = H_test_thr.leftCols(n_test);
-                        G_local_W_thr.template selfadjointView<Eigen::Lower>()
-                            .rankUpdate(H_sub, Scalar(-1));
-                        G_local_W_thr.template triangularView<Eigen::Upper>() =
-                            G_local_W_thr.transpose();
-                    }
-
-                    x_local_W = W_T.col(i);
-                    if (config.solver_mode == 1) {
-                        primitives::detail::cholesky_clip_col(
-                            G_local_W_thr, b_local_W.data(), x_local_W.data(), k,
-                            config.W.L1, Scalar(0), config.W.nonneg,
-                            config.cd_max_iter, config.cd_tol);
-                    } else {
-                        primitives::detail::cd_nnls_col_fixed(
-                            G_local_W_thr, b_local_W.data(), x_local_W.data(), k,
-                            config.W.L1, Scalar(0), config.W.nonneg,
-                            config.cd_max_iter);
-                    }
-                    W_T.col(i) = x_local_W;
-                }
-            }
-        }
-#else
-        std::vector<int> test_cols;
-        test_cols.reserve(static_cast<size_t>(est_max_test));
-        std::vector<int> excluded_cols_serial;
-        DenseVector<Scalar> b_full_serial(k);  // full RHS for B_W_full
-
-        for (int i = 0; i < m; ++i) {
-            if (is_zi && iter > 0) {
-                detail::compute_train_rhs_W(
-                    A_imputed, H, i, mask, b, test_cols,
-                    config.mask_zeros, n);
-            } else if constexpr (is_sparse_v<MatrixType>) {
-                detail::compute_train_rhs_W(
-                    A_T, H, i, mask, b, test_cols,
-                    config.mask_zeros, n);
-            } else {
-                detail::compute_train_rhs_W(
-                    A, H, i, mask, b, test_cols,
-                    config.mask_zeros, n);
-            }
-
-            // Accumulate full RHS for Gram trick loss (train + test entries)
-            if (need_train_loss_pre && !test_cols.empty()) {
-                b_full_serial = b;
-                if constexpr (is_sparse_v<MatrixType>) {
-                    for (int jj : test_cols) {
-                        if (config.mask_zeros) {
-                            for (typename SparseMatrix<Scalar>::InnerIterator it(A_T, i); it; ++it) {
-                                if (it.row() == jj) {
-                                    b_full_serial.noalias() += it.value() * H.col(jj);
-                                    break;
-                                }
-                            }
-                        } else {
-                            Scalar val = 0;
-                            for (typename SparseMatrix<Scalar>::InnerIterator it(A_T, i); it; ++it) {
-                                if (it.row() == jj) { val = it.value(); break; }
-                                if (it.row() > jj) break;
-                            }
-                            if (val != Scalar(0)) {
-                                b_full_serial.noalias() += val * H.col(jj);
-                            }
-                        }
-                    }
-                } else {
-                    for (int jj : test_cols) {
-                        Scalar val = A(i, jj);
-                        if (val != Scalar(0)) {
-                            b_full_serial.noalias() += val * H.col(jj);
-                        }
-                    }
-                }
-                B_W_full.col(i) = b_full_serial;
-            } else if (need_train_loss_pre) {
-                B_W_full.col(i) = b;
-            }
-
-            // User mask adjustment for W-update
-            const auto& gram_cols = use_mask
-                ? (([&]() {
-                       if constexpr (is_sparse_v<MatrixType>) {
-                           detail::adjust_rhs_for_user_mask_w(
-                               A_T, H, mask_T, i, b, test_cols, excluded_cols_serial);
-                       } else {
-                           detail::adjust_rhs_for_user_mask_w(
-                               A, H, mask_T, i, b, test_cols, excluded_cols_serial);
-                       }
-                   }()),
-                   excluded_cols_serial)
-                : test_cols;
-
-            if (config.requires_irls()) {
-                x = W_T.col(i);
-                if (is_zi && iter > 0) {
-                    detail::irls_solve_row_cv(
-                        A_imputed, H, i, x, gram_cols,
-                        config.mask_zeros, config.loss,
-                        config, W_T, n);
-                } else if constexpr (is_sparse_v<MatrixType>) {
-                    detail::irls_solve_row_cv(
-                        A_T, H, i, x, gram_cols,
-                        config.mask_zeros, config.loss,
-                        config, W_T, n);
-                } else {
-                    detail::irls_solve_row_cv(
-                        A, H, i, x, gram_cols,
-                        config.mask_zeros, config.loss,
-                        config, W_T, n);
-                }
-                W_T.col(i) = x;
-            } else {
-                G_local = G;
-                if (!gram_cols.empty()) {
-                    const int n_tc = static_cast<int>(gram_cols.size());
-                    for (int idx = 0; idx < n_tc; ++idx) {
-                        W_test_buf.col(idx) = H.col(gram_cols[idx]);
-                    }
-                    auto H_sub = W_test_buf.leftCols(n_tc);
-                    G_local.template selfadjointView<Eigen::Lower>()
-                        .rankUpdate(H_sub, Scalar(-1));
-                    G_local.template triangularView<Eigen::Upper>() =
-                        G_local.transpose();
-                }
-
-                x = W_T.col(i);
-                if (config.solver_mode == 1) {
-                    primitives::detail::cholesky_clip_col(
-                        G_local, b.data(), x.data(), k,
-                        config.W.L1, Scalar(0), config.W.nonneg,
-                        config.cd_max_iter, config.cd_tol);
-                } else {
-                    primitives::detail::cd_nnls_col_fixed(
-                        G_local, b.data(), x.data(), k,
-                        config.W.L1, Scalar(0), config.W.nonneg,
-                        config.cd_max_iter);
-                }
-                W_T.col(i) = x;
-            }
-        }
 #endif
+        {
+            detail::CVWorkspace<Scalar> ws(k, est_max_test);
+#ifdef _OPENMP
+            #pragma omp for schedule(dynamic, 16)
+#endif
+            for (int i = 0; i < m; ++i) {
+                if (use_imputed) {
+                    solve_w_row(A_imputed, i, ws);
+                } else {
+                    if constexpr (is_sparse_v<MatrixType>) {
+                        solve_w_row(A_T, i, ws);
+                    } else {
+                        solve_w_row(A, i, ws);
+                    }
+                }
+            }
+        }
 
-        // Post-NNLS bounds and angular on W
-        if (config.W.upper_bound > 0)
-            features::apply_upper_bound(W_T, config.W.upper_bound);
+        // Angular on W (the upper bound is enforced inside the solver)
         if (config.W.angular > 0)
             features::apply_angular_posthoc(W_T, config.W.angular);
 
@@ -1342,210 +1327,209 @@ template<typename Resource, typename Scalar, typename MatrixType>
         t_w_update_us += elapsed_us(t_after_h, t_after_w);
 
         // ==============================================================
+        // Convergence measure: 1 - cosine similarity of successive W
+        // ==============================================================
+        // Convergence is judged on the change of the fitted factor, which is
+        // a property of the training fit alone. The test loss only drives
+        // early stopping (cv_patience), never the tolerance check.
+        double w_change = std::numeric_limits<double>::quiet_NaN();
+        bool tol_converged = false;
+        if (iter > 0 && W_prev.size() == W_T.size()) {
+            double num = 0.0, n_new = 0.0, n_old = 0.0;
+            const Scalar* p_new = W_T.data();
+            const Scalar* p_old = W_prev.data();
+            const Eigen::Index sz = W_T.size();
+            for (Eigen::Index q = 0; q < sz; ++q) {
+                const double a_new = static_cast<double>(p_new[q]);
+                const double a_old = static_cast<double>(p_old[q]);
+                num += a_new * a_old;
+                n_new += a_new * a_new;
+                n_old += a_old * a_old;
+            }
+            const double den = std::sqrt(n_new) * std::sqrt(n_old);
+            w_change = (den > 0.0) ? std::max(0.0, 1.0 - num / den) : 0.0;
+            tol_converged = w_change < static_cast<double>(config.tol);
+        }
+        W_prev = W_T;
+
+        // ==============================================================
         // Compute train and test loss
         // ==============================================================
 
-        // Determine if we need loss this iteration
-        // Loss is needed for: (1) patience-based early stopping, (2) loss history, (3) verbose
+        // Loss is needed for: (1) early stopping, (2) loss history, (3) verbose,
+        // (4) the first iteration and the last one (max_iter or convergence),
+        // so that the returned model always has a test loss.
         const bool need_loss_this_iter =
-            (config.cv_patience > 0) ||               // patience-based early stopping needs test loss
-            config.track_loss_history ||               // loss history requested
-            config.verbose ||                          // verbose prints loss
-            (iter == 0) ||                             // always compute first iteration
-            (iter == config.max_iter - 1);             // always compute last iteration
+            (config.cv_patience > 0) ||
+            config.track_loss_history ||
+            config.verbose ||
+            (iter == 0) ||
+            (iter == config.max_iter - 1) ||
+            tol_converged;
 
-        // We always need test_loss for patience. We only need train_loss for
-        // loss_history/verbose/result reporting. The Gram trick for train loss
-        // is expensive, so skip it when track_train_loss is false.
-        const bool need_train_loss = need_loss_this_iter &&
-            (config.track_train_loss || config.verbose ||
-             iter == 0 || iter == config.max_iter - 1);
+        // Train loss only when it was asked for (track_train_loss or verbose).
+        // When it is not computed it is reported as NaN, never as 0.
+        const bool need_train_loss = need_loss_this_iter && want_train_loss;
 
-        Scalar test_sq_error = 0;
-        Scalar train_sq_error = 0;
+        Scalar train_loss = nan_val;
+        Scalar test_loss = nan_val;
         int64_t n_test_total = 0;
         int64_t n_train_total = 0;
-        Scalar train_loss = 0;
-        Scalar test_loss = 0;
 
         if (need_loss_this_iter) {
 
-        // Apply d scaling to W_T for loss: recon = W_T^T · diag(d) · H = W_Td^T · H
-        DenseMatrix<Scalar> W_Td_loss = W_T;
-        for (int i = 0; i < k; ++i) W_Td_loss.row(i) *= d(i);
+            // Model used for the loss: W_T^T · diag(d) · H
+            DenseMatrix<Scalar> W_Td_loss = W_T;
+            for (int r = 0; r < k; ++r) W_Td_loss.row(r) *= d(r);
 
-        if (config.requires_irls() || use_mask) {
-            // Non-MSE or masked: compute train and test loss explicitly per element
-            // When use_mask, we skip the Gram trick because it includes masked entries
-            FactorNet::LossConfig<Scalar> loss_cfg = config.loss;
+            const FactorNet::LossConfig<Scalar> loss_cfg = config.loss;
+            const bool disp_per_col = (config.gp_dispersion == DispersionMode::PER_COL);
+            // Entry-wise train loss (the Gram trick covers the other case)
+            const bool accumulate_train = need_train_loss && explicit_loss;
+
+            // Per-column partial sums in double, added up serially afterwards
+            // so that the result does not depend on thread scheduling.
+            std::vector<double> col_test(static_cast<size_t>(n), 0.0);
+            std::vector<double> col_train(static_cast<size_t>(n), 0.0);
+            std::vector<int64_t> col_ntest(static_cast<size_t>(n), 0);
+            std::vector<int64_t> col_ntrain(static_cast<size_t>(n), 0);
+
 #ifdef _OPENMP
-            #pragma omp parallel for schedule(dynamic, 64) num_threads(actual_threads) \
-                reduction(+:test_sq_error, train_sq_error, n_test_total, n_train_total)
+            #pragma omp parallel for schedule(dynamic, 64) num_threads(actual_threads)
 #endif
             for (int j = 0; j < n; ++j) {
-                DenseVector<Scalar> wdh_j = W_Td_loss.transpose() * H.col(j);
+                double s_test = 0.0, s_train = 0.0;
+                int64_t c_test = 0, c_train = 0;
 
-                if constexpr (is_sparse_v<MatrixType>) {
-                    if (config.mask_zeros) {
+                // Is row i of this column held out? Cached list (rows are
+                // visited in ascending order) or the hash.
+                const std::vector<int>* held_rows =
+                    mask_cache.active ? &mask_cache.col[static_cast<size_t>(j)] : nullptr;
+                size_t held_pos = 0;
+                auto is_held = [&](int i) -> bool {
+                    if (held_rows == nullptr) return mask.is_holdout(i, j);
+                    const std::vector<int>& hl = *held_rows;
+                    while (held_pos < hl.size() && hl[held_pos] < i) ++held_pos;
+                    return held_pos < hl.size() && hl[held_pos] == i;
+                };
+
+                auto visit = [&](int i, Scalar val, bool is_test) {
+                    if (use_mask && detail::is_user_masked_h(i, j, *config.mask))
+                        return;
+                    if (!is_test && !accumulate_train) return;
+
+                    const Scalar pred = W_Td_loss.col(i).dot(H.col(j));
+                    // Fitted dispersion of this entry: GP theta (per row),
+                    // NB size r (per row or per column)
+                    Scalar disp = Scalar(0);
+                    if (is_gp) {
+                        disp = theta_vec(i);
+                    } else if (is_nb) {
+                        disp = nb_size_vec(disp_per_col ? j : i);
+                    }
+                    const double loss_val = static_cast<double>(
+                        compute_loss(val, pred, loss_cfg, disp));
+                    if (is_test) {
+                        s_test += loss_val;
+                        ++c_test;
+                    } else {
+                        s_train += loss_val;
+                        ++c_train;
+                    }
+                };
+
+                if (held_rows != nullptr && !accumulate_train) {
+                    // Only the held-out entries are needed: walk the list
+                    if constexpr (is_sparse_v<MatrixType>) {
+                        typename MatrixType::InnerIterator it(A, j);
+                        for (int i : *held_rows) {
+                            while (it && it.row() < i) ++it;
+                            Scalar val = 0;
+                            if (it && it.row() == i)
+                                val = static_cast<Scalar>(it.value());
+                            visit(i, val, true);
+                        }
+                    } else {
+                        for (int i : *held_rows) visit(i, A(i, j), true);
+                    }
+                } else if constexpr (is_sparse_v<MatrixType>) {
+                    if (missing_zeros) {
+                        // Zeros are missing: only stored entries are data
                         for (typename MatrixType::InnerIterator it(A, j); it; ++it) {
-                            if (use_mask && detail::is_user_masked_h(it.row(), j, *config.mask))
-                                continue;
-                            Scalar pred = wdh_j(it.row());
-                            Scalar th = is_gp ? theta_vec(it.row()) : Scalar(0);
-                            Scalar loss_val = compute_loss(it.value(), pred, loss_cfg, th);
-                            if (mask.is_holdout(it.row(), j)) {
-                                test_sq_error += loss_val;
-                                n_test_total++;
-                            } else {
-                                train_sq_error += loss_val;
-                                n_train_total++;
-                            }
+                            const int i = static_cast<int>(it.row());
+                            visit(i, static_cast<Scalar>(it.value()), is_held(i));
                         }
                     } else {
                         typename MatrixType::InnerIterator it(A, j);
                         for (int i = 0; i < m; ++i) {
-                            if (use_mask && detail::is_user_masked_h(i, j, *config.mask)) {
-                                if (it && it.row() == i) ++it;
-                                continue;
+                            Scalar val = 0;
+                            if (it && it.row() == i) {
+                                val = static_cast<Scalar>(it.value());
+                                ++it;
                             }
-                            Scalar actual = 0;
-                            if (it && it.row() == i) { actual = it.value(); ++it; }
-                            Scalar pred = wdh_j(i);
-                            Scalar th = is_gp ? theta_vec(i) : Scalar(0);
-                            Scalar loss_val = compute_loss(actual, pred, loss_cfg, th);
-                            if (mask.is_holdout(i, j)) {
-                                test_sq_error += loss_val;
-                                n_test_total++;
-                            } else {
-                                train_sq_error += loss_val;
-                                n_train_total++;
-                            }
+                            visit(i, val, is_held(i));
                         }
                     }
                 } else {
                     for (int i = 0; i < m; ++i) {
-                        if (use_mask && detail::is_user_masked_h(i, j, *config.mask))
-                            continue;
-                        Scalar val = A(i, j);
-                        if (config.mask_zeros && val == Scalar(0)) continue;
-                        Scalar pred = wdh_j(i);
-                        Scalar th = is_gp ? theta_vec(i) : Scalar(0);
-                        Scalar loss_val = compute_loss(val, pred, loss_cfg, th);
-                        if (mask.is_holdout(i, j)) {
-                            test_sq_error += loss_val;
-                            n_test_total++;
-                        } else {
-                            train_sq_error += loss_val;
-                            n_train_total++;
-                        }
+                        const Scalar val = A(i, j);
+                        if (missing_zeros && val == Scalar(0)) continue;
+                        visit(i, val, is_held(i));
                     }
                 }
-            }
-        } else {
-            // MSE path: optimized test loss + optional train loss via Gram trick
 
-            // Compute test loss using per-entry dot products (avoiding full prediction vectors)
-            // Cost: O(m*n) mask checks + O(n_test * k) dot products
-            // vs old approach: O(m*n*k) for full prediction vectors
-#ifdef _OPENMP
-            #pragma omp parallel for schedule(dynamic, 64) num_threads(actual_threads) \
-                reduction(+:test_sq_error, n_test_total)
-#endif
+                col_test[static_cast<size_t>(j)] = s_test;
+                col_train[static_cast<size_t>(j)] = s_train;
+                col_ntest[static_cast<size_t>(j)] = c_test;
+                col_ntrain[static_cast<size_t>(j)] = c_train;
+            }
+
+            double test_sum = 0.0, train_sum = 0.0;
             for (int j = 0; j < n; ++j) {
-                if constexpr (is_sparse_v<MatrixType>) {
-                    if (config.mask_zeros) {
-                        // Only check non-zero entries; use dot product for predictions
-                        for (typename MatrixType::InnerIterator it(A, j); it; ++it) {
-                            if (mask.is_holdout(it.row(), j)) {
-                                Scalar pred = W_Td_loss.col(it.row()).dot(H.col(j));
-                                Scalar diff = it.value() - pred;
-                                test_sq_error += diff * diff;
-                                n_test_total++;
-                            }
-                        }
-                    } else {
-                        // Non-mask_zeros: test set includes zeros. Iterate all rows
-                        // but only compute dot product at held-out entries.
-                        typename MatrixType::InnerIterator it(A, j);
-                        for (int i = 0; i < m; ++i) {
-                            if (mask.is_holdout(i, j)) {
-                                Scalar actual = 0;
-                                if (it && it.row() == i) { actual = it.value(); ++it; }
-                                Scalar pred = W_Td_loss.col(i).dot(H.col(j));
-                                Scalar diff = actual - pred;
-                                test_sq_error += diff * diff;
-                                n_test_total++;
-                            } else {
-                                if (it && it.row() == i) ++it;
-                            }
-                        }
-                    }
-                } else {
-                    // Dense: iterate all entries, dot product only at held-out
-                    for (int i = 0; i < m; ++i) {
-                        Scalar val = A(i, j);
-                        if (config.mask_zeros && val == Scalar(0)) continue;
-                        if (mask.is_holdout(i, j)) {
-                            Scalar pred = W_Td_loss.col(i).dot(H.col(j));
-                            Scalar diff = val - pred;
-                            test_sq_error += diff * diff;
-                            n_test_total++;
-                        }
-                    }
-                }
+                test_sum += col_test[static_cast<size_t>(j)];
+                train_sum += col_train[static_cast<size_t>(j)];
+                n_test_total += col_ntest[static_cast<size_t>(j)];
+                n_train_total += col_ntrain[static_cast<size_t>(j)];
             }
 
-            // Train loss via Gram trick — REUSES B_W_full from W-update
-            // B_W_full.col(i) = H · A^T.col(i) was accumulated during W-update
-            //
-            // Total loss = trAtA - 2·cross + recon where:
-            //   cross = Σ_r d(r) · W_T.row(r) · B_W_full.row(r)^T   — O(k·m)
-            //   recon = Σ_{r,s} d(r)·d(s) · G_W_new(r,s) · G_H_saved(r,s) — O(k²)
-            //   G_W_new = W_T · W_T^T  — O(k²·m)
-            //   G_H_saved was saved before W-update regularization  — already O(k²)
-            //
-            // This avoids the previous O(nnz·k) B_full recomputation.
-            if (need_train_loss) {
-                // Cross-term: Σ_r d(r) * W_T_new.row(r).dot(B_W_full.row(r))
-                // O(k·m)
-                Scalar cross_term = 0;
+            if (need_train_loss && gram_train_loss) {
+                // Squared error over ALL entries by the Gram trick, reusing
+                // B_W_full from the W update:
+                //   total = tr(A^T A) - 2·cross + recon
+                //   cross = Σ_r d(r) · W_T.row(r) · B_W_full.row(r)^T
+                //   recon = Σ_{r,s} d(r)·d(s) · (W_T W_T^T)(r,s) · (H H^T)(r,s)
+                // The train error is the total minus the test error.
+                double cross_term = 0.0;
                 for (int r = 0; r < k; ++r) {
-                    cross_term += d(r) * W_T.row(r).dot(B_W_full.row(r));
+                    cross_term += static_cast<double>(d(r)) *
+                        static_cast<double>(W_T.row(r).dot(B_W_full.row(r)));
                 }
 
-                // Gram of post-W-update W_T: G_W_new = W_T · W_T^T, O(k²·m)
                 DenseMatrix<Scalar> G_W_new;
                 primitives::gram<Resource>(W_T, G_W_new);
 
-                // Recon norm: Σ_{r,s} d(r)·d(s) · G_W_new(r,s) · G_H_saved(r,s)
-                // O(k²)
-                Scalar recon_norm = 0;
+                double recon_norm = 0.0;
                 for (int r = 0; r < k; ++r) {
                     for (int s = 0; s < k; ++s) {
-                        recon_norm += d(r) * d(s) * G_W_new(r, s) * G_H_saved(r, s);
+                        recon_norm += static_cast<double>(d(r)) * static_cast<double>(d(s)) *
+                                      static_cast<double>(G_W_new(r, s)) *
+                                      static_cast<double>(G_H_saved(r, s));
                     }
                 }
 
-                Scalar total_sq_error = std::max(
-                    trAtA - static_cast<Scalar>(2) * cross_term + recon_norm,
-                    static_cast<Scalar>(0));
-
-                train_sq_error = std::max(total_sq_error - test_sq_error, Scalar(0));
-
-                int64_t total_entries;
-                if (config.mask_zeros) {
-                    total_entries = nnz;
-                } else {
-                    total_entries = static_cast<int64_t>(m) * n;
-                }
-                n_train_total = total_entries - n_test_total;
+                const double total_sq_error = std::max(
+                    static_cast<double>(trAtA) - 2.0 * cross_term + recon_norm, 0.0);
+                train_sum = std::max(total_sq_error - test_sum, 0.0);
+                n_train_total = static_cast<int64_t>(m) * n - n_test_total;
             }
-        }
 
-        train_loss = (n_train_total > 0)
-            ? train_sq_error / static_cast<Scalar>(n_train_total) : 0;
-        test_loss = (n_test_total > 0)
-            ? test_sq_error / static_cast<Scalar>(n_test_total) : 0;
+            if (need_train_loss && n_train_total > 0)
+                train_loss = static_cast<Scalar>(train_sum / static_cast<double>(n_train_total));
+            if (n_test_total > 0)
+                test_loss = static_cast<Scalar>(test_sum / static_cast<double>(n_test_total));
+
+            last_train_loss = train_loss;
+            last_test_loss = test_loss;
 
         } // end need_loss_this_iter
 
@@ -1558,15 +1542,8 @@ template<typename Resource, typename Scalar, typename MatrixType>
             result.test_loss_history.push_back(test_loss);
         }
 
-        result.train_loss = train_loss;
-        result.test_loss = test_loss;
-
-        // Compute relative change for history/callback (before early stopping)
-        Scalar cv_rel_change = 0;
-        if (need_loss_this_iter && iter > 0) {
-            cv_rel_change = std::abs(prev_conv_loss - test_loss)
-                          / (std::abs(prev_conv_loss) + static_cast<Scalar>(1e-15));
-        }
+        const Scalar cv_rel_change =
+            (iter > 0) ? static_cast<Scalar>(w_change) : Scalar(0);
 
         // Record FitHistory snapshot
         if (config.track_loss_history) {
@@ -1580,48 +1557,54 @@ template<typename Resource, typename Scalar, typename MatrixType>
             config.on_iteration(iter + 1, train_loss, test_loss);
         }
 
-        // Early stopping
-        if (test_loss < best_test_loss) {
-            best_test_loss = test_loss;
-            best_iter = iter;
-            patience_count = 0;
-        } else {
-            patience_count++;
+        // Early stopping bookkeeping (only iterations with a valid test loss count)
+        const bool have_test = need_loss_this_iter && n_test_total > 0 &&
+                               std::isfinite(static_cast<double>(test_loss));
+        if (have_test) {
+            if (test_loss < best_test_loss) {
+                best_test_loss = test_loss;
+                best_train_loss = train_loss;
+                best_iter = iter;
+                patience_count = 0;
+                if (keep_best) {
+                    best_W_T = W_T;
+                    best_H = H;
+                    best_d = d;
+                    best_theta = theta_vec;
+                    best_nb = nb_size_vec;
+                    best_phi = phi_vec;
+                    best_pi_row = pi_row_vec;
+                    best_pi_col = pi_col_vec;
+                }
+            } else {
+                patience_count++;
+            }
         }
 
         if (config.verbose) {
             FACTORNET_PRINT_IMPL("Iter %d: train=%g, test=%g, best=%g  [H=%ldus W=%ldus loss=%ldus]\n",
-                              iter + 1, train_loss, test_loss, best_test_loss,
+                              iter + 1, static_cast<double>(train_loss),
+                              static_cast<double>(test_loss),
+                              static_cast<double>(best_test_loss),
                               (long)elapsed_us(t_iter_start, t_after_h),
                               (long)elapsed_us(t_after_h, t_after_w),
                               (long)elapsed_us(t_after_w, t_after_loss));
         }
 
-        if (config.cv_patience > 0 && patience_count >= config.cv_patience) {
-            result.iterations = iter + 1;
+        result.iterations = iter + 1;
+        if (iter > 0) result.final_tol = cv_rel_change;
+
+        // Early stopping: test loss has not improved for cv_patience iterations
+        if (keep_best && patience_count >= config.cv_patience) {
             result.converged = false;
-            result.best_test_loss = best_test_loss;
-            result.best_iter = best_iter;
             break;
         }
 
-        // Loss-based convergence check (using test loss relative change)
-        if (need_loss_this_iter && iter > 0) {
-            result.final_tol = cv_rel_change;
-
-            if (cv_rel_change < config.tol) {
-                result.iterations = iter + 1;
-                result.converged = true;
-                result.best_test_loss = best_test_loss;
-                result.best_iter = best_iter;
-                break;
-            }
+        // Convergence: the factor has stopped changing
+        if (tol_converged) {
+            result.converged = true;
+            break;
         }
-        if (need_loss_this_iter) {
-            prev_conv_loss = test_loss;
-        }
-
-        result.iterations = iter + 1;
     }
 
     if (config.verbose) {
@@ -1636,11 +1619,33 @@ template<typename Resource, typename Scalar, typename MatrixType>
     // 6. Package result
     // ------------------------------------------------------------------
 
-    // Absorb d into H for final output
-    for (int i = 0; i < k; ++i) {
-        H.row(i) *= d(i);
+    // The returned factors, losses and best_iter always describe the same
+    // model: the best test iteration when early stopping is on, the last
+    // iteration otherwise.
+    if (keep_best && best_iter >= 0) {
+        if (best_iter != result.iterations - 1) {
+            W_T = best_W_T;
+            H = best_H;
+            d = best_d;
+            theta_vec = best_theta;
+            nb_size_vec = best_nb;
+            phi_vec = best_phi;
+            pi_row_vec = best_pi_row;
+            pi_col_vec = best_pi_col;
+        }
+        result.best_test_loss = best_test_loss;
+        result.best_iter = best_iter;
+        result.test_loss = best_test_loss;
+        result.train_loss = best_train_loss;
+    } else {
+        result.test_loss = last_test_loss;
+        result.train_loss = last_train_loss;
+        result.best_test_loss = last_test_loss;
+        result.best_iter = std::max(result.iterations - 1, 0);
     }
 
+    // Same convention as the non-CV fit: W (columns) and H (rows) carry unit
+    // norm and the scale lives in d only, so that A ≈ W · diag(d) · H.
     result.W = W_T.transpose();  // k×m → m×k
     result.d = d;
     result.H = H;
@@ -1651,11 +1656,6 @@ template<typename Resource, typename Scalar, typename MatrixType>
     if (pi_row_vec.size() > 0) result.pi_row = pi_row_vec;
     if (pi_col_vec.size() > 0) result.pi_col = pi_col_vec;
 
-    if (result.best_test_loss == 0)
-        result.best_test_loss = best_test_loss;
-    if (result.best_iter == 0)
-        result.best_iter = best_iter;
-
     if (config.sort_model)
         result.sort();
 
@@ -1664,4 +1664,3 @@ template<typename Resource, typename Scalar, typename MatrixType>
 
 }  // namespace nmf
 }  // namespace FactorNet
-

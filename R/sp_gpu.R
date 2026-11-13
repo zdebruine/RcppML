@@ -1,6 +1,21 @@
+# GPU-side .spz decoding needs a CUDA decoder (streampress/gpu/) that is not
+# part of this source tree, so sp_gpu_bridge.cu is not compiled into
+# RcppML_gpu.so and the entry points below cannot work in this build.
+.st_gpu_unavailable <- function(what) {
+  stop(what, " is not available in this build of RcppML: the GPU StreamPress ",
+       "decoder is not included. Use st_read() and pass the dgCMatrix to ",
+       "nmf(..., resource = \"gpu\") instead.", call. = FALSE)
+}
+
 #' @title Read StreamPress File Directly to GPU Memory
 #'
 #' @description
+#' \strong{Not available in this build.} The GPU-side StreamPress decoder is
+#' not included in this release, so this function always stops with an error.
+#' Use \code{\link{st_read}} and pass the result to
+#' \code{nmf(..., resource = "gpu")}. The description below documents the
+#' intended behavior.
+#'
 #' Reads a \code{.spz} v2 file and decodes it directly on the GPU, returning
 #' an opaque GPU-resident CSC matrix. This avoids the CPU-to-GPU transfer that
 #' occurs when using \code{st_read()} followed by \code{nmf(data, gpu = TRUE)}.
@@ -46,6 +61,8 @@
 #' @seealso \code{\link{st_read}}, \code{\link{st_free_gpu}}, \code{\link{nmf}}
 #' @export
 st_read_gpu <- function(path, device = 0L) {
+  .st_gpu_unavailable("st_read_gpu()")
+
   if (!gpu_available()) {
     stop("No GPU available. Use st_read() for CPU decoding.", call. = FALSE)
   }
@@ -109,6 +126,10 @@ st_read_gpu <- function(path, device = 0L) {
 #' @title Free GPU-Resident Sparse Matrix
 #'
 #' @description
+#' \strong{Not available in this build} (see \code{\link{st_read_gpu}});
+#' no \code{gpu_sparse_matrix} object can be created, and this function stops
+#' with an error.
+#'
 #' Explicitly frees CUDA device memory held by a \code{gpu_sparse_matrix} object.
 #' This is optional — the memory will be freed automatically when the object
 #' is garbage-collected.
@@ -127,6 +148,8 @@ st_free_gpu <- function(x) {
   if (!inherits(x, "gpu_sparse_matrix")) {
     stop("'x' must be a gpu_sparse_matrix object", call. = FALSE)
   }
+  .st_gpu_unavailable("st_free_gpu()")
+
   if (!gpu_available()) return(invisible(NULL))
 
   .gpu_call("rcppml_sp_free_gpu",

@@ -51,7 +51,7 @@ dim(attr(movielens, "genres"))
 Matrix::nnzero(movielens) / prod(dim(movielens))
 
 # Run NMF for collaborative filtering
-result <- nmf(movielens, k = 20, maxit = 50)
+result <- nmf(movielens, k = 10, maxit = 20, seed = 1, threads = 2)
 }
 
 }

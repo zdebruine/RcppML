@@ -17,9 +17,13 @@ mse(w, d = NULL, h, data, mask = NULL, missing_only = FALSE, ...)
 Also accepts a file path (character string) which will be auto-loaded based on extension.}
 
 \item{mask}{missing data mask. Accepts:
-\code{NULL} (no masking), \code{"zeros"} (mask zeros), \code{"NA"} (mask NAs),
-a dgCMatrix/matrix (custom mask), or \code{list("zeros", <matrix>)} to mask
-zeros and use a custom mask simultaneously.}
+\code{NULL} (no masking), \code{"zeros"} (treat zeros as missing),
+\code{"NA"} (mask NA/NaN entries; this happens automatically, with a
+warning, whenever the data contain them),
+a dgCMatrix/matrix of the same dimensions as \code{data} whose non-zero
+entries mark missing values, or \code{list("zeros", <matrix>)} to mask
+zeros and use a custom mask simultaneously. NA/NaN positions are always
+added to a custom mask.}
 
 \item{missing_only}{only calculate mean squared error at masked values}
 
@@ -29,13 +33,16 @@ zeros and use a custom mask simultaneously.}
 A single numeric value: the mean squared error of the factorization.
 }
 \description{
+\code{mse()} is deprecated; use \code{\link{evaluate}}.
+}
+\details{
 Same as the \code{evaluate} S4 method for the \code{nmf} class, but allows one to input the `w`, `d`, `h`, and `data` independently.
 }
 \examples{
 \dontrun{
 data <- simulateNMF(50, 30, k = 3, seed = 1)
 model <- nmf(data$A, 3, seed = 1, maxit = 50)
-RcppML:::mse(model$w, model$d, model$h, data$A)
+mse(model$w, model$d, model$h, data$A)
 }
 }
 \keyword{internal}

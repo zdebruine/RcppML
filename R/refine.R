@@ -150,6 +150,7 @@ refine <- function(x, data = NULL, labels, batch = NULL,
         H_model <- nmf(data, k = k,
                        seed = W_new,
                        maxit = 1L, nonneg = nonneg,
+                       sort_model = FALSE,  # keep factor order aligned with batch_target
                        target_H = batch_target,
                        target_lambda = c(0, -lambda))
         H_new <- H_model@h
@@ -165,11 +166,12 @@ refine <- function(x, data = NULL, labels, batch = NULL,
         H_new <- solve(WtW + 1e-8 * diag(k), t(WtA))  # k x n
         if (nonneg) H_new[H_new < 0] <- 0
 
-        # Rescale: extract d as column norms of H
+        # Rescale: move the row norms of H into d. H_new was solved against
+        # W_new (data ~ W_new H_new), so data ~ W_new diag(d_new) (H_new / d_new)
+        # and W_new must NOT be rescaled as well (that would count d twice).
         d_new <- sqrt(rowSums(H_new^2))
         d_new[d_new < 1e-10] <- 1e-10
         H_new <- H_new / d_new
-        W_new <- sweep(W_new, 2, d_new, "*")
       }
 
       # Update for next cycle

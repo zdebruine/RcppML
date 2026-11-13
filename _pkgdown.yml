@@ -140,6 +140,7 @@ reference:
     contents:
       - gpu_available
       - gpu_info
+      - any_of(c("install_gpu", "gpu_status"))
       - gpu-backend
       - gpu_sparse_matrix-methods
 
@@ -157,3 +158,4 @@ reference:
   - title: "Package"
     contents:
       - RcppML-package
+      - RcppML-deprecated

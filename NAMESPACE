@@ -5,6 +5,7 @@ S3method(as.data.frame,nmf_assessment)
 S3method(as.data.frame,training_logger)
 S3method(dim,gpu_sparse_matrix)
 S3method(fit,factor_net)
+S3method(head,svd)
 S3method(ncol,gpu_sparse_matrix)
 S3method(nrow,gpu_sparse_matrix)
 S3method(plot,consensus_nmf)
@@ -27,6 +28,9 @@ S3method(print,training_logger)
 S3method(summary,consensus_nmf)
 S3method(summary,factor_net_result)
 S3method(summary,fn_classifier_eval)
+S3method(tail,svd)
+S3method(utils::head,nmf)
+S3method(utils::tail,nmf)
 export(H)
 export(W)
 export(align)
@@ -41,6 +45,7 @@ export(compare_nmf)
 export(compute_target)
 export(consensus_nmf)
 export(cosine)
+export(crossValidate)
 export(cross_validate_graph)
 export(dclust)
 export(diagnose_dispersion)
@@ -57,10 +62,14 @@ export(factor_shared)
 export(fit)
 export(gpu_available)
 export(gpu_info)
+export(gpu_status)
+export(install_gpu)
+export(mse)
 export(nmf)
 export(nmf_layer)
 export(nnls)
 export(pca)
+export(project)
 export(reconstruct)
 export(refine)
 export(score_test_distribution)
@@ -108,38 +117,48 @@ exportMethods(sort)
 exportMethods(subset)
 exportMethods(summary)
 exportMethods(t)
+exportMethods(tail)
 exportMethods(variance_explained)
 import(Matrix)
 importFrom(Rcpp,evalCpp)
 importFrom(grDevices,hcl.colors)
-importFrom(graphics,layout)
-importFrom(graphics,legend)
-importFrom(graphics,par)
-importFrom(graphics,plot.new)
-importFrom(graphics,plot.window)
-importFrom(graphics,rect)
-importFrom(graphics,segments)
-importFrom(graphics,text)
-importFrom(methods,as)
-importFrom(methods,canCoerce)
-importFrom(methods,is)
-importFrom(methods,new)
-importFrom(methods,slot)
-importFrom(methods,validObject)
-importFrom(stats,as.dist)
-importFrom(stats,cophenetic)
-importFrom(stats,cor)
-importFrom(stats,cutree)
-importFrom(stats,hclust)
-importFrom(stats,median)
-importFrom(stats,predict)
-importFrom(stats,rbinom)
-importFrom(stats,rnorm)
-importFrom(stats,runif)
-importFrom(stats,sd)
-importFrom(stats,setNames)
-importFrom(stats,var)
-importFrom(utils,setTxtProgressBar)
-importFrom(utils,str)
-importFrom(utils,txtProgressBar)
+importFrom(graphics,
+  layout,
+  legend,
+  par,
+  plot.new,
+  plot.window,
+  rect,
+  segments,
+  text
+)
+importFrom(methods,
+  as,
+  canCoerce,
+  is,
+  new,
+  slot,
+  validObject
+)
+importFrom(stats,
+  as.dist,
+  biplot,
+  cophenetic,
+  cor,
+  cutree,
+  hclust,
+  median,
+  predict,
+  rbinom,
+  rnorm,
+  runif,
+  sd,
+  setNames,
+  var
+)
+importFrom(utils,
+  setTxtProgressBar,
+  str,
+  txtProgressBar
+)
 useDynLib(RcppML, .registration = TRUE)

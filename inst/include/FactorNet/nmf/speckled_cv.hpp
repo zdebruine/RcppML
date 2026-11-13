@@ -41,7 +41,8 @@ namespace nmf {
 /**
  * @brief Fully lazy speckled CV mask - NEVER materializes the full mask
  * 
- * The mask is a mathematical function: given (i, j, seed, inv_prob), return true/false.
+ * The mask is a mathematical function: given (i, j, seed, fraction), return true/false.
+ * Entry (i, j) is held out when hash(seed, i, j) < fraction * 2^64.
  * Uses CV_RNG::is_holdout() for O(1) position-dependent queries.
  * 
  * Key insight: We don't need to store ANY vectors. Just query on-the-fly.
@@ -58,7 +59,8 @@ template<typename Scalar>
 class LazySpeckledMask {
 private:
     uint64_t seed_;  // RNG seed for SplitMix64 position-dependent hashing
-    uint64_t inv_prob_;     // Inverse probability: 10 = 10% holdout
+    uint64_t threshold_;    // Entry is held out when hash(seed, i, j) < threshold_
+    double fraction_;       // Holdout probability (threshold_ / 2^64)
     int n_rows_;
     int n_cols_;
     int64_t nnz_;           // Non-zeros in original matrix (for statistics)
@@ -71,6 +73,13 @@ private:
     double col_subsample_frac_;   // Fraction of columns eligible for holdout (1.0 = all)
     double row_subsample_frac_;   // Fraction of rows eligible for holdout (1.0 = all)
     uint64_t subsample_seed_;     // Separate seed for subsample selection
+    bool symmetric_ = false;      // If true, (i,j) and (j,i) share one holdout decision
+
+    /// Hash of the entry, with (i,j) and (j,i) identified when symmetric_ is set.
+    inline uint64_t entry_hash(uint32_t i, uint32_t j) const {
+        if (symmetric_ && j < i) return rng::SplitMix64::hash(seed_, j, i);
+        return rng::SplitMix64::hash(seed_, i, j);
+    }
     
     /**
      * @brief O(1) deterministic check: is column j in the subsampled set?
@@ -118,7 +127,8 @@ public:
                      double holdout_fraction, uint64_t seed, bool mask_zeros,
                      double col_subsample_frac = 1.0, double row_subsample_frac = 1.0)
         : seed_(static_cast<uint32_t>(seed) == 0 ? 12345ULL : static_cast<uint32_t>(seed))  // Match legacy CV_RNG seed handling
-        , inv_prob_(holdout_fraction > 0 ? static_cast<uint64_t>(1.0 / holdout_fraction) : 0)
+        , threshold_(rng::SplitMix64::holdout_threshold(holdout_fraction))
+        , fraction_(holdout_fraction > 0 ? (holdout_fraction < 1.0 ? holdout_fraction : 1.0) : 0.0)
         , n_rows_(n_rows)
         , n_cols_(n_cols)
         , nnz_(nnz)
@@ -149,12 +159,23 @@ public:
             return false;
         if (row_subsample_frac_ < 1.0 && !is_row_in_subsample(static_cast<uint32_t>(i)))
             return false;
-        // Standard holdout check via unified SplitMix64 engine
-        return rng::SplitMix64::is_holdout(seed_,
-                                            static_cast<uint32_t>(i), 
-                                            static_cast<uint32_t>(j), 
-                                            inv_prob_);
+        // Holdout with probability fraction_: compare the position hash with
+        // the threshold fraction_ * 2^64 (any fraction in (0,1) is honored).
+        return entry_hash(static_cast<uint32_t>(i),
+                          static_cast<uint32_t>(j)) < threshold_;
     }
+
+    /**
+     * @brief Tie the holdout decision of (i,j) to that of (j,i).
+     *
+     * Required for symmetric factorizations of a symmetric matrix, where a
+     * held-out entry would otherwise be visible through its mirror image.
+     */
+    void set_symmetric(bool symmetric) { symmetric_ = symmetric; }
+    bool symmetric() const { return symmetric_; }
+
+    /// Holdout probability actually used by the mask
+    double holdout_fraction() const { return fraction_; }
     
     /**
      * @brief Check if column j is in the subsampled region (for dispatch optimization)
@@ -179,7 +200,11 @@ public:
     int cols() const { return n_cols_; }
     int64_t nnz() const { return nnz_; }
     bool mask_zeros() const { return mask_zeros_; }
-    uint64_t inv_prob() const { return inv_prob_; }
+    /// Rounded reciprocal of the holdout probability (kept for diagnostics only;
+    /// the mask itself uses the exact fraction).
+    uint64_t inv_prob() const {
+        return fraction_ > 0 ? static_cast<uint64_t>(std::llround(1.0 / fraction_)) : 0;
+    }
     double col_subsample_frac() const { return col_subsample_frac_; }
     double row_subsample_frac() const { return row_subsample_frac_; }
     
@@ -193,12 +218,12 @@ public:
      * For mask_zeros=FALSE: ~(n_rows * n_cols) / inv_prob * col_frac * row_frac
      */
     int64_t estimated_n_test() const {
-        if (inv_prob_ == 0) return 0;
+        if (threshold_ == 0) return 0;
         double subsample_factor = col_subsample_frac_ * row_subsample_frac_;
         if (mask_zeros_) {
-            return static_cast<int64_t>(nnz_ * subsample_factor / static_cast<double>(inv_prob_));
+            return static_cast<int64_t>(static_cast<double>(nnz_) * subsample_factor * fraction_);
         } else {
-            return static_cast<int64_t>(static_cast<double>(n_rows_) * n_cols_ * subsample_factor / static_cast<double>(inv_prob_));
+            return static_cast<int64_t>(static_cast<double>(n_rows_) * n_cols_ * subsample_factor * fraction_);
         }
     }
     
@@ -211,14 +236,14 @@ public:
     }
     
     bool is_valid() const {
-        return inv_prob_ > 0 && n_rows_ > 0 && n_cols_ > 0;
+        return threshold_ > 0 && n_rows_ > 0 && n_cols_ > 0;
     }
     
     /**
      * @brief Check if CV mask is active (has holdout entries)
      */
     bool is_active() const {
-        return inv_prob_ > 0;
+        return threshold_ > 0;
     }
     
     /**
@@ -249,14 +274,14 @@ public:
     void holdout_zero_rows(int col, int m,
                            const std::vector<int>& nz_rows,
                            std::vector<int>& result) const {
-        if (inv_prob_ == 0) return;
+        if (threshold_ == 0) return;
         
         // Fast rejection: column not in subsampled region
         if (col_subsample_frac_ < 1.0 && 
             !is_col_in_subsample(static_cast<uint32_t>(col)))
             return;
         
-        const uint64_t threshold = UINT64_MAX / inv_prob_;
+        const uint64_t threshold = threshold_;
         size_t nz_idx = 0;
         const size_t nz_count = nz_rows.size();
         
@@ -288,8 +313,8 @@ public:
                 !is_row_in_subsample(static_cast<uint32_t>(i)))
                 continue;
             // Hash-based holdout check
-            if (rng::SplitMix64::hash(seed_, static_cast<uint32_t>(i),
-                                       static_cast<uint32_t>(col)) < threshold) {
+            if (entry_hash(static_cast<uint32_t>(i),
+                           static_cast<uint32_t>(col)) < threshold) {
                 result.push_back(i);
             }
         }
@@ -308,14 +333,14 @@ public:
     void holdout_zero_cols(int row, int n,
                            const std::vector<int>& nz_cols,
                            std::vector<int>& result) const {
-        if (inv_prob_ == 0) return;
+        if (threshold_ == 0) return;
         
         // Fast rejection: row not in subsampled region
         if (row_subsample_frac_ < 1.0 && 
             !is_row_in_subsample(static_cast<uint32_t>(row)))
             return;
         
-        const uint64_t threshold = UINT64_MAX / inv_prob_;
+        const uint64_t threshold = threshold_;
         size_t nz_idx = 0;
         const size_t nz_count = nz_cols.size();
         
@@ -330,8 +355,8 @@ public:
                 !is_col_in_subsample(static_cast<uint32_t>(j)))
                 continue;
             // Hash-based holdout check
-            if (rng::SplitMix64::hash(seed_, static_cast<uint32_t>(row),
-                                       static_cast<uint32_t>(j)) < threshold) {
+            if (entry_hash(static_cast<uint32_t>(row),
+                           static_cast<uint32_t>(j)) < threshold) {
                 result.push_back(j);
             }
         }

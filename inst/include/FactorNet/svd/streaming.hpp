@@ -30,6 +30,8 @@
 #include <FactorNet/core/types.hpp>
 #include <FactorNet/svd/streaming_matvec.hpp>
 #include <FactorNet/svd/deflation.hpp>
+#include <FactorNet/svd/lanczos.hpp>
+#include <FactorNet/svd/irlba.hpp>
 #include <FactorNet/svd/test_entries.hpp>
 #include <FactorNet/nmf/speckled_cv.hpp>
 #include <FactorNet/rng/rng.hpp>
@@ -42,6 +44,9 @@
 #include <numeric>
 #include <chrono>
 #include <limits>
+#include <string>
+#include <stdexcept>
+#include <cstdio>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -85,6 +90,19 @@ SVDResult<Scalar> streaming_deflation_svd(const SVDConfig<Scalar>& config)
     if (config.spz_path.empty()) {
         throw std::runtime_error("streaming_deflation_svd requires config.spz_path");
     }
+    if (config.L21_u > 0 || config.L21_v > 0) {
+        throw std::invalid_argument(
+            "svd(method = \"deflation\"): L21 (group sparsity across factors) is not "
+            "defined when factors are fit one at a time; use method = \"krylov\"");
+    }
+    if (config.upper_bound_u > 0 || config.upper_bound_v > 0) {
+        throw std::invalid_argument(
+            "svd: 'upper_bound' is not supported: factors are returned with unit "
+            "norm, so an element-wise bound has no scale-free meaning");
+    }
+    // Two-sided ridge on a rank-one term = soft threshold on its scale
+    const Scalar l2_tau = (config.L2_u > 0 && config.L2_v > 0)
+        ? std::sqrt(config.L2_u * config.L2_v) : static_cast<Scalar>(0);
 
     StreamingContext<Scalar> ctx;
     ctx.load(config.spz_path, config.center, config.scale);
@@ -199,9 +217,9 @@ SVDResult<Scalar> streaming_deflation_svd(const SVDConfig<Scalar>& config)
                 v = spmv_result / u_sq;
             } else { v.setZero(); break; }
 
-            apply_regularization(v, config.L1_v, config.L2_v,
-                                 config.nonneg_v, config.upper_bound_v, u_sq,
-                                 config.L21_v);
+            apply_regularization(v, config.L1_v, static_cast<Scalar>(0),
+                                 config.nonneg_v, static_cast<Scalar>(0), u_sq,
+                                 static_cast<Scalar>(0));
             apply_angular_penalty(v, V_all, k, config.angular_v, u_sq);
             apply_graph_penalty(v, config.graph_v, config.graph_v_lambda, u_sq);
 
@@ -217,9 +235,9 @@ SVDResult<Scalar> streaming_deflation_svd(const SVDConfig<Scalar>& config)
                 u = spmv_result / v_sq;
             } else { u.setZero(); break; }
 
-            apply_regularization(u, config.L1_u, config.L2_u,
-                                 config.nonneg_u, config.upper_bound_u, v_sq,
-                                 config.L21_u);
+            apply_regularization(u, config.L1_u, static_cast<Scalar>(0),
+                                 config.nonneg_u, static_cast<Scalar>(0), v_sq,
+                                 static_cast<Scalar>(0));
             apply_angular_penalty(u, U_all, k, config.angular_u, v_sq);
             apply_graph_penalty(u, config.graph_u, config.graph_u_lambda, v_sq);
 
@@ -288,13 +306,19 @@ SVDResult<Scalar> streaming_deflation_svd(const SVDConfig<Scalar>& config)
             }
         }
 
-        if (sigma < std::numeric_limits<Scalar>::epsilon() * 100) break;
+        // Stop when nothing is left relative to the first factor
+        if (!(sigma > 0) ||
+            (k > 0 && sigma <= std::numeric_limits<Scalar>::epsilon() * 100 * d_all(0))) break;
     }
 
     result.k_selected = best_k;
     result.U = U_all.leftCols(best_k);
     result.d = d_all.head(best_k);
     result.V = V_all.leftCols(best_k);
+    if (l2_tau > 0) {
+        for (int i = 0; i < best_k; ++i)
+            result.d(i) = std::max(static_cast<Scalar>(0), result.d(i) - l2_tau);
+    }
     result.wall_time_ms = Ms(Clock::now() - t_start).count();
     return result;
 }
@@ -311,7 +335,8 @@ SVDResult<Scalar> streaming_deflation_svd(const SVDConfig<Scalar>& config)
  * Total file passes: O(lanczos_steps).
  */
 template<typename Scalar>
-SVDResult<Scalar> streaming_lanczos_svd(const SVDConfig<Scalar>& config)
+SVDResult<Scalar> streaming_lanczos_svd(const SVDConfig<Scalar>& config,
+                                        bool strict = true)
 {
     using namespace detail;
     using Clock = std::chrono::high_resolution_clock;
@@ -326,11 +351,6 @@ SVDResult<Scalar> streaming_lanczos_svd(const SVDConfig<Scalar>& config)
     const int n = static_cast<int>(ctx.n);
     const int k = config.k_max;
 
-    const int default_steps = std::max(3 * k, k + 50);
-    const int user_steps = config.max_iter > 0 ? config.max_iter : 0;
-    const int jmax = std::min(std::min(m, n) - 1,
-                              std::max(default_steps, user_steps));
-
     SVDResult<Scalar> result;
     result.centered = config.center;
     if (config.center) result.row_means = ctx.row_means;
@@ -338,119 +358,32 @@ SVDResult<Scalar> streaming_lanczos_svd(const SVDConfig<Scalar>& config)
     if (config.scale) result.row_sds = ctx.row_sds;
     result.frobenius_norm_sq = static_cast<double>(ctx.frobenius_norm_sq);
 
-    const Scalar eps = std::numeric_limits<Scalar>::epsilon() * 100;
-    const Scalar conv_tol = config.tol > 0 ? config.tol : static_cast<Scalar>(1e-10);
+    auto forward_vec = [&](const DenseVector<Scalar>& x, DenseVector<Scalar>& out) {
+        detail::spmv_forward(ctx, x, out);
+    };
+    auto transpose_vec = [&](const DenseVector<Scalar>& x, DenseVector<Scalar>& out) {
+        detail::spmv_transpose(ctx, x, out);
+    };
 
-    // Lanczos vectors
-    DenseMatrix<Scalar> P(n, jmax + 1);   // right Lanczos
-    DenseMatrix<Scalar> Q(m, jmax);       // left Lanczos
-    DenseVector<Scalar> alpha(jmax);
-    DenseVector<Scalar> beta_vec(jmax + 1);
+    int j_actual = 0, n_unconv = 0;
+    detail::lanczos_bidiag_core<Scalar>(
+        m, n, k, config.tol, config.max_iter > 0 ? config.max_iter : 0,
+        config.seed, config.verbose, strict,
+        forward_vec, transpose_vec,
+        result.U, result.d, result.V, j_actual, n_unconv);
 
-    // Random p_0
-    {
-        rng::SplitMix64 rng(config.seed == 0 ? 42ULL : static_cast<uint64_t>(config.seed));
-        DenseMatrix<Scalar> p0_mat(n, 1);
-        rng.fill_uniform(p0_mat.data(), p0_mat.rows(), p0_mat.cols());
-        P.col(0) = p0_mat.col(0);
-        P.col(0).array() -= static_cast<Scalar>(0.5);
-        P.col(0).normalize();
-    }
-    beta_vec(0) = 0;
-
-    int j_actual = 0;
-    const int check_interval = 5;
-    const int min_steps_before_check = k + 2;
-
-    DenseVector<Scalar> r(m), s(n);
-
-    // Pre-allocate reorthogonalization coefficient vectors
-    DenseVector<Scalar> h_q(jmax);
-    DenseVector<Scalar> h_p(jmax + 1);
-
-    for (int j = 0; j < jmax; ++j) {
-        SSVD_CHECK_INTERRUPT();
-
-        // r = A * p_j - beta_j * q_{j-1}
-        DenseVector<Scalar> p_j = P.col(j);
-        detail::spmv_forward(ctx, p_j, r);
-        if (j > 0) r.noalias() -= beta_vec(j) * Q.col(j - 1);
-
-        // Full reorthogonalization (2-pass)
-        if (j > 0) {
-            auto Q_j = Q.leftCols(j);
-            auto h = h_q.head(j);
-            h.noalias() = Q_j.transpose() * r;
-            r.noalias() -= Q_j * h;
-            h.noalias() = Q_j.transpose() * r;
-            r.noalias() -= Q_j * h;
-        }
-
-        alpha(j) = r.norm();
-        if (alpha(j) < eps) { j_actual = j; break; }
-        Q.col(j) = r / alpha(j);
-
-        // s = A' * q_j - alpha_j * p_j
-        DenseVector<Scalar> q_j = Q.col(j);
-        detail::spmv_transpose(ctx, q_j, s);
-        s.noalias() -= alpha(j) * P.col(j);
-
-        // Full reorthogonalization (2-pass)
-        {
-            auto P_j = P.leftCols(j + 1);
-            auto h = h_p.head(j + 1);
-            h.noalias() = P_j.transpose() * s;
-            s.noalias() -= P_j * h;
-            h.noalias() = P_j.transpose() * s;
-            s.noalias() -= P_j * h;
-        }
-
-        beta_vec(j + 1) = s.norm();
-        if (beta_vec(j + 1) < eps) { j_actual = j + 1; break; }
-        P.col(j + 1) = s / beta_vec(j + 1);
-        j_actual = j + 1;
-
-        // Adaptive early stopping via Ritz value convergence
-        if (j_actual >= min_steps_before_check &&
-            j_actual % check_interval == 0 && j_actual < jmax) {
-            DenseMatrix<Scalar> B_check = DenseMatrix<Scalar>::Zero(j_actual, j_actual);
-            for (int jj = 0; jj < j_actual; ++jj) {
-                B_check(jj, jj) = alpha(jj);
-                if (jj < j_actual - 1) B_check(jj, jj + 1) = beta_vec(jj + 1);
-            }
-            Eigen::JacobiSVD<DenseMatrix<Scalar>> svd_check(B_check, Eigen::ComputeFullU);
-            auto sigmas = svd_check.singularValues();
-            auto U_B = svd_check.matrixU();
-
-            int k_check = std::min(k, j_actual);
-            Scalar beta_last = std::abs(beta_vec(j_actual));
-            bool all_converged = true;
-            for (int i = 0; i < k_check; ++i) {
-                Scalar err = beta_last * std::abs(U_B(j_actual - 1, i));
-                if (err > conv_tol * sigmas(0)) { all_converged = false; break; }
-            }
-            if (all_converged) {
-                if (config.verbose) SSVD_PRINT("    Streaming Lanczos: early stop at step %d\n", j_actual);
-                break;
-            }
-        }
-    }
-
-    // Build bidiagonal B and extract SVD
-    DenseMatrix<Scalar> B = DenseMatrix<Scalar>::Zero(j_actual, j_actual);
-    for (int j = 0; j < j_actual; ++j) {
-        B(j, j) = alpha(j);
-        if (j < j_actual - 1) B(j, j + 1) = beta_vec(j + 1);
-    }
-
-    Eigen::JacobiSVD<DenseMatrix<Scalar>> svd_b(B, Eigen::ComputeFullU | Eigen::ComputeFullV);
-    int k_actual = std::min(k, j_actual);
-
-    result.d = svd_b.singularValues().head(k_actual);
-    result.U = Q.leftCols(j_actual) * svd_b.matrixU().leftCols(k_actual);
-    result.V = P.leftCols(j_actual) * svd_b.matrixV().leftCols(k_actual);
-    result.k_selected = k_actual;
+    result.k_selected = static_cast<int>(result.d.size());
     result.iters_per_factor.push_back(j_actual);
+
+    if (strict && n_unconv > 0) {
+        char wbuf[320];
+        std::snprintf(wbuf, sizeof(wbuf),
+            "svd(method = \"lanczos\"): %d of %d singular values did not reach "
+            "tol = %.1e after %d Lanczos steps; increase 'maxit' (number of steps) "
+            "or use method = \"irlba\"",
+            n_unconv, result.k_selected, static_cast<double>(config.tol), j_actual);
+        add_warning(std::string(wbuf));
+    }
     result.wall_time_ms = Ms(Clock::now() - t_start).count();
 
     if (config.verbose) {
@@ -484,15 +417,6 @@ SVDResult<Scalar> streaming_irlba_svd(const SVDConfig<Scalar>& config)
 
     const int m = static_cast<int>(ctx.m);
     const int n = static_cast<int>(ctx.n);
-    const int nu = config.k_max;
-    const int mn_min = std::min(m, n);
-    const int work = std::min(nu + 15, mn_min);
-    const int maxit = config.max_iter > 0 ? config.max_iter : 1000;
-    const Scalar tol = config.tol > 0 ? config.tol : static_cast<Scalar>(1e-5);
-    const Scalar svtol = tol;
-    const Scalar eps = std::numeric_limits<Scalar>::epsilon();
-    const Scalar eps23 = std::pow(eps, static_cast<Scalar>(2.0 / 3.0));
-
     SVDResult<Scalar> result;
     result.centered = config.center;
     if (config.center) result.row_means = ctx.row_means;
@@ -500,177 +424,32 @@ SVDResult<Scalar> streaming_irlba_svd(const SVDConfig<Scalar>& config)
     if (config.scale) result.row_sds = ctx.row_sds;
     result.frobenius_norm_sq = static_cast<double>(ctx.frobenius_norm_sq);
 
-    // Working storage
-    DenseMatrix<Scalar> V(n, work), W(m, work);
-    DenseVector<Scalar> F(n);
-    DenseMatrix<Scalar> B = DenseMatrix<Scalar>::Zero(work, work);
-    DenseMatrix<Scalar> V1(n, work), W1(m, work);
-    DenseVector<Scalar> svratio_prev = DenseVector<Scalar>::Zero(work);
-    DenseVector<Scalar> svratio_comp(work), residuals(work), signed_res(work);
-
-    // Init V[:, 0]
-    {
-        rng::SplitMix64 rng(config.seed == 0 ? 42ULL : static_cast<uint64_t>(config.seed));
-        DenseMatrix<Scalar> v0_mat(n, 1);
-        rng.fill_uniform(v0_mat.data(), v0_mat.rows(), v0_mat.cols());
-        V.col(0) = v0_mat.col(0);
-        V.col(0).array() -= static_cast<Scalar>(0.5);
-        V.col(0).normalize();
-    }
-
-    int k_r = nu;
-    int iter = 0, mprod = 0;
-    Scalar Smax = 0, S = 0;
-    bool converged = false;
-    DenseVector<Scalar> BS, spmv_in;
-    DenseVector<Scalar> spmv_out_m(m);
-    DenseMatrix<Scalar> BU, BV_mat;
-
-    // Orthogonalization helper
-    auto orthog = [](const DenseMatrix<Scalar>& X, auto& Y, int ncols) {
-        if (ncols <= 0) return;
-        auto Xk = X.leftCols(ncols);
-        DenseVector<Scalar> h = Xk.transpose() * Y.derived();
-        Y.derived().noalias() -= Xk * h;
-        h.noalias() = Xk.transpose() * Y.derived();
-        Y.derived().noalias() -= Xk * h;
+    auto forward_vec = [&](const DenseVector<Scalar>& x, DenseVector<Scalar>& out) {
+        detail::spmv_forward(ctx, x, out);
+    };
+    auto transpose_vec = [&](const DenseVector<Scalar>& x, DenseVector<Scalar>& out) {
+        detail::spmv_transpose(ctx, x, out);
     };
 
-    while (iter < maxit) {
-        SSVD_CHECK_INTERRUPT();
+    int iter = 0, mprod = 0, n_unconv = 0;
+    detail::irlba_core<Scalar>(
+        m, n, config.k_max, config.tol, config.max_iter,
+        config.seed, config.verbose,
+        forward_vec, transpose_vec,
+        result.U, result.d, result.V, iter, mprod, n_unconv);
 
-        int j_start = (iter == 0) ? 0 : k_r;
-        int j = j_start;
-
-        // Forward multiply: W[:, j] = A * V[:, j]
-        spmv_in = V.col(j);
-        detail::spmv_forward(ctx, spmv_in, spmv_out_m);
-        W.col(j) = spmv_out_m;
-        mprod++;
-
-        if (j > 0) { auto w_col = W.col(j); orthog(W, w_col, j); }
-        S = W.col(j).norm();
-        if (S < eps23 && j == 0) break;
-        if (S < eps23) {
-            rng::SplitMix64 rng2(config.seed + iter * 1000 + 1);
-            DenseMatrix<Scalar> r_mat(m, 1);
-            rng2.fill_uniform(r_mat.data(), r_mat.rows(), r_mat.cols());
-            W.col(j) = r_mat.col(0);
-            W.col(j).array() -= static_cast<Scalar>(0.5);
-            auto w_col = W.col(j); orthog(W, w_col, j);
-            W.col(j).normalize(); S = 0;
-        } else { W.col(j) /= S; }
-
-        // Inner loop: Lanczos bidiagonalization
-        while (j < work) {
-            spmv_in = W.col(j);
-            detail::spmv_transpose(ctx, spmv_in, F);
-            mprod++;
-            F -= S * V.col(j);
-            orthog(V, F, j + 1);
-
-            if (j + 1 < work) {
-                Scalar R_F = F.norm();
-                if (R_F < eps23) {
-                    rng::SplitMix64 rng3(config.seed + iter * 1000 + j + 2);
-                    DenseMatrix<Scalar> f_mat(n, 1);
-                    rng3.fill_uniform(f_mat.data(), f_mat.rows(), f_mat.cols());
-                    F = f_mat.col(0); F.array() -= static_cast<Scalar>(0.5);
-                    orthog(V, F, j + 1); R_F = F.norm();
-                    V.col(j + 1) = F / R_F; R_F = 0;
-                } else { V.col(j + 1) = F / R_F; }
-
-                B(j, j) = S;
-                B(j + 1, j) = R_F;
-
-                spmv_in = V.col(j + 1);
-                detail::spmv_forward(ctx, spmv_in, spmv_out_m);
-                W.col(j + 1) = spmv_out_m;
-                mprod++;
-                W.col(j + 1) -= R_F * W.col(j);
-                { auto w_col = W.col(j + 1); orthog(W, w_col, j + 1); }
-                S = W.col(j + 1).norm();
-                if (S < eps23) {
-                    rng::SplitMix64 rng4(config.seed + iter * 1000 + j + 3);
-                    DenseMatrix<Scalar> w_mat(m, 1);
-                    rng4.fill_uniform(w_mat.data(), w_mat.rows(), w_mat.cols());
-                    W.col(j + 1) = w_mat.col(0); W.col(j + 1).array() -= static_cast<Scalar>(0.5);
-                    auto w_col2 = W.col(j + 1); orthog(W, w_col2, j + 1);
-                    W.col(j + 1).normalize(); S = 0;
-                } else { W.col(j + 1) /= S; }
-            } else { B(j, j) = S; }
-            j++;
-        }
-
-        // SVD of bidiagonal B
-        Eigen::JacobiSVD<DenseMatrix<Scalar>> svd_b(
-            B.topLeftCorner(work, work), Eigen::ComputeFullU | Eigen::ComputeFullV);
-        BS = svd_b.singularValues();
-        BU = svd_b.matrixV();
-        BV_mat = svd_b.matrixU();
-
-        Scalar R_F = F.norm();
-        if (R_F > eps) F /= R_F; else R_F = 0;
-
-        Smax = std::max(Smax, BS(0));
-        for (int i = 0; i < work; ++i) {
-            signed_res(i) = R_F * BU(work - 1, i);
-            residuals(i) = std::abs(signed_res(i));
-        }
-        for (int i = 0; i < work; ++i) {
-            svratio_comp(i) = (svratio_prev(i) > 0 && BS(i) > eps)
-                ? std::abs(svratio_prev(i) - BS(i)) / BS(i) : static_cast<Scalar>(1);
-        }
-
-        // Convergence test
-        k_r = work;
-        {
-            int n_conv = 0;
-            for (int i = 0; i < work; ++i)
-                if (residuals(i) < tol * Smax && svratio_comp(i) < svtol) n_conv++;
-            if (n_conv >= nu || BS.norm() < eps) { converged = true; }
-            else {
-                if (k_r < nu + n_conv) k_r = nu + n_conv;
-                if (k_r > work - 3) k_r = work - 3;
-                if (k_r < 1) k_r = 1;
-            }
-        }
-
-        if (config.verbose) {
-            SSVD_PRINT("    Streaming IRLBA iter %d: sigma_1=%.6e, mprod=%d\n",
-                       iter + 1, static_cast<double>(BS(0)), mprod);
-        }
-
-        if (converged) { iter++; break; }
-        if (iter >= maxit - 1) { iter++; break; }
-
-        for (int i = 0; i < work; ++i) svratio_prev(i) = BS(i);
-
-        // Augmented implicit restart
-        V1.leftCols(k_r).noalias() = V.leftCols(work) * BV_mat.topLeftCorner(work, k_r);
-        V.leftCols(k_r) = V1.leftCols(k_r);
-        V.col(k_r) = F;
-        W1.leftCols(k_r).noalias() = W.leftCols(work) * BU.topLeftCorner(work, k_r);
-        W.leftCols(k_r) = W1.leftCols(k_r);
-
-        B.setZero();
-        for (int i = 0; i < k_r; ++i) {
-            B(i, i) = BS(i);
-            B(i, k_r) = signed_res(i);
-        }
-        iter++;
-    }
-
-    // Extract results
-    int k_actual = std::min(nu, work);
-    if (BS.size() >= k_actual && BU.rows() >= work && BV_mat.rows() >= work) {
-        result.U = W.leftCols(work) * BU.leftCols(k_actual);
-        result.V = V.leftCols(work) * BV_mat.leftCols(k_actual);
-        result.d = BS.head(k_actual);
-    }
-
-    result.k_selected = k_actual;
+    result.k_selected = static_cast<int>(result.d.size());
     result.iters_per_factor.push_back(iter);
+
+    if (n_unconv > 0) {
+        char wbuf[320];
+        std::snprintf(wbuf, sizeof(wbuf),
+            "svd(method = \"irlba\"): %d of %d singular values did not reach "
+            "tol = %.1e after %d restarts; increase 'maxit' (number of restarts) "
+            "or loosen 'tol'",
+            n_unconv, result.k_selected, static_cast<double>(config.tol), iter);
+        add_warning(std::string(wbuf));
+    }
     result.wall_time_ms = Ms(Clock::now() - t_start).count();
 
     if (config.verbose) {
@@ -707,7 +486,7 @@ SVDResult<Scalar> streaming_randomized_svd(const SVDConfig<Scalar>& config)
     const int k = config.k_max;
     const int p = std::min(std::max(10, k / 5), std::min(m, n) - k);
     const int l = k + std::max(p, 0);
-    const int q = (config.max_iter <= 0) ? 3 : std::min(config.max_iter, 10);
+    const int q = (config.max_iter <= 0) ? 3 : std::min(config.max_iter, 100);
 
     SVDResult<Scalar> result;
     result.centered = config.center;
@@ -811,6 +590,12 @@ SVDResult<Scalar> streaming_krylov_svd(const SVDConfig<Scalar>& config)
         config.angular_u > 0 || config.angular_v > 0 ||
         config.has_gram_level_reg();
 
+    if (config.upper_bound_u > 0 || config.upper_bound_v > 0) {
+        throw std::invalid_argument(
+            "svd: 'upper_bound' is not supported: factors are returned with unit "
+            "norm, so an element-wise bound has no scale-free meaning");
+    }
+
     // If no constraints and no CV, just run streaming Lanczos (optimal)
     if (!has_constraints && !config.is_cv()) {
         return streaming_lanczos_svd<Scalar>(config);
@@ -843,7 +628,8 @@ SVDResult<Scalar> streaming_krylov_svd(const SVDConfig<Scalar>& config)
     lanczos_config.spz_path = config.spz_path;
 
     auto t_p1 = Clock::now();
-    SVDResult<Scalar> lanczos_result = streaming_lanczos_svd<Scalar>(lanczos_config);
+    // internal seed: short step budget, no convergence warning
+    SVDResult<Scalar> lanczos_result = streaming_lanczos_svd<Scalar>(lanczos_config, false);
     auto t_p1_end = Clock::now();
 
     if (config.verbose) {
@@ -1007,6 +793,8 @@ SVDResult<Scalar> streaming_krylov_svd(const SVDConfig<Scalar>& config)
     SVDResult<Scalar> result;
     result.centered = config.center;
     if (config.center) result.row_means = ctx.row_means;
+    result.scaled = config.scale;
+    if (config.scale) result.row_sds = ctx.row_sds;
     result.frobenius_norm_sq = static_cast<double>(ctx.frobenius_norm_sq);
 
     std::vector<int> order(k_actual);

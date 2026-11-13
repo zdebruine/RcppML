@@ -19,9 +19,9 @@ dclust(
 \arguments{
 \item{A}{matrix of features-by-samples in sparse format (preferred class is "Matrix::dgCMatrix")}
 
-\item{min_samples}{stopping criteria giving the minimum number of samples permitted in a cluster}
+\item{min_samples}{stopping criteria giving the minimum number of samples permitted in a cluster (at least 1)}
 
-\item{min_dist}{stopping criteria giving the minimum cosine distance of samples within a cluster to the center of their assigned vs. unassigned cluster. If \code{0}, neither this distance nor cluster centroids will be calculated.}
+\item{min_dist}{stopping criteria giving the minimum relative cosine distance (in \code{[0, 1]}, see Details) that a bipartition must reach to be accepted. If \code{0}, the distance is not calculated and only \code{min_samples} stops the recursion.}
 
 \item{tol}{in rank-2 NMF, the correlation distance (\eqn{1 - R^2}) between \eqn{w} across consecutive iterations at which to stop factorization}
 
@@ -55,18 +55,30 @@ See \code{\link{nmf}} and \code{\link{bipartition}} for technical considerations
 \strong{Stopping criteria}. Two stopping criteria are used to prevent indefinite division of clusters and tune the clustering resolution to a desirable range:
 \itemize{
 \item \code{min_samples}: Minimum number of samples permitted in a cluster
-\item \code{min_dist}: Minimum cosine distance of samples to their cluster center relative to their unassigned cluster center (an approximation of Newman-Girvan modularity)
+\item \code{min_dist}: Minimum relative cosine distance of a bipartition: the mean over samples of the cosine distance to the center of the other cluster minus the cosine distance to the center of the sample's own cluster
 }
 
 Newman-Girvan modularity (\eqn{Q}) is an interpretable and widely used measure of modularity for a bipartition. However, it requires the calculation of distance between all within-cluster and between-cluster sample pairs. This is computationally intensive, especially for large sample sets.
 
-\code{dclust} uses a measure which linearly approximates Newman-Girvan modularity, and simply requires the calculation of distance between all samples in a cluster and both cluster centers (the assigned and unassigned center), which is orders of magnitude faster to compute. Cosine distance is used instead of Euclidean distance since it handles outliers and sparsity well.
+\code{dclust} uses a measure in the same spirit that only requires the distance between all samples in a cluster and both cluster centers (the assigned and unassigned center), which is orders of magnitude faster to compute. Cosine distance is used instead of Euclidean distance since it handles outliers and sparsity well. For a sample \eqn{x} the contribution is \eqn{cos(x, c_{own}) - cos(x, c_{other})}, and the measure is the mean over all samples of the cluster being split. It lies in \eqn{[-1, 1]}: it is near 0 when a homogeneous cluster is split arbitrarily (the two centers point in the same direction) and approaches 1 when the two children have non-overlapping features. It does not depend on the number of features, the number of samples or the scale of the data. All-zero samples contribute 0.
 
-A bipartition is rejected if either of the two clusters contains fewer than \code{min_samples} or if the mean relative cosine distance of the bipartition is less than \code{min_dist}.
+Values of \code{min_dist} are therefore on a different scale than in RcppML 0.3.7, where the measure was a ratio that grew with the number of samples.
 
-A bipartition will only be attempted if there are more than \code{2 * min_samples} samples in the cluster, meaning that \code{dist} may not be calculated for some clusters.
+\strong{Choosing \code{min_dist}.} The rank-2 factorization always finds the direction of largest variation, also in a cluster that is pure noise, so the distance of a split of a homogeneous cluster is small but not zero, and it grows with the noise level and shrinks with the number of samples. As a guide:
+\itemize{
+\item low-noise data (samples within a cluster have cosine similarity above 0.95 to their center): splits of a homogeneous cluster score below about 0.02, real splits above 0.3; any \code{min_dist} between 0.05 and 0.2 works.
+\item heavy noise (for example every entry multiplied by exponential noise, or sparse counts): splits of a homogeneous cluster of 30 to 60 samples score about 0.1 to 0.2, while splits between distinct clusters score about 0.4 to 0.7; use \code{min_dist} around 0.3.
+}
 
-\strong{Reproducibility.} Because rank-2 NMF is approximate and requires random initialization, results may vary slightly across restarts. Therefore, specify a \code{seed} to guarantee absolute reproducibility.
+To calibrate on your own data, look at \code{bipartition(A)$dist} for the first split and at \code{bipartition(A, samples = s)$dist} for a set of samples \code{s} that you believe to be homogeneous, and choose a value between the two.
+
+The default \code{min_dist = 0} (as in 0.3.7) does not compute the distance: every bipartition is accepted until clusters are smaller than \code{2 * min_samples}, which returns a full binary tree down to the \code{min_samples} resolution rather than a set of distinct clusters. Set \code{min_dist} to obtain clusters that are separated from each other.
+
+A bipartition is rejected if either of the two clusters contains fewer than \code{min_samples} or if the relative cosine distance of the bipartition is less than \code{min_dist}. A rejected bipartition leaves the parent cluster as a leaf, so every sample belongs to exactly one returned cluster.
+
+A bipartition will only be attempted if there are at least \code{2 * min_samples} samples in the cluster, meaning that \code{dist} may not be calculated for some clusters.
+
+\strong{Reproducibility.} Rank-2 NMF requires random initialization, so results may differ slightly between seeds. The default \code{seed = NULL} uses a fixed seed; results are reproducible and do not depend on \code{threads}.
 
 Other than setting the seed, reproducibility may be improved by setting \code{tol} to a smaller number to increase the exactness of each bipartition.
 }

@@ -164,7 +164,9 @@ st_read <- function(path, cols = NULL, reorder = TRUE, threads = NULL) {
   path <- normalizePath(path, mustWork = TRUE)
   if (is.null(threads)) {
     fsize <- file.info(path)$size
-    threads <- if (!is.na(fsize) && fsize < 50e6) 1L else 0L
+    threads <- if (!is.na(fsize) && fsize < 50e6) 1L else .resolve_threads(0L)
+  } else {
+    threads <- .resolve_threads(threads)
   }
   Rcpp_sp_read(path, cols = cols, reorder = reorder, threads = as.integer(threads))
 }

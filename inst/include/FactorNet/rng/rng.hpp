@@ -181,6 +181,36 @@ public:
                           static_cast<uint32_t>(col), inv_prob);
     }
 
+    /**
+     * @brief Convert a holdout probability into a 64-bit hash threshold.
+     *
+     * An entry is held out when hash(seed, i, j) < threshold, so the holdout
+     * probability is threshold / 2^64 = fraction for any fraction in (0, 1),
+     * not only for reciprocals of integers.
+     *
+     * @param fraction  Holdout probability. <= 0 gives 0 (nothing held out),
+     *                  >= 1 gives UINT64_MAX.
+     */
+    FACTORNET_HOST_DEVICE static uint64_t holdout_threshold(double fraction) noexcept {
+        if (!(fraction > 0.0)) return 0ULL;
+        if (fraction >= 1.0) return UINT64_MAX;
+        const double t = fraction * 18446744073709551616.0;  // fraction * 2^64
+        if (t >= 18446744073709551616.0) return UINT64_MAX;
+        return static_cast<uint64_t>(t);
+    }
+
+    /**
+     * @brief Deterministic holdout test against a precomputed threshold.
+     *
+     * Use with holdout_threshold(). Pure function of (seed, i, j).
+     */
+    FACTORNET_HOST_DEVICE static bool is_holdout_threshold(uint64_t seed,
+                                                         uint32_t i,
+                                                         uint32_t j,
+                                                         uint64_t threshold) noexcept {
+        return hash(seed, i, j) < threshold;
+    }
+
     // -------------------------------------------------------------------
     // Matrix initialization helpers
     // -------------------------------------------------------------------

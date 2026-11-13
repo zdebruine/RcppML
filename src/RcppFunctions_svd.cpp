@@ -48,6 +48,14 @@ static Rcpp::List svd_result_to_list(const FactorNet::SVDResult<Scalar>& result)
         ret["train_loss"] = trl;
     }
 
+    // Convergence warnings recorded by the solvers; R/svd.R raises them.
+    std::vector<std::string>& pending = FactorNet::svd::pending_warnings();
+    if (!pending.empty()) {
+        Rcpp::CharacterVector w(pending.begin(), pending.end());
+        ret["warnings"] = w;
+        pending.clear();
+    }
+
     return ret;
 }
 
@@ -87,6 +95,8 @@ Rcpp::List Rcpp_svd_pca(
     double irls_tol = 1e-4)
 {
     using Scalar = float;
+
+    FactorNet::svd::pending_warnings().clear();
 
     // Build config from plain-old-data parameters
     auto config = FactorNet::svd::build_svd_config_scalars<Scalar>(
@@ -177,6 +187,8 @@ Rcpp::List Rcpp_svd_streaming_spz(
     double irls_tol = 1e-4)
 {
     using Scalar = float;
+
+    FactorNet::svd::pending_warnings().clear();
 
     // Build config — spz_path supplied here
     auto config = FactorNet::svd::build_svd_config_scalars<Scalar>(

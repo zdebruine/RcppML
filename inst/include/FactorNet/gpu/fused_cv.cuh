@@ -157,7 +157,7 @@ __device__ __forceinline__ bool is_test_entry(
     h = (h ^ (h >> 30)) * 0xbf58476d1ce4e5b9ULL;
     h = (h ^ (h >> 27)) * 0x94d049bb133111ebULL;
     h ^= h >> 31;
-    return (inv_prob > 0) && (h < (0xFFFFFFFFFFFFFFFFULL / inv_prob));
+    return (h < inv_prob)  /* inv_prob carries the threshold f * 2^64 */;
 }
 
 /**

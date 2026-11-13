@@ -27,9 +27,11 @@ Overlay training curves from multiple NMF models to compare convergence behavior
 \donttest{
 library(Matrix)
 A <- abs(rsparsematrix(100, 50, 0.2))
-model1 <- nmf(A, k = 5, L1 = 0.01)
-model2 <- nmf(A, k = 5, L1 = 0.1)
-compare_nmf(model1, model2, labels = c("L1=0.01", "L1=0.1"))
+model1 <- nmf(A, k = 5, L1 = 0.01, seed = 1, threads = 2)
+model2 <- nmf(A, k = 5, L1 = 0.1, seed = 1, threads = 2)
+if (requireNamespace("ggplot2", quietly = TRUE)) {
+  compare_nmf(model1, model2, labels = c("L1=0.01", "L1=0.1"))
+}
 }
 }
 \seealso{

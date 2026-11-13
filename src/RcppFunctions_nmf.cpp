@@ -8,6 +8,7 @@
 #include "../inst/include/FactorNet/nmf/fit.hpp"
 #include "../inst/include/FactorNet/nmf/fit_streaming_spz.hpp"
 #include "../inst/include/FactorNet/nmf/rank_cv.hpp"
+#include "../inst/include/FactorNet/primitives/cpu/sparse_setup.hpp"
 
 using namespace FactorNet::nmf;
 using FactorNet::tiny_num;
@@ -222,7 +223,9 @@ Rcpp::List Rcpp_nmf_rank_cv(SEXP A_sexp,
     RankSearchResult<float> result;
     if (Rf_isS4(A_sexp)) {
         auto A_mapped = mapSparseMatrix(Rcpp::S4(A_sexp));
-        Eigen::SparseMatrix<float> A_f = A_mapped.cast<float>();
+        // Parallel single-precision copy (identical to A_mapped.cast<float>())
+        Eigen::SparseMatrix<float> A_f =
+            FactorNet::primitives::sparse_cast<float>(A_mapped, config.threads);
         result = find_optimal_rank(A_f, k_init, max_k, tolerance, config, verbose);
     } else {
         Eigen::MatrixXd A_d = Rcpp::as<Eigen::MatrixXd>(A_sexp);
@@ -295,7 +298,7 @@ Rcpp::List Rcpp_nmf_full(
     bool symmetric_nmf = false,
     int solver_mode = 0,
     int init_mode = 0,
-    int irls_max_iter = 20,
+    int irls_max_iter = 5,
     double irls_tol = 1e-4,
     int gp_dispersion_mode = 1,
     double gp_theta_init = 0.1,
@@ -444,9 +447,48 @@ Rcpp::List Rcpp_nmf_full(
             fconfig.H.target_lambda = static_cast<float>(tl[1]);
     }
 
+    // --- Automatic rank search (k = "auto") ---
+    // The search runs with the complete configuration built above (loss,
+    // masks, penalties, solver, seeds), so the selected rank refers to the
+    // same model that R fits afterwards at k_optimal.
+    if (k_auto) {
+        RankSearchResult<float> rs;
+        if (is_sparse) {
+            auto A_mapped = mapSparseMatrix(Rcpp::S4(A_sexp));
+            Eigen::SparseMatrix<float> A_f =
+                FactorNet::primitives::sparse_cast<float>(A_mapped, fconfig.threads);
+            rs = find_optimal_rank(A_f, k_auto_min, k_auto_max, 2, fconfig, verbose);
+        } else {
+            Eigen::MatrixXd A_d = Rcpp::as<Eigen::MatrixXd>(A_sexp);
+            Eigen::MatrixXf A_f = A_d.cast<float>();
+            rs = find_optimal_rank(A_f, k_auto_min, k_auto_max, 2, fconfig, verbose);
+        }
+        Rcpp::List evaluations_list(rs.evaluations.size());
+        for (size_t i = 0; i < rs.evaluations.size(); ++i) {
+            const auto& eval = rs.evaluations[i];
+            evaluations_list[i] = Rcpp::List::create(
+                Rcpp::Named("rank") = eval.rank,
+                Rcpp::Named("train_loss") = eval.train_loss_final,
+                Rcpp::Named("test_loss") = eval.test_loss_final,
+                Rcpp::Named("iterations") = eval.iterations
+            );
+        }
+        Rcpp::List ret = Rcpp::List::create(
+            Rcpp::Named("k_optimal") = rs.k_optimal,
+            Rcpp::Named("evaluations") = evaluations_list,
+            Rcpp::Named("k_low") = rs.k_low,
+            Rcpp::Named("k_high") = rs.k_high,
+            Rcpp::Named("overfitting_detected") = rs.overfitting_detected
+        );
+        ret.attr("mode") = "rank_search";
+        return ret;
+    }
+
     if (is_sparse) {
         auto A_mapped = mapSparseMatrix(Rcpp::S4(A_sexp));
-        Eigen::SparseMatrix<float> A_f = A_mapped.cast<float>();
+        // Parallel single-precision copy (identical to A_mapped.cast<float>())
+        Eigen::SparseMatrix<float> A_f =
+            FactorNet::primitives::sparse_cast<float>(A_mapped, fconfig.threads);
         auto result = FactorNet::nmf::nmf<float>(A_f, fconfig, W_init_f_ptr, H_init_f_ptr);
         return result_to_list(result);
     } else {
@@ -603,4 +645,53 @@ Rcpp::List Rcpp_nmf_streaming_spz(
         ret["profile"] = prof_vec;
     }
     return ret;
+}
+
+// ============================================================================
+// TEST HOOK: parallel sparse setup against Eigen's serial result
+// ============================================================================
+
+namespace {
+
+inline bool same_sparse_f(const Eigen::SparseMatrix<float>& a,
+                          const Eigen::SparseMatrix<float>& b) {
+    if (a.rows() != b.rows() || a.cols() != b.cols() ||
+        a.nonZeros() != b.nonZeros() ||
+        !a.isCompressed() || !b.isCompressed())
+        return false;
+    for (Eigen::Index j = 0; j <= a.cols(); ++j)
+        if (a.outerIndexPtr()[j] != b.outerIndexPtr()[j]) return false;
+    for (Eigen::Index q = 0; q < a.nonZeros(); ++q) {
+        if (a.innerIndexPtr()[q] != b.innerIndexPtr()[q]) return false;
+        if (a.valuePtr()[q] != b.valuePtr()[q]) return false;
+    }
+    return true;
+}
+
+}  // namespace
+
+// Internal, for tests only: runs the parallel single-precision copy and the
+// parallel transpose (forced on, whatever the size) and reports whether each
+// equals Eigen's serial result exactly.
+// [[Rcpp::export]]
+Rcpp::List Rcpp_test_sparse_setup(const Rcpp::S4& A_s4, int threads = 2) {
+    auto A = mapSparseMatrix(A_s4);
+
+    Eigen::SparseMatrix<float> ref_cast = A.cast<float>();
+    ref_cast.makeCompressed();
+    Eigen::SparseMatrix<float> ref_t = ref_cast.transpose();
+    ref_t.makeCompressed();
+
+    // min_parallel_nnz = 0 forces the parallel code path
+    Eigen::SparseMatrix<float> par_cast =
+        FactorNet::primitives::sparse_cast<float>(A, threads, 0);
+    Eigen::SparseMatrix<float> par_t =
+        FactorNet::primitives::sparse_transpose<float>(par_cast, threads, 0);
+    Eigen::SparseMatrix<float> par_t_from_double =
+        FactorNet::primitives::sparse_transpose<float>(A, threads, 0);
+
+    return Rcpp::List::create(
+        Rcpp::Named("cast") = same_sparse_f(ref_cast, par_cast),
+        Rcpp::Named("transpose") = same_sparse_f(ref_t, par_t),
+        Rcpp::Named("transpose_from_double") = same_sparse_f(ref_t, par_t_from_double));
 }

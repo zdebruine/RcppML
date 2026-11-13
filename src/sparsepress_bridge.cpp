@@ -229,10 +229,24 @@ S4 Rcpp_sp_read(const std::string& path,
                 int threads = 0) {
     std::vector<uint8_t> data = streampress::read_compressed(path);
 
+    if (data.size() < 6 ||
+        data[0] != 'S' || data[1] != 'P' || data[2] != 'R' || data[3] != 'Z') {
+        stop("Not a valid StreamPress (.spz) file: " + path);
+    }
+    streampress::require_little_endian();
+
     // Check version to decide decode path
-    if (data.size() >= 6) {
+    {
         uint16_t version;
         std::memcpy(&version, data.data() + 4, 2);
+        if (version == 3) {
+            stop("'" + path + "' is a dense (v3) .spz file; "
+                 "read it with st_read_dense().");
+        }
+        if (version != 1 && version != 2) {
+            stop("Unsupported .spz format version " + std::to_string(version) +
+                 " in '" + path + "'.");
+        }
         if (version == 2) {
             // v2 path: chunked decode with metadata support
             streampress::v2::DecompressConfig_v2 dcfg;
@@ -241,6 +255,13 @@ S4 Rcpp_sp_read(const std::string& path,
 
             if (cols.isNotNull()) {
                 IntegerVector col_vec(cols);
+                if (col_vec.size() == 0 ||
+                    IntegerVector::is_na(col_vec[0]) ||
+                    IntegerVector::is_na(col_vec[col_vec.size() - 1]) ||
+                    col_vec[0] < 1 || col_vec[col_vec.size() - 1] < col_vec[0]) {
+                    stop("'cols' must be a non-empty, increasing range of "
+                         "1-based column indices.");
+                }
                 // Convert from R 1-indexed to C++ 0-indexed
                 dcfg.col_start = col_vec[0] - 1;
                 dcfg.col_end = col_vec[col_vec.size() - 1];  // exclusive
@@ -294,10 +315,8 @@ List Rcpp_sp_metadata(const std::string& path) {
     FILE* f = fopen(path.c_str(), "rb");
     if (!f) stop("Cannot open file: " + path);
 
-    // Get file size
-    fseek(f, 0, SEEK_END);
-    long file_size = ftell(f);
-    fseek(f, 0, SEEK_SET);
+    // Get file size (64-bit on every platform)
+    long long file_size = streampress::spz_file_size(f);
 
     // Read enough bytes for either v1 (72) or v2 (128) header
     const size_t max_header = 128;
@@ -511,8 +530,7 @@ List Rcpp_sp_write_dense(const NumericMatrix& A, const std::string& path,
     FILE* f = fopen(path.c_str(), "rb");
     double file_bytes = 0;
     if (f) {
-        fseek(f, 0, SEEK_END);
-        file_bytes = static_cast<double>(ftell(f));
+        file_bytes = static_cast<double>(streampress::spz_file_size(f));
         fclose(f);
     }
 
@@ -538,12 +556,15 @@ NumericMatrix Rcpp_sp_read_dense(const std::string& path) {
     // Read file into memory
     FILE* f = fopen(path.c_str(), "rb");
     if (!f) stop("Cannot open file: " + path);
-    fseek(f, 0, SEEK_END);
-    size_t file_size = static_cast<size_t>(ftell(f));
-    fseek(f, 0, SEEK_SET);
+    const long long file_size_ll = streampress::spz_file_size(f);
+    if (file_size_ll < 0) {
+        fclose(f);
+        stop("Cannot determine file size: " + path);
+    }
+    size_t file_size = static_cast<size_t>(file_size_ll);
 
     std::vector<uint8_t> data(file_size);
-    if (fread(data.data(), 1, file_size, f) != file_size) {
+    if (file_size > 0 && fread(data.data(), 1, file_size, f) != file_size) {
         fclose(f);
         stop("Failed to read file");
     }
@@ -581,11 +602,10 @@ List Rcpp_sp_metadata_v3(const std::string& path) {
     uint8_t buf[128];
     size_t nread = fread(buf, 1, 128, f);
 
-    fseek(f, 0, SEEK_END);
-    long file_size = ftell(f);
+    long long file_size = streampress::spz_file_size(f);
     fclose(f);
 
-    if (nread < 8) stop("File too small");
+    if (nread < streampress::v3::HEADER_SIZE_V3) stop("File too small");
 
     uint16_t ver = streampress::v3::detect_version(buf, nread);
     if (ver != 3) {
@@ -789,7 +809,9 @@ static DataFrame deserialize_to_dataframe(const uint8_t* buf, size_t buf_bytes) 
                     r_levels[k] = col.dict[k];
                 IntegerVector factor_codes(col.codes.size());
                 for (size_t i = 0; i < col.codes.size(); ++i)
-                    factor_codes[i] = (col.codes[i] == NA_UINT32) ? NA_INTEGER : static_cast<int>(col.codes[i] + 1);
+                    factor_codes[i] = (col.codes[i] == NA_UINT32 ||
+                                       col.codes[i] >= col.dict.size())
+                        ? NA_INTEGER : static_cast<int>(col.codes[i] + 1);
                 factor_codes.attr("levels") = r_levels;
                 factor_codes.attr("class") = "factor";
                 result[j] = factor_codes;
@@ -813,7 +835,19 @@ static DataFrame read_table_at_offset(const std::string& path, uint64_t table_of
     FILE* f = fopen(path.c_str(), "rb");
     if (!f) stop("Cannot open file: " + path);
 
-    fseek(f, static_cast<long>(table_off), SEEK_SET);
+    // Every size below comes from the file; none may exceed what follows
+    // the table offset.
+    const long long fsize = streampress::spz_file_size(f);
+    if (fsize < 0 || table_off > static_cast<uint64_t>(fsize)) {
+        fclose(f);
+        stop("obs/var table offset lies outside the file");
+    }
+    const uint64_t table_avail = static_cast<uint64_t>(fsize) - table_off;
+
+    if (streampress::spz_fseek(f, table_off) != 0) {
+        fclose(f);
+        stop("Failed to seek to table");
+    }
     uint8_t tbl_hdr_buf[16];
     if (fread(tbl_hdr_buf, 1, 16, f) != 16) {
         fclose(f);
@@ -832,6 +866,11 @@ static DataFrame read_table_at_offset(const std::string& path, uint64_t table_of
         stop("Invalid obs/var table magic bytes");
     }
 
+    if (static_cast<uint64_t>(tbl_hdr.n_cols) * sizeof(ColDescriptor) >
+        table_avail - 16) {
+        fclose(f);
+        stop("obs/var table descriptors extend past the file");
+    }
     size_t desc_bytes = static_cast<size_t>(tbl_hdr.n_cols) * sizeof(ColDescriptor);
     std::vector<uint8_t> desc_buf(desc_bytes);
     if (fread(desc_buf.data(), 1, desc_bytes, f) != desc_bytes) {
@@ -863,9 +902,16 @@ static DataFrame read_table_at_offset(const std::string& path, uint64_t table_of
     }
 
     size_t hdr_plus_desc = 16 + desc_bytes;
+    if (max_end > table_avail) {
+        fclose(f);
+        stop("obs/var table data extends past the file");
+    }
     size_t total_bytes = std::max(hdr_plus_desc, static_cast<size_t>(max_end));
     std::vector<uint8_t> full_buf(total_bytes);
-    fseek(f, static_cast<long>(table_off), SEEK_SET);
+    if (streampress::spz_fseek(f, table_off) != 0) {
+        fclose(f);
+        stop("Failed to seek to table");
+    }
     if (fread(full_buf.data(), 1, total_bytes, f) != total_bytes) {
         fclose(f);
         stop("Failed to read table data");

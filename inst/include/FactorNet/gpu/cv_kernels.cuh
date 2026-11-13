@@ -192,7 +192,7 @@ inline CVNorms precompute_cv_norms(
             ch ^= ch >> 31;
             if (ch >= col_sub_thresh) return false;
         }
-        return rng.is_holdout(i, j, inv_prob);
+        return FactorNet::rng::SplitMix64::is_holdout_threshold(rng.state(), static_cast<uint32_t>(i), static_cast<uint32_t>(j), inv_prob);
     };
 
     if (mask_zeros) {
@@ -381,7 +381,7 @@ void irls_solve_col_cv(
     if (mask_zeros) {
         for (int p = col_ptr[j]; p < col_ptr[j + 1]; ++p) {
             int i = row_idx[p];
-            bool is_test = col_in_sub && rng.is_holdout(i, j, inv_prob);
+            bool is_test = col_in_sub && FactorNet::rng::SplitMix64::is_holdout_threshold(rng.state(), static_cast<uint32_t>(i), static_cast<uint32_t>(j), inv_prob);
             if (!is_test) {
                 train_entries.push_back({i, values[p]});
             }
@@ -391,7 +391,7 @@ void irls_solve_col_cv(
         for (int i = 0; i < m; ++i) {
             Scalar val = Scalar(0);
             if (p < col_ptr[j + 1] && row_idx[p] == i) { val = values[p]; ++p; }
-            bool is_test = col_in_sub && rng.is_holdout(i, j, inv_prob);
+            bool is_test = col_in_sub && FactorNet::rng::SplitMix64::is_holdout_threshold(rng.state(), static_cast<uint32_t>(i), static_cast<uint32_t>(j), inv_prob);
             if (!is_test) {
                 train_entries.push_back({i, val});
             }
@@ -519,7 +519,7 @@ void irls_w_update_cv(
     // But wait — for W update, we iterate over rows of A, i.e., columns of A^T
     // For column i of A^T: entries correspond to A's nonzeros in row i
     //   row_idx[p] for A^T column i = column index j in original A
-    //   The holdout test for entry (i,j) in original A is rng.is_holdout(i, j, inv_prob)
+    //   The holdout test for entry (i,j) in original A is FactorNet::rng::SplitMix64::is_holdout_threshold(rng.state(), static_cast<uint32_t>(i), static_cast<uint32_t>(j), inv_prob)
 
     // We need a custom version that swaps i,j for the holdout check
     // since irls_solve_col_cv does rng.is_holdout(row, col, inv_prob)
@@ -567,7 +567,7 @@ void irls_w_update_cv(
                     col_in_sub = (ch < col_sub_thresh);
                 }
 
-                bool is_test = col_in_sub && rng.is_holdout(i, j, inv_prob);
+                bool is_test = col_in_sub && FactorNet::rng::SplitMix64::is_holdout_threshold(rng.state(), static_cast<uint32_t>(i), static_cast<uint32_t>(j), inv_prob);
                 if (!is_test) {
                     train_entries.push_back({j, at_values[p]});
                 }
@@ -588,7 +588,7 @@ void irls_w_update_cv(
                     col_in_sub = (ch < col_sub_thresh);
                 }
 
-                bool is_test = col_in_sub && rng.is_holdout(i, j, inv_prob);
+                bool is_test = col_in_sub && FactorNet::rng::SplitMix64::is_holdout_threshold(rng.state(), static_cast<uint32_t>(i), static_cast<uint32_t>(j), inv_prob);
                 if (!is_test) {
                     train_entries.push_back({j, val});
                 }
@@ -695,7 +695,7 @@ void compute_cv_loss_irls(
                 double entry_loss = static_cast<double>(
                     FactorNet::compute_loss(values[p], predicted, loss));
 
-                bool is_test = col_in_sub && rng.is_holdout(i, j, inv_prob);
+                bool is_test = col_in_sub && FactorNet::rng::SplitMix64::is_holdout_threshold(rng.state(), static_cast<uint32_t>(i), static_cast<uint32_t>(j), inv_prob);
                 if (is_test) { test_sum += entry_loss; test_count++; }
                 else { train_sum += entry_loss; train_count++; }
             }
@@ -710,7 +710,7 @@ void compute_cv_loss_irls(
                 double entry_loss = static_cast<double>(
                     FactorNet::compute_loss(val, predicted, loss));
 
-                bool is_test = col_in_sub && rng.is_holdout(i, j, inv_prob);
+                bool is_test = col_in_sub && FactorNet::rng::SplitMix64::is_holdout_threshold(rng.state(), static_cast<uint32_t>(i), static_cast<uint32_t>(j), inv_prob);
                 if (is_test) { test_sum += entry_loss; test_count++; }
                 else { train_sum += entry_loss; train_count++; }
             }
@@ -801,7 +801,7 @@ void masked_h_update_cv(
             for (int p = col_ptr[j]; p < col_ptr[j + 1]; ++p) {
                 int i = row_idx[p];
                 if (is_user_masked(i, j, mask)) continue;
-                bool is_test = col_in_sub && rng.is_holdout(i, j, inv_prob);
+                bool is_test = col_in_sub && FactorNet::rng::SplitMix64::is_holdout_threshold(rng.state(), static_cast<uint32_t>(i), static_cast<uint32_t>(j), inv_prob);
                 if (!is_test) {
                     train_entries.push_back({i, values[p]});
                 }
@@ -815,7 +815,7 @@ void masked_h_update_cv(
                 }
                 Scalar val = Scalar(0);
                 if (p < col_ptr[j + 1] && row_idx[p] == i) { val = values[p]; ++p; }
-                bool is_test = col_in_sub && rng.is_holdout(i, j, inv_prob);
+                bool is_test = col_in_sub && FactorNet::rng::SplitMix64::is_holdout_threshold(rng.state(), static_cast<uint32_t>(i), static_cast<uint32_t>(j), inv_prob);
                 if (!is_test) {
                     train_entries.push_back({i, val});
                 }
@@ -950,7 +950,7 @@ void masked_w_update_cv(
                     ch ^= ch >> 31;
                     col_in_sub = (ch < col_sub_thresh);
                 }
-                bool is_test = col_in_sub && rng.is_holdout(i, j, inv_prob);
+                bool is_test = col_in_sub && FactorNet::rng::SplitMix64::is_holdout_threshold(rng.state(), static_cast<uint32_t>(i), static_cast<uint32_t>(j), inv_prob);
                 if (!is_test) {
                     train_entries.push_back({j, at_values[p]});
                 }
@@ -974,7 +974,7 @@ void masked_w_update_cv(
                     ch ^= ch >> 31;
                     col_in_sub = (ch < col_sub_thresh);
                 }
-                bool is_test = col_in_sub && rng.is_holdout(i, j, inv_prob);
+                bool is_test = col_in_sub && FactorNet::rng::SplitMix64::is_holdout_threshold(rng.state(), static_cast<uint32_t>(i), static_cast<uint32_t>(j), inv_prob);
                 if (!is_test) {
                     train_entries.push_back({j, val});
                 }
@@ -1090,7 +1090,7 @@ void masked_cv_loss(
                 double entry_loss = static_cast<double>(
                     FactorNet::compute_loss(values[p], predicted, loss));
 
-                bool is_test = col_in_sub && rng.is_holdout(i, j, inv_prob);
+                bool is_test = col_in_sub && FactorNet::rng::SplitMix64::is_holdout_threshold(rng.state(), static_cast<uint32_t>(i), static_cast<uint32_t>(j), inv_prob);
                 if (is_test) { test_sum += entry_loss; test_count++; }
                 else { train_sum += entry_loss; train_count++; }
             }
@@ -1106,7 +1106,7 @@ void masked_cv_loss(
                 double entry_loss = static_cast<double>(
                     FactorNet::compute_loss(val, predicted, loss));
 
-                bool is_test = col_in_sub && rng.is_holdout(i, j, inv_prob);
+                bool is_test = col_in_sub && FactorNet::rng::SplitMix64::is_holdout_threshold(rng.state(), static_cast<uint32_t>(i), static_cast<uint32_t>(j), inv_prob);
                 if (is_test) { test_sum += entry_loss; test_count++; }
                 else { train_sum += entry_loss; train_count++; }
             }
@@ -1162,9 +1162,16 @@ CVNMFResult nmf_cv_fit_gpu(
     CVNMFResult result;
 
     // Create RNG
-    FactorNet::rng::SplitMix64 rng(config.cv_seed);
-    uint64_t inv_prob = config.holdout_fraction > 0
-                      ? static_cast<uint64_t>(1.0 / config.holdout_fraction) : 0;
+    // Same holdout rule as the CPU LazySpeckledMask: the seed is the low 32
+    // bits of the CV seed (0 mapped to 12345), and entry (i, j) is held out
+    // when hash(seed, i, j) < holdout_fraction * 2^64.
+    // NOTE: `inv_prob` (here and in every kernel it is passed to) now carries
+    // that 64-bit threshold, not 1/fraction; 0 still means "no holdout".
+    const uint32_t cv_seed32 = static_cast<uint32_t>(config.cv_seed);
+    FactorNet::rng::SplitMix64 rng(cv_seed32 == 0 ? 12345ULL
+                                                  : static_cast<uint64_t>(cv_seed32));
+    uint64_t inv_prob = FactorNet::rng::SplitMix64::holdout_threshold(
+        static_cast<double>(config.holdout_fraction));
 
     // Column subsample threshold
     uint64_t col_sub_thresh = (config.col_subsample_frac >= 1.0)

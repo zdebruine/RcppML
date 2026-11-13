@@ -145,6 +145,142 @@ inline void apply_features(
     }
 }
 
+// ========================================================================
+// 2a. Per-column penalty terms for the CPU fit paths (fit_cpu.hpp)
+// ========================================================================
+
+/**
+ * @brief Penalty terms that differ from column to column
+ *
+ * Built once per half-step by build_column_penalty() and consumed by every
+ * CPU solve path (fused, standard, masked, IRLS), so that each path applies
+ * the same penalties.
+ */
+template<typename Scalar>
+struct ColumnPenalty {
+    /// k × ncols term added to the right-hand side (target, graph neighbors).
+    /// Empty when unused.
+    DenseMatrix<Scalar> B_add;
+
+    /// Per-column ridge from the graph Laplacian diagonal (λ·L_jj).
+    /// Empty when unused.
+    DenseVector<Scalar> ridge;
+
+    /// ‖previous column‖₂ on the scale of the variable (for L21).
+    /// Empty when unused.
+    DenseVector<Scalar> group_norm;
+
+    /// Ridge shared by all columns from the target penalty (λ_target > 0).
+    Scalar shared_ridge = 0;
+
+    bool has_B() const noexcept { return B_add.size() > 0; }
+    bool has_ridge() const noexcept { return ridge.size() > 0; }
+    bool has_group() const noexcept { return group_norm.size() > 0; }
+
+    const DenseMatrix<Scalar>* B_ptr() const noexcept {
+        return has_B() ? &B_add : nullptr;
+    }
+    const Scalar* ridge_ptr() const noexcept {
+        return has_ridge() ? ridge.data() : nullptr;
+    }
+    const Scalar* group_ptr() const noexcept {
+        return has_group() ? group_norm.data() : nullptr;
+    }
+};
+
+/**
+ * @brief PROJ_ADV batch removal (negative target_lambda) on a Gram matrix
+ *
+ * Subtracts the trace-scaled target covariance from G, then clips negative
+ * eigenvalues.  Same operation as the negative branch of apply_features().
+ */
+template<typename Scalar>
+inline void apply_proj_adv(DenseMatrix<Scalar>& G,
+                           const FactorConfig<Scalar>& fc)
+{
+    const Scalar abs_lambda = std::abs(fc.target_lambda);
+    const Scalar trace_G  = G.trace();
+    const Scalar trace_GT = fc.target_gram.trace();
+    const Scalar scale = (trace_GT > static_cast<Scalar>(1e-10))
+                       ? (trace_G / trace_GT) : static_cast<Scalar>(0);
+    G.noalias() -= abs_lambda * scale * fc.target_gram;
+
+    Eigen::SelfAdjointEigenSolver<DenseMatrix<Scalar>> eig(G);
+    DenseVector<Scalar> evals = eig.eigenvalues();
+    const Scalar eps = static_cast<Scalar>(1e-8);
+    bool has_neg = false;
+    for (int i = 0; i < evals.size(); ++i) {
+        if (evals(i) < eps) {
+            evals(i) = eps;
+            has_neg = true;
+        }
+    }
+    if (has_neg) {
+        const DenseMatrix<Scalar> V = eig.eigenvectors();
+        G.noalias() = V * evals.asDiagonal() * V.transpose();
+    }
+}
+
+/**
+ * @brief Build all penalty terms for one half-step (any CPU path)
+ *
+ * Shared terms are applied to G; column-specific terms go into `cp`.
+ * L1, bounds and non-negativity are handled inside the solvers.
+ *
+ *   L2      : G.diagonal() += L2                       (if add_L2)
+ *   target  : λ > 0:  G.diagonal() += λ,  B_add += λ·T
+ *             λ < 0:  PROJ_ADV on G                    (if allow_proj_adv)
+ *   graph   : ridge_j = λ·L_jj,  B_add_j += λ·Σ_{i≠j}(−L_ij)·s_i
+ *   L21     : group_norm_j = ‖s_j‖₂
+ *
+ * @param G       Gram matrix (k × k) to receive the shared terms
+ * @param S       Previous iterate of the factor being solved, k × ncols, on
+ *                the scale of the variable (i.e. with d applied)
+ * @param fc      Factor configuration
+ * @param cp      Output column penalty (fully overwritten)
+ * @param add_L2  Add the L2 ridge to G (false when the solver adds it)
+ * @param allow_proj_adv  Apply the negative-target branch to G
+ */
+template<typename Scalar>
+inline void build_column_penalty(
+    DenseMatrix<Scalar>& G,
+    const DenseMatrix<Scalar>& S,
+    const FactorConfig<Scalar>& fc,
+    ColumnPenalty<Scalar>& cp,
+    bool add_L2 = true,
+    bool allow_proj_adv = true)
+{
+    cp.B_add.resize(0, 0);
+    cp.ridge.resize(0);
+    cp.group_norm.resize(0);
+    cp.shared_ridge = 0;
+
+    if (add_L2 && fc.L2 > 0) G.diagonal().array() += fc.L2;
+
+    const bool pos_target = fc.target && fc.target_lambda > 0;
+    const bool has_graph  = fc.graph && fc.graph_lambda > 0;
+
+    if (pos_target || has_graph) {
+        cp.B_add.resize(S.rows(), S.cols());
+        cp.B_add.setZero();
+    }
+
+    if (pos_target) {
+        G.diagonal().array() += fc.target_lambda;
+        cp.shared_ridge = fc.target_lambda;
+        cp.B_add.noalias() += fc.target_lambda * (*fc.target);
+    } else if (fc.target && fc.target_lambda < 0 && allow_proj_adv) {
+        apply_proj_adv(G, fc);
+    }
+
+    if (has_graph)
+        features::graph_column_terms(*fc.graph, S, fc.graph_lambda,
+                                     cp.ridge, cp.B_add);
+
+    if (fc.L21 > 0)
+        cp.group_norm = S.colwise().norm().transpose();
+}
+
 /**
  * @brief Apply Tier-2 features only (angular, graph_reg, L21)
  *
@@ -333,8 +469,19 @@ inline void projective_h_update(
     // H = W_Td · A (via the backend-specific RHS function)
     rhs_fn(W_Td, H);
 
-    // Normalize H → d
-    extract_scaling(H, d, norm_type);
+    // Normalize H.  The row norms of W_Td·A are NOT the scale of the model:
+    // they carry an extra factor ‖w_iᵀA‖ and, written into d, would compound
+    // every iteration (d is applied to W_T again above), overflowing within
+    // a few iterations whenever something reads d before the W-update
+    // resets it — the graph and L21 penalties do.  d therefore keeps the
+    // scale left by the last W normalization, which is the scale of the
+    // variable solved in the following W-update.
+    if (norm_type == NormType::None) {
+        d.setOnes();
+    } else {
+        DenseVector<Scalar> h_norms(d.size());
+        extract_scaling(H, h_norms, norm_type);
+    }
 }
 
 /**

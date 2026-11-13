@@ -19,9 +19,9 @@ Also accepts a file path (character string) which will be auto-loaded based on e
 
 \item{tol}{tolerance of the fit (default 1e-4)}
 
-\item{nonneg}{enforce non-negativity of the rank-2 factorization used for bipartitioning}
+\item{nonneg}{enforce non-negativity of the rank-2 factorization used for bipartitioning. Each rank-2 least squares problem is solved exactly (closed form), with or without the constraint.}
 
-\item{threads}{number of threads for OpenMP parallelization (default 0 = all available)}
+\item{threads}{number of threads (default 0 = \code{getOption("RcppML.threads")}, else all available). The update of the sample loadings is parallel over samples; results do not depend on the number of threads.}
 
 \item{verbose}{print progress information (default FALSE)}
 
@@ -31,11 +31,11 @@ Also accepts a file path (character string) which will be auto-loaded based on e
 A list giving the bipartition and useful statistics:
 \itemize{
 \item v       : vector giving difference between sample loadings between factors in a rank-2 factorization
-\item dist    : relative cosine distance of samples within a cluster to centroids of assigned vs. not-assigned cluster
+\item dist    : relative cosine distance of the bipartition: the mean over samples of the cosine distance to the center of the other cluster minus the cosine distance to the center of the sample's own cluster, i.e. \code{mean(cos(x, own center) - cos(x, other center))}. It lies in \code{[-1, 1]}, is near 0 for an arbitrary split of a homogeneous sample set and approaches 1 for two clusters with non-overlapping features. It does not depend on the number of features or samples. \code{-1} if \code{calc_dist = FALSE}.
 \item size1   : number of samples in first cluster (positive loadings in 'v')
 \item size2   : number of samples in second cluster (negative loadings in 'v')
-\item samples1: indices of samples in first cluster
-\item samples2: indices of samples in second cluster
+\item samples1: 0-based indices of samples in first cluster (add 1 for R-style indexing)
+\item samples2: 0-based indices of samples in second cluster (add 1 for R-style indexing)
 \item center1 : mean feature loadings across samples in first cluster
 \item center2 : mean feature loadings across samples in second cluster
 }
@@ -62,10 +62,10 @@ because single rank-2 subproblems converge faster.
 
 Several parameters may be specified in the \code{...} argument:
 \itemize{
-\item \code{diag = TRUE}: scale factors in \eqn{w} and \eqn{h} to sum to 1 by introducing a diagonal, \eqn{d}. This should generally never be set to \code{FALSE}. Diagonalization enables symmetry of models in factorization of symmetric matrices, convex L1 regularization, and consistent factor scalings.
+\item \code{diag = TRUE}: accepted for backward compatibility. Factors are always scaled to unit L1 norm with the scale kept in a diagonal, \eqn{d}; \code{diag = FALSE} is not supported and raises an error.
 \item \code{samples = 1:ncol(A)}: samples to include in bipartition, numbered from 1 to \code{ncol(A)}. Default is all samples.
-\item \code{calc_dist = TRUE}: calculate the relative cosine distance of samples within a cluster to either cluster centroid. If \code{TRUE}, centers for clusters will also be calculated.
-\item \code{seed = NULL}: random seed for model initialization, generally not needed for rank-2 factorizations because robust solutions are recovered when \code{diag = TRUE}
+\item \code{calc_dist = TRUE}: calculate the relative cosine distance of the bipartition (see \strong{Value}). If \code{TRUE}, centers for clusters will also be calculated.
+\item \code{seed = NULL}: random seed for model initialization. \code{NULL} uses a fixed seed, so results are reproducible either way.
 \item \code{maxit = 100}: maximum number of alternating updates of \eqn{w} and \eqn{h}. Generally, rank-2 factorizations converge quickly and this should not need to be adjusted.
 }
 }

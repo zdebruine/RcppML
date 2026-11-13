@@ -30,14 +30,14 @@
 #' 2,638 columns (cells), containing 2,238,732 non-zero entries (integer UMI counts).
 #' Cell type annotations (9 types: Naive CD4 T, Memory CD4 T, CD14+ Mono, B,
 #' CD8 T, FCGR3A+ Mono, NK, DC, Platelet) were obtained from the Seurat
-#' \code{pbmc3k.final} reference object via the SeuratData package and stored
+#' \code{pbmc3k.final} reference object (distributed by the Satija lab) and stored
 #' as StreamPress column metadata.
 #'
 #' This dataset is commonly used for demonstrating single-cell analysis workflows
 #' including distribution-aware NMF and zero-inflation diagnostics.
 #'
 #' @source
-#' 10x Genomics PBMC 3k dataset, processed with Seurat (SeuratData::pbmc3k.final).
+#' 10x Genomics PBMC 3k dataset, processed with Seurat (the \code{pbmc3k.final} object).
 #'
 #' @examples
 #' \donttest{
@@ -104,7 +104,7 @@
 #' table(attr(aml, "metadata_h")$category)
 #'
 #' # Run NMF (transpose so samples are columns)
-#' result <- nmf(t(aml), k = 6, maxit = 100)
+#' result <- nmf(t(aml), k = 6, maxit = 30, seed = 1, threads = 2)
 #' }
 #'
 #' @keywords datasets
@@ -165,7 +165,7 @@
 #' table(attr(hawaiibirds, "metadata_h")$island)
 #'
 #' # Run NMF to identify species co-occurrence patterns
-#' result <- nmf(hawaiibirds, k = 10, maxit = 50)
+#' result <- nmf(hawaiibirds, k = 10, maxit = 30, seed = 1, threads = 2)
 #' }
 #'
 #' @keywords datasets
@@ -215,7 +215,7 @@
 #' Matrix::nnzero(movielens) / prod(dim(movielens))
 #'
 #' # Run NMF for collaborative filtering
-#' result <- nmf(movielens, k = 20, maxit = 50)
+#' result <- nmf(movielens, k = 10, maxit = 20, seed = 1, threads = 2)
 #' }
 #'
 #' @keywords datasets
@@ -276,7 +276,7 @@
 #' image(t(face_img)[,64:1], col=grey.colors(256))
 #'
 #' # Run NMF to discover face components (small k for speed)
-#' model <- nmf(t(olivetti), k = 5, maxit = 10)
+#' model <- nmf(t(olivetti), k = 5, maxit = 10, seed = 1, threads = 2)
 #' }
 #'
 #' @keywords datasets
@@ -334,10 +334,10 @@
 #' table(attr(golub, "cancer_type"))  # 27 ALL, 11 AML
 #'
 #' # Run NMF for class discovery
-#' model <- nmf(t(golub), k = 2, maxit = 100)  # Transpose: genes x samples
+#' model <- nmf(t(golub), k = 2, maxit = 30, seed = 1, threads = 2)  # genes x samples
 #'
 #' # Try rank 3 as suggested by Brunet et al.
-#' model3 <- nmf(t(golub), k = 3, maxit = 100)
+#' model3 <- nmf(t(golub), k = 3, maxit = 30, seed = 1, threads = 2)
 #' }
 #'
 #' @keywords datasets
@@ -374,7 +374,7 @@
 #' \donttest{
 #' data(digits)
 #' dim(digits)
-#' model <- nmf(digits, k = 10, maxit = 50)
+#' model <- nmf(digits, k = 10, maxit = 20, seed = 1, threads = 2)
 #' }
 #'
 #' @keywords datasets

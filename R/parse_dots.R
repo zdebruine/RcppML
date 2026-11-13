@@ -32,8 +32,6 @@
     tweedie_power = 1.5,
     irls_max_iter = 5L,
     irls_tol = 1e-4,
-    # Huber loss tuning
-    huber_delta = 1.0,
     # Zero-inflation
     zi_em_iters = 1L,
     # Solver
@@ -54,20 +52,39 @@
     sort_model = TRUE,
     # Streaming
     streaming = "auto",
-    panel_cols = 0L,
     dispatch = NULL,
     # Callbacks
     on_iteration = NULL,
     profile = FALSE,
-    # Convergence mode
-    convergence = "loss",
-    # Sparse mode (treat zeros as missing)
-    sparse = FALSE
+    # Deprecated 0.3.7 arguments (handled in nmf() with a deprecation warning)
+    mask_zeros = NULL,
+    A = NULL,
+    # Internal: nnls() projects onto as few as one sample, where k may
+    # exceed min(dim(data)).
+    .skip_rank_check = FALSE
   )
 
-  # Published API params that were passed via ... in the old API
-  # (sort_model, upper_bound, link_matrix_h, link_h)
-  # Keep backward compat for these
+  if (length(dots) > 0 && (is.null(names(dots)) || any(names(dots) == "")))
+    stop("Unnamed extra argument(s) passed to nmf(). Arguments after 'robust' ",
+         "must be named. See ?nmf.", call. = FALSE)
+
+  # Arguments that earlier versions accepted (or silently ignored) and that
+  # no longer exist: fail with a pointer to the replacement.
+  removed <- c(
+    huber_delta = "use robust = <delta> (Huber delta) instead",
+    sparse      = "use mask = \"zeros\" to treat zeros as missing",
+    convergence = "it was never implemented; convergence is controlled by 'tol'",
+    panel_cols  = "chunked streaming is not available in this version",
+    precision   = "all fits run in single precision",
+    zi_mode     = "use zi = \"row\" or zi = \"col\"",
+    diag        = "use norm = \"none\" to disable the scaling diagonal",
+    update_in_place = "it is no longer needed"
+  )
+  gone <- intersect(names(dots), names(removed))
+  if (length(gone) > 0) {
+    stop(paste0("Argument '", gone, "' is not supported by nmf(): ",
+                removed[gone], ".", collapse = "\n"), call. = FALSE)
+  }
 
   known <- names(defaults)
   unknown <- setdiff(names(dots), known)
@@ -140,7 +157,7 @@
     if (length(result[[nm]]) == 1) result[[nm]] <- rep(result[[nm]], 2)
   }
 
-  result$convergence <- match.arg(result$convergence, c("factor", "global"))
+  result$convergence <- match.arg(result$convergence, c("factor", "loss", "both"))
 
   result
 }
@@ -157,6 +174,10 @@
     cd_maxit = 100L,
     cd_tol = 1e-8,
     warm_start = NULL,
+    # Deprecated 0.3.7 arguments: nnls(a, b, cd_maxit, cd_tol, fast_nnls, L1)
+    a = NULL,
+    b = NULL,
+    fast_nnls = NULL,
     # Target regularization (forwarded to nmf() for target-aware solves)
     target_H = NULL,
     target_lambda = c(0, 0),

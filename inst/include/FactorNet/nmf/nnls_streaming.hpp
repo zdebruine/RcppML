@@ -138,12 +138,12 @@ Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> nnls_streaming_spz(
         H_panel.setZero();
 
         if (solver_mode == 1) {
-            if (L1 > 0)
-                B_panel.array() -= L1;
-            MatS G_solve = G_W;
+            // Exact Cholesky solve (L2 already in G_W; L1 and the bound are
+            // handled by the solver)
             FactorNet::primitives::cholesky_clip_batch(
-                G_solve, B_panel, H_panel,
-                nonneg, threads, false);
+                G_W, B_panel, H_panel,
+                nonneg, threads, false,
+                L1, upper_bound, cd_maxit);
         } else {
             FactorNet::primitives::nnls_batch<FactorNet::primitives::CPU, Scalar>(
                 G_W, B_panel, H_panel,

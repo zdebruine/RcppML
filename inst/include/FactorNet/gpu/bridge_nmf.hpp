@@ -24,6 +24,7 @@
 #include <FactorNet/core/result.hpp>
 #include <FactorNet/core/traits.hpp>
 #include <FactorNet/rng/rng.hpp>
+#include <FactorNet/nmf/nmf_init.hpp>
 #include <Eigen/Sparse>
 #include <vector>
 #include <stdexcept>
@@ -164,6 +165,129 @@ GraphCSC pack_graph(const Eigen::SparseMatrix<Scalar>* graph, Scalar lambda) {
 }
 
 // ========================================================================
+// Helper: start the GPU fit from exactly the factors the CPU fit starts from
+// ========================================================================
+
+/**
+ * @brief Fill the flat k×m W and k×n H start values as nmf_fit<CPU> does.
+ *
+ * Same branches as nmf/fit_cpu.hpp: a user W (with a user H or a seeded
+ * random H), Lanczos or IRLBA initialization, or seeded random factors drawn
+ * in the fit's scalar type. (Drawing them as doubles gave a different random
+ * stream from CPU, so "same seed" did not mean "same start".)
+ */
+template<typename Scalar, typename MatrixType>
+inline void bridge_init_factors(const MatrixType& A,
+                                const NMFConfig<Scalar>& config,
+                                const DenseMatrix<Scalar>* W_init,
+                                const DenseMatrix<Scalar>* H_init,
+                                std::vector<double>& W_flat,
+                                std::vector<double>& H_flat)
+{
+    const int m = static_cast<int>(A.rows());
+    const int n = static_cast<int>(A.cols());
+    const int k = config.rank;
+
+    DenseMatrix<Scalar> W_T, H;
+    DenseVector<Scalar> d;
+    if (W_init && W_init->rows() == m && W_init->cols() == k) {
+        W_T = W_init->transpose();
+        if (H_init && H_init->rows() == k && H_init->cols() == n) {
+            H = *H_init;
+        } else {
+            H.resize(k, n);
+            rng::SplitMix64 hrng(config.seed == 0 ? 12345U : config.seed);
+            hrng.fill_uniform(H.data(), k, n);
+        }
+    } else if (config.init_mode == 1) {
+        nmf::detail::initialize_lanczos(W_T, H, d, A, k, m, n,
+                                        config.seed, config.threads, config.verbose);
+    } else if (config.init_mode == 2) {
+        nmf::detail::initialize_irlba(W_T, H, d, A, k, m, n,
+                                      config.seed, config.threads, config.verbose);
+    } else {
+        nmf::detail::initialize_factors(W_T, H, d, k, m, n, config.seed);
+    }
+
+    if (static_cast<size_t>(W_T.size()) != W_flat.size() ||
+        static_cast<size_t>(H.size()) != H_flat.size())
+        throw std::runtime_error("GPU bridge: initial factors have the wrong size");
+    for (size_t i = 0; i < W_flat.size(); ++i)
+        W_flat[i] = static_cast<double>(W_T.data()[i]);   // k×m, column-major
+    for (size_t i = 0; i < H_flat.size(); ++i)
+        H_flat[i] = static_cast<double>(H.data()[i]);     // k×n, column-major
+}
+
+/**
+ * @brief Squared-error loss ||A - W diag(d) H||_F^2 on the host, in double.
+ *
+ * The same quantity the CPU fit reports for Gaussian loss (all m*n entries).
+ * @param trAtA  sum of squares of A
+ * @param AHt    A * H^T (m × k)
+ */
+template<typename Scalar>
+inline double bridge_sse(double trAtA, const DenseMatrix<Scalar>& AHt,
+                         const NMFResult<Scalar>& r)
+{
+    const int k = static_cast<int>(r.d.size());
+    const Eigen::MatrixXd W = r.W.template cast<double>();
+    const Eigen::MatrixXd H = r.H.template cast<double>();
+    const Eigen::VectorXd d = r.d.template cast<double>();
+    double cross = 0.0;
+    for (int f = 0; f < k; ++f)
+        cross += d(f) * W.col(f).dot(AHt.col(f).template cast<double>());
+    const Eigen::MatrixXd GW = W.transpose() * W;
+    const Eigen::MatrixXd GH = H * H.transpose();
+    double recon = 0.0;
+    for (int i = 0; i < k; ++i)
+        for (int j = 0; j < k; ++j)
+            recon += d(i) * d(j) * GW(i, j) * GH(i, j);
+    return trAtA - 2.0 * cross + recon;
+}
+
+// ========================================================================
+// Helper: put a GPU result on the CPU model convention
+// ========================================================================
+
+/**
+ * @brief Unit-norm factors under the requested norm, scale in d, sorted by d.
+ *
+ * The CPU fit returns W with unit-norm columns and H with unit-norm rows
+ * (L1 or L2 as requested), carries the scale in d, and orders the factors by
+ * decreasing d when sort_model is set. The GPU library does not receive
+ * sort_model and has returned factors that were not unit-normalized, so the
+ * convention is enforced here, on the host, without changing W diag(d) H.
+ */
+template<typename Scalar>
+inline void canonicalize_result(NMFResult<Scalar>& result,
+                                const NMFConfig<Scalar>& config)
+{
+    const int k = static_cast<int>(result.d.size());
+    if (config.norm_type != NormType::None) {
+        const bool l1 = (config.norm_type == NormType::L1);
+        for (int f = 0; f < k; ++f) {
+            const double nw = l1
+                ? static_cast<double>(result.W.col(f).cwiseAbs().sum())
+                : static_cast<double>(result.W.col(f).norm());
+            const double nh = l1
+                ? static_cast<double>(result.H.row(f).cwiseAbs().sum())
+                : static_cast<double>(result.H.row(f).norm());
+            if (nw > 0.0 && nh > 0.0) {
+                result.W.col(f) /= static_cast<Scalar>(nw);
+                result.H.row(f) /= static_cast<Scalar>(nh);
+                result.d(f) = static_cast<Scalar>(
+                    static_cast<double>(result.d(f)) * nw * nh);
+            } else {
+                // Empty factor: the CPU fit reports a tiny positive scale
+                // (norm + 1e-15), never zero
+                result.d(f) = static_cast<Scalar>(1e-15);
+            }
+        }
+    }
+    if (config.sort_model) result.sort();
+}
+
+// ========================================================================
 // Bridge caller: Standard NMF (sparse input)
 // ========================================================================
 
@@ -229,6 +353,9 @@ NMFResult<Scalar> bridge_nmf_sparse(
         rng.fill_uniform(H_flat.data(), k, n);
     }
 
+    // Start from the same factors as the CPU fit (overrides the fill above)
+    bridge_init_factors(A, config, W_init, H_init, W_flat, H_flat);
+
     // --- Pack config scalars ---
     int max_iter = config.max_iter;
     double tol = static_cast<double>(config.tol);
@@ -256,7 +383,11 @@ NMFResult<Scalar> bridge_nmf_sparse(
     int norm_type = static_cast<int>(config.norm_type);
     int projective = config.projective ? 1 : 0;
     int symmetric = config.symmetric ? 1 : 0;
-    int solver_mode = config.solver_mode;
+    // One exact solver on GPU, whatever was requested: Cholesky solve, clip,
+    // then coordinate descent until the KKT conditions hold
+    // (primitives/gpu/cholesky_nnls.cuh). Fixed-sweep coordinate descent
+    // alone was up to 2% off per half-step on nearly collinear factors.
+    int solver_mode = 1;
 
     // --- Pack dispersion config ---
     int gp_dispersion_mode = static_cast<int>(config.gp_dispersion);
@@ -371,6 +502,15 @@ NMFResult<Scalar> bridge_nmf_sparse(
     result.converged = (out_converged != 0);
     result.train_loss = static_cast<Scalar>(out_loss);
     result.final_tol = static_cast<Scalar>(out_tol);
+    canonicalize_result(result, config);
+    // Report the Gaussian loss on the CPU definition, computed on the host
+    if (config.loss.type == LossType::MSE && !config.requires_irls()) {
+        double trAtA = 0.0;
+        for (int j = 0; j < nnz; ++j) trAtA += values_d[j] * values_d[j];
+        const DenseMatrix<Scalar> Ht = result.H.transpose();
+        const DenseMatrix<Scalar> AHt = A * Ht;
+        result.train_loss = static_cast<Scalar>(bridge_sse(trAtA, AHt, result));
+    }
     result.diagnostics.plan_chosen = "GPU (dlsym bridge)";
     result.diagnostics.plan_reason = "GPU via runtime-loaded bridge library";
 
@@ -466,7 +606,7 @@ NMFResult<Scalar> bridge_nmf_cv_sparse(
 
     int projective_int = config.projective ? 1 : 0;
     int symmetric_int = config.symmetric ? 1 : 0;
-    int solver_mode_int = config.solver_mode;
+    int solver_mode_int = 1;   // Cholesky + KKT polish (see bridge_nmf_sparse)
 
     // Output variables
     int out_iter = 0, out_converged = 0, out_status = 0;
@@ -612,11 +752,14 @@ NMFResult<Scalar> bridge_nmf_dense(
     double tweedie_power_d = static_cast<double>(config.loss.power_param);
     int projective_int = config.projective ? 1 : 0;
     int symmetric_int = config.symmetric ? 1 : 0;
-    int solver_mode_int = config.solver_mode;
+    int solver_mode_int = 1;   // Cholesky + KKT polish (see bridge_nmf_sparse)
 
     int out_iter = 0, out_converged = 0, out_status = 0;
     double out_loss = 0.0, out_tol = 0.0;
     int m_mut = m, n_mut = n, k_mut = k;
+
+    // Start from the same factors as the CPU fit (overrides the fill above)
+    bridge_init_factors(A, config, W_init, H_init, W_flat, H_flat);
 
     // Theta output buffer (max size is max(m,n))
     std::vector<double> theta_buf(std::max(m, n), 0.0);
@@ -672,6 +815,15 @@ NMFResult<Scalar> bridge_nmf_dense(
     result.converged = (out_converged != 0);
     result.train_loss = static_cast<Scalar>(out_loss);
     result.final_tol = static_cast<Scalar>(out_tol);
+    canonicalize_result(result, config);
+    // Report the Gaussian loss on the CPU definition, computed on the host
+    if (config.loss.type == LossType::MSE && !config.requires_irls()) {
+        double trAtA = 0.0;
+        for (size_t i = 0; i < A_data.size(); ++i) trAtA += A_data[i] * A_data[i];
+        const DenseMatrix<Scalar> Ht = result.H.transpose();
+        const DenseMatrix<Scalar> AHt = A * Ht;
+        result.train_loss = static_cast<Scalar>(bridge_sse(trAtA, AHt, result));
+    }
     result.diagnostics.plan_chosen = "GPU (dlsym bridge, dense)";
     result.diagnostics.plan_reason = "GPU dense via runtime-loaded bridge library";
 

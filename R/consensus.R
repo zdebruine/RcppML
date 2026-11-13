@@ -1,9 +1,16 @@
 #' Consensus Clustering for NMF
 #' 
 #' Run multiple NMF replicates and compute consensus matrix showing 
-#' co-clustering frequency of samples.
+#' co-clustering frequency of the \strong{rows} of \code{data}.
+#'
+#' \strong{Orientation.} \code{consensus_nmf()} clusters the rows of \code{data}
+#' (called "samples" on this page), using the \code{w} matrix of each replicate.
+#' This is unlike \code{\link{nmf}}, which treats columns as samples. If your
+#' samples are in columns, pass \code{t(data)}. The consensus matrix has
+#' \code{nrow(data)} rows and columns, so keep the clustered dimension small.
 #' 
-#' @param data input matrix (samples x features for clustering samples)
+#' @param data input matrix with the items to cluster ("samples") in \strong{rows}
+#'   and features in columns. Pass \code{t(data)} if samples are in columns.
 #' @param k rank of factorization
 #' @param reps number of replicates (default 50)
 #' @param method consensus method: "hard" for hard cluster assignments (default), 
@@ -15,6 +22,7 @@
 #' @param ... additional arguments passed to \code{\link{nmf}}
 #' 
 #' @importFrom stats hclust as.dist cutree cophenetic cor
+#' @importFrom methods is
 #' @importFrom utils txtProgressBar setTxtProgressBar
 #' 
 #' @return List with:
@@ -30,13 +38,13 @@
 #' Consensus clustering runs NMF multiple times with different random initializations.
 #' 
 #' **Hard clustering method** (method = "hard"):
-#' For each run, samples are clustered based on their dominant factor in W.
+#' For each run, samples (rows) are clustered based on their dominant factor in W.
 #' The consensus matrix C[i,j] gives the proportion of runs where samples i and j 
 #' were assigned to the same cluster. This is the traditional consensus clustering approach.
 #' 
 #' **KNN Jaccard method** (method = "knn_jaccard"):
 #' For each run, the k-nearest neighbors of each sample are computed based on 
-#' factor loadings (W matrix). The consensus matrix C[i,j] is the average Jaccard 
+#' factor loadings (rows of the W matrix). The consensus matrix C[i,j] is the average Jaccard 
 #' similarity between the KNN sets of samples i and j across all replicates.
 #' This approach is more robust to ambiguous cluster assignments and captures 
 #' neighborhood structure rather than hard cluster membership.
@@ -77,50 +85,54 @@ consensus_nmf <- function(data, k, reps = 50, method = c("hard", "knn_jaccard"),
   if (!is.null(seed)) set.seed(seed)
   
   method <- match.arg(method)
+  threads <- .resolve_threads(threads)
   
-  # Get n_samples: handle file paths (streaming) or in-memory data
-  if (is.character(data) && length(data) == 1 && file.exists(data)) {
-    info <- st_info(data)
-    n_samples <- info$rows
-  } else {
-    n_samples <- nrow(data)
-  }
-  consensus <- matrix(0, n_samples, n_samples)
-  connectivity <- matrix(0, n_samples, n_samples)
+  if (length(k) != 1 || !is.numeric(k))
+    stop("'k' must be a single rank for consensus clustering")
+
+  # The ROWS of 'data' are clustered, through the rows of w. The matrices
+  # are allocated after the first fit, which also covers file-path input.
+  consensus <- NULL
+  connectivity <- NULL
   models <- vector("list", reps)
-  
+
   if (verbose) {
     cat("Running", reps, "NMF replicates for consensus clustering (method:", method, ")...\n")
   }
   pb <- if (verbose) txtProgressBar(min = 0, max = reps, style = 3) else NULL
-  
+
   for (i in 1:reps) {
     # Run NMF with different random seed each time
     rep_seed <- if (!is.null(seed)) seed + i else NULL
     models[[i]] <- nmf(data, k, seed = rep_seed, threads = threads, verbose = FALSE, ...)
-    
+    if (!is(models[[i]], "nmf"))
+      stop("consensus_nmf() requires arguments for which nmf() returns a single model")
+
+    W <- models[[i]]@w                           # n_samples x k
+    n_samples <- nrow(W)
+    if (is.null(connectivity)) connectivity <- matrix(0, n_samples, n_samples)
+
     if (method == "hard") {
       # Hard clustering: Get cluster assignments (max factor in W)
-      clusters <- apply(models[[i]]@w, 1, which.max)
-      
+      clusters <- apply(W, 1, which.max)
+
       # Update connectivity matrix
       for (cluster_id in unique(clusters)) {
         members <- which(clusters == cluster_id)
         connectivity[members, members] <- connectivity[members, members] + 1
       }
     } else if (method == "knn_jaccard") {
-      # KNN Jaccard: Compute pairwise distances and find KNN for each sample
-      W <- models[[i]]@w
-      
-      # Compute cosine similarity matrix
-      W_norm <- W / sqrt(rowSums(W^2))
+      # Cosine similarity between rows of W
+      norms <- sqrt(rowSums(W^2))
+      norms[norms == 0] <- 1                     # all-zero rows: similarity 0, not NaN
+      W_norm <- W / norms
       sim_matrix <- tcrossprod(W_norm)
-      
+
       # Use C++ implementation for KNN + Jaccard computation
       jaccard_matrix <- c_knn_jaccard(sim_matrix, knn)
       connectivity <- connectivity + jaccard_matrix
     }
-    
+
     if (!is.null(pb)) setTxtProgressBar(pb, i)
   }
   if (!is.null(pb)) close(pb)

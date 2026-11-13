@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 # Test: Cross-validation with IRLS distributions
 # Tests CV (speckled + full mask) for GP, NB, Gamma, InvGauss, Tweedie, and dense CV
 
@@ -205,26 +209,30 @@ test_that("Dense Tweedie CV returns valid test loss", {
 # Projective + Symmetric CV
 # ============================================================
 
-test_that("Projective NMF CV sparse returns valid test loss", {
+# The projective H update H = W^T A reads every entry of A, so a held-out
+# entry cannot be kept out of the fit; the combination is rejected.
+test_that("Projective NMF with test_fraction is rejected (sparse)", {
   skip_on_cran()
   set.seed(42)
   A <- Matrix::Matrix(abs(matrix(rnorm(50 * 40, 2, 0.5), 50, 40)), sparse = TRUE)
-  model <- nmf(A, 3, loss = "mse", projective = TRUE,
-               test_fraction = 0.1, maxit = 30, tol = 1e-4,
-               seed = 42, verbose = FALSE)
-  expect_s4_class(model, "nmf")
-  expect_true(is.finite(model@misc$test_loss))
+  expect_error(
+    nmf(A, 3, loss = "mse", projective = TRUE,
+        test_fraction = 0.1, maxit = 30, tol = 1e-4,
+        seed = 42, verbose = FALSE),
+    "[Pp]rojective"
+  )
 })
 
-test_that("Projective NMF CV dense returns valid test loss", {
+test_that("Projective NMF with test_fraction is rejected (dense)", {
   skip_on_cran()
   set.seed(42)
   A <- abs(matrix(rnorm(40 * 30, 2, 0.5), 40, 30))
-  model <- nmf(A, 3, loss = "mse", projective = TRUE,
-               test_fraction = 0.1, maxit = 30, tol = 1e-4,
-               seed = 42, verbose = FALSE)
-  expect_s4_class(model, "nmf")
-  expect_true(is.finite(model@misc$test_loss))
+  expect_error(
+    nmf(A, 3, loss = "mse", projective = TRUE,
+        test_fraction = 0.1, maxit = 30, tol = 1e-4,
+        seed = 42, verbose = FALSE),
+    "[Pp]rojective"
+  )
 })
 
 test_that("Symmetric NMF CV sparse returns valid test loss", {

@@ -8,14 +8,6 @@
 ^news\.md$
 ^manuscript$
 ^validate_loss_computation\.R$
-^src/gpu_bridge\.cu$
-^src/gpu_bridge_cluster\.cu$
-^src/gpu_bridge_nmf\.cu$
-^src/gpu_bridge_svd\.cu$
-^src/gpu_bridge_utils\.cu$
-^src/gpu_bridge_common\.cuh$
-^src/sp_gpu_bridge\.cu$
-^src/Makefile\.gpu$
 ^benchmarks$
 ^sparsepress$
 ^dcgm-gpu-stats.*$
@@ -49,7 +41,6 @@
 ^data/hcabm40k_mat\.rda$
 ^PRODUCTION_AUDIT\.md$
 ^logs$
-^build_config$
 ^src/RcppML.*\.so$
 ^GITHUB_ISSUES_ANALYSIS\.md$
 ^GPU_RHS_OPTIMIZATION_LOG\.md$
@@ -98,3 +89,5 @@
 ^NEWS\.md\.bak$
 ^README\.md$
 ^vignettes/.*\.bak$
+^CLAUDE\.md$
+^PROPOSAL\.md$

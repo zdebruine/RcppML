@@ -1,0 +1,1095 @@
+"file","test","nb","failed","skipped","error","warning","real"
+"test_align.R","align returns same class as input",1,0,FALSE,0,0,0.054
+"test_align.R","align preserves factor dimensions",3,0,FALSE,0,0,0.0289999999999999
+"test_align.R","align improves factor correlation with reference",1,0,FALSE,0,0,0.01
+"test_align.R","align works with k=2",2,0,FALSE,0,0,0.0489999999999999
+"test_align.R","align with cor method",2,0,FALSE,0,0,0.01
+"test_align.R","align errors on dimension mismatch",1,0,FALSE,0,0,0.012
+"test_align.R","align with identical models is identity-like",3,0,FALSE,0,0,0.00900000000000012
+"test_align.R","align reconstruction error is preserved",1,0,FALSE,0,0,0.012
+"test_auto_distribution.R","auto_nmf_distribution runs with default distributions",15,0,FALSE,0,2,0.0820000000000001
+"test_auto_distribution.R","auto_nmf_distribution works with subset of distributions",4,0,FALSE,0,1,0.0309999999999999
+"test_auto_distribution.R","auto_nmf_distribution AIC criterion works",4,0,FALSE,0,2,0.0529999999999999
+"test_auto_distribution.R","auto_nmf_distribution BIC penalizes complexity",5,0,FALSE,0,2,0.052
+"test_auto_distribution.R","auto_nmf_distribution works with dense matrix",5,0,FALSE,0,2,0.0569999999999999
+"test_auto_distribution.R","auto_nmf_distribution verbose mode prints output",3,0,FALSE,0,2,0.0290000000000001
+"test_auto_distribution.R","auto_nmf_distribution NLL values are finite",5,0,FALSE,0,2,0.054
+"test_auto_distribution.R","auto_nmf_distribution single distribution works",4,0,FALSE,0,1,0.0289999999999999
+"test_bipartiteMatch.R","bipartiteMatch returns correct structure",5,0,FALSE,0,0,0.01
+"test_bipartiteMatch.R","bipartiteMatch minimizes cost",3,0,FALSE,0,0,0.00700000000000012
+"test_bipartiteMatch.R","bipartiteMatch with identity cost matches off-diagonal",4,0,FALSE,0,0,0.0110000000000001
+"test_bipartiteMatch.R","bipartiteMatch with zero matrix has zero cost",1,0,FALSE,0,0,0.004
+"test_bipartiteMatch.R","bipartiteMatch handles single element",2,0,FALSE,0,0,0.00700000000000012
+"test_bipartiteMatch.R","TEST-BIPARTITE-MATCH-PROPERTY: optimal assignment on known cost matrix",5,0,FALSE,0,0,0.0179999999999998
+"test_bipartition.R","Testing RcppML::bipartition",6,0,FALSE,0,0,0.0429999999999997
+"test_build_dense_paths.R","Dense ZI-ROW GP returns pi_row with correct length and range",5,0,FALSE,0,1,0.0310000000000001
+"test_build_dense_paths.R","Dense ZI-ROW GP loss is finite",4,0,FALSE,0,1,0.0290000000000004
+"test_build_dense_paths.R","Dense ZI-ROW NB returns pi_row with correct length and range",4,0,FALSE,0,0,0.032
+"test_build_dense_paths.R","Dense ZI-ROW NB loss is finite and factors nonneg",3,0,FALSE,0,0,0.0299999999999998
+"test_build_dense_paths.R","Dense robust MSE downweights outliers",5,0,FALSE,0,0,0.0270000000000001
+"test_build_dense_paths.R","Dense robust MSE with custom delta works",2,0,FALSE,0,0,0.02
+"test_build_dense_paths.R","Seeded NMF with dense input recovers seeded factors",7,0,FALSE,0,0,0.024
+"test_build_dense_paths.R","Seeded dense NMF has lower loss than random init",1,0,FALSE,0,0,0.00800000000000001
+"test_build_ls_semi_nmf.R","Unconstrained LS achieves lower loss than NNLS on mixed-sign data (sparse)",1,0,FALSE,0,0,0.0089999999999999
+"test_build_ls_semi_nmf.R","Unconstrained LS factors have negative entries (sparse)",4,0,FALSE,0,0,0.016
+"test_build_ls_semi_nmf.R","Unconstrained LS achieves lower loss than NNLS on mixed-sign data (dense)",1,0,FALSE,0,0,0.00800000000000001
+"test_build_ls_semi_nmf.R","Unconstrained LS factors have negative entries (dense)",4,0,FALSE,0,0,0.0109999999999997
+"test_build_ls_semi_nmf.R","Unconstrained LS loss decreases over iterations (dense)",2,0,FALSE,0,0,0.0089999999999999
+"test_build_ls_semi_nmf.R","Semi-NMF produces unconstrained W and nonneg H (sparse)",4,0,FALSE,0,0,0.0129999999999999
+"test_build_ls_semi_nmf.R","Semi-NMF loss converges (sparse)",2,0,FALSE,0,0,0.0089999999999999
+"test_build_ls_semi_nmf.R","Semi-NMF produces unconstrained W and nonneg H (dense)",4,0,FALSE,0,0,0.012
+"test_build_ls_semi_nmf.R","Semi-NMF loss converges (dense)",2,0,FALSE,0,0,0.00800000000000001
+"test_build_ls_semi_nmf.R","Semi-NMF has lower loss than full NNLS on mixed-sign W data",1,0,FALSE,0,0,0.0089999999999999
+"test_compute_target.R","compute_target returns correct dimensions",3,0,FALSE,0,0,0.0129999999999999
+"test_compute_target.R","compute_target without whitening produces sensible values",2,0,FALSE,0,0,0.00800000000000001
+"test_compute_target.R","compute_target with whitening produces finite values",2,0,FALSE,0,0,0.00800000000000001
+"test_compute_target.R","compute_target for batch labels produces different target than class labels",3,0,FALSE,0,0,0.00999999999999979
+"test_compute_target.R","compute_target with single class produces zero target",1,0,FALSE,0,0,0.004
+"test_compute_target.R","compute_target errors on mismatched dimensions",1,0,FALSE,0,0,0.00599999999999978
+"test_compute_target.R","compute_target with k=2 works",2,0,FALSE,0,0,0.0110000000000001
+"test_compute_target.R","compute_target accepts integer and character labels",2,0,FALSE,0,0,0.00800000000000001
+"test_compute_target.R","compute_target handles NA labels (unguided samples)",5,0,FALSE,0,0,0.0139999999999998
+"test_consensus.R","consensus_nmf returns correct structure with hard method",11,0,FALSE,0,0,0.0369999999999999
+"test_consensus.R","consensus_nmf hard method produces valid consensus matrix",3,0,FALSE,0,0,0.0189999999999997
+"test_consensus.R","consensus_nmf knn_jaccard method works",4,0,FALSE,0,0,0.134
+"test_consensus.R","consensus_nmf cluster assignments have correct range",1,0,FALSE,0,0,0.0150000000000001
+"test_consensus.R","consensus_nmf cophenetic is between -1 and 1",1,0,FALSE,0,0,0.0129999999999999
+"test_consensus.R","summary.consensus_nmf returns object and prints stats",7,0,FALSE,0,0,0.032
+"test_convergence.R","NMF converges (MSE decreases with iterations) on sparse matrices",4,0,FALSE,0,0,0.0269999999999997
+"test_convergence.R","NMF converges (MSE decreases with iterations) on dense matrices",4,0,FALSE,0,0,0.0219999999999998
+"test_convergence.R","NMF converges on real AML dataset",2,0,FALSE,0,0,1.958
+"test_convergence.R","NMF converges consistently across random seeds",5,0,FALSE,0,0,0.0449999999999999
+"test_convergence.R","NMF reconstruction values stay bounded (no divergence)",2,0,FALSE,0,0,0.0379999999999994
+"test_convergence.R","NMF achieves reasonable MSE on known factorizable matrix",1,0,FALSE,0,0,0.00800000000000001
+"test_convergence.R","NMF with higher rank achieves lower or equal MSE",2,0,FALSE,0,0,0.0330000000000004
+"test_convergence.R","NMF handles different L1/L2 regularization without diverging",8,0,FALSE,0,0,0.0310000000000006
+"test_convergence.R","NMF handles tall matrices (m >> n)",1,0,FALSE,0,0,0.0220000000000002
+"test_convergence.R","NMF handles wide matrices (n >> m)",1,0,FALSE,0,0,0.0170000000000003
+"test_convergence.R","NMF handles very sparse matrices",1,0,FALSE,0,0,0.00900000000000034
+"test_convergence.R","nmf() rejects the removed 'convergence' argument",1,0,FALSE,0,0,0.00700000000000056
+"test_cosine.R","cosine of matrix with itself gives identity diagonal",4,0,FALSE,0,0,0.016
+"test_cosine.R","cosine between two matrices works",3,0,FALSE,0,0,0.0110000000000001
+"test_cosine.R","cosine between matrix and vector works",2,0,FALSE,0,0,0.00600000000000023
+"test_cosine.R","cosine between vector and matrix works",2,0,FALSE,0,0,0.00600000000000023
+"test_cosine.R","cosine between two vectors works",2,0,FALSE,0,0,0.00700000000000056
+"test_cosine.R","cosine works with sparse matrices",3,0,FALSE,0,0,0.0110000000000001
+"test_cosine.R","cosine errors when x is vector and y is NULL",1,0,FALSE,0,0,0.00600000000000023
+"test_coverage_gaps.R","assess() returns valid assessment for NMF model",5,0,FALSE,0,0,0.0169999999999995
+"test_coverage_gaps.R","assess() with silhouette metric",2,0,FALSE,0,0,0.0139999999999993
+"test_coverage_gaps.R","export_log writes CSV from training_logger",2,0,FALSE,0,0,0.00600000000000023
+"test_coverage_gaps.R","export_log handles empty logger",2,0,FALSE,0,0,0.00900000000000034
+"test_coverage_gaps.R","diagnose_dispersion returns valid mode recommendation",7,0,FALSE,0,0,0.0209999999999999
+"test_coverage_gaps.R","diagnose_dispersion works with GP-fitted model",3,0,FALSE,0,1,0.0329999999999995
+"test_coverage_gaps.R","classify_rf returns valid classification result",4,0,FALSE,0,0,0.024
+"test_coverage_gaps.R","classify_rf errors without randomForest package",1,0,FALSE,0,0,0.0169999999999995
+"test_cv_distributions.R","Dense MSE CV speckled returns valid test loss",2,0,FALSE,0,0,0.00699999999999967
+"test_cv_distributions.R","Dense MSE CV full mask returns valid test loss",2,0,FALSE,0,0,0.00700000000000056
+"test_cv_distributions.R","GP CV full mask returns valid test loss",2,0,FALSE,0,0,0.0130000000000008
+"test_cv_distributions.R","NB CV speckled returns valid test loss",2,0,FALSE,0,0,0.0119999999999996
+"test_cv_distributions.R","NB CV full mask returns valid test loss",2,0,FALSE,0,0,0.0119999999999996
+"test_cv_distributions.R","Gamma CV speckled returns valid test loss",2,0,FALSE,0,0,0.0119999999999996
+"test_cv_distributions.R","InvGauss CV speckled returns valid test loss",2,0,FALSE,0,0,0.0110000000000001
+"test_cv_distributions.R","Tweedie CV speckled returns valid test loss",2,0,FALSE,0,0,0.0170000000000003
+"test_cv_distributions.R","Dense GP CV returns valid test loss",2,0,FALSE,0,0,0.0140000000000002
+"test_cv_distributions.R","Dense NB CV returns valid test loss",2,0,FALSE,0,0,0.0150000000000006
+"test_cv_distributions.R","Dense Gamma CV returns valid test loss",2,0,FALSE,0,0,0.016
+"test_cv_distributions.R","Dense InvGauss CV returns valid test loss",2,0,FALSE,0,0,0.0110000000000001
+"test_cv_distributions.R","Dense Tweedie CV returns valid test loss",2,0,FALSE,0,0,0.0140000000000002
+"test_cv_distributions.R","Projective NMF with test_fraction is rejected (sparse)",1,0,FALSE,0,0,0.00700000000000056
+"test_cv_distributions.R","Projective NMF with test_fraction is rejected (dense)",1,0,FALSE,0,0,0.00699999999999967
+"test_cv_distributions.R","Symmetric NMF CV sparse returns valid test loss",2,0,FALSE,0,0,0.00899999999999945
+"test_cv_distributions.R","Symmetric NMF CV dense returns valid test loss",2,0,FALSE,0,0,0.00599999999999934
+"test_cv_irls.R","single-rank CV with robust='mae' produces valid result",4,0,FALSE,0,0,0.0179999999999998
+"test_cv_irls.R","single-rank CV with robust=TRUE (Huber) produces valid result",2,0,FALSE,0,0,0.00800000000000001
+"test_cv_irls.R","single-rank CV with GP loss produces valid result",3,0,FALSE,0,1,0.0129999999999999
+"test_cv_irls.R","multi-rank CV with robust='mae' returns valid data.frame",4,0,FALSE,0,0,0.024
+"test_cv_irls.R","multi-rank CV with robust=TRUE returns valid data.frame",3,0,FALSE,0,0,0.0179999999999998
+"test_cv_irls.R","CV with sparse matrix and robust='mae'",2,0,FALSE,0,0,0.00999999999999979
+"test_cv_irls.R","CV with robust fitting is reproducible",1,0,FALSE,0,0,0.0540000000000003
+"test_cv_irls.R","CV robust and MSE produce valid but potentially different results",5,0,FALSE,0,0,0.0229999999999997
+"test_cv_irls.R","CV with high rank (k=16) produces valid results",5,0,FALSE,0,0,0.024
+"test_cv_irls.R","multi-rank CV sweep to k=16 produces valid data.frame",4,0,FALSE,0,0,0.0330000000000004
+"test_dclust_expanded.R","dclust partitions all samples",1,0,FALSE,0,0,0.0199999999999996
+"test_dclust_expanded.R","dclust returns correct structure",35,0,FALSE,0,0,0.0939999999999994
+"test_dclust_expanded.R","dclust min_samples prevents small clusters",3,0,FALSE,0,0,0.00599999999999934
+"test_dclust_expanded.R","dclust min_dist controls splitting resolution",1,0,FALSE,0,0,0.00699999999999967
+"test_dclust_expanded.R","dclust is reproducible with seed",7,0,FALSE,0,0,0.032
+"test_dclust_expanded.R","dclust works with dense matrix input",1,0,FALSE,0,0,0.00800000000000001
+"test_dclust_expanded.R","dclust cluster IDs are unique",1,0,FALSE,0,0,0.00800000000000001
+"test_dclust_expanded.R","dclust center vectors have correct dimensions",5,0,FALSE,0,0,0.0229999999999997
+"test_dclust_expanded.R","dclust sample indices are valid and non-overlapping",21,0,FALSE,0,0,0.0619999999999994
+"test_dclust_expanded.R","TEST-DCLUST-PROPERTY: dclust recovers ground-truth clusters on separable data",3,0,FALSE,0,0,0.00899999999999945
+"test_degenerate_inputs.R","nmf handles single-column sparse matrix",4,0,FALSE,0,0,0.0249999999999995
+"test_degenerate_inputs.R","nmf handles single-row sparse matrix",3,0,FALSE,0,0,0.0110000000000001
+"test_degenerate_inputs.R","nmf handles single-column dense matrix",3,0,FALSE,0,0,0.00999999999999979
+"test_degenerate_inputs.R","nmf handles single-row dense matrix",3,0,FALSE,0,0,0.00999999999999979
+"test_degenerate_inputs.R","nmf handles matrix with some all-zero rows",3,0,FALSE,0,0,0.00999999999999979
+"test_degenerate_inputs.R","nmf handles sparse matrix with some all-zero columns",2,0,FALSE,0,0,0.00700000000000056
+"test_degenerate_inputs.R","nmf handles k larger than min dimension gracefully",1,0,FALSE,0,0,0.00699999999999967
+"test_degenerate_inputs.R","nmf handles 2x2 matrix",3,0,FALSE,0,0,0.00999999999999979
+"test_degenerate_inputs.R","nmf handles square matrix with k = min(m,n) - 1",2,0,FALSE,0,0,0.00699999999999967
+"test_degenerate_inputs.R","nmf produces finite results on near-zero matrix",4,0,FALSE,0,0,0.00999999999999979
+"test_degenerate_inputs.R","nmf handles matrix with identical columns",2,0,FALSE,0,0,0.00499999999999989
+"test_degenerate_inputs.R","nmf handles matrix with identical rows",1,0,FALSE,0,0,0.00300000000000011
+"test_degenerate_inputs.R","nmf handles very sparse matrix (>99% zeros)",2,0,FALSE,0,0,0.00800000000000001
+"test_dense_irls.R","dense NMF with robust=TRUE (Huber) converges",4,0,FALSE,0,0,0.0469999999999997
+"test_dense_irls.R","dense NMF with robust='mae' converges",2,0,FALSE,0,0,0.0830000000000002
+"test_dense_irls.R","dense NMF with GP divergence converges",3,0,FALSE,0,1,0.0380000000000003
+"test_dense_irls.R","dense robust=TRUE matches sparse robust=TRUE for same data",1,0,FALSE,0,0,0.016
+"test_dense_irls.R","dense robust fitting with different delta values",3,0,FALSE,0,0,0.0739999999999998
+"test_dense_irls.R","dense NMF robust with regularization",3,0,FALSE,0,0,0.032
+"test_dense_irls.R","dense GP NMF with cross-validation",3,0,FALSE,0,1,0.0140000000000002
+"test_dense_irls.R","dense Gamma NMF converges and produces finite loss",4,0,FALSE,0,0,0.0489999999999995
+"test_dense_irls.R","dense Inverse Gaussian NMF converges and produces finite loss",4,0,FALSE,0,0,0.0439999999999996
+"test_dense_irls.R","dense Tweedie NMF converges and produces finite loss",4,0,FALSE,0,0,0.0949999999999998
+"test_dense_irls.R","dense Gamma matches sparse Gamma for same non-zero data",1,0,FALSE,0,0,0.0149999999999997
+"test_dimnames.R","nmf() preserves rownames on W and colnames on H for dense input",2,0,FALSE,0,0,0.00800000000000001
+"test_dimnames.R","nmf() preserves dimnames for dgCMatrix input",2,0,FALSE,0,0,0.00800000000000001
+"test_dimnames.R","nmf() works when input has no dimnames",2,0,FALSE,0,0,0.00699999999999967
+"test_dimnames.R","nmf() preserves only rownames when colnames are absent",2,0,FALSE,0,0,0.0119999999999996
+"test_dimnames.R","nmf() preserves only colnames when rownames are absent",2,0,FALSE,0,0,0.00800000000000001
+"test_distribution_api.R","loss='mse' runs (formerly distribution='gaussian')",1,0,FALSE,0,0,0.00400000000000045
+"test_distribution_api.R","loss='gp' with dispersion='none' (formerly distribution='poisson')",1,0,FALSE,0,0,0.00700000000000056
+"test_distribution_api.R","loss='gp' runs with dispersion estimation",2,0,FALSE,0,0,0.0190000000000001
+"test_distribution_api.R","loss='nb' runs with dispersion estimation",2,0,FALSE,0,0,0.0120000000000005
+"test_distribution_api.R","loss='gamma' runs on positive data",1,0,FALSE,0,0,0.0200000000000005
+"test_distribution_api.R","loss='inverse_gaussian' runs on positive data",1,0,FALSE,0,0,0.00900000000000034
+"test_distribution_api.R","Gamma NMF runs on sparse data",3,0,FALSE,0,0,0.0250000000000004
+"test_distribution_api.R","Gamma NMF runs on dense data",1,0,FALSE,0,0,0.0100000000000007
+"test_distribution_api.R","Inverse Gaussian NMF runs on sparse data",1,0,FALSE,0,0,0.0149999999999997
+"test_distribution_api.R","Inverse Gaussian NMF runs on dense data",1,0,FALSE,0,0,0.00999999999999979
+"test_distribution_api.R","Gamma dispersion per_row produces reasonable phi values",5,0,FALSE,0,0,0.0460000000000003
+"test_distribution_api.R","Inverse Gaussian dispersion per_row produces positive values",3,0,FALSE,0,0,0.0340000000000007
+"test_distribution_api.R","Gamma dispersion per_col produces n-length output",3,0,FALSE,0,0,0.024
+"test_distribution_api.R","Gamma dispersion global produces per_row length output",2,0,FALSE,0,0,0.0259999999999998
+"test_distribution_api.R","Gamma dispersion none produces no dispersion output",1,0,FALSE,0,0,0.0110000000000001
+"test_distribution_api.R","Gamma loss decreases overall",2,0,FALSE,0,0,0.0390000000000006
+"test_distribution_api.R","Inverse Gaussian loss decreases overall",2,0,FALSE,0,0,0.0309999999999997
+"test_distribution_api.R","robust=TRUE works with loss='gamma'",1,0,FALSE,0,0,0.0109999999999992
+"test_distribution_api.R","robust=TRUE works with loss='gp'",1,0,FALSE,0,0,0.00999999999999979
+"test_distribution_api.R","robust=TRUE works with loss='nb'",1,0,FALSE,0,0,0.0140000000000002
+"test_distribution_api.R","robust with custom delta works with gamma",1,0,FALSE,0,0,0.0110000000000001
+"test_distribution_api.R","robust=TRUE with loss='inverse_gaussian'",1,0,FALSE,0,0,0.0110000000000001
+"test_distribution_api.R","dispersion='per_col' overrides default for gamma",2,0,FALSE,0,0,0.0179999999999998
+"test_distribution_api.R","gamma_phi_init override works",1,0,FALSE,0,0,0.00999999999999979
+"test_distribution_api.R","score_test_distribution returns valid structure",6,0,FALSE,0,0,0.0229999999999997
+"test_distribution_api.R","score_test_distribution works with dense data",2,0,FALSE,0,0,0.00900000000000034
+"test_distribution_api.R","score_test_distribution with custom powers",1,0,FALSE,0,0,0.00800000000000001
+"test_distribution_api.R","unknown parameters in ... are rejected",1,0,FALSE,0,0,0.00699999999999967
+"test_distribution_api.R","Gamma NMF with k=1",2,0,FALSE,0,0,0.00800000000000001
+"test_distribution_api.R","Gamma NMF with high rank",2,0,FALSE,0,0,0.04
+"test_distribution_api.R","auto_nmf_distribution() selects a valid distribution",6,0,FALSE,0,2,0.0710000000000006
+"test_distribution_api.R","auto_nmf_distribution() works with sparse matrix",4,0,FALSE,0,2,0.048
+"test_distribution_api.R","diagnose_zero_inflation() selects a valid zi mode",2,0,FALSE,0,0,0.0190000000000001
+"test_distribution_api.R","auto_nmf_distribution() + diagnose_zero_inflation() together",1,0,FALSE,0,0,0.032
+"test_distribution_api.R","Tweedie NMF runs with default power (1.5)",1,0,FALSE,0,0,0.0810000000000004
+"test_distribution_api.R","Tweedie NMF with power=2 matches Gamma",3,0,FALSE,0,0,0.0500000000000007
+"test_distribution_api.R","Tweedie NMF with power=3 matches InvGaussian",3,0,FALSE,0,0,0.0410000000000004
+"test_distribution_api.R","Tweedie power configurable via tweedie_power in ...",1,0,FALSE,0,0,0.0270000000000001
+"test_distribution_api.R","Tweedie NMF with robust modifier",1,0,FALSE,0,0,0.0810000000000004
+"test_distribution_api.R","Robust loss is tracked and monotonically decreasing",2,0,FALSE,0,0,0.048
+"test_distribution_api.R","Robust MSE loss is properly bounded by Huber function",3,0,FALSE,0,0,0.0369999999999999
+"test_distribution_api.R","Gamma loss decreases monotonically iteration by iteration",2,0,FALSE,0,0,0.0549999999999997
+"test_distribution_api.R","Inverse Gaussian loss decreases monotonically iteration by iteration",3,0,FALSE,0,0,0.048
+"test_distribution_api.R","Tweedie loss decreases monotonically iteration by iteration",2,0,FALSE,0,0,0.143
+"test_distribution_api.R","Robust MSE downweights outliers: lower reconstruction error on clean entries",1,0,FALSE,0,0,0.020999999999999
+"test_distribution_api.R","Robust GP downweights outliers in count data",3,0,FALSE,0,0,0.109
+"test_distribution_losses.R","Gamma NMF converges and produces nonneg factors",4,0,FALSE,0,0,0.0339999999999989
+"test_distribution_losses.R","Gamma NMF loss decreases over iterations",2,0,FALSE,0,0,0.0690000000000008
+"test_distribution_losses.R","Gamma NMF with global dispersion",2,0,FALSE,0,0,0.0280000000000005
+"test_distribution_losses.R","InverseGaussian NMF converges and produces nonneg factors",4,0,FALSE,0,0,0.0269999999999992
+"test_distribution_losses.R","InverseGaussian NMF loss decreases over iterations",1,0,FALSE,0,0,0.0350000000000001
+"test_distribution_losses.R","Tweedie NMF converges with power=1.5",4,0,FALSE,0,0,0.0739999999999998
+"test_distribution_losses.R","Tweedie NMF loss decreases over iterations",1,0,FALSE,0,0,0.103999999999999
+"test_distribution_losses.R","GP loss works on sparse (dgCMatrix) input",3,0,FALSE,0,1,0.0399999999999991
+"test_distribution_losses.R","NB loss works on sparse input",3,0,FALSE,0,1,0.0520000000000014
+"test_distribution_losses.R","Gamma loss works on dense input",1,0,FALSE,0,0,0.0170000000000012
+"test_distribution_losses.R","GP NMF is reproducible with same seed",4,0,FALSE,0,2,0.0449999999999999
+"test_distribution_losses.R","Gamma NMF is reproducible with same seed",2,0,FALSE,0,0,0.0329999999999995
+"test_edge_cases.R","NMF works with k=1 (rank-1 factorization)",5,0,FALSE,0,0,0.0169999999999995
+"test_edge_cases.R","NMF works with k=1 on dense matrix",3,0,FALSE,0,0,0.00999999999999979
+"test_edge_cases.R","NMF works with k equal to min dimension minus 1",3,0,FALSE,0,0,0.0120000000000005
+"test_edge_cases.R","NMF with mixed penalty combinations (L1 + L21 + graph)",3,0,FALSE,0,0,0.0100000000000016
+"test_edge_cases.R","NMF handles matrix with some all-zero columns gracefully",2,0,FALSE,0,0,0.011000000000001
+"test_edge_cases.R","NMF handles custom w_init",2,0,FALSE,0,0,0.00900000000000034
+"test_edge_cases.R","NMF k=1 CV mode works",2,0,FALSE,0,0,0.0080000000000009
+"test_evaluate.R","evaluate with MSE loss on sparse data",4,0,FALSE,0,0,0.0120000000000005
+"test_evaluate.R","evaluate with MSE loss on dense data",2,0,FALSE,0,0,0.0549999999999997
+"test_evaluate.R","evaluate supports loss functions",3,0,FALSE,0,0,0.0129999999999999
+"test_evaluate.R","evaluate with mask_zeros option",2,0,FALSE,0,0,0.00999999999999979
+"test_evaluate.R","evaluate with explicit mask matrix",2,0,FALSE,0,0,0.0129999999999999
+"test_evaluate.R","evaluate errors when missing_only but no mask",1,0,FALSE,0,0,0.00900000000000034
+"test_evaluate.R","mse function works as wrapper",1,0,FALSE,0,0,0.00799999999999912
+"test_evaluate.R","mse works without d vector",2,0,FALSE,0,0,0.00999999999999979
+"test_evaluate.R","better model has lower MSE",1,0,FALSE,0,0,0.00900000000000034
+"test_factor_net.R","factor_input creates input node",3,0,FALSE,0,0,0.0080000000000009
+"test_factor_net.R","nmf_layer creates layer node",3,0,FALSE,0,0,0.0080000000000009
+"test_factor_net.R","W() and H() config constructors work",6,0,FALSE,0,0,0.0140000000000011
+"test_factor_net.R","factor_config constructs global config",4,0,FALSE,0,0,0.00900000000000034
+"test_factor_net.R","factor_config basic parameters work",2,0,FALSE,0,0,0.00699999999999967
+"test_factor_net.R","factor_net compiles a graph",3,0,FALSE,0,0,0.00600000000000023
+"test_factor_net.R","single-layer factor_net matches nmf() exactly",1,0,FALSE,0,0,0.0129999999999999
+"test_factor_net.R","config hierarchy: layer L1 < factor H override",4,0,FALSE,0,0,0.0129999999999999
+"test_factor_net.R","multi-modal shared-H matches concatenated nmf()",4,0,FALSE,0,0,0.0190000000000001
+"test_factor_net.R","deep NMF (2-layer) produces valid results",7,0,FALSE,0,0,0.0229999999999997
+"test_factor_net.R","conditional deep NMF works",4,0,FALSE,0,0,0.016
+"test_factor_net.R","mixed SVD+NMF deep network works",4,0,FALSE,0,0,0.0139999999999993
+"test_factor_net.R","factor_add residual connection works",3,0,FALSE,0,0,0.0170000000000012
+"test_factor_net.R","svd_layer produces signed factors",1,0,FALSE,0,0,0.00500000000000078
+"test_factor_net.R","predict.factor_net_result works",4,0,FALSE,0,0,0.0560000000000009
+"test_factor_net.R","nmf() with list input dispatches to factor_net",4,0,FALSE,0,0,0.0129999999999999
+"test_factor_net.R","factor_input rejects invalid input",1,0,FALSE,0,0,0.00600000000000023
+"test_factor_net.R","nmf_layer rejects non-node input",1,0,FALSE,0,0,0.00600000000000023
+"test_factor_net.R","factor_shared requires at least 2 inputs",1,0,FALSE,0,0,0.00600000000000023
+"test_factor_net.R","factor_concat requires at least 2 inputs",1,0,FALSE,0,0,0.00600000000000023
+"test_factor_net.R","W() and H() accept target params",3,0,FALSE,0,0,0.00899999999999856
+"test_factor_net.R","classify_embedding produces valid metrics",5,0,FALSE,0,0,0.0199999999999996
+"test_factor_net.R","classify_logistic produces valid metrics",3,0,FALSE,0,0,0.0220000000000002
+"test_factor_net.R","training_logger records entries during deep fit",5,0,FALSE,0,0,0.016
+"test_factor_net.R","single-layer CV produces test_loss > 0",3,0,FALSE,0,0,0.00699999999999967
+"test_factor_net.R","cross_validate_graph rank selection works",4,0,FALSE,0,0,0.020999999999999
+"test_factor_net.R","cross_validate_graph multi-parameter search works",2,0,FALSE,0,0,0.0180000000000007
+"test_factor_net.R","factor_input rejects non-existent .spz path",1,0,FALSE,0,0,0.00600000000000023
+"test_factor_net.R","descriptor builder routes .spz paths correctly",1,0,FALSE,0,0,0.00499999999999901
+"test_factor_net.R","factor_net with real .spz file streams correctly",1,0,TRUE,0,0,0.00300000000000011
+"test_factor_net.R","graph regularization changes W factors",3,0,FALSE,0,0,0.0169999999999995
+"test_factor_net.R","resource='cpu' propagates through descriptor",1,0,FALSE,0,0,0.00399999999999956
+"test_factor_net.R","resource='gpu' propagates in descriptor",1,0,FALSE,0,0,0.00400000000000134
+"test_factor_net.R","print methods execute without error",5,0,FALSE,0,0,0.0180000000000007
+"test_factor_net.R","TEST-GRAPH-SINGLE-DENSE: single-layer factor_net works with dense input",5,0,FALSE,0,0,0.0179999999999989
+"test_factor_net.R","TEST-GRAPH-DEEP-DENSE: deep NMF works with dense input",8,0,FALSE,0,0,0.0260000000000016
+"test_factor_net.R","TEST-GRAPH-MULTIMODAL: multi-modal with sparse matrices",5,0,FALSE,0,0,0.0180000000000007
+"test_factor_net.R","TEST-GRAPH-BRANCHING: branching NMF with factor_concat",8,0,FALSE,0,0,0.0240000000000009
+"test_factor_net.R","TEST-GRAPH-SINGLE-STREAMING: factor_net with .spz input",1,0,TRUE,0,0,0.00999999999999979
+"test_factor_net.R","TEST-GRAPH-SINGLE-GPU-STREAMING: factor_net with .spz on GPU",1,0,TRUE,0,0,0.00200000000000067
+"test_file_input.R","nmf() accepts .rds file path (sparse)",3,0,FALSE,0,0,0.109999999999999
+"test_file_input.R","nmf() accepts .rds file path (dense)",3,0,FALSE,0,0,0.011000000000001
+"test_file_input.R","nmf() accepts .mtx file path",3,0,FALSE,0,0,0.0800000000000001
+"test_file_input.R","nmf() accepts .spz file path",1,0,TRUE,0,0,0.00300000000000011
+"test_file_input.R","nmf() accepts .csv file path",3,0,FALSE,0,0,0.0129999999999999
+"test_file_input.R","validate_data errors on non-existent file",1,0,FALSE,0,0,0.00600000000000023
+"test_file_input.R","validate_data errors on unsupported extension",1,0,FALSE,0,0,0.00600000000000023
+"test_file_input.R",".load_sparse_file round-trips through .rds",3,0,FALSE,0,0,0.0939999999999994
+"test_file_input.R",".load_sparse_file preserves data through .mtx",3,0,FALSE,0,0,0.0119999999999987
+"test_file_input.R",".load_sparse_file handles .tsv",2,0,FALSE,0,0,0.00799999999999912
+"test_g1_g6_fixes.R","G1: Gamma CV returns dispersion vector",3,0,FALSE,0,0,0.0169999999999995
+"test_g1_g6_fixes.R","G1: Inverse Gaussian CV returns dispersion vector",3,0,FALSE,0,0,0.0150000000000006
+"test_g1_g6_fixes.R","G1: Tweedie CV returns dispersion vector",3,0,FALSE,0,0,0.0470000000000006
+"test_g1_g6_fixes.R","G1: Gamma CV per_col dispersion returns n-length vector",2,0,FALSE,0,0,0.0120000000000005
+"test_g1_g6_fixes.R","G1: Gamma CV with sparse data returns dispersion",2,0,FALSE,0,0,0.0360000000000014
+"test_g1_g6_fixes.R","G3: auto-distribution with custom power does not crash",4,0,FALSE,0,3,0.184000000000001
+"test_g1_g6_fixes.R","G3: score_test with non-standard powers returns valid result",3,0,FALSE,0,0,0.0129999999999999
+"test_g1_g6_fixes.R","G4: factor_net with loss='tweedie' runs",1,0,FALSE,0,0,0.0199999999999996
+"test_g1_g6_fixes.R","G5: multi-rank CV with GP includes mean_theta column",3,0,FALSE,0,0,0.0240000000000009
+"test_g1_g6_fixes.R","G5: multi-rank CV with Gamma includes mean_dispersion column",3,0,FALSE,0,0,0.0229999999999997
+"test_g1_g6_fixes.R","G5: multi-rank CV with MSE has NA distribution columns",5,0,FALSE,0,0,0.0180000000000007
+"test_g1_g6_fixes.R","G6: tweedie_power sets Tweedie power directly",1,0,FALSE,0,0,0.0259999999999998
+"test_g1_g6_fixes.R","G6: different tweedie_power values produce different losses",1,0,FALSE,0,0,0.0850000000000009
+"test_gp_nmf.R","GP-NMF recovers known theta within 100% of true value",3,0,FALSE,0,0,0.118
+"test_gp_nmf.R","GP-NMF with per_row dispersion recovers theta distribution",2,0,FALSE,0,0,0.436999999999999
+"test_gp_nmf.R","GP NMF runs without error on sparse data",3,0,FALSE,0,0,0.0120000000000005
+"test_gp_nmf.R","GP NMF runs without error on dense data",1,0,FALSE,0,0,0.00700000000000145
+"test_gp_nmf.R","theta is returned for GP with per_row dispersion",3,0,FALSE,0,0,0.0250000000000004
+"test_gp_nmf.R","theta is returned for GP with global dispersion",2,0,FALSE,0,0,0.0179999999999989
+"test_gp_nmf.R","no theta returned with dispersion='none' (Poisson)",1,0,FALSE,0,0,0.00799999999999912
+"test_gp_nmf.R","theta is returned for GP with per_col dispersion",3,0,FALSE,0,0,0.0199999999999996
+"test_gp_nmf.R","GP loss with dispersion='none' works",1,0,FALSE,0,0,0.00499999999999901
+"test_gp_nmf.R","GP loss works in cross-validation mode",3,0,FALSE,0,0,0.0109999999999992
+"test_gp_nmf.R","GP CV test loss uses NLL (not MSE)",1,0,FALSE,0,0,0.0139999999999993
+"test_gp_nmf.R","ZIGP-row runs and returns pi",4,0,FALSE,0,0,0.0419999999999998
+"test_gp_nmf.R","ZIGP-col runs and returns pi",3,0,FALSE,0,0,0.0280000000000005
+"test_gp_nmf.R","ZIGP on data with no dropout gives pi near 0",1,0,FALSE,0,0,0.0200000000000014
+"test_gp_nmf.R","ZIGP requires GP loss",1,0,FALSE,0,0,0.00600000000000023
+"test_gp_nmf.R","ZIGP works in CV mode",4,0,FALSE,0,0,0.0199999999999996
+"test_gp_nmf.R","evaluate() with loss='gp' returns a numeric value",2,0,FALSE,0,0,0.00999999999999979
+"test_gp_nmf.R","GP with dispersion='none' is equivalent to deprecated KL",3,0,FALSE,0,0,0.0460000000000012
+"test_gp_nmf.R","GP loss decreases monotonically",4,0,FALSE,0,0,0.0630000000000006
+"test_gp_nmf.R","irls_max_iter=5 gives comparable results to irls_max_iter=20",1,0,FALSE,0,0,0.0650000000000013
+"test_gp_nmf.R","GP CV theta evolves during fitting (not stuck at init)",2,0,FALSE,0,0,0.0139999999999993
+"test_gpu_accuracy.R","GPU produces same results as CPU (standard NMF)",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_accuracy.R","GPU produces same results for k=2",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_accuracy.R","GPU fp32 converges to similar solution as fp64",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_accuracy.R","GPU auto-dispatch respects RcppML.gpu option",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_accuracy.R","Multi-GPU produces valid results",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_accuracy.R","GPU sparse NMF tightly matches CPU (loss <10%, factor agreement >0.95)",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_clustering.R","dclust produces valid clusters on GPU node",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_clustering.R","dclust cluster IDs are unique and zero-indexed",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_clustering.R","consensus_nmf runs on GPU and returns valid structure",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_clustering.R","GPU consensus_nmf produces similar clusters to CPU",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_cv.R","GPU MSE CV speckled matches CPU (test_loss parity)",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_cv.R","GPU MSE CV full-mask matches CPU (test_loss parity)",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_cv.R","GPU MSE CV with dense input matches CPU",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_cv.R","GPU GP CV runs and produces valid output",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_cv.R","GPU NB CV matches CPU (test_loss parity)",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_cv.R","GPU multi-rank CV produces valid data.frame",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_dense.R","GPU NMF works on dense matrix input",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_dense.R","GPU dense NMF accuracy matches CPU within tolerance",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_dense.R","GPU dense NMF supports L1/L2 regularization",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_dense.R","GPU dense NMF works with fp32 precision",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_dense.R","GPU dense NMF handles k=1",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_dense.R","GPU dense NMF handles large rank (k=32)",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_dense.R","GPU dense NMF loss within 5% of CPU dense NMF",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_dense.R","GPU dense CD solver loss within 5% of CPU",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_dense.R","GPU dense CD solver produces valid non-negative factors",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_dense.R","GPU dense GP loss matches CPU within 5%",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_dense.R","GPU dense NB loss matches CPU within 5%",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_dense.R","GPU dense Gamma loss matches CPU within 5%",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_dense.R","GPU dense InvGauss loss matches CPU within 5%",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_dense.R","GPU dense Tweedie loss matches CPU within 5%",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_dense.R","GPU dense robust MSE matches CPU within 5%",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_dense.R","GPU dense robust GP matches CPU within 5%",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_dense.R","GPU dense CV selects same optimal rank as CPU",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_dense.R","GPU dense single-rank CV test loss within 10% of CPU",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_dense.R","GPU dense CV with GP loss matches CPU",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_dense.R","GPU dense CV with NB loss matches CPU",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_dense.R","GPU dense CV with Gamma loss matches CPU",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_dense.R","GPU dense CV with InvGauss loss matches CPU",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_dense.R","GPU dense CV with Tweedie loss matches CPU",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_dense.R","GPU dense multi-rank CV with GP selects same rank as CPU",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_dense.R","GPU dense projective NMF enforces H = normalize(d*Wt*A)",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_dense.R","GPU dense symmetric NMF enforces H = Wt",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_dense.R","projective NMF with cross-validation is rejected",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_dense.R","GPU dense symmetric CV test loss within 5% of CPU",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_dense.R","GPU dense CD IRLS GP matches CPU within 1%",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_dense.R","GPU Cholesky MSE matches CPU within 5%",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_dense.R","GPU dense ZI-ROW GP matches CPU",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_dense.R","GPU dense ZI-ROW NB matches CPU",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_dense.R","GPU dense Semi-NMF allows negative W",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_dense.R","GPU dense seeded NMF (seed W) matches CPU within 1%",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_dense.R","GPU dense mask NA matches CPU within 1%",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_dense.R","GPU dense mask zeros matches CPU within 1%",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_dense.R","GPU SVD auto-select matches CPU singular values",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_dense.R","GPU SVD krylov matches CPU singular values",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_distributions.R","GPU GP NMF matches CPU GP NMF",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_distributions.R","GPU NB NMF matches CPU NB NMF",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_distributions.R","GPU Gamma NMF runs and produces valid output",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_distributions.R","GPU InvGauss NMF runs and produces valid output",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_distributions.R","GPU Tweedie NMF runs and produces valid output",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_distributions.R","GPU robust MSE NMF runs and produces valid output",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_features.R","GPU cross-validation runs for multiple ranks",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_features.R","GPU CV matches CPU CV approximately",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_features.R","GPU NMF with L1 regularization",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_features.R","GPU NMF with L2 regularization",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_features.R","GPU NMF with L21 regularization (Tier 2)",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_features.R","GPU NMF with angular regularization (Tier 2)",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_features.R","GPU NMF with upper bounds (Tier 2)",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_features.R","GPU NMF with graph regularization (Tier 2)",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_features.R","GPU bipartition produces valid partition",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_features.R","GPU bipartition matches CPU bipartition",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_features.R","GPU dclust produces valid hierarchical clustering",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_features.R","Multi-GPU with different max_gpus settings",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_features.R","GPU supports semi-NMF (unconstrained W)",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_features.R","robust = 'mae' requested on GPU runs on CPU and says so",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_features.R","GPU supports robust=TRUE (Huber) via host-mediated IRLS",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_features.R","GPU Semi-NMF with robust='mae' works together",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_features.R","GPU precision option controls fp32 vs fp64",1,0,TRUE,0,0,0.00299999999999834
+"test_gpu_features.R","GPU L1-W loss within 10% of CPU L1-W",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_features.R","GPU L1-H loss within 10% of CPU L1-H",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_features.R","GPU L2-W loss within 15% of CPU L2-W",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_features.R","GPU L2-H loss within 10% of CPU L2-H",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_features.R","GPU scale=L2 loss within 5% of CPU",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_features.R","GPU scale=none loss within 5% of CPU",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_features.R","GPU mask='zeros' loss within 5% of CPU",1,0,TRUE,0,0,0.00299999999999834
+"test_gpu_features.R","GPU default mask loss within 5% of CPU",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_features.R","GPU sparse loss eval matches CPU",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_features.R","GPU dense loss eval matches CPU",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_features.R","GPU per-iteration loss history or final loss is valid",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_graph.R","GPU graph NMF runs without error",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_graph.R","GPU graph NMF loss decreases from initial",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_graph.R","GPU deep graph NMF runs with both graph_W and graph_H",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_init.R","GPU lanczos init loss within 5% of CPU",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_init.R","GPU lanczos init produces valid factors",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_init.R","GPU random init loss within 5% of CPU",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_init.R","GPU user-supplied init loss within 5% of CPU",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_init.R","GPU user init produces non-negative factors",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_init.R","GPU dense random init loss within 5% of CPU",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_init.R","GPU dense lanczos init loss within 5% of CPU",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_init.R","GPU dense user init loss within 5% of CPU",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_oom.R","GPU streaming mode activates for large matrices",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_oom.R","GPU CPU fallback produces valid results",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_oom.R","GPU handles medium-scale matrix correctly",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_oom.R","GPU NMF with large k succeeds or falls back gracefully",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_oom.R","GPU ZI NMF memory guard passes on normal-sized input",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_streaming.R","GPU streaming NMF returns valid result on large sparse matrix",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_streaming.R","GPU NMF on large sparse matches CPU within tolerance",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_streaming.R","GPU NMF handles large rank on large sparse matrix",1,0,TRUE,0,0,0.00299999999999834
+"test_gpu_streaming.R","Streaming NMF correctly restricts to MSE loss",1,0,TRUE,0,0,0.020999999999999
+"test_gpu_streaming.R","GPU NMF works on very wide sparse matrix (n >> m)",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_streaming.R","GPU NMF with L1 regularization on large sparse matrix",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_streaming.R","TEST-GPU-STREAMING-MSE: streaming GPU NMF vs in-memory GPU parity",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_streaming.R","TEST-GPU-STREAMING-GP: streaming GPU GP loss produces valid results",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_streaming.R","TEST-GPU-STREAMING-NB: streaming GPU NB loss produces valid results",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_streaming.R","TEST-GPU-STREAMING-REG: streaming GPU regularization parity",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_streaming.R","TEST-GPU-STREAMING-SCALE: streaming GPU reconstruction parity",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_streaming.R","TEST-GPU-STREAMING-LOSS: streaming GPU loss is finite and positive",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_streaming.R","TEST-GPU-STREAMING-INIT: streaming GPU 1-iter init produces valid W,H",1,0,TRUE,0,0,0.00199999999999889
+"test_gpu_streaming.R","TEST-SPZ-AUTO-CHUNK-GPU: GPU SPZ auto-chunking matches in-memory GPU",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_utils.R","gpu_available returns FALSE on non-GPU nodes",2,0,FALSE,0,0,0.00499999999999901
+"test_gpu_utils.R","gpu_info returns NULL when no GPU is available",1,0,FALSE,0,0,0.00399999999999956
+"test_gpu_utils.R","gpu_info returns data.frame when GPU is available",1,0,TRUE,0,0,0.00299999999999834
+"test_gpu_utils.R","gpu_available is idempotent",1,0,FALSE,0,0,0.00399999999999956
+"test_gpu_utils.R","gpu_available with force_recheck",2,0,FALSE,0,0,0.00699999999999967
+"test_gpu_variants.R","GPU projective NMF loss within 15% of CPU",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_variants.R","GPU symmetric NMF loss within 15% of CPU",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_zi.R","GPU ZIGP-row accepts zi param and produces valid factors",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_zi.R","GPU ZIGP-col accepts zi param and produces valid factors",1,0,TRUE,0,0,0.00300000000000011
+"test_gpu_zi.R","CPU ZIGP-row returns pi_row and has different loss than non-ZI",5,0,FALSE,0,0,0.0419999999999998
+"test_gpu_zi.R","GPU ZINB-row accepts zi param and produces valid factors",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_zi.R","GPU ZINB-col accepts zi param and produces valid factors",1,0,TRUE,0,0,0.00200000000000067
+"test_gpu_zi.R","CPU ZINB-row returns pi_row and has different loss than non-ZI",5,0,FALSE,0,0,0.0800000000000001
+"test_ground_truth_recovery.R","Perfect recovery with no noise - small problem",3,0,FALSE,0,0,0.0659999999999989
+"test_ground_truth_recovery.R","High recovery with low noise",2,0,FALSE,0,0,0.0249999999999986
+"test_ground_truth_recovery.R","Recovery degrades gracefully with increasing noise",2,0,FALSE,0,0,0.0169999999999995
+"test_ground_truth_recovery.R","Recovery works for different ranks",3,0,FALSE,0,0,0.0419999999999998
+"test_ground_truth_recovery.R","Recovery with sparse input matrices",2,0,FALSE,0,0,0.0190000000000001
+"test_ground_truth_recovery.R","Recovery with mask='zeros' for sparse data",1,0,FALSE,0,0,0.0549999999999997
+"test_ground_truth_recovery.R","Recovery with different loss functions",3,0,FALSE,0,0,0.361000000000001
+"test_ground_truth_recovery.R","Multiple restarts improve recovery",2,0,FALSE,0,0,0.016
+"test_ground_truth_recovery.R","Reconstruction error correlates with recovery quality",3,0,FALSE,0,0,0.0169999999999995
+"test_ground_truth_recovery.R","Recovery with regularization",1,0,FALSE,0,0,0.00599999999999845
+"test_ground_truth_recovery.R","Alignment resolves permutation ambiguity",1,0,FALSE,0,0,0.00900000000000034
+"test_loss_functions.R","MSE loss computed correctly - small example",1,0,FALSE,0,0,0.00699999999999967
+"test_loss_functions.R","MSE loss computed correctly - larger problem",1,0,FALSE,0,0,0.0370000000000008
+"test_loss_functions.R","robust='mae' fitting works correctly",3,0,FALSE,0,0,0.081999999999999
+"test_loss_functions.R","robust=TRUE (Huber) fitting works correctly",2,0,FALSE,0,0,0.0169999999999995
+"test_loss_functions.R","GP divergence computed correctly",2,0,FALSE,0,1,0.016
+"test_loss_functions.R","robust='mae' is more robust to outliers than MSE",2,0,FALSE,0,0,0.0410000000000004
+"test_loss_functions.R","robust=TRUE interpolates between MSE and MAE",3,0,FALSE,0,0,0.159000000000001
+"test_loss_functions.R","Loss functions work with sparse matrices",9,0,FALSE,0,1,0.0470000000000006
+"test_loss_functions.R","Loss with L1 regularization includes penalty",6,0,FALSE,0,0,0.0220000000000002
+"test_loss_functions.R","Loss with L2 regularization includes penalty",6,0,FALSE,0,0,0.0299999999999994
+"test_loss_functions.R","Loss with mask='zeros' only considers non-zero entries",1,0,FALSE,0,0,0.020999999999999
+"test_loss_monotonicity.R","MSE loss decreases monotonically - no regularization",5,0,FALSE,0,0,0.0220000000000002
+"test_loss_monotonicity.R","MSE loss decreases monotonically - with L1 regularization",4,0,FALSE,0,0,0.0170000000000012
+"test_loss_monotonicity.R","MSE loss decreases monotonically - with L2 regularization",1,0,FALSE,0,0,0.0139999999999993
+"test_loss_monotonicity.R","MSE loss decreases monotonically - combined regularization",4,0,FALSE,0,0,0.0169999999999995
+"test_loss_monotonicity.R","robust='mae' loss decreases monotonically - IRLS iterations",4,0,FALSE,0,0,0.239000000000001
+"test_loss_monotonicity.R","robust=TRUE (Huber) loss decreases monotonically",4,0,FALSE,0,0,0.0950000000000006
+"test_loss_monotonicity.R","GP divergence decreases monotonically",9,0,FALSE,0,5,0.266999999999999
+"test_loss_monotonicity.R","Loss monotonicity holds for sparse matrices",4,0,FALSE,0,0,0.0230000000000015
+"test_loss_monotonicity.R","Loss monotonicity with mask='zeros'",4,0,FALSE,0,0,0.0359999999999996
+"test_loss_monotonicity.R","Data loss may increase if regularization decreases faster",3,0,FALSE,0,0,0.0119999999999987
+"test_masking.R","mask='zeros' excludes zero entries from optimization",6,0,FALSE,0,0,0.027000000000001
+"test_masking.R","mask='zeros' loss only considers non-zero entries",1,0,FALSE,0,0,0.0190000000000001
+"test_masking.R","mask='zeros' works with different loss types",4,0,FALSE,0,0,0.016
+"test_masking.R","mask='zeros' with regularization",4,0,FALSE,0,0,0.0120000000000005
+"test_masking.R","Dense matrices: zeros are always observed",1,0,FALSE,0,0,0.00500000000000078
+"test_masking.R","Sparse vs dense: different treatment of zeros",6,0,FALSE,0,0,0.0269999999999992
+"test_masking.R","mask='zeros' improves fit on non-zero entries",4,0,FALSE,0,0,0.020999999999999
+"test_masking.R","Highly sparse data: mask='zeros' vs standard NMF",4,0,FALSE,0,0,0.0179999999999989
+"test_masking.R","mask='zeros' respects non-negativity",2,0,FALSE,0,0,0.00900000000000034
+"test_masking.R","mask='zeros' with very few non-zeros still works",5,0,FALSE,0,0,0.0230000000000015
+"test_masking.R","Dense matrices: NA values are auto-detected and masked",5,0,FALSE,0,0,0.0199999999999996
+"test_masking.R","Dense matrices: explicit mask='NA' works",3,0,FALSE,0,1,0.0129999999999999
+"test_masking.R","Dense matrices: NA mask does not affect non-NA regions",2,0,FALSE,0,1,0.011000000000001
+"test_multi_rank_cv.R","multi-rank CV returns nmfCrossValidate data.frame",8,0,FALSE,0,0,0.0300000000000011
+"test_multi_rank_cv.R","multi-rank CV with multiple replicates",2,0,FALSE,0,0,0.0129999999999999
+"test_multi_rank_cv.R","multi-rank CV test_mse values are positive",2,0,FALSE,0,0,0.0129999999999999
+"test_multi_rank_cv.R","multi-rank CV train_mse values are positive when tracked",1,0,FALSE,0,0,0.00999999999999979
+"test_multi_rank_cv.R","multi-rank CV is reproducible with same cv_seed",1,0,FALSE,0,0,0.016
+"test_multi_rank_cv.R","multi-rank CV with dense matrix",2,0,FALSE,0,0,0.0109999999999992
+"test_multi_rank_cv.R","single-rank CV returns nmf object, not data.frame",1,0,FALSE,0,0,0.00600000000000023
+"test_nb_nmf.R","NB-NMF with global dispersion recovers size parameter order of magnitude",4,0,FALSE,0,0,0.852
+"test_nb_nmf.R","NB-NMF distinguishes high vs low overdispersion",1,0,FALSE,0,0,0.238
+"test_nb_nmf.R","NB NMF runs without error on sparse data",3,0,FALSE,0,0,0.0280000000000005
+"test_nb_nmf.R","NB NMF runs without error on dense data",1,0,FALSE,0,0,0.0210000000000008
+"test_nb_nmf.R","NB loss decreases overall",2,0,FALSE,0,0,0.0350000000000001
+"test_nb_nmf.R","NB dispersion per_row produces reasonable r values",3,0,FALSE,0,0,0.0349999999999984
+"test_nb_nmf.R","NB with global dispersion mode runs",1,0,FALSE,0,0,0.0199999999999996
+"test_nb_nmf.R","NB with dispersion=none runs",1,0,FALSE,0,0,0.0149999999999988
+"test_nb_nmf.R","NB with per_col dispersion produces col-length r values",3,0,FALSE,0,0,0.0350000000000001
+"test_nb_nmf.R","ZINB runs without error",1,0,FALSE,0,0,0.0229999999999997
+"test_nb_nmf.R","ZINB column mode runs",1,0,FALSE,0,0,0.0229999999999997
+"test_nb_nmf.R","ZINB works in CV mode",3,0,FALSE,0,0,0.0169999999999995
+"test_nb_nmf.R","NB gives different result than MSE on count data",1,0,FALSE,0,0,0.0339999999999989
+"test_nmf.R","nmf converges over several iterations for sparse asymmetric inputs (k = 5)",25,0,FALSE,0,0,0.100000000000001
+"test_nmf.R","nmf converges over several iterations for dense asymmetric inputs (k = 5)",25,0,FALSE,0,0,0.0869999999999997
+"test_nmf.R","nmf converges over several iterations for sparse symmetric inputs (k = 5)",25,0,FALSE,0,0,0.0919999999999987
+"test_nmf.R","nmf converges over several iterations for dense symmetric inputs (k = 5)",25,0,FALSE,0,0,0.093
+"test_nmf.R","L1 regularization increases factor sparsity",6,0,FALSE,0,0,0.0169999999999995
+"test_nmf.R","setting the random seed gives identical models (sparse)",3,0,FALSE,0,0,0.0180000000000007
+"test_nmf.R","setting the random seed gives identical models (dense)",3,0,FALSE,0,0,0.0190000000000019
+"test_nnls.R","Testing nnls (projection: minimize ||WH - A||^2)",4,0,FALSE,0,0,0.0129999999999981
+"test_nnls.R","nnls with sparse matrices",2,0,FALSE,0,0,0.00700000000000145
+"test_nnls.R","nnls with penalties",2,0,FALSE,0,0,0.00700000000000145
+"test_nnls.R","nnls dimension validation",5,0,FALSE,0,0,0.0189999999999984
+"test_norm.R","nmf accepts all three norm types",3,0,FALSE,0,0,0.00999999999999801
+"test_norm.R","nmf rejects invalid norm",1,0,FALSE,0,0,0.0069999999999979
+"test_norm.R","default norm is L1",3,0,FALSE,0,0,0.0120000000000005
+"test_norm.R","L1 norm: column sums of W equal d (up to tolerance)",1,0,FALSE,0,0,0.00700000000000145
+"test_norm.R","L2 norm: column-wise L2 norms of W equal 1",1,0,FALSE,0,0,0.00700000000000145
+"test_norm.R","none norm: d is all ones",1,0,FALSE,0,0,0.00600000000000023
+"test_norm.R","reconstruction is similar across norm types",2,0,FALSE,0,0,0.0100000000000016
+"test_norm.R","all norm types work with dense input",3,0,FALSE,0,0,0.00799999999999912
+"test_norm.R","NMF converges with L1 norm",1,0,FALSE,0,0,0.0069999999999979
+"test_norm.R","NMF converges with L2 norm",1,0,FALSE,0,0,0.00700000000000145
+"test_norm.R","NMF converges with no normalization",1,0,FALSE,0,0,0.00700000000000145
+"test_norm.R","seed reproducibility with L1 norm",3,0,FALSE,0,0,0.0120000000000005
+"test_norm.R","seed reproducibility with L2 norm",3,0,FALSE,0,0,0.0119999999999969
+"test_norm.R","seed reproducibility with no normalization",3,0,FALSE,0,0,0.0169999999999995
+"test_norm.R","different norm types produce different d values",2,0,FALSE,0,0,0.0129999999999981
+"test_norm.R","cross-validation works with all norm types",3,0,FALSE,0,0,0.0150000000000006
+"test_orthogonality.R","angular parameter is accepted",5,0,FALSE,0,0,0.0160000000000018
+"test_orthogonality.R","angular parameter validation works",2,0,FALSE,0,0,0.0120000000000005
+"test_orthogonality.R","angular regularization reduces factor correlation",1,0,FALSE,0,0,0.00999999999999801
+"test_orthogonality.R","angular works with sparse matrices",3,0,FALSE,0,0,0.0130000000000017
+"test_orthogonality.R","angular works with different loss functions",3,0,FALSE,0,0,0.0219999999999985
+"test_orthogonality.R","angular H reduces correlation between H rows",1,0,FALSE,0,0,0.00800000000000267
+"test_orthogonality.R","angular can be combined with other regularization",4,0,FALSE,0,0,0.0139999999999993
+"test_p2_hardening.R","Cholesky solver works on dense MSE data",4,0,FALSE,0,0,0.0159999999999982
+"test_p2_hardening.R","Cholesky solver gives comparable loss to CD on dense MSE",1,0,FALSE,0,0,0.0120000000000005
+"test_p2_hardening.R","L1 regularization works on dense input",1,0,FALSE,0,0,0.00700000000000145
+"test_p2_hardening.R","L2 regularization works on dense input",1,0,FALSE,0,0,0.00700000000000145
+"test_p2_hardening.R","Dense L1/L2 produces same sparsification pattern as sparse L1/L2",1,0,FALSE,0,0,0.0069999999999979
+"test_p2_hardening.R","Projective NMF works on dense data",2,0,FALSE,0,0,0.00700000000000145
+"test_p2_hardening.R","Symmetric NMF works on dense symmetric data",2,0,FALSE,0,0,0.00600000000000023
+"test_p2_hardening.R","Seeded NMF with custom W seed recovers factors",2,0,FALSE,0,0,0.0100000000000016
+"test_p2_hardening.R","Seeded NMF with custom H seed produces valid result",6,0,FALSE,0,0,0.0199999999999996
+"test_p2_hardening.R","Seeded NMF with W+H seeds achieves lower loss than random",7,0,FALSE,0,0,0.0240000000000009
+"test_p2_hardening.R","NMF handles k = min(m,n) edge case",3,0,FALSE,0,0,0.0100000000000016
+"test_p2_hardening.R","NMF handles all-zero rows gracefully",3,0,FALSE,0,0,0.0109999999999992
+"test_p2_hardening.R","NMF handles single nonzero entry",2,0,FALSE,0,0,0.0139999999999993
+"test_p2_hardening.R","NMF with maxit=1 returns valid result",3,0,FALSE,0,0,0.00999999999999801
+"test_p2_hardening.R","NMF auto-masks NaN input",2,0,FALSE,0,0,0.00900000000000034
+"test_p2_hardening.R","NMF handles Inf input without crashing",1,0,FALSE,0,0,0.00399999999999778
+"test_p2_hardening.R","robust_delta numeric value works",2,0,FALSE,0,0,0.0180000000000007
+"test_p2_hardening.R","robust=TRUE uses default delta",2,0,FALSE,0,0,0.017000000000003
+"test_p2_hardening.R","Streaming NMF dispatches via SPZ file with RcppML.streaming option",1,0,TRUE,0,0,0.00300000000000011
+"test_p2_hardening.R","GPU auto-dispatch works when GPU is available",1,0,TRUE,0,0,0.00199999999999889
+"test_p2_hardening.R","Invalid resource value errors",1,0,FALSE,0,0,0.00700000000000145
+"test_parameters.R","k parameter accepts single integer",5,0,FALSE,0,0,0.0180000000000007
+"test_parameters.R","k parameter accepts vector for CV",4,0,FALSE,0,0,0.0180000000000007
+"test_parameters.R","k = 'auto' performs automatic rank search",3,0,FALSE,0,0,0.0120000000000005
+"test_parameters.R","tol parameter controls convergence",1,0,FALSE,0,0,0.00700000000000145
+"test_parameters.R","maxit parameter limits iterations",2,0,FALSE,0,0,0.00800000000000267
+"test_parameters.R","L1 accepts single value or vector",3,0,FALSE,0,0,0.0150000000000006
+"test_parameters.R","L2 accepts single value or vector",3,0,FALSE,0,0,0.0100000000000016
+"test_parameters.R","L21 accepts single value or vector",3,0,FALSE,0,0,0.00999999999999801
+"test_parameters.R","angular accepts single value or vector",3,0,FALSE,0,0,0.0100000000000016
+"test_parameters.R","penalties can be combined",4,0,FALSE,0,0,0.0129999999999981
+"test_parameters.R","seed = NULL gives random initialization",1,0,FALSE,0,0,0.00599999999999667
+"test_parameters.R","seed = integer gives reproducible results",2,0,FALSE,0,0,0.00900000000000034
+"test_parameters.R","seed = matrix gives custom initialization",1,0,FALSE,0,0,0.00600000000000023
+"test_parameters.R","seed = 'random' gives random initialization",1,0,FALSE,0,0,0.00400000000000134
+"test_parameters.R","loss parameter accepts all valid options",6,0,FALSE,0,0,0.0380000000000003
+"test_parameters.R","robust parameter works with numeric delta",2,0,FALSE,0,0,0.0140000000000029
+"test_parameters.R","test_fraction enables cross-validation",3,0,FALSE,0,0,0.0109999999999992
+"test_parameters.R","test_fraction = 0 disables CV",2,0,FALSE,0,0,0.0130000000000017
+"test_parameters.R","cv_seed controls CV holdout pattern",1,0,FALSE,0,0,0.00799999999999912
+"test_parameters.R","cv_seed vector enables multiple folds",2,0,FALSE,0,0,0.0219999999999985
+"test_parameters.R","patience parameter enables early stopping",1,0,FALSE,0,0,0.00400000000000134
+"test_parameters.R","cv_k_range controls automatic rank search range",2,0,FALSE,0,0,0.00799999999999912
+"test_parameters.R","removed nmf() arguments give an informative error",5,0,FALSE,0,0,0.0240000000000009
+"test_parameters.R","default precision (fp32) works",1,0,FALSE,0,0,0.00399999999999778
+"test_parameters.R","nonneg parameter controls non-negativity",4,0,FALSE,0,0,0.00999999999999801
+"test_parameters.R","upper_bound parameter constrains factor values",4,0,FALSE,0,0,0.00799999999999912
+"test_parameters.R","graph_W parameter works",1,0,FALSE,0,0,0.00600000000000023
+"test_parameters.R","graph_H parameter works",1,0,FALSE,0,0,0.00600000000000023
+"test_parameters.R","graph_lambda controls graph regularization strength",2,0,FALSE,0,0,0.00900000000000034
+"test_parameters.R","mask parameter accepts matrix",1,0,FALSE,0,0,0.00600000000000023
+"test_parameters.R","mask = 'zeros' masks zero entries",1,0,FALSE,0,0,0.00600000000000023
+"test_parameters.R","mask = 'NA' masks NA entries",1,0,FALSE,0,0,0.0100000000000016
+"test_parameters.R","sort_model parameter sorts factors",3,0,FALSE,0,0,0.00799999999999912
+"test_parameters.R","all parameters can be combined",5,0,FALSE,0,0,0.022000000000002
+"test_parameters.R","model output has expected structure",12,0,FALSE,0,0,0.0330000000000013
+"test_parameters.R","CV output has expected structure",10,0,FALSE,0,0,0.0399999999999991
+"test_parameters.R","Seed: Multiple random seeds for multiple runs",4,0,FALSE,0,0,0.0190000000000019
+"test_parameters.R","Seed: Multiple custom initialization matrices",4,0,FALSE,0,0,0.0139999999999993
+"test_parameters.R","Seed: Rank validation for custom initialization",1,0,FALSE,0,0,0.00600000000000023
+"test_parameters.R","Seed: Rank validation for list of custom initializations",1,0,FALSE,0,0,0.00700000000000145
+"test_parameters.R","Seed: Multiple inits incompatible with CV",1,0,FALSE,0,0,0.00700000000000145
+"test_parameters.R","NA detection: Warns and auto-masks NA values in dense matrix",2,0,FALSE,0,0,0.0100000000000016
+"test_parameters.R","NA detection: Works with sparse matrix containing NAs",2,0,FALSE,0,0,0.0159999999999982
+"test_plot_consensus.R","plot.consensus_nmf returns a ggplot",1,0,FALSE,0,0,0.881
+"test_plot_consensus.R","plot.consensus_nmf with cluster_rows=FALSE",1,0,FALSE,0,0,0.169
+"test_plot_consensus.R","plot.consensus_nmf with show_clusters=FALSE",1,0,FALSE,0,0,0.141999999999999
+"test_plot_cv.R","plot.nmfCrossValidate returns ggplot",1,0,FALSE,0,0,0.070999999999998
+"test_plot_cv.R","plot.nmfCrossValidate with multiple replicates",1,0,FALSE,0,0,0.0640000000000001
+"test_plot_cv.R","plot.nmfCrossValidate with show_train=FALSE",1,0,FALSE,0,0,0.0620000000000012
+"test_plot_cv.R","plot.nmfCrossValidate with show_train=TRUE",1,0,FALSE,0,0,0.0629999999999988
+"test_plotting.R","plot.nmf returns ggplot for loss type",1,0,FALSE,0,0,0.0769999999999982
+"test_plotting.R","plot.nmf returns ggplot for convergence type",1,0,FALSE,0,0,0.146000000000001
+"test_plotting.R","plot.nmf returns ggplot for sparsity type",1,0,FALSE,0,0,0.0659999999999989
+"test_plotting.R","plot.nmf returns ggplot for regularization type",1,0,FALSE,0,0,0.0670000000000002
+"test_plotting.R","biplot.nmf returns ggplot",1,0,FALSE,0,0,0.0559999999999974
+"test_plotting.R","compare_nmf returns ggplot",1,0,FALSE,0,0,0.0779999999999994
+"test_plotting.R","summary and plot.nmfSummary work",2,0,FALSE,0,0,0.0689999999999991
+"test_predict.R","predict works on sparse data",3,0,FALSE,0,0,0.0109999999999992
+"test_predict.R","predict works on dense data",3,0,FALSE,0,0,0.00999999999999801
+"test_predict.R","predict with L1 penalty induces sparsity",4,0,FALSE,0,0,0.0130000000000017
+"test_predict.R","predict with L2 penalty",3,0,FALSE,0,0,0.0109999999999992
+"test_predict.R","predict errors with invalid L1",3,0,FALSE,0,0,0.0329999999999977
+"test_predict.R","predict errors with invalid L2",1,0,FALSE,0,0,0.00999999999999801
+"test_predict.R","predict preserves column count",1,0,FALSE,0,0,0.0109999999999992
+"test_predict.R","predict result has non-negative values",1,0,FALSE,0,0,0.00800000000000267
+"test_project_svd.R","predict(svd_model, newdata) projects new data correctly",3,0,FALSE,0,0,0.0109999999999992
+"test_project_svd.R","svd model stores row_means when centered",2,0,FALSE,0,0,0.00600000000000023
+"test_project_svd.R","svd reconstruction inverts projection (PCA)",1,0,FALSE,0,0,0.00400000000000134
+"test_project_svd.R","svd reconstruction inverts projection (SVD, no centering)",1,0,FALSE,0,0,0.00500000000000256
+"test_rcpp_bridge_roundtrip.R","Rcpp_nmf_full produces valid NMF result (sparse)",8,0,FALSE,0,0,0.027000000000001
+"test_rcpp_bridge_roundtrip.R","Rcpp_nmf_full produces valid NMF result (dense)",5,0,FALSE,0,0,0.0160000000000018
+"test_rcpp_bridge_roundtrip.R","Rcpp_nmf_full with CV produces cross-validation results",4,0,FALSE,0,0,0.0180000000000007
+"test_rcpp_bridge_roundtrip.R","Rcpp_svd_pca produces valid SVD result (dense)",5,0,FALSE,0,0,0.0160000000000018
+"test_rcpp_bridge_roundtrip.R","Rcpp_svd_pca produces valid SVD result (sparse)",3,0,FALSE,0,0,0.00799999999999912
+"test_rcpp_bridge_roundtrip.R","Rcpp_predict_sparse matches R-level predict()",3,0,FALSE,0,0,0.00999999999999801
+"test_rcpp_bridge_roundtrip.R","Rcpp_predict_dense matches R-level predict()",3,0,FALSE,0,0,0.0100000000000016
+"test_rcpp_bridge_roundtrip.R","Rcpp_evaluate_loss_sparse matches R-level evaluate()",3,0,FALSE,0,0,0.0110000000000028
+"test_rcpp_bridge_roundtrip.R","Rcpp_evaluate_loss_dense matches R-level evaluate()",3,0,FALSE,0,0,0.0109999999999992
+"test_rcpp_bridge_roundtrip.R","Rcpp_bipartition_sparse produces valid split",3,0,FALSE,0,0,0.0100000000000016
+"test_rcpp_bridge_roundtrip.R","Rcpp_bipartition_dense produces valid split",3,0,FALSE,0,0,0.00900000000000034
+"test_rcpp_bridge_roundtrip.R","st_write + st_read round-trip",1,0,FALSE,0,0,0.00700000000000145
+"test_rcpp_bridge_roundtrip.R","st_info reads correct dimensions",2,0,FALSE,0,0,0.00799999999999912
+"test_ref_api.R","thread count: argument, then option, then all cores",5,0,FALSE,0,0,0.0130000000000017
+"test_ref_api.R","thread count is capped under R CMD check and OMP_THREAD_LIMIT",7,0,FALSE,0,0,0.0229999999999997
+"test_ref_api.R","NA mask matrix marks exactly the NA/NaN positions (dense and sparse)",6,0,FALSE,0,0,0.0240000000000009
+"test_ref_api.R","mask = 'NA' excludes missing entries from the fit (matrix completion)",4,0,FALSE,0,0,0.0380000000000003
+"test_ref_api.R","NA positions are added to a custom mask",2,0,FALSE,0,0,0.027000000000001
+"test_ref_api.R","mask forms are parsed into a zeros flag and a mask matrix",8,0,FALSE,0,0,0.0280000000000022
+"test_ref_api.R","nmf() rejects data it cannot fit, before any C++ call",21,0,FALSE,0,0,0.0990000000000002
+"test_ref_api.R","nmf() checks the shape of auxiliary matrices and penalty ranges",14,0,FALSE,0,0,0.0719999999999992
+"test_ref_api.R","projective and symmetric NMF refuse settings they would ignore",13,0,FALSE,0,0,0.0630000000000024
+"test_ref_api.R","h_init is used: the true H reproduces an exact factorization at once",7,0,FALSE,0,0,0.0279999999999987
+"test_ref_api.R","SVD-based seed strings start from the SVD, not from the R RNG",5,0,FALSE,0,0,0.0300000000000011
+"test_ref_api.R","a numeric seed does not change the caller's RNG stream",2,0,FALSE,0,0,0.0139999999999993
+"test_ref_api.R","CV data frame has the documented columns and consistent iterations",6,0,FALSE,0,0,0.0229999999999997
+"test_ref_api.R","train_mse is NA when it is not tracked, and finite when it is",4,0,FALSE,0,0,0.0219999999999985
+"test_ref_api.R","best_iter is the 1-based position of the lowest test loss",2,0,FALSE,0,0,0.00899999999999679
+"test_ref_api.R","k = 'auto' honors the data size and the rest of the configuration",6,0,FALSE,0,0,0.0210000000000008
+"test_ref_api.R","mask_zeros and A are accepted with a deprecation warning",4,0,FALSE,0,0,0.0210000000000008
+"test_ref_api.R","nnls(a, b) keeps the 0.3.7 meaning: a x = b with x >= 0",8,0,FALSE,0,0,0.0440000000000005
+"test_ref_api.R","project() and crossValidate() still work, with a deprecation warning",7,0,FALSE,0,0,0.0380000000000003
+"test_ref_api.R","streaming = TRUE on a .spz path says once that it loads in memory",3,0,FALSE,0,0,0.0139999999999993
+"test_ref_api.R","a multi-seed fit returns the best start and the factors that belong to it",8,0,FALSE,0,0,0.032
+"test_ref_api.R","SVD seed strings start from |U| sqrt(d): one sweep matches plain R",5,0,FALSE,0,0,0.027000000000001
+"test_ref_api.R","the automatic solver rule is the documented one",11,0,FALSE,0,0,0.0269999999999975
+"test_ref_clustering_utils.R","bipartition matches exact rank-2 NNLS alternating least squares",12,0,FALSE,0,0,0.106999999999999
+"test_ref_clustering_utils.R","bipartition with nonneg = FALSE matches unconstrained rank-2 ALS",2,0,FALSE,0,0,0.00900000000000034
+"test_ref_clustering_utils.R","bipartition returns 0-based indices covering every sample once",5,0,FALSE,0,0,0.0330000000000013
+"test_ref_clustering_utils.R","bipartition dist is the mean relative cosine distance",6,0,FALSE,0,0,0.0330000000000013
+"test_ref_clustering_utils.R","bipartition dist is ~1 for disjoint clusters and ~0 for a homogeneous set",5,0,FALSE,0,0,0.0130000000000017
+"test_ref_clustering_utils.R","dclust recovers four clean clusters and assigns every sample once",8,0,FALSE,0,0,0.0280000000000022
+"test_ref_clustering_utils.R","dclust separates four clusters under heavy multiplicative noise",4,0,FALSE,0,0,0.036999999999999
+"test_ref_clustering_utils.R","mse() is deprecated in favor of evaluate()",2,0,FALSE,0,0,0.0109999999999992
+"test_ref_clustering_utils.R","dclust min_dist rejects splits of a homogeneous cluster, not good ones",2,0,FALSE,0,0,0.00700000000000145
+"test_ref_clustering_utils.R","dclust guards min_samples, min_dist and all-zero columns",6,0,FALSE,0,0,0.0240000000000009
+"test_ref_clustering_utils.R","cosine agrees with the definition in all five call forms",5,0,FALSE,0,0,0.0229999999999997
+"test_ref_clustering_utils.R","bipartiteMatch is optimal against brute force, also with negative costs",9,0,FALSE,0,0,0.0250000000000021
+"test_ref_clustering_utils.R","AUC counts ties as one half and matches the pairwise definition",6,0,FALSE,0,0,0.0169999999999995
+"test_ref_clustering_utils.R","single-factor subsetting keeps a valid rank-1 model",7,0,FALSE,0,0,0.027000000000001
+"test_ref_clustering_utils.R","$ finds misc entries by their exact name",6,0,FALSE,0,0,0.0190000000000019
+"test_ref_clustering_utils.R","head, tail and show print a model",4,0,FALSE,0,0,0.0180000000000007
+"test_ref_clustering_utils.R","summary works when a group has a single member",9,0,FALSE,0,0,0.0499999999999972
+"test_ref_clustering_utils.R","align inverts a cyclic permutation of three or more factors",12,0,FALSE,0,0,0.0380000000000003
+"test_ref_clustering_utils.R","predict returns h on the model scale: w diag(d) h reproduces the data",5,0,FALSE,0,0,0.0180000000000007
+"test_ref_clustering_utils.R","predict honors a mask matrix and mask = 'zeros'",4,0,FALSE,0,0,0.017000000000003
+"test_ref_clustering_utils.R","predict honors the nonneg setting of the model",4,0,FALSE,0,0,0.0150000000000006
+"test_ref_clustering_utils.R","evaluate honors mask, mask = 'zeros' and missing_only",8,0,FALSE,0,0,0.0309999999999988
+"test_ref_clustering_utils.R","refine with lambda = 0 keeps the reconstruction (d is not counted twice)",2,0,FALSE,0,0,0.00800000000000267
+"test_ref_clustering_utils.R","consensus_nmf clusters the rows of data (pass t(data) for samples in columns)",5,0,FALSE,0,0,0.0199999999999996
+"test_ref_clustering_utils.R","multi-modal W blocks follow the order of the inputs, dense and sparse",14,0,FALSE,0,0,0.0410000000000004
+"test_ref_clustering_utils.R","layers are returned in declared order, not alphabetical order",3,0,FALSE,0,0,0.0109999999999992
+"test_ref_clustering_utils.R","unsupported network options raise an error that names them",12,0,FALSE,0,0,0.0609999999999999
+"test_ref_clustering_utils.R","a target on H of a single-layer network changes the fit",3,0,FALSE,0,0,0.00799999999999912
+"test_ref_clustering_utils.R","cross_validate_graph uses the same mask for every combination in a replicate",6,0,FALSE,0,0,0.0219999999999985
+"test_ref_cv.R","reference hash reproduces the published SplitMix64 value",1,0,FALSE,0,0,0.0259999999999998
+"test_ref_cv.R","CV fit returns w, d, h on the non-CV convention and losses match the holdout set",15,0,FALSE,0,0,0.125999999999998
+"test_ref_cv.R","one CV iteration with solver = 'cd' equals exact NNLS on the training entries",4,0,FALSE,0,0,0.0679999999999978
+"test_ref_cv.R","mask = 'zeros' treats zeros as missing in the Gaussian CV fit",5,0,FALSE,0,0,0.0670000000000002
+"test_ref_cv.R","a user mask combined with test_fraction excludes both sets",3,0,FALSE,0,0,0.121000000000002
+"test_ref_cv.R","Poisson-type CV fit satisfies the KL stationarity condition on the training entries",2,0,FALSE,0,0,0.101000000000003
+"test_ref_cv.R","train loss is missing, not 0, when track_train_loss = FALSE",4,0,FALSE,0,0,0.0189999999999984
+"test_ref_cv.R","multi-rank CV reports a best iteration that was actually run",2,0,FALSE,0,0,0.0189999999999984
+"test_ref_cv.R","CV fits are reproducible for a fixed seed and cv_seed",2,0,FALSE,0,0,0.0100000000000016
+"test_ref_cv.R","projective NMF with test_fraction is rejected",1,0,FALSE,0,0,0.00700000000000145
+"test_ref_cv.R","k = 'auto' returns the minimizer of the test loss, not the upper bound",3,0,FALSE,0,0,0.0209999999999972
+"test_ref_cv.R","L21 on W under CV zeroes exactly the rows the group-lasso condition selects",2,0,FALSE,0,0,0.0439999999999969
+"test_ref_cv.R","graph penalty on W under CV equals the per-row Jacobi update",1,0,FALSE,0,0,0.0749999999999993
+"test_ref_cv.R","upper_bound on W under CV is the box-constrained solution, not a clamp",2,0,FALSE,0,0,0.0509999999999984
+"test_ref_cv.R","gamma, inverse Gaussian and Tweedie CV fits beat the rank-1 margins model",9,0,FALSE,0,0,0.0340000000000025
+"test_ref_cv.R","cached and hashed holdout routes give the same fit and the same test set",15,0,FALSE,0,0,0.178000000000001
+"test_ref_distributions.R","Poisson (gp, dispersion none): sparse and dense input give the same fit",3,0,FALSE,0,0,0.0329999999999977
+"test_ref_distributions.R","gp with per-row dispersion: sparse and dense input give the same fit",2,0,FALSE,0,0,0.032
+"test_ref_distributions.R","nb: sparse and dense input give the same fit",2,0,FALSE,0,0,0.0389999999999979
+"test_ref_distributions.R","tweedie p = 1.5: sparse and dense input give the same fit",3,0,FALSE,0,0,0.0549999999999997
+"test_ref_distributions.R","gamma: sparse and dense input give the same fit",2,0,FALSE,0,0,0.0289999999999999
+"test_ref_distributions.R","inverse_gaussian: sparse and dense input give the same fit",2,0,FALSE,0,0,0.0269999999999975
+"test_ref_distributions.R","gp (dispersion none) reports the exact Poisson NLL over all entries",4,0,FALSE,0,0,0.0390000000000015
+"test_ref_distributions.R","gp with dispersion reports the exact generalized-Poisson NLL, zeros included",3,0,FALSE,0,0,0.0389999999999979
+"test_ref_distributions.R","nb reports the exact negative-binomial NLL over all entries",4,0,FALSE,0,0,0.0489999999999995
+"test_ref_distributions.R","gamma, inverse_gaussian and tweedie report the summed unit deviance",4,0,FALSE,0,0,0.135999999999999
+"test_ref_distributions.R","Poisson fit on sparse input satisfies sum(mu) = sum(y)",1,0,FALSE,0,0,0.0440000000000005
+"test_ref_distributions.R","gamma fit satisfies mean(y / mu) = 1",1,0,FALSE,0,0,0.0399999999999991
+"test_ref_distributions.R","inverse Gaussian fit satisfies sum((y - mu) / mu^2) = 0",1,0,FALSE,0,0,0.0719999999999992
+"test_ref_distributions.R","tweedie fit on sparse input satisfies sum((y - mu) mu^(1-p)) = 0",1,0,FALSE,0,0,0.298999999999999
+"test_ref_distributions.R","Poisson fit on sparse low counts has lower Poisson deviance than mse",1,0,FALSE,0,0,0.0380000000000003
+"test_ref_distributions.R","nb fit on sparse input has lower NB deviance than mse",1,0,FALSE,0,0,0.103999999999999
+"test_ref_distributions.R","inverse Gaussian fit stays finite and beats mse in its own deviance",4,0,FALSE,0,0,0.0579999999999998
+"test_ref_distributions.R","tweedie with p = 2 and p = 3 reproduces gamma and inverse Gaussian",2,0,FALSE,0,0,0.0420000000000016
+"test_ref_distributions.R","tweedie with p = 1 reproduces the Poisson fit",1,0,FALSE,0,0,0.0199999999999996
+"test_ref_distributions.R","tweedie power below 1 is rejected",2,0,FALSE,0,0,0.0129999999999981
+"test_ref_distributions.R","zeros are rejected by gamma, inverse_gaussian and tweedie p >= 2",4,0,FALSE,0,0,0.0229999999999997
+"test_ref_distributions.R","negative values are rejected by count losses",2,0,FALSE,0,0,0.0119999999999969
+"test_ref_distributions.R","Poisson fit with L1 on W satisfies the penalised KKT conditions",5,0,FALSE,0,0,0.199999999999999
+"test_ref_distributions.R","nb fit with L1 on W satisfies the penalised KKT conditions",3,0,FALSE,0,0,0.330000000000002
+"test_ref_distributions.R","tweedie fit with L1 on W satisfies the penalised KKT conditions",3,0,FALSE,0,0,0.531000000000002
+"test_ref_distributions.R","nb recovers a known size within a factor of two",5,0,FALSE,0,0,0.202000000000002
+"test_ref_gpu.R","TEST-REF-GPU-SEARCH: the GPU library is never looked up in the working directory",3,0,FALSE,0,0,0.0120000000000005
+"test_ref_gpu.R","TEST-REF-GPU-STATUS: gpu_status() reports every step",7,0,FALSE,0,0,0.0249999999999986
+"test_ref_gpu.R","TEST-REF-GPU-ARCH: architecture flags are well formed",3,0,FALSE,0,0,0.017000000000003
+"test_ref_gpu.R","TEST-REF-GPU-INSTALL: install_gpu() fails clearly without a toolchain",1,0,FALSE,0,0,0.00700000000000145
+"test_ref_gpu.R","TEST-REF-GPU-SPZ: GPU .spz decoding reports that it is unavailable",2,0,FALSE,0,0,0.0100000000000016
+"test_ref_gpu.R","TEST-REF-GPU-SVD-GUARD: unsupported SVD requests are named",15,0,FALSE,0,0,0.0210000000000008
+"test_ref_gpu.R","TEST-REF-GPU-NO-DEVICE: resource = 'gpu' without a GPU warns and fits on CPU",2,0,FALSE,0,0,0.0100000000000016
+"test_ref_gpu.R","TEST-REF-GPU-FALLBACK: routed options warn and return the CPU fit",1,0,TRUE,0,0,0.00300000000000011
+"test_ref_gpu.R","TEST-REF-GPU-MSE: the supported Gaussian path matches CPU and plain R",1,0,TRUE,0,0,0.00300000000000011
+"test_ref_gpu.R","TEST-REF-GPU-EXACT: one iteration matches exact double-precision ALS",1,0,TRUE,0,0,0.00300000000000011
+"test_ref_gpu.R","TEST-REF-GPU-SVD-FLAT: Lanczos and Krylov resolve a flat spectrum",1,0,TRUE,0,0,0.00200000000000244
+"test_ref_gpu.R","TEST-REF-GPU-SVD-RANK: Lanczos and Krylov recover an exactly rank-k matrix",1,0,TRUE,0,0,0.00199999999999889
+"test_ref_solver_penalties.R","cd and cholesky solve each half-step exactly (plain NNLS)",10,0,FALSE,0,0,0.0799999999999983
+"test_ref_solver_penalties.R","the default solver satisfies the NNLS KKT conditions at k = 12",8,0,FALSE,0,0,0.0949999999999989
+"test_ref_solver_penalties.R","a singular Gram does not break the cholesky solver",4,0,FALSE,0,0,0.0230000000000032
+"test_ref_solver_penalties.R","L1 is an absolute shift and L2 a ridge, on every Gaussian path",10,0,FALSE,0,0,0.108000000000001
+"test_ref_solver_penalties.R","L1 on a signed factor is soft-thresholding",14,0,FALSE,0,0,0.0659999999999989
+"test_ref_solver_penalties.R","upper_bound is a box constraint inside the solve",15,0,FALSE,0,0,0.137999999999998
+"test_ref_solver_penalties.R","L21 on W removes whole features and matches the reference step",13,0,FALSE,0,0,0.088000000000001
+"test_ref_solver_penalties.R","L21 keeps features at exactly zero over many iterations",4,0,FALSE,0,0,0.0470000000000006
+"test_ref_solver_penalties.R","graph_W applies the per-feature Laplacian coupling",9,0,FALSE,0,0,0.0960000000000001
+"test_ref_solver_penalties.R","a symmetric adjacency matrix is used as its Laplacian D - A",4,0,FALSE,0,0,0.0309999999999988
+"test_ref_solver_penalties.R","projective NMF with graph_W stays finite and smooths W",3,0,FALSE,0,0,0.811
+"test_ref_solver_penalties.R","a large angular step does not re-correlate a signed factor",2,0,FALSE,0,0,0.0130000000000017
+"test_ref_solver_penalties.R","a non-symmetric graph is rejected",1,0,FALSE,0,0,0.00799999999999912
+"test_ref_solver_penalties.R","target_H adds lambda/2 * |h - t|^2 on dense and sparse input",9,0,FALSE,0,0,0.0779999999999994
+"test_ref_solver_penalties.R","target_H with the wrong dimensions is an error",1,0,FALSE,0,0,0.00899999999999679
+"test_ref_solver_penalties.R","a strong target dominates under a robust (IRLS) loss too",1,0,FALSE,0,0,0.00799999999999912
+"test_ref_solver_penalties.R","angular does not clip a signed factor to non-negative",3,0,FALSE,0,0,0.0450000000000017
+"test_ref_solver_penalties.R","a mask matrix excludes entries from both half-steps",9,0,FALSE,0,0,0.125999999999998
+"test_ref_solver_penalties.R","mask = 'zeros' fits the non-zero entries only (sparse input)",5,0,FALSE,0,0,0.123000000000001
+"test_ref_solver_penalties.R","mask = 'zeros' fits the non-zero entries only (dense input)",4,0,FALSE,0,0,0.0840000000000032
+"test_ref_solver_penalties.R","a mask with a non-Gaussian loss is refused, not ignored",1,0,FALSE,0,0,0.0069999999999979
+"test_ref_solver_penalties.R","L21 with a non-Gaussian loss is refused, not ignored",1,0,FALSE,0,0,0.00799999999999912
+"test_ref_solver_penalties.R","symmetric NMF reports the loss of the returned model",1,0,FALSE,0,0,0.00499999999999901
+"test_ref_solver_penalties.R","misc$loss is the explicit squared error on sparse input",20,0,FALSE,0,0,1.889
+"test_ref_solver_penalties.R","misc$loss is the explicit squared error on dense input",2,0,FALSE,0,0,2.004
+"test_ref_solver_penalties.R","parallel cast and transpose equal Eigen's serial result exactly",4,0,FALSE,0,0,0.0150000000000006
+"test_ref_solver_penalties.R","one iteration on nearly exact low-rank data matches exact ALS",15,0,FALSE,0,0,0.407
+"test_ref_solver_penalties.R","coordinate descent passes a KKT test on ordinary noisy data",2,0,FALSE,0,0,0.337
+"test_ref_spz.R","TEST-REF-SPZ-ROUNDTRIP-V2: sparse v2 file reads back exactly",5,0,FALSE,0,0,0.0150000000000006
+"test_ref_spz.R","TEST-REF-SPZ-ROUNDTRIP-V2-CHUNKS: several chunks and the stored transpose",5,0,FALSE,0,0,0.0770000000000053
+"test_ref_spz.R","TEST-REF-SPZ-ROUNDTRIP-EMPTY: all-zero columns survive",3,0,FALSE,0,0,0.0200000000000031
+"test_ref_spz.R","TEST-REF-SPZ-ROUNDTRIP-V1: in-memory v1 codec round trips",3,0,FALSE,0,0,0.0110000000000028
+"test_ref_spz.R","TEST-REF-SPZ-ROUNDTRIP-V3: dense v3 file reads back",2,0,FALSE,0,0,0.00799999999999557
+"test_ref_spz.R","TEST-REF-SPZ-DISPATCH: st_read() names the right reader for a dense file",1,0,FALSE,0,0,0.00900000000000034
+"test_ref_spz.R","TEST-REF-SPZ-DISPATCH: unknown version and non-spz input are errors",3,0,FALSE,0,0,0.0230000000000032
+"test_ref_spz.R","TEST-REF-SPZ-TRUNCATE-V2: every truncation of a v2 file is an error",30,0,FALSE,0,0,0.183
+"test_ref_spz.R","TEST-REF-SPZ-TRUNCATE-V3: truncated dense file is an error",6,0,FALSE,0,0,0.0319999999999965
+"test_ref_spz.R","TEST-REF-SPZ-TRUNCATE-V1: truncated v1 buffer is an error",7,0,FALSE,0,0,0.0479999999999947
+"test_ref_spz.R","TEST-REF-SPZ-CRC: a flipped byte anywhere before the footer is an error",52,0,FALSE,0,0,0.317
+"test_ref_spz.R","TEST-REF-SPZ-FIELDS: implausible header and index fields are errors",19,0,FALSE,0,0,0.114999999999995
+"test_ref_spz.R","TEST-REF-SPZ-FUZZ: random damage never crashes the reader",820,0,FALSE,0,0,3.616
+"test_ref_spz.R","TEST-REF-SPZ-FUZZ-V3: random damage never crashes the dense reader",180,0,FALSE,0,0,0.526000000000003
+"test_ref_svd.R","REF-SVD-LOWRANK: exactly rank-5 30x20 matrix, k = 5, every method",30,0,FALSE,0,0,0.0519999999999996
+"test_ref_svd.R","REF-SVD-LOWRANK: k larger than the rank returns the rank plus zeros",6,0,FALSE,0,0,0.0130000000000052
+"test_ref_svd.R","REF-SVD-REPEATED: repeated singular values are all returned",11,0,FALSE,0,0,0.0249999999999986
+"test_ref_svd.R","REF-SVD-SCALE: results do not depend on the overall scale (A * 1e-7)",10,0,FALSE,0,0,0.0249999999999986
+"test_ref_svd.R","REF-SVD-FULLRANK: k = min(m, n), tall and wide",24,0,FALSE,0,0,0.0569999999999951
+"test_ref_svd.R","REF-SVD-K1: k = 1 matches base::svd up to sign",9,0,FALSE,0,0,0.0150000000000006
+"test_ref_svd.R","REF-SVD-IRLBA: restarted IRLBA returns singular values on flat spectra",6,0,FALSE,0,0,0.0729999999999933
+"test_ref_svd.R","REF-SVD-LANCZOS: default step budget reaches 1e-3 on a flat spectrum, k = 20",1,0,FALSE,0,0,0.157000000000004
+"test_ref_svd.R","REF-SVD-WARN: stopping before tol is met raises a warning",5,0,FALSE,0,0,0.0289999999999964
+"test_ref_svd.R","REF-SVD-MASK: masked entries are missing, not zero",6,0,FALSE,0,0,0.027000000000001
+"test_ref_svd.R","REF-SVD-MASK: methods that cannot honor a mask or a holdout say so",7,0,FALSE,0,0,0.0359999999999943
+"test_ref_svd.R","REF-SVD-CV: holding out entries does not shrink d",10,0,FALSE,0,0,0.0249999999999986
+"test_ref_svd.R","REF-SVD-CV: centering statistics exclude held-out entries (large mean)",1,0,FALSE,0,0,0.00500000000000256
+"test_ref_svd.R","REF-SVD-CV: sparse and dense input define the same test set",4,0,FALSE,0,0,0.0350000000000037
+"test_ref_svd.R","REF-SVD-AUTORANK: k = 'auto' recovers the rank of a low-rank matrix",1,0,FALSE,0,0,0.007000000000005
+"test_ref_svd.R","REF-PCA: pca(t(X)) matches prcomp(X), centered and scaled",36,0,FALSE,0,0,0.106000000000002
+"test_ref_svd.R","REF-PCA: variance_explained matches prcomp",1,0,FALSE,0,0,0.007000000000005
+"test_ref_svd.R","REF-PCA: reconstruct() and predict() honor centering and scaling",6,0,FALSE,0,0,0.0360000000000014
+"test_ref_svd.R","REF-SVD-ARGS: k is validated against the matrix size",3,0,FALSE,0,0,0.0159999999999982
+"test_ref_svd.R","REF-SVD-ARGS: unsupported options are rejected",4,0,FALSE,0,0,0.0360000000000014
+"test_ref_svd.R","REF-SVD-L2: ridge on both factors soft-thresholds d in deflation",3,0,FALSE,0,0,0.00800000000000267
+"test_ref_svd.R","REF-SVD-CONSTRAINED: least-squares d, reconstruction and variance agree",12,0,FALSE,0,0,0.0380000000000038
+"test_ref_svd.R","REF-SVD-L1: sparse factors keep exact zeros and unit norm",4,0,FALSE,0,0,0.0140000000000029
+"test_ref_svd.R","REF-SVD-L1: a penalty that removes a whole factor stops the decomposition",4,0,FALSE,0,0,0.0159999999999982
+"test_ref_svd.R","REF-SVD-PRINT: head() and tail() work on svd objects",3,0,FALSE,0,0,0.0120000000000005
+"test_refine.R","refine returns nmf object when given nmf input",4,0,FALSE,0,0,0.0150000000000006
+"test_refine.R","refine returns matrix when given matrix input",2,0,FALSE,0,0,0.0100000000000051
+"test_refine.R","refine with lambda=0 returns nearly unchanged embedding",1,0,FALSE,0,0,0.00800000000000267
+"test_refine.R","refine enforces non-negativity by default",1,0,FALSE,0,0,0.00500000000000256
+"test_refine.R","refine with nonneg=FALSE allows negatives",1,0,FALSE,0,0,0.00499999999999545
+"test_refine.R","refine errors on mismatched label length",1,0,FALSE,0,0,0.0069999999999979
+"test_refine.R","refine errors on invalid lambda",2,0,FALSE,0,0,0.0120000000000005
+"test_refine.R","refine with cycles>0 requires data",1,0,FALSE,0,0,0.00900000000000034
+"test_refine.R","refine with cycles>0 runs and returns updated model",5,0,FALSE,0,0,0.0180000000000007
+"test_refine.R","refine with batch labels uses PROJ_ADV (cycles>0)",3,0,FALSE,0,0,0.0139999999999958
+"test_refine.R","refine with batch labels (cycles=0) still does post-hoc correction",2,0,FALSE,0,0,0.00800000000000267
+"test_refine.R","refine errors on non-nmf non-matrix input",1,0,FALSE,0,0,0.007000000000005
+"test_refine.R","refine with sparse data and cycles>0 works",2,0,FALSE,0,0,0.0140000000000029
+"test_regularization_effects.R","angular regularization increases factor orthogonality (W)",1,0,FALSE,0,0,0.0169999999999959
+"test_regularization_effects.R","angular regularization increases factor orthogonality (H)",1,0,FALSE,0,0,0.0159999999999982
+"test_regularization_effects.R","angular reproduces across seeds",2,0,FALSE,0,0,0.0139999999999958
+"test_regularization_effects.R","L21 on W promotes column-group sparsity",1,0,FALSE,0,0,0.0169999999999959
+"test_regularization_effects.R","L21 on H promotes column-group sparsity in H",1,0,FALSE,0,0,0.0229999999999961
+"test_regularization_effects.R","L21 reproduces across seeds",2,0,FALSE,0,0,0.019999999999996
+"test_regularization_effects.R","angular + L1 + L21 combined produces valid model",5,0,FALSE,0,0,0.0330000000000013
+"test_regularization.R","L1 regularization increases sparsity",2,0,FALSE,0,0,0.0240000000000009
+"test_regularization.R","L1 on W only affects W sparsity",2,0,FALSE,0,0,0.0120000000000005
+"test_regularization.R","L2 regularization reduces Frobenius norm",2,0,FALSE,0,0,0.0200000000000031
+"test_regularization.R","L2 regularization prevents overfitting",2,0,FALSE,0,0,0.0169999999999959
+"test_regularization.R","Combined L1+L2 regularization",2,0,FALSE,0,0,0.0109999999999957
+"test_regularization.R","Regularization doesn't break non-negativity",2,0,FALSE,0,0,0.00900000000000034
+"test_regularization.R","Regularization works with sparse matrices",5,0,FALSE,0,0,0.0160000000000053
+"test_regularization.R","Regularization works with different loss functions",9,0,FALSE,0,0,0.0360000000000014
+"test_regularization.R","Strong L1 drives factors to zero",2,0,FALSE,0,0,0.00600000000000023
+"test_regularization.R","L2 regularization stabilizes solution",2,0,FALSE,0,0,0.0280000000000058
+"test_regularization.R","Regularization strength affects reconstruction quality",4,0,FALSE,0,0,0.0140000000000029
+"test_reproducibility.R","Same seed produces identical results (sparse, mask='zeros')",2,0,FALSE,0,0,0.0320000000000036
+"test_reproducibility.R","CV reproducibility with fixed cv_seed",2,0,FALSE,0,0,0.0519999999999996
+"test_reproducibility.R","Parallel execution is deterministic",2,0,FALSE,0,0,0.0159999999999982
+"test_s4_methods.R","[[ accesses misc elements by name",2,0,FALSE,0,0,0.00999999999999801
+"test_s4_methods.R","[[ accesses misc elements by numeric index",1,0,FALSE,0,0,0.0069999999999979
+"test_s4_methods.R","[[ errors on missing name",1,0,FALSE,0,0,0.0100000000000051
+"test_s4_methods.R","[[ errors on out-of-bounds index",1,0,FALSE,0,0,0.00900000000000034
+"test_s4_methods.R","t() transposes w and h",3,0,FALSE,0,0,0.0129999999999981
+"test_s4_methods.R","t() preserves misc",1,0,FALSE,0,0,0.0069999999999979
+"test_s4_methods.R","t(t(x)) recovers original",3,0,FALSE,0,0,0.0129999999999981
+"test_s4_methods.R","sort() reorders by decreasing d",3,0,FALSE,0,0,0.0129999999999981
+"test_s4_methods.R","sort(decreasing=FALSE) gives increasing order",1,0,FALSE,0,0,0.00800000000000267
+"test_s4_methods.R","prod() reconstructs W * diag(d) * H",1,0,FALSE,0,0,0.0100000000000051
+"test_s4_methods.R","prod() returns correct dimensions",2,0,FALSE,0,0,0.0110000000000028
+"test_s4_methods.R","$ accesses w, d, h slots",3,0,FALSE,0,0,0.0249999999999986
+"test_s4_methods.R","$ accesses misc slot",1,0,FALSE,0,0,0.00900000000000034
+"test_s4_methods.R","$ accesses elements within misc",2,0,FALSE,0,0,0.0100000000000051
+"test_s4_methods.R","$ errors on unknown name",1,0,FALSE,0,0,0.0100000000000051
+"test_s4_methods.R","as(nmf, 'list') returns list with w, d, h, misc",6,0,FALSE,0,0,0.0210000000000008
+"test_s4_methods.R","subset() selects specific factors",3,0,FALSE,0,0,0.0150000000000006
+"test_s4_methods.R","[ selects specific factors",5,0,FALSE,0,0,0.019999999999996
+"test_s4_methods.R","dim() returns m, n, k",3,0,FALSE,0,0,0.0129999999999981
+"test_s4_methods.R","head() produces output without error",1,0,FALSE,0,0,0.0139999999999958
+"test_s4_methods.R","show() produces output without error",1,0,FALSE,0,0,0.0129999999999981
+"test_s4_methods.R","sparsity() returns data.frame with correct structure",4,0,FALSE,0,0,0.017000000000003
+"test_simulateNMF.R","simulateNMF returns correct structure",2,0,FALSE,0,0,0.0069999999999979
+"test_simulateNMF.R","simulateNMF returns matrices with correct dimensions",3,0,FALSE,0,0,0.0140000000000029
+"test_simulateNMF.R","simulateNMF with no noise produces non-negative matrix",3,0,FALSE,0,0,0.0100000000000051
+"test_simulateNMF.R","simulateNMF with noise still produces non-negative matrix",1,0,FALSE,0,0,0.00500000000000256
+"test_simulateNMF.R","simulateNMF with dropout introduces zeros",1,0,FALSE,0,0,0.00499999999999545
+"test_simulateNMF.R","simulateNMF is reproducible with seed",3,0,FALSE,0,0,0.0110000000000028
+"test_simulateNMF.R","simulateNMF different seeds give different results",1,0,FALSE,0,0,0.00500000000000256
+"test_simulateNMF.R","simulateNMF w columns sum to 1",1,0,FALSE,0,0,0.00600000000000023
+"test_simulateSwimmer.R","simulateSwimmer returns matrix with correct dimensions",2,0,FALSE,0,0,0.0360000000000014
+"test_simulateSwimmer.R","simulateSwimmer custom n_images",2,0,FALSE,0,0,0.0129999999999981
+"test_simulateSwimmer.R","simulateSwimmer gaussian style works and is non-negative",2,0,FALSE,0,0,0.414999999999999
+"test_simulateSwimmer.R","simulateSwimmer stick style produces output",2,0,FALSE,0,0,0.0120000000000005
+"test_simulateSwimmer.R","simulateSwimmer with return_factors returns list",12,0,FALSE,0,0,0.0399999999999991
+"test_simulateSwimmer.R","simulateSwimmer is reproducible with seed",1,0,FALSE,0,0,0.0109999999999957
+"test_simulateSwimmer.R","simulateSwimmer gaussian with noise produces non-negative output",1,0,FALSE,0,0,0.00799999999999557
+"test_simulateSwimmer.R","simulateSwimmer different seeds produce different results",1,0,FALSE,0,0,0.00899999999999324
+"test_solver.R","solver='auto' selects Cholesky for small k MSE no-L1",1,0,FALSE,0,0,0.00600000000000023
+"test_solver.R","solver='auto' selects exact Cholesky when L1 > 0",1,0,FALSE,0,0,0.0069999999999979
+"test_solver.R","solver='auto' selects exact Cholesky for large k",1,0,FALSE,0,0,0.00900000000000034
+"test_solver.R","solver='auto' selects CD for non-MSE distributions",2,0,FALSE,0,1,0.0150000000000006
+"test_spz_roundtrip_comprehensive.R","st_write + st_read round-trips for float32 (default)",3,0,FALSE,0,0,0.0149999999999935
+"test_spz_roundtrip_comprehensive.R","st_write + st_read round-trips for float64",1,0,FALSE,0,0,0.00999999999999801
+"test_spz_roundtrip_comprehensive.R","st_write + st_read round-trips for float16",3,0,FALSE,0,0,0.0120000000000005
+"test_spz_roundtrip_comprehensive.R","st_write + st_read round-trips with auto precision",2,0,FALSE,0,0,0.00999999999999801
+"test_spz_roundtrip_comprehensive.R","st_info reads correct metadata without decompression",3,0,FALSE,0,0,0.0120000000000005
+"test_spz_roundtrip_comprehensive.R","st_read with cols= returns correct column subset",1,0,TRUE,0,0,0.00200000000000244
+"test_streaming_loss_rejection.R","streaming SPZ NMF runs with GP loss",1,0,TRUE,0,0,0.00300000000000011
+"test_streaming_loss_rejection.R","streaming SPZ NMF runs with NB loss",1,0,TRUE,0,0,0.00199999999999534
+"test_streaming_loss_rejection.R","streaming SPZ NMF runs with robust MSE",1,0,TRUE,0,0,0.00300000000000011
+"test_streaming_loss_rejection.R","streaming SPZ NMF with MSE loss still works",1,0,TRUE,0,0,0.00199999999999534
+"test_streaming_svd_cv.R","st_write creates .spz file for streaming SVD",1,0,FALSE,0,0,0.00500000000000256
+"test_streaming_svd_cv.R","streaming deflation SVD produces test_loss with test_fraction>0",6,0,FALSE,0,0,0.0189999999999984
+"test_streaming_svd_cv.R","streaming deflation CV test_loss beats the zero model",4,0,FALSE,0,0,0.017000000000003
+"test_streaming_svd_cv.R","streaming krylov SVD produces test_loss with test_fraction>0",7,0,FALSE,0,1,0.0289999999999964
+"test_streaming_svd_cv.R","streaming krylov CV test_loss beats the zero model",4,0,FALSE,0,0,0.0209999999999937
+"test_streaming_svd_cv.R","streaming SVD auto-rank selects reasonable rank",5,0,FALSE,0,0,0.0169999999999959
+"test_streaming_svd_cv.R","streaming deflation mask='zeros' works",4,0,FALSE,0,0,0.0120000000000005
+"test_streaming_svd_cv.R","streaming deflation CV test_loss close to in-memory deflation",5,0,FALSE,0,0,0.00999999999999801
+"test_streaming_svd_cv.R","TEST-STREAMING-SVD-PARITY: streaming SVD singular values match in-memory",2,0,FALSE,0,0,0.0149999999999935
+"test_streaming.R","streaming NMF produces valid factorization",5,0,FALSE,0,0,0.046999999999997
+"test_streaming.R","streaming NMF converges to similar loss as standard",1,0,FALSE,0,0,0.0659999999999954
+"test_streaming.R","streaming NMF with L1/L2 regularization",3,0,FALSE,0,0,0.0350000000000037
+"test_streaming.R","streaming NMF auto mode doesn't activate for small data",1,0,FALSE,0,0,0.0300000000000011
+"test_streaming.R","streaming NMF with file-path input",2,0,FALSE,0,0,0.108999999999995
+"test_streaming.R","streaming NMF with .spz file-path input",1,0,TRUE,0,0,0.00200000000000244
+"test_streaming.R","streaming NMF with .spz transpose (chunked gather)",1,0,TRUE,0,0,0.00300000000000011
+"test_streaming.R","TEST-STREAMING-GP: streaming GP matches in-memory GP",1,0,FALSE,0,0,2.512
+"test_streaming.R","TEST-STREAMING-NB: streaming NB matches in-memory NB",1,0,FALSE,0,0,16.222
+"test_streaming.R","TEST-STREAMING-REG: streaming L1+L2+L21 matches in-memory",1,0,FALSE,0,0,0.0620000000000047
+"test_streaming.R","TEST-STREAMING-SCALE: streaming d scaling matches in-memory",1,0,FALSE,0,0,0.0720000000000027
+"test_streaming.R","TEST-STREAMING-LOSS: streaming tracks loss correctly",2,0,FALSE,0,0,0.0490000000000066
+"test_streaming.R","TEST-STREAMING-INIT: streaming init produces valid starting factors",4,0,FALSE,0,0,0.0360000000000014
+"test_streaming.R","TEST-STREAMING-CV: streaming CV produces valid test loss",4,0,FALSE,0,0,0.380000000000003
+"test_streaming.R","TEST-SPZ-AUTO-CHUNK-CPU: SPZ auto-chunking produces same result as in-memory",1,0,TRUE,0,0,0.00300000000000011
+"test_streampress_api.R","st_write / st_read round-trip preserves matrix exactly",5,0,FALSE,0,0,0.0230000000000032
+"test_streampress_api.R","st_write defaults to include_transpose = TRUE",2,0,FALSE,0,0,0.00900000000000034
+"test_streampress_api.R","st_write with obs/var table round-trips data.frame",4,0,FALSE,0,0,0.0150000000000006
+"test_streampress_api.R","st_write validates obs nrow matches matrix nrow",1,0,FALSE,0,0,0.00900000000000034
+"test_streampress_api.R","st_write validates var nrow matches matrix ncol",1,0,FALSE,0,0,0.00900000000000034
+"test_streampress_api.R","st_read_obs on old file (no obs table) returns empty data.frame",2,0,FALSE,0,0,0.007000000000005
+"test_streampress_api.R","st_read_var on file without var table returns empty data.frame",2,0,FALSE,0,0,0.007000000000005
+"test_streampress_api.R","st_info returns correct fields",7,0,FALSE,0,0,0.0230000000000032
+"test_streampress_api.R","st_slice_cols returns correct submatrix",3,0,FALSE,0,0,0.0159999999999982
+"test_streampress_api.R","st_slice_cols with single column",2,0,FALSE,0,0,0.00900000000000034
+"test_streampress_api.R","st_slice_rows returns correct submatrix (requires transpose)",3,0,FALSE,0,0,0.0429999999999993
+"test_streampress_api.R","st_slice_rows errors on file without transpose",1,0,FALSE,0,0,0.00899999999999324
+"test_streampress_api.R","st_slice(rows=, cols=) matches manual subset",3,0,FALSE,0,0,0.017000000000003
+"test_streampress_api.R","st_slice with only rows acts like st_slice_rows",1,0,FALSE,0,0,0.0260000000000034
+"test_streampress_api.R","st_slice with only cols acts like st_slice_cols",1,0,FALSE,0,0,0.0069999999999979
+"test_streampress_api.R","st_slice with no rows/cols reads full matrix",1,0,FALSE,0,0,0.00799999999999557
+"test_streampress_api.R","st_chunk_ranges covers all columns",4,0,FALSE,0,0,0.0250000000000057
+"test_streampress_api.R","st_map_chunks reconstructs full matrix chunk-by-chunk",1,0,FALSE,0,0,0.0210000000000008
+"test_streampress_api.R","old v2 files (reserved=0) remain fully readable",6,0,FALSE,0,0,0.0189999999999984
+"test_streampress_api.R","st_write with list of matrices matches cbind result",3,0,FALSE,0,0,0.0140000000000029
+"test_streampress_api.R","chunk_bytes parameter produces correct chunk_cols",1,0,FALSE,0,0,0.201000000000001
+"test_streampress_api.R","st_read does not return dimnames without obs/var",2,0,FALSE,0,0,0.00900000000000034
+"test_streampress_compat.R","st_write/st_read round-trip: sparse matrix",1,0,FALSE,0,0,0.00899999999999324
+"test_streampress_compat.R","st_info returns correct dimensions for v2 file",3,0,FALSE,0,0,0.0109999999999957
+"test_streampress_compat.R","nmf from .spz file works end-to-end",1,0,TRUE,0,0,0.00200000000000244
+"test_streampress_compat.R","chunk_cols parameter accepted by st_write",2,0,FALSE,0,0,0.007000000000005
+"test_streampress_compat.R","st_add_transpose adds transpose successfully",2,0,FALSE,0,0,0.00800000000000267
+"test_streampress_compat.R","st_write_dense round-trips correctly",2,0,FALSE,0,0,0.00800000000000267
+"test_streampress_compat.R","auto-dispatch selects IN_CORE_CPU for small files",1,0,TRUE,0,0,0.00199999999999534
+"test_streampress_compat.R","Rcpp_get_available_ram_mb returns non-negative value",1,0,FALSE,0,0,0.00199999999999534
+"test_streampress_cpp.R","FileHeader_v2 accessor methods for reserved bytes work",4,0,FALSE,0,0,0.0120000000000005
+"test_streampress_cpp.R","old files without obs_table_offset report has_obs_table == FALSE",2,0,FALSE,0,0,0.00799999999999557
+"test_streampress_cpp.R","ColDescriptor serialization round-trip via obs table",2,0,FALSE,0,0,0.0109999999999957
+"test_streampress_cpp.R","parallel write produces same output as serial write",1,0,FALSE,0,0,0.00800000000000267
+"test_streampress_cpp.R","decompress_v2 handles column range parameters",1,0,FALSE,0,0,0.0069999999999979
+"test_streampress_cpp.R","transpose section enables row access",3,0,FALSE,0,0,0.0189999999999984
+"test_streampress_cpp.R","safe_pread reads correct bytes at given offsets",2,0,FALSE,0,0,0.0100000000000051
+"test_streampress_cpp.R","extdata pbmc3k.spz is readable with new code",6,0,FALSE,0,0,0.0930000000000035
+"test_svd.R","svd() returns valid rank-5 factorization (dense)",8,0,FALSE,0,0,0.0230000000000032
+"test_svd.R","svd() returns valid rank-5 factorization (sparse)",5,0,FALSE,0,0,0.0160000000000053
+"test_svd.R","svd() reconstruction has bounded residual (dense)",1,0,FALSE,0,0,0.00400000000000489
+"test_svd.R","svd() reconstruction has bounded residual (sparse)",1,0,FALSE,0,0,0.0069999999999979
+"test_svd.R","svd() with center=TRUE produces meaningful PCA",6,0,FALSE,0,0,0.0139999999999958
+"test_svd.R","svd(method='deflation') returns orthogonal U,V",2,0,FALSE,0,0,0.00999999999999801
+"test_svd.R","svd(method='irlba') converges for sparse input",3,0,FALSE,0,0,0.00900000000000034
+"test_svd.R","svd(method='krylov') agrees with deflation on singular values",1,0,FALSE,0,0,0.00600000000000023
+"test_svd.R","svd(method='lanczos') agrees with deflation on singular values",1,0,FALSE,0,0,0.0069999999999979
+"test_svd.R","svd(method='randomized') has bounded residual",3,0,FALSE,0,0,0.00799999999999557
+"test_svd.R","pca() is an alias for svd() with center=TRUE",2,0,FALSE,0,0,0.00600000000000023
+"test_svd.R","svd() with L1 penalty applies sparsity to V",2,0,FALSE,0,0,0.00600000000000023
+"test_svd.R","svd() with nonneg applies non-negativity constraint (deflation)",4,0,FALSE,0,0,0.00999999999999801
+"test_svd.R","svd() with nonneg via krylov produces non-negative factors",3,0,FALSE,0,0,0.0110000000000028
+"test_svd.R","svd() with L1 via krylov applies sparsity",3,0,FALSE,0,0,0.00999999999999801
+"test_svd.R","svd() krylov+nonneg+L1 combined constraints",4,0,FALSE,0,0,0.0109999999999957
+"test_svd.R","krylov vs deflation nonneg quality is comparable",2,0,FALSE,0,0,0.0129999999999981
+"test_svd.R","deflation nonneg PCA keeps every component non-negative (mixed-sign data)",2,0,FALSE,0,0,0.00799999999999557
+"test_svd.R","deflation L1 sparsity is preserved on later factors",1,0,FALSE,0,0,0.00600000000000023
+"test_svd.R","deflation nonneg PCA returns distinct factors at larger k",3,0,FALSE,0,0,0.0150000000000006
+"test_svd.R","auto method uses deflation for nonneg/L1 constraints at any k",1,0,FALSE,0,0,0.00600000000000023
+"test_svd.R","krylov with nonneg and k > 1 warns",3,0,FALSE,0,1,0.0140000000000029
+"test_svd.R","reconstruct(svd_result) has low MSE",2,0,FALSE,0,0,0.0069999999999979
+"test_svd.R","variance_explained() returns decreasing proportions",5,0,FALSE,0,0,0.0110000000000028
+"test_svd.R","dim() works on svd",1,0,FALSE,0,0,0.00500000000000256
+"test_svd.R","show() works on svd",1,0,FALSE,0,0,0.00300000000000011
+"test_svd.R","head() works on svd",1,0,FALSE,0,0,0.00400000000000489
+"test_svd.R","subsetting [i] works on svd",3,0,FALSE,0,0,0.0120000000000005
+"test_svd.R","svd() preserves dimnames",2,0,FALSE,0,0,0.007000000000005
+"test_svd.R","svd() preserves dimnames for sparse input",2,0,FALSE,0,0,0.00800000000000267
+"test_svd.R","svd() works with default NULL seed",2,0,FALSE,0,0,0.0069999999999979
+"test_svd.R","svd() is reproducible with same seed",3,0,FALSE,0,0,0.00999999999999801
+"test_svd.R","svd() gives different results with different seeds",1,0,FALSE,0,0,0.00600000000000023
+"test_svd.R","svd() rejects invalid inputs",5,0,FALSE,0,0,0.0239999999999938
+"test_svd.R","svd() works with k = 1",4,0,FALSE,0,0,0.0139999999999958
+"test_svd.R","svd(scale=TRUE) returns correct metadata fields",8,0,FALSE,0,0,0.0200000000000031
+"test_svd.R","svd(scale=TRUE) auto-enables center=TRUE",2,0,FALSE,0,0,0.00800000000000267
+"test_svd.R","svd(scale=TRUE) singular values match prcomp on transposed iris",2,0,FALSE,0,0,0.0069999999999979
+"test_svd.R","svd(scale=TRUE) works on sparse matrices",5,0,FALSE,0,0,0.0129999999999981
+"test_svd.R","svd(scale=TRUE) sparse and dense agree",3,0,FALSE,0,0,0.0120000000000005
+"test_svd.R","svd(scale=TRUE) frobenius_norm_sq equals m*(n-1)",2,0,FALSE,0,0,0.0110000000000028
+"test_svd.R","svd(scale=TRUE) is reproducible",4,0,FALSE,0,0,0.0140000000000029
+"test_svd.R","svd(scale=TRUE) works across multiple methods",12,0,FALSE,0,0,0.044000000000004
+"test_svd.R","variance_explained() with scale=TRUE sums to <=1",5,0,FALSE,0,0,0.0120000000000005
+"test_svd.R","svd(test_fraction>0, deflation) produces test_loss (sparse)",5,0,FALSE,0,0,0.0139999999999958
+"test_svd.R","svd(test_fraction>0, deflation) produces test_loss (dense)",4,0,FALSE,0,0,0.0110000000000028
+"test_svd.R","svd(test_fraction>0, krylov) produces test_loss (sparse)",4,0,FALSE,0,0,0.0140000000000029
+"test_svd.R","svd(test_fraction>0, krylov) produces test_loss (dense)",5,0,FALSE,0,1,0.017000000000003
+"test_svd.R","mask='zeros' changes CV behavior on sparse data",6,0,FALSE,0,0,0.0179999999999936
+"test_svd.R","auto-rank (k='auto') selects reasonable rank",4,0,FALSE,0,0,0.00900000000000034
+"test_svd.R","svd(robust=TRUE) succeeds on dense input",4,0,FALSE,0,1,0.0129999999999981
+"test_svd.R","svd(robust=TRUE) succeeds on sparse input",4,0,FALSE,0,1,0.0150000000000006
+"test_svd.R","svd(robust='mae') succeeds",4,0,FALSE,0,1,0.0139999999999958
+"test_svd.R","svd(robust=numeric) uses custom Huber delta",4,0,FALSE,0,1,0.0129999999999981
+"test_svd.R","robust SVD downweights outliers",4,0,FALSE,0,1,0.0150000000000006
+"test_svd.R","svd(robust + CV) works together",4,0,FALSE,0,1,0.0159999999999982
+"test_svd.R","TEST-SVD-DEFLATION-GROUNDTRUTH: deflation matches base::svd (sparse)",2,0,FALSE,0,0,0.0069999999999979
+"test_svd.R","TEST-SVD-KRYLOV-GROUNDTRUTH: krylov matches base::svd (sparse)",2,0,FALSE,0,0,0.0069999999999979
+"test_svd.R","TEST-SVD-LANCZOS-GROUNDTRUTH: lanczos matches base::svd (sparse)",2,0,FALSE,0,0,0.0069999999999979
+"test_svd.R","TEST-SVD-IRLBA-GROUNDTRUTH: irlba matches base::svd (sparse)",2,0,FALSE,0,0,0.007000000000005
+"test_svd.R","TEST-SVD-RANDOMIZED-GROUNDTRUTH: randomized matches base::svd (sparse)",2,0,FALSE,0,0,0.00800000000000267
+"test_svd.R","TEST-SVD-DEFLATION-DENSE: deflation matches base::svd (dense)",2,0,FALSE,0,0,0.007000000000005
+"test_svd.R","TEST-SVD-KRYLOV-DENSE: krylov matches base::svd (dense)",2,0,FALSE,0,0,0.00600000000000023
+"test_svd.R","TEST-SVD-LANCZOS-DENSE: lanczos matches base::svd (dense)",2,0,FALSE,0,0,0.00600000000000023
+"test_svd.R","TEST-SVD-IRLBA-DENSE: irlba matches base::svd (dense)",2,0,FALSE,0,0,0.00600000000000023
+"test_svd.R","TEST-SVD-RANDOMIZED-DENSE: randomized matches base::svd (dense)",2,0,FALSE,0,0,0.0069999999999979
+"test_target_regularization.R","nmf with target_H and target_lambda runs without error",3,0,FALSE,0,0,0.00999999999999801
+"test_target_regularization.R","nmf with target_lambda=0 gives same result as no target",1,0,FALSE,0,0,0.0069999999999979
+"test_target_regularization.R","nmf with positive target_lambda gives different result than without",1,0,FALSE,0,0,0.00800000000000267
+"test_target_regularization.R","nmf with sparse matrix and target works",1,0,FALSE,0,0,0.00600000000000023
+"test_target_regularization.R","W() and H() accept target parameters in factor_net",5,0,FALSE,0,0,0.017000000000003
+"test_target_regularization.R","nmf with negative target_lambda (PROJ_ADV) runs without error",4,0,FALSE,0,0,0.0120000000000005
+"test_target_regularization.R","PROJ_ADV gives different result from enrichment",1,0,FALSE,0,0,0.00800000000000267
+"test_target_regularization.R","PROJ_ADV with sparse matrix works",2,0,FALSE,0,0,0.00800000000000267
+"test_target_regularization.R","PROJ_ADV scalar lambda expands correctly",1,0,FALSE,0,0,0.00399999999999778
+"test_target_regularization.R","nnls with positive target_lambda (enrichment) works",2,0,FALSE,0,0,0.00800000000000267
+"test_target_regularization.R","nnls with negative target_lambda (PROJ_ADV) works",2,0,FALSE,0,0,0.00800000000000267
+"test_thread_edge_cases.R","nmf works with threads = 1",2,0,FALSE,0,0,0.0069999999999979
+"test_thread_edge_cases.R","nmf works with threads = 0 (auto-detect)",2,0,FALSE,0,0,0.0069999999999979
+"test_thread_edge_cases.R","nmf works with threads = 2",2,0,FALSE,0,0,0.00799999999999557
+"test_thread_edge_cases.R","nmf gives consistent results regardless of thread count",1,0,FALSE,0,0,0.00900000000000034
+"test_thread_edge_cases.R","nmf handles very large thread count gracefully",2,0,FALSE,0,0,2.329
+"test_thread_edge_cases.R","bipartition works with threads = 1",1,0,FALSE,0,0,0.00600000000000023
+"test_thread_edge_cases.R","nnls works with threads = 1",2,0,FALSE,0,0,0.00900000000000034
+"test_unified_backend.R","Unified backend recovers known ground truth (sparse)",2,0,FALSE,0,0,0.0100000000000051
+"test_unified_backend.R","Unified backend works correctly with dense matrices",4,0,FALSE,0,0,0.0149999999999935
+"test_unified_backend.R","Sparse and dense paths produce equivalent loss (same init)",2,0,FALSE,0,0,0.0130000000000052
+"test_unified_backend.R","Sparse CV works through unified backend",5,0,FALSE,0,0,0.0189999999999912
+"test_unified_backend.R","Multi-rank CV returns data.frame with metrics",5,0,FALSE,0,0,0.0220000000000056
+"test_unified_backend.R","NNLS warm_start produces better or equal results",1,0,FALSE,0,0,0.00499999999999545
+"test_unified_backend.R","NNLS warm_start with dense input works",1,0,FALSE,0,0,0.00500000000000966
+"test_unified_backend.R","L1 regularization increases sparsity through unified backend",1,0,FALSE,0,0,0.00800000000000978
+"test_unified_backend.R","Unified backend returns resource diagnostics",3,0,FALSE,0,0,0.0110000000000099
+"test_unified_backend.R","Loss history is tracked and monotonically decreasing",2,0,FALSE,0,0,0.0109999999999957
+"test_unified_backend.R","cd_maxit is respected in unified backend",1,0,FALSE,0,0,0.00799999999999557
+"test_unsupported_combos.R","GUARD-MSE-ZI: MSE + zero-inflation is rejected",2,0,FALSE,0,0,0.0710000000000122
+"test_unsupported_combos.R","GUARD-GAMMA-ZI: Gamma + zero-inflation is rejected",2,0,FALSE,0,0,0.0679999999999978
+"test_unsupported_combos.R","GUARD-INVGAUSS-ZI: InvGauss + zero-inflation is rejected",1,0,FALSE,0,0,0.0640000000000072
+"test_unsupported_combos.R","GUARD-TWEEDIE-ZI: Tweedie + zero-inflation is rejected",1,0,FALSE,0,0,0.063999999999993
+"test_unsupported_combos.R","GUARD-CHOLESKY-IRLS: Cholesky + non-MSE distribution is rejected",3,0,FALSE,0,0,0.0790000000000077
+"test_unsupported_combos.R","GUARD-CHOLESKY-ROBUST: Cholesky + robust is rejected",1,0,FALSE,0,0,0.0649999999999977
+"test_unsupported_combos.R","AUTO-SOLVER-IRLS: auto solver selects CD for IRLS distributions",2,0,FALSE,0,1,0.283999999999992
+"test_unsupported_combos.R","GUARD-ZI-NOT-GP-NB: ZI with generic non-GP/NB also rejected",1,0,FALSE,0,0,0.0730000000000075
+"test_upper_bound.R","upper_bound clamps factor values for W",2,0,FALSE,0,0,0.0150000000000006
+"test_upper_bound.R","upper_bound clamps factor values for H",1,0,FALSE,0,0,0.00900000000000034
+"test_upper_bound.R","upper_bound = 0 means no bound (default behavior)",2,0,FALSE,0,0,0.0150000000000006
+"test_upper_bound.R","upper_bound on both W and H simultaneously",2,0,FALSE,0,0,0.0130000000000052
+"test_upper_bound.R","upper_bound affects convergence and loss",1,0,FALSE,0,0,0.0139999999999958
+"test_validation_errors.R","nmf() errors on non-coercible data",1,0,FALSE,0,0,0.0130000000000052
+"test_validation_errors.R","nmf() errors on non-existent file path",1,0,FALSE,0,0,0.00999999999999091
+"test_validation_errors.R","nmf() errors on unsupported file extension",1,0,FALSE,0,0,0.0100000000000051
+"test_validation_errors.R","L1 penalty must be in [0, 1)",3,0,FALSE,0,0,0.0229999999999961
+"test_validation_errors.R","L1 penalty must be length 1 or 2",1,0,FALSE,0,0,0.00799999999999557
+"test_validation_errors.R","L2 penalty must be non-negative",1,0,FALSE,0,0,0.00900000000000034
+"test_validation_errors.R","L2 penalty must be length 1 or 2",1,0,FALSE,0,0,0.00799999999999557
+"test_validation_errors.R","L21 penalty must be non-negative",1,0,FALSE,0,0,0.00699999999999079
+"test_validation_errors.R","angular penalty must be non-negative",1,0,FALSE,0,0,0.00699999999999079
+"test_validation_errors.R","graph_lambda must be non-negative",1,0,FALSE,0,0,0.007000000000005
+"test_validation_errors.R","upper_bound must be non-negative",1,0,FALSE,0,0,0.00600000000000023
+"test_validation_errors.R","test_fraction must be a single numeric in [0, 1)",4,0,FALSE,0,0,0.0210000000000008
+"test_validation_errors.R","patience must be a single numeric",2,0,FALSE,0,0,0.0109999999999957
+"test_validation_errors.R","sort_model must be a single logical",2,0,FALSE,0,0,0.0110000000000099
+"test_validation_errors.R","nonneg must be logical",2,0,FALSE,0,0,0.0109999999999957
+"test_validation_errors.R","mask must be a matrix, 'zeros', 'NA', or NULL",2,0,FALSE,0,0,0.0110000000000099
+"test_validation_errors.R","graph_W must have correct dimensions",1,0,FALSE,0,0,0.00800000000000978
+"test_validation_errors.R","graph_H must have correct dimensions",1,0,FALSE,0,0,0.0190000000000055
+"test_validation_errors.R","invalid loss string is rejected",3,0,FALSE,0,0,0.0150000000000006
+"test_zi_modes.R","ZIGP col returns pi_col with correct length and range",5,0,FALSE,0,0,0.0460000000000065
+"test_zi_modes.R","ZIGP col loss converges",2,0,FALSE,0,0,0.0420000000000016
+"test_zi_modes.R","ZINB row returns pi_row with correct length and range",5,0,FALSE,0,0,0.0640000000000072
+"test_zi_modes.R","ZINB row loss converges",2,0,FALSE,0,0,0.0589999999999975
+"test_zi_modes.R","ZINB col returns pi_col with correct length and range",5,0,FALSE,0,0,0.0630000000000024
+"test_zi_modes.R","ZINB col loss converges",2,0,FALSE,0,0,0.061000000000007

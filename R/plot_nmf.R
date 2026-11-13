@@ -24,19 +24,22 @@ utils::globalVariables(c("k", "type", "mean_loss"))
 #' @method plot nmf
 #' @examples
 #' \donttest{
-#' # Basic loss plot
-#' model <- nmf(hawaiibirds, k = 10)
-#' plot(model)
+#' model <- nmf(hawaiibirds, k = 5, seed = 1, maxit = 30, threads = 2)
+#' if (requireNamespace("ggplot2", quietly = TRUE)) {
+#'   # Basic loss plot
+#'   plot(model)
 #'
-#' # Convergence analysis
-#' plot(model, type = "convergence")
+#'   # Convergence analysis
+#'   plot(model, type = "convergence")
 #'
-#' # Interactive plot
-#' plot(model, type = "loss", interactive = TRUE)
+#'   # Factor sparsity
+#'   plot(model, type = "sparsity")
 #'
-#' # Compare multiple runs
-#' models <- replicate(5, nmf(hawaiibirds, k = 10), simplify = FALSE)
-#' plot(models[[1]], type = "sparsity")
+#'   # Interactive plot (needs plotly and an interactive session)
+#'   if (interactive() && requireNamespace("plotly", quietly = TRUE)) {
+#'     plot(model, type = "loss", interactive = TRUE)
+#'   }
+#' }
 #' }
 plot.nmf <- function(x, type = c("loss", "convergence", "regularization", "sparsity"),
                      smooth = TRUE, span = 0.3, log_scale = FALSE,
@@ -67,7 +70,7 @@ plot.nmf <- function(x, type = c("loss", "convergence", "regularization", "spars
 plot_nmf_loss <- function(x, smooth, span, log_scale, interactive, theme) {
   # Check if loss history exists
   if (is.null(x@misc$loss_history)) {
-    stop("No loss history found. Run nmf() with track_loss = TRUE")
+    stop("No loss history found. Fit the model with nmf() first")
   }
   
   # Extract loss history — stored as a numeric vector in misc$loss_history
@@ -173,7 +176,7 @@ plot_nmf_loss <- function(x, smooth, span, log_scale, interactive, theme) {
 #' @keywords internal
 plot_nmf_convergence <- function(x, smooth, span, interactive, theme) {
   if (is.null(x@misc$loss_history)) {
-    stop("No loss history found. Run nmf() with track_loss = TRUE")
+    stop("No loss history found. Fit the model with nmf() first")
   }
   
   history <- x@misc$loss_history
@@ -249,7 +252,7 @@ plot_nmf_convergence <- function(x, smooth, span, interactive, theme) {
 #' @keywords internal
 plot_nmf_regularization <- function(x, smooth, span, interactive, theme) {
   if (is.null(x@misc$loss_history)) {
-    stop("No loss history found. Run nmf() with track_loss = TRUE")
+    stop("No loss history found. Fit the model with nmf() first")
   }
   
   history <- x@misc$loss_history
@@ -366,9 +369,11 @@ apply_plot_theme <- function(p, theme) {
 #' \donttest{
 #' library(Matrix)
 #' A <- abs(rsparsematrix(100, 50, 0.2))
-#' model1 <- nmf(A, k = 5, L1 = 0.01)
-#' model2 <- nmf(A, k = 5, L1 = 0.1)
-#' compare_nmf(model1, model2, labels = c("L1=0.01", "L1=0.1"))
+#' model1 <- nmf(A, k = 5, L1 = 0.01, seed = 1, threads = 2)
+#' model2 <- nmf(A, k = 5, L1 = 0.1, seed = 1, threads = 2)
+#' if (requireNamespace("ggplot2", quietly = TRUE)) {
+#'   compare_nmf(model1, model2, labels = c("L1=0.01", "L1=0.1"))
+#' }
 #' }
 compare_nmf <- function(..., labels = NULL, metric = "loss", smooth = TRUE, span = 0.3) {
   models <- list(...)
@@ -457,8 +462,11 @@ compare_nmf <- function(..., labels = NULL, metric = "loss", smooth = TRUE, span
 #' \donttest{
 #' library(Matrix)
 #' A <- abs(rsparsematrix(50, 30, 0.3))
-#' cv_result <- nmf(A, k = 2:6, test_fraction = 0.1, cv_seed = 1, maxit = 20)
-#' plot(cv_result)
+#' cv_result <- nmf(A, k = 2:6, test_fraction = 0.1, cv_seed = 1, maxit = 20,
+#'                  threads = 2)
+#' if (requireNamespace("ggplot2", quietly = TRUE)) {
+#'   plot(cv_result)
+#' }
 #' }
 plot.nmfCrossValidate <- function(x, show_train = NULL, point_size = 3,
                                    interactive = FALSE, ...) {

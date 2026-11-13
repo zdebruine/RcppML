@@ -49,7 +49,10 @@ struct FactorDesc {
     bool nonneg = true;
     Scalar graph_lambda = 0;
     const SparseMatrix<Scalar>* graph = nullptr;
-    // Target regularization handled at Rcpp level
+    /// Target matrix (k x n for H, k x m for W; not owned). nullptr = none.
+    const DenseMatrix<Scalar>* target = nullptr;
+    /// Target strength: > 0 attracts, < 0 removes (PROJ_ADV), 0 = off.
+    Scalar target_lambda = 0;
 };
 
 /**
@@ -158,7 +161,13 @@ public:
     const DenseMatrix<Scalar>& first_dense() const { return *first_dense_; }
 
     /// Get the concatenated data for shared-H (multi-modal)
-    bool has_concatenated() const { return concat_data_.rows() > 0; }
+    /// True when the first layer reads a shared (row-concatenated) input.
+    /// The concatenation lives in concat_sparse_ when all inputs are sparse
+    /// and in concat_data_ otherwise, so both must be checked.
+    bool has_concatenated() const {
+        return concat_is_sparse_ ? (concat_sparse_.rows() > 0)
+                                 : (concat_data_.rows() > 0);
+    }
     const DenseMatrix<Scalar>& concatenated_data() const { return concat_data_; }
     const SparseMatrix<Scalar>& concatenated_sparse() const { return concat_sparse_; }
     bool concat_is_sparse() const { return concat_is_sparse_; }
@@ -390,6 +399,10 @@ private:
         cfg.nonneg = desc.nonneg;
         cfg.graph_lambda = desc.graph_lambda;
         if (desc.graph) cfg.graph = desc.graph;
+        if (desc.target) {
+            cfg.target = desc.target;
+            cfg.target_lambda = desc.target_lambda;
+        }
     }
 
     std::vector<std::string> split_names(const std::string& s) {

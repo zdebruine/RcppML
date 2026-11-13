@@ -59,10 +59,10 @@ dim(golub)  # 38 samples x 5000 genes
 table(attr(golub, "cancer_type"))  # 27 ALL, 11 AML
 
 # Run NMF for class discovery
-model <- nmf(t(golub), k = 2, maxit = 100)  # Transpose: genes x samples
+model <- nmf(t(golub), k = 2, maxit = 30, seed = 1, threads = 2)  # genes x samples
 
 # Try rank 3 as suggested by Brunet et al.
-model3 <- nmf(t(golub), k = 3, maxit = 100)
+model3 <- nmf(t(golub), k = 3, maxit = 30, seed = 1, threads = 2)
 }
 
 }

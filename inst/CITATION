@@ -1,0 +1,22 @@
+bibentry(
+  bibtype = "Article",
+  header  = "To cite RcppML in publications, please use:",
+  title   = "Fast and robust non-negative matrix factorization for single-cell experiments",
+  author  = c(person(given = c("Zachary", "J."), family = "DeBruine"),
+              person("Karsten", "Melcher"),
+              person(given = c("Timothy", "J."), family = "Triche Jr.")),
+  journal = "bioRxiv",
+  year    = "2021",
+  doi     = "10.1101/2021.09.01.458620",
+  url     = "https://doi.org/10.1101/2021.09.01.458620"
+)
+
+bibentry(
+  bibtype = "Manual",
+  header  = "To cite the software itself:",
+  title   = "RcppML: Fast Non-Negative Matrix Factorization and Divisive Clustering",
+  author  = person(given = c("Zachary", "J."), family = "DeBruine"),
+  year    = sub("-.*", "", meta$Date),
+  note    = paste("R package version", meta$Version),
+  url     = "https://github.com/zdebruine/RcppML"
+)

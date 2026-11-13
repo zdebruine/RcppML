@@ -35,7 +35,8 @@ nnls(
 
 \item{nonneg}{non-negativity constraints, length 1 or 2.}
 
-\item{threads}{number of threads for OpenMP parallelization (0 = all available).}
+\item{threads}{number of threads for OpenMP parallelization. \code{0} (default)
+uses \code{getOption("RcppML.threads")}, and all available cores if that is unset.}
 
 \item{verbose}{print progress information.}
 
@@ -78,9 +79,23 @@ This function solves NNLS projection problems with full flexibility.
 \item{\code{gamma_phi_max}}{Maximum Gamma shape (default 1e4)}
 \item{\code{gamma_phi_min}}{Minimum Gamma shape (default 1e-6)}
 \item{\code{tweedie_power}}{Tweedie variance power (default 1.5)}
-\item{\code{irls_max_iter}}{Maximum IRLS iterations per solve (default 5)}
+\item{\code{irls_max_iter}}{Maximum IRLS iterations per solve (default 20)}
 \item{\code{irls_tol}}{IRLS convergence tolerance (default 1e-4)}
 }
+}
+
+\section{Compatibility with RcppML 0.3.7}{
+
+The previous signature was \code{nnls(a, b, cd_maxit, cd_tol, fast_nnls, L1)},
+which solved the system \eqn{a x = b} for \eqn{x \ge 0} with \code{a} a
+symmetric positive definite matrix (typically \eqn{W^T W}) and \code{b} the
+right-hand sides (typically \eqn{W^T A}). Calls of that form (two leading
+matrices and no \code{A}, optionally followed by positional \code{cd_maxit}
+and \code{cd_tol}, or the named arguments \code{a} and \code{b}) are still
+accepted with a deprecation warning and return the same solution: for a
+symmetric positive definite \code{a}, \eqn{\min_x x^T a x / 2 - b^T x}; for
+any other \code{a}, the least-squares solution of \eqn{a x = b}, both
+subject to \eqn{x \ge 0}. \code{fast_nnls} is ignored.
 }
 
 \section{Target Regularization}{

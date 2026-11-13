@@ -273,14 +273,31 @@ struct DenseMatrixGPU {
 // ---------------------------------------------------------------------------
 
 struct GPUContext {
-    cublasHandle_t cublas;
+    cublasHandle_t cublas = nullptr;
     cublasHandle_t& handle = cublas;  // backward-compat alias for legacy NMF code
-    cusparseHandle_t cusparse;
-    cusolverDnHandle_t cusolver;
-    cudaStream_t stream;
-    int sm_count;  // Number of SMs for kernel launch configuration
+    cusparseHandle_t cusparse = nullptr;
+    cusolverDnHandle_t cusolver = nullptr;
+    cudaStream_t stream = nullptr;
+    int sm_count = 0;  // Number of SMs for kernel launch configuration
 
     GPUContext() {
+        // A constructor that throws does not run the destructor, so release
+        // whatever was created before rethrowing.
+        try {
+            init();
+        } catch (...) {
+            destroy();
+            throw;
+        }
+    }
+
+    ~GPUContext() { destroy(); }
+
+    GPUContext(const GPUContext&) = delete;
+    GPUContext& operator=(const GPUContext&) = delete;
+
+private:
+    void init() {
         CUBLAS_CHECK(cublasCreate(&cublas));
         CUSPARSE_CHECK(cusparseCreate(&cusparse));
         CUSOLVER_CHECK(cusolverDnCreate(&cusolver));
@@ -289,8 +306,10 @@ struct GPUContext {
         CUSPARSE_CHECK(cusparseSetStream(cusparse, stream));
         CUSOLVER_CHECK(cusolverDnSetStream(cusolver, stream));
 
-        // Enable TF32 for float on Ampere+ GPUs
-        CUBLAS_CHECK(cublasSetMathMode(cublas, CUBLAS_TF32_TENSOR_OP_MATH));
+        // TF32 tensor-core math is left off: it rounds single-precision
+        // GEMM inputs to a 10-bit mantissa on Ampere and newer cards, which
+        // made results differ between GPU generations and from CPU.
+        CUBLAS_CHECK(cublasSetMathMode(cublas, CUBLAS_DEFAULT_MATH));
 
         // Query SM count for adaptive kernel dispatch
         int device;
@@ -300,20 +319,18 @@ struct GPUContext {
         sm_count = prop.multiProcessorCount;
     }
 
-    ~GPUContext() {
+    void destroy() noexcept {
         // Sync stream before destroying handles to avoid async errors
-        cudaStreamSynchronize(stream);
+        if (stream) cudaStreamSynchronize(stream);
         // Clear any sticky async errors so handle destruction succeeds
         cudaGetLastError();
-        cusolverDnDestroy(cusolver);
-        cublasDestroy(cublas);
-        cusparseDestroy(cusparse);
-        cudaStreamDestroy(stream);
+        if (cusolver) { cusolverDnDestroy(cusolver); cusolver = nullptr; }
+        if (cublas)   { cublasDestroy(cublas);       cublas = nullptr; }
+        if (cusparse) { cusparseDestroy(cusparse);   cusparse = nullptr; }
+        if (stream)   { cudaStreamDestroy(stream);   stream = nullptr; }
     }
 
-    GPUContext(const GPUContext&) = delete;
-    GPUContext& operator=(const GPUContext&) = delete;
-
+public:
     void sync() const {
         CUDA_CHECK(cudaStreamSynchronize(stream));
     }

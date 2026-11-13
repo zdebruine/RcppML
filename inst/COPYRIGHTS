@@ -1,0 +1,41 @@
+RcppML is Copyright (C) 2021-2026 Zachary DeBruine and is distributed under
+the GNU General Public License, version 3 or later.
+
+The package bundles the following third-party code.
+
+File: inst/include/RcppHungarian.h
+
+  Hungarian (Kuhn-Munkres) algorithm for the linear assignment problem.
+
+  Original implementation: Markus Buehren, "Functions for the rectangular
+  assignment problem" (MATLAB mex functions), MATLAB Central File Exchange
+  submission 6543.
+  C++ wrapper with slight modification: Copyright (c) 2016 Cong Ma.
+  Single-header adaptation for use in R packages: Copyright (c) 2019
+  Justin Silverman (https://github.com/jsilve24/RcppHungarian).
+
+  The original code and both derived versions are published under the
+  BSD license:
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are
+  met:
+
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in
+      the documentation and/or other materials provided with the
+      distribution.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  POSSIBILITY OF SUCH DAMAGE.

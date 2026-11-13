@@ -1,0 +1,106 @@
+# =============================================================================
+# Makefile.gpu — Build RcppML_gpu.so from the GPU bridge sources
+#
+# Usage (from the directory that holds this file):
+#   make -f Makefile.gpu              # Build GPU shared library
+#   make -f Makefile.gpu install      # Copy it next to the package (lib/)
+#   make -f Makefile.gpu clean        # Remove build artifacts
+#   make -f Makefile.gpu check        # Show the detected configuration
+#
+# Prerequisites:
+#   - CUDA toolkit (nvcc) in PATH
+#   - R with RcppEigen installed (for the Eigen headers), or EIGEN_INC set
+#
+# Most users should call RcppML::install_gpu() from R instead; it runs the
+# same compile and link steps and writes the library to the per-user
+# directory that gpu_available() searches.
+#
+# This file works from a source checkout (src/, headers in ../inst/include)
+# and from an installed package or the inst/ tree (gpu/, headers in
+# ../include).
+# =============================================================================
+
+NVCC ?= nvcc
+
+# Target architectures (compute capability without the dot). The default
+# covers Volta, Turing, Ampere and Hopper; PTX for the oldest one lets newer
+# cards JIT-compile. Override for a single card, for example:
+#   make -f Makefile.gpu GPU_ARCHS="86"
+GPU_ARCHS ?= 70 75 80 90
+CUDA_ARCH ?= $(foreach a,$(GPU_ARCHS),-gencode arch=compute_$(a),code=sm_$(a)) \
+             -gencode arch=compute_$(firstword $(GPU_ARCHS)),code=compute_$(firstword $(GPU_ARCHS))
+
+# Extra flags, e.g. EXTRA_NVCC_FLAGS="-w" to silence warnings
+EXTRA_NVCC_FLAGS ?=
+
+NVCC_FLAGS = -O3 $(CUDA_ARCH) -std=c++17 \
+             -Xcompiler -fPIC \
+             --expt-relaxed-constexpr \
+             -DNDEBUG $(EXTRA_NVCC_FLAGS)
+
+# Eigen headers come from RcppEigen
+EIGEN_INC ?= $(shell Rscript -e 'cat(system.file("include", package="RcppEigen"))' 2>/dev/null)
+ifeq ($(strip $(EIGEN_INC)),)
+  $(error Eigen headers not found: install the R package RcppEigen or set EIGEN_INC)
+endif
+
+# FactorNet headers: ../inst/include in a source checkout, ../include otherwise
+PROJECT_INC ?= $(firstword $(wildcard ../inst/include ../include))
+ifeq ($(strip $(PROJECT_INC)),)
+  $(error FactorNet headers not found: set PROJECT_INC to the directory that contains FactorNet/)
+endif
+
+INCLUDES = -I$(EIGEN_INC) -I$(PROJECT_INC) -I.
+
+# CUDA libraries (nvcc adds the CUDA runtime itself)
+LIBS = -lcublas -lcusparse -lcusolver
+
+TARGET = RcppML_gpu.so
+INSTALL_DIR ?= $(if $(wildcard ../inst),../inst/lib,../lib)
+
+# Headers the bridge depends on (for rebuilds after a header edit)
+FN = $(PROJECT_INC)/FactorNet
+GPU_HEADERS = gpu_bridge_common.cuh \
+              $(wildcard $(FN)/gpu/*.cuh) \
+              $(wildcard $(FN)/primitives/gpu/*.cuh) \
+              $(wildcard $(FN)/nmf/*.cuh) $(wildcard $(FN)/nmf/*.hpp) \
+              $(wildcard $(FN)/svd/*.cuh) $(wildcard $(FN)/svd/*.hpp) \
+              $(wildcard $(FN)/core/*.hpp) \
+              $(wildcard $(FN)/features/*.hpp) \
+              $(wildcard $(FN)/rng/*.hpp)
+
+# sp_gpu_bridge.cu (GPU-side .spz decode) is not built: the decoder headers it
+# needs (streampress/gpu/) are not part of this source tree.
+OBJ = gpu_bridge_cluster.o gpu_bridge_nmf.o gpu_bridge_svd.o \
+      gpu_bridge_utils.o gpu_bridge_assess.o
+
+.PHONY: all clean install check
+
+all: $(TARGET)
+
+$(TARGET): $(OBJ)
+	$(NVCC) -shared -o $@ $^ $(LIBS)
+	@echo "==> Built $(TARGET) successfully"
+
+gpu_bridge_assess.o: gpu_bridge_assess.cu
+	$(NVCC) $(NVCC_FLAGS) $(INCLUDES) -c -o $@ $<
+
+%.o: %.cu $(GPU_HEADERS)
+	$(NVCC) $(NVCC_FLAGS) $(INCLUDES) -c -o $@ $<
+
+install: $(TARGET)
+	@mkdir -p $(INSTALL_DIR)
+	cp $(TARGET) $(INSTALL_DIR)/
+	@echo "==> Installed $(TARGET) to $(INSTALL_DIR)/"
+
+clean:
+	rm -f $(OBJ) $(TARGET) gpu_bridge.o sp_gpu_bridge.o
+
+check:
+	@which $(NVCC) > /dev/null 2>&1 && echo "nvcc found: $$($(NVCC) --version | tail -1)" \
+	  || echo "ERROR: nvcc not found. Put the CUDA toolkit on the PATH first."
+	@echo "Eigen include:    $(EIGEN_INC)"
+	@echo "FactorNet include: $(PROJECT_INC)"
+	@echo "Headers tracked:  $(words $(GPU_HEADERS))"
+	@echo "CUDA_ARCH:        $(CUDA_ARCH)"
+	@echo "Install dir:      $(INSTALL_DIR)"

@@ -26,6 +26,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include <streampress/core/checks.hpp>
+
 namespace streampress {
 namespace v2 {
 
@@ -194,6 +196,7 @@ struct FileHeader_v2 {
     }
 
     static FileHeader_v2 deserialize(const uint8_t* buf) {
+        require_little_endian();
         // Verify magic
         if (std::memcmp(buf, HEADER_MAGIC_V2, 4) != 0) {
             throw std::runtime_error("Invalid magic bytes (not a SparsePress file)");
@@ -352,7 +355,9 @@ struct Metadata {
                 const char* ptr = reinterpret_cast<const char*>(e.data.data());
                 const char* end = ptr + e.data.size();
                 while (ptr < end) {
-                    std::string s(ptr);
+                    // Bounded: a damaged entry may lack its final terminator
+                    std::string s(ptr, bounded_strlen(
+                        ptr, static_cast<size_t>(end - ptr)));
                     names.push_back(s);
                     ptr += s.size() + 1;
                 }
@@ -375,7 +380,11 @@ struct Metadata {
             if (e.key == MetadataKey::ROW_PERMUTATION) {
                 size_t count = e.data.size() / sizeof(uint32_t);
                 std::vector<uint32_t> perm(count);
-                std::memcpy(perm.data(), e.data.data(), e.data.size());
+                // Copy whole entries only (a corrupt length need not be a
+                // multiple of 4)
+                if (count > 0)
+                    std::memcpy(perm.data(), e.data.data(),
+                                count * sizeof(uint32_t));
                 return perm;
             }
         }
@@ -444,11 +453,11 @@ struct Metadata {
             MetadataEntry e;
             e.key = static_cast<MetadataKey>(*p++);
 
-            if (p + 4 > end) break;
+            if (static_cast<size_t>(end - p) < 4) break;
             uint32_t len;
             std::memcpy(&len, p, 4); p += 4;
 
-            if (p + len > end) break;
+            if (static_cast<size_t>(end - p) < len) break;
             e.data.assign(p, p + len);
             p += len;
 

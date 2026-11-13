@@ -44,7 +44,7 @@ cosine <- function(x, y = NULL) {
       # x is a vector, y is a matrix
       if (class(y)[1] != "dgCMatrix") y <- .to_dgCMatrix(y)
       colnames(y) <- rownames(y) <- NULL
-      return(as.vector(crossprod(tcrossprod(x, crossprod(x ^ 2, rep(1, length(x)))), tcrossprod(y, Diagonal(x = as.vector(crossprod(y ^ 2, rep(1, length(x)))) ^ -0.5)))))
+      return(as.vector(crossprod(tcrossprod(x, crossprod(x ^ 2, rep(1, length(x))) ^ -0.5), tcrossprod(y, Diagonal(x = as.vector(crossprod(y ^ 2, rep(1, length(x)))) ^ -0.5)))))
     } else {
       # x is a vector, y is a vector
       return(as.vector(crossprod(tcrossprod(x, crossprod(x ^ 2, rep(1, length(x))) ^ -0.5), tcrossprod(y, crossprod(y ^ 2, rep(1, length(x))) ^ -0.5))))

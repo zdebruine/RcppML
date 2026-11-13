@@ -9,6 +9,7 @@ vignette: >
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(
+  dpi = 72, fig.retina = 1,   # keep the built vignettes small (CRAN size limit)
   collapse = TRUE,
   comment = "#>",
   fig.width = 7,
@@ -17,7 +18,17 @@ knitr::opts_chunk$set(
   warning = FALSE
 )
 library(RcppML)
-library(ggplot2)
+# CRAN allows at most two cores
+options(RcppML.threads = 2)
+# Chunks run only when NOT_CRAN is "true" (set when the package tarball and
+# the pkgdown site are built) and the suggested packages are installed.
+# CRAN's checks then rebuild the text without refitting the models.
+run_chunks <- identical(Sys.getenv("NOT_CRAN"), "true") &&
+  all(vapply(c("ggplot2"), requireNamespace, logical(1), quietly = TRUE))
+knitr::opts_chunk$set(eval = run_chunks)
+if (run_chunks) {
+  library(ggplot2)
+}
 
 # Helper: rescale a numeric vector to [0, 1]
 rescale01 <- function(x) {
@@ -36,26 +47,26 @@ RcppML provides six distinct penalty mechanisms, all applied independently to W 
 
 ### Sparsity Penalties
 
-- `L1 = c(w_penalty, h_penalty)` — LASSO penalty, range [0, 1]. Drives small coefficients to exactly zero, producing element-wise sparsity.
+- `L1 = c(w_penalty, h_penalty)` — LASSO penalty, range [0, 1). Drives small coefficients to exactly zero, producing element-wise sparsity. The penalty is an absolute shift of the right-hand side of each solve, applied the same way on every fit path (sparse, dense, masked, cross-validated and non-Gaussian). Because the factors are scaled to unit sum by the diagonal `d`, the same value has a comparable effect across datasets.
 - `L2 = c(w_penalty, h_penalty)` — Ridge penalty, range ≥ 0. Shrinks large coefficients toward zero without producing exact zeros.
-- `L21 = c(w_penalty, h_penalty)` — Group sparsity, range ≥ 0. Zeros entire rows or columns of W or H, eliminating full features or samples from a factor.
+- `L21 = c(w_penalty, h_penalty)` — Group sparsity, range ≥ 0. A group is one feature for W (a row of W, its loadings on all factors) and one sample for H (a column of H). The penalty shrinks whole groups together, so it removes a feature or a sample from the model entirely instead of zeroing single entries.
 
 ### Structural Penalties
 
 - `angular = c(w_penalty, h_penalty)` — Orthogonality penalty, range ≥ 0. Penalizes correlation between factor pairs, encouraging decorrelated components.
-- `graph_W`, `graph_H` — Sparse graph Laplacian matrices (`dgCMatrix`). Penalizes differences between connected nodes, enforcing spatial or network smoothness.
+- `graph_W`, `graph_H` — Sparse, symmetric graph Laplacian matrices (`dgCMatrix`), $L = D - A$ for an undirected graph with adjacency $A$ and degree matrix $D$: features × features for `graph_W`, samples × samples for `graph_H`. Penalizes differences between connected nodes, enforcing spatial or network smoothness. Pass the Laplacian, not the adjacency matrix.
 - `graph_lambda = c(w_strength, h_strength)` — Controls the strength of graph regularization.
 
 ### Box Constraints
 
-- `upper_bound = c(w_bound, h_bound)` — Maximum coefficient value. Useful for bounded data such as probabilities or normalized scores.
+- `upper_bound = c(w_bound, h_bound)` — Maximum coefficient value (0 = no bound). The bound is a constraint of the least-squares solve itself, like non-negativity, so the returned coefficients are the best fit within the box. Useful for bounded data such as probabilities or normalized scores.
 - `nonneg = c(TRUE, TRUE)` — Nonnegativity toggle. Set `FALSE` to allow negative coefficients (semi-NMF).
 
 ### Parameter Conventions
 
 All penalty parameters accept either a single value (applied to both W and H) or a length-2 vector `c(w, h)` for independent control. Zero means no penalty (the default for all).
 
-Each penalty modifies the NNLS subproblem: L1 subtracts from the RHS (soft thresholding), L2 adds to the Gram diagonal (Tikhonov), angular applies a post-solve projection that subtracts correlated components between factors (decorrelation), and graph Laplacian adds the Laplacian matrix to the Gram (smoothness).
+Each penalty modifies the NNLS subproblem: L1 subtracts from the RHS (soft thresholding), L2 adds to the Gram diagonal (Tikhonov), angular applies a post-solve projection that subtracts correlated components between factors (decorrelation), the graph Laplacian couples the solutions of connected nodes (smoothness), and the upper bound and non-negativity are box constraints of the solve. The penalties are honored on every fit path, including masked data, cross-validation and the non-Gaussian losses.
 
 ## Theory
 
@@ -69,9 +80,9 @@ Each penalty modifies the NNLS subproblem:
 
 - **L1 (LASSO)**: $\lambda_1 \|h\|_1$ — soft-thresholds the RHS, driving small coefficients to exactly zero. Ideal for sparse factors.
 - **L2 (Ridge)**: $\lambda_2 \|h\|_2^2$ — adds $\lambda_2 I$ to the Gram diagonal (Tikhonov regularization). Shrinks coefficients smoothly.
-- **L21 (Group LASSO)**: $\lambda_{21} \sum_g \|h_g\|_2$ — zeros entire groups (rows/columns). Useful for feature selection.
+- **L21 (Group LASSO)**: $\lambda_{21} \sum_g \|w_{g\cdot}\|_2$ for W, with one group per feature (row of W), and $\lambda_{21} \sum_g \|h_{\cdot g}\|_2$ for H, with one group per sample (column of H). Useful for feature selection.
 - **Angular**: $\lambda_a \sum_{i<j} \frac{w_i^\top w_j}{\|w_i\|\|w_j\|}$ — after the NNLS solve, subtracts correlated components from each factor profile, directly pushing overlapping factors apart.
-- **Graph Laplacian**: $\lambda_G \, \text{tr}(H L H^\top)$ where $L = D - A$ — adds the Laplacian to the Gram, encouraging connected nodes to share similar values.
+- **Graph Laplacian**: $\lambda_G \, \text{tr}(H L H^\top)$ where $L = D - A$ is symmetric — encourages connected nodes to share similar values.
 
 | Goal | Penalty | Typical Range |
 |------|---------|---------------|
@@ -401,18 +412,9 @@ Each row tracks a baseline factor across L1 strengths by finding the maximum cos
 
 When data has spatial or network structure, graph Laplacian regularization encourages connected nodes to share similar factor values. This is especially useful in **spatial transcriptomics**, where tissue spots have known physical coordinates but standard NMF is agnostic to their spatial arrangement.
 
-We demonstrate this on the 10X Visium mouse brain dataset from [SeuratData](https://github.com/satijalab/seurat-data). This requires the `SeuratData` and `Seurat` packages. If they are not installed, the code blocks below are silently skipped — install `SeuratData` and `stxBrain.SeuratData` to see the spatial results.
+We demonstrate this on the 10X Visium mouse brain dataset from [SeuratData](https://github.com/satijalab/seurat-data). The dataset is distributed through the `SeuratData` package, which is available from GitHub only, so the code in this section is shown for reference and is not run when the vignette is built. To reproduce it, install `Seurat`, `SeuratData` and the `stxBrain.SeuratData` data package.
 
-```{r graph-laplacian-setup, include = FALSE}
-has_seurat <- tryCatch(
-  nzchar(system.file(package = "stxBrain.SeuratData")) &&
-    nzchar(system.file(package = "Seurat")) &&
-    nzchar(system.file(package = "SeuratObject")),
-  error = function(e) FALSE
-)
-```
-
-```{r graph-laplacian, eval = has_seurat}
+```{r graph-laplacian, eval = FALSE}
 brain <- SeuratData::LoadData("stxBrain", type = "anterior1")
 brain <- Seurat::NormalizeData(brain, normalization.method = "LogNormalize",
                                scale.factor = 1e4, verbose = FALSE)
@@ -481,7 +483,7 @@ As λ increases, graph loss decreases (smoother factor loadings) while reconstru
 
 The spatial effect of graph regularization is visible as a trajectory across λ values. For each baseline factor, we find the maximum cosine-matching factor in each regularized model to track how spatial patterns evolve with increasing regularization.
 
-```{r graph-spatial-plot, fig.width = 8, fig.height = 8, eval = has_seurat}
+```{r graph-spatial-plot, eval = FALSE}
 # Trajectory: factors as rows, lambda values as columns
 traj_lambdas <- c(0, 0.01, 0.05, 0.5)
 traj_models <- lapply(traj_lambdas, function(lam) {
@@ -537,7 +539,7 @@ ggplot(traj_data, aes(x = x, y = y, color = loading)) +
 
 At λ = 0, factors show spatial patterns that arise purely from gene co-expression. As λ increases, the graph Laplacian penalty encourages neighboring spots to have similar loadings, producing smoother spatial domains with fewer isolated outlier spots.
 
-```{r graph-loss-boxplot, fig.width = 5, fig.height = 4, eval = has_seurat}
+```{r graph-loss-boxplot, eval = FALSE}
 # Graph Laplacian loss per factor: tr(d*h L h'*d) for each factor
 graph_loss_per_factor <- function(model, L) {
   sapply(seq_len(nrow(model@h)), function(f) {

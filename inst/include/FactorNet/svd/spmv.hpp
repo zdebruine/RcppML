@@ -25,6 +25,10 @@
 #include <FactorNet/core/types.hpp>
 
 #include <vector>
+#include <string>
+#include <cmath>
+#include <limits>
+#include <type_traits>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -32,6 +36,51 @@
 
 namespace FactorNet {
 namespace svd {
+
+// ============================================================================
+// Deferred warnings
+//
+// SVD routines record convergence warnings here instead of raising them from
+// inside the numerical code. The R bridge clears the buffer before a fit and
+// turns its contents into R warnings afterwards. Only written from serial
+// sections.
+// ============================================================================
+
+inline std::vector<std::string>& pending_warnings() {
+    static std::vector<std::string> w;
+    return w;
+}
+
+inline void add_warning(const std::string& msg) {
+    pending_warnings().push_back(msg);
+}
+
+/**
+ * @brief Sample standard deviations (n - 1 denominator, as stats::sd and
+ *        prcomp) from per-row sums, sums of squares and observation counts.
+ *
+ * Accumulated in double. A row without measurable variance gets SD 1, so it
+ * is left unscaled instead of being divided by a rounding-level number.
+ */
+template<typename Scalar>
+inline DenseVector<Scalar> row_sds_from_moments(const Eigen::VectorXd& sum,
+                                                const Eigen::VectorXd& sum_sq,
+                                                const Eigen::VectorXd& nobs) {
+    const int m = static_cast<int>(sum.size());
+    DenseVector<Scalar> sds(m);
+    for (int i = 0; i < m; ++i) {
+        const double no = nobs(i);
+        double sd = 1.0;
+        if (no > 1.0) {
+            const double mu = sum(i) / no;
+            const double css = sum_sq(i) - no * mu * mu;
+            const double var = css / (no - 1.0);
+            if (var > 0.0 && var > 1e-12 * (sum_sq(i) / no)) sd = std::sqrt(var);
+        }
+        sds(i) = static_cast<Scalar>(sd);
+    }
+    return sds;
+}
 
 // ============================================================================
 // Pre-allocated workspace for thread-local SpMV forward buffers
@@ -153,77 +202,46 @@ DenseVector<Scalar> compute_row_means_dense(const DenseMatrix<Scalar>& A) {
 // ============================================================================
 
 /**
- * @brief Compute row standard deviations (population SD) from a sparse matrix
+ * @brief Compute row standard deviations (sample SD, n - 1 denominator)
  *
- * Uses the identity: Var(x) = E[x^2] - (E[x])^2
- * Requires pre-computed row means.
+ * Moments are accumulated in double; the row_means argument is kept for
+ * source compatibility and is not used.
  */
 template<typename Scalar, typename SparseMat>
 DenseVector<Scalar> compute_row_sds_sparse(const SparseMat& A,
-                                           const DenseVector<Scalar>& row_means,
-                                           int threads = 0) {
+                                           const DenseVector<Scalar>& /*row_means*/,
+                                           int /*threads*/ = 0) {
     const int m = static_cast<int>(A.rows());
     const int n = static_cast<int>(A.cols());
-    DenseVector<Scalar> sum_sq = DenseVector<Scalar>::Zero(m);
-
-#ifdef _OPENMP
-    const int nthreads = threads > 0 ? threads : omp_get_max_threads();
-    if (nthreads > 1 && n > 64) {
-        const int nt = std::min(nthreads, n);
-        std::vector<DenseVector<Scalar>> locals(nt, DenseVector<Scalar>::Zero(m));
-        #pragma omp parallel num_threads(nt)
-        {
-            const int tid = omp_get_thread_num();
-            #pragma omp for schedule(static)
-            for (int j = 0; j < n; ++j) {
-                for (typename SparseMat::InnerIterator it(A, j); it; ++it) {
-                    Scalar val = static_cast<Scalar>(it.value());
-                    locals[tid](it.row()) += val * val;
-                }
-            }
-        }
-        for (int t = 0; t < nt; ++t) sum_sq += locals[t];
-    } else
-#endif
-    {
-        for (int j = 0; j < n; ++j) {
-            for (typename SparseMat::InnerIterator it(A, j); it; ++it) {
-                Scalar val = static_cast<Scalar>(it.value());
-                sum_sq(it.row()) += val * val;
-            }
+    Eigen::VectorXd sum = Eigen::VectorXd::Zero(m);
+    Eigen::VectorXd sum_sq = Eigen::VectorXd::Zero(m);
+    for (int j = 0; j < n; ++j) {
+        for (typename SparseMat::InnerIterator it(A, j); it; ++it) {
+            const double val = static_cast<double>(it.value());
+            sum(it.row()) += val;
+            sum_sq(it.row()) += val * val;
         }
     }
-
-    // Var = E[x^2] - (E[x])^2 = sum_sq/n - mean^2
-    // SD = sqrt(Var), clamped away from zero for numerical safety
-    const Scalar inv_n = n > 0 ? static_cast<Scalar>(1) / static_cast<Scalar>(n)
-                               : static_cast<Scalar>(0);
-    const Scalar eps = std::numeric_limits<Scalar>::epsilon() * 100;
-    DenseVector<Scalar> sds(m);
-    for (int i = 0; i < m; ++i) {
-        Scalar var = sum_sq(i) * inv_n - row_means(i) * row_means(i);
-        if (var < eps) var = eps;  // prevent division by zero
-        sds(i) = std::sqrt(var);
-    }
-    return sds;
+    Eigen::VectorXd nobs = Eigen::VectorXd::Constant(m, static_cast<double>(n));
+    return row_sds_from_moments<Scalar>(sum, sum_sq, nobs);
 }
 
 template<typename Scalar>
 DenseVector<Scalar> compute_row_sds_dense(const DenseMatrix<Scalar>& A,
-                                          const DenseVector<Scalar>& row_means) {
+                                          const DenseVector<Scalar>& /*row_means*/) {
     const int m = static_cast<int>(A.rows());
     const int n = static_cast<int>(A.cols());
-    const Scalar inv_n = n > 0 ? static_cast<Scalar>(1) / static_cast<Scalar>(n)
-                               : static_cast<Scalar>(0);
-    const Scalar eps = std::numeric_limits<Scalar>::epsilon() * 100;
-    DenseVector<Scalar> sds(m);
-    for (int i = 0; i < m; ++i) {
-        Scalar sum_sq = A.row(i).squaredNorm();
-        Scalar var = sum_sq * inv_n - row_means(i) * row_means(i);
-        if (var < eps) var = eps;
-        sds(i) = std::sqrt(var);
+    Eigen::VectorXd sum = Eigen::VectorXd::Zero(m);
+    Eigen::VectorXd sum_sq = Eigen::VectorXd::Zero(m);
+    for (int j = 0; j < n; ++j) {
+        for (int i = 0; i < m; ++i) {
+            const double val = static_cast<double>(A(i, j));
+            sum(i) += val;
+            sum_sq(i) += val * val;
+        }
     }
-    return sds;
+    Eigen::VectorXd nobs = Eigen::VectorXd::Constant(m, static_cast<double>(n));
+    return row_sds_from_moments<Scalar>(sum, sum_sq, nobs);
 }
 
 // ============================================================================
@@ -761,6 +779,149 @@ DenseVector<Scalar> compute_row_sds(const MatrixType& A,
     }
 }
 
+// ============================================================================
+// Row sums and sums of squares in double precision (sparse or dense)
+// ============================================================================
+
+template<typename MatrixType>
+inline void row_sums_sumsq(const MatrixType& A,
+                           Eigen::VectorXd& sum,
+                           Eigen::VectorXd& sum_sq,
+                           int threads = 1) {
+    const int m = static_cast<int>(A.rows());
+    const int n = static_cast<int>(A.cols());
+    sum = Eigen::VectorXd::Zero(m);
+    sum_sq = Eigen::VectorXd::Zero(m);
+
+#ifdef _OPENMP
+    int nt = threads > 0 ? threads : omp_get_max_threads();
+    if (nt > n) nt = n;
+    if (nt > 1 && n > 64) {
+        // One pass over the entries with per-thread accumulators, merged in
+        // thread order so the result does not depend on scheduling.
+        std::vector<Eigen::VectorXd> ls(static_cast<size_t>(nt), Eigen::VectorXd::Zero(m));
+        std::vector<Eigen::VectorXd> lq(static_cast<size_t>(nt), Eigen::VectorXd::Zero(m));
+        #pragma omp parallel num_threads(nt)
+        {
+            const int tid = omp_get_thread_num();
+            Eigen::VectorXd& s_loc = ls[static_cast<size_t>(tid)];
+            Eigen::VectorXd& q_loc = lq[static_cast<size_t>(tid)];
+            #pragma omp for schedule(static)
+            for (int j = 0; j < n; ++j) {
+                if constexpr (is_sparse_matrix<MatrixType>::value) {
+                    for (typename MatrixType::InnerIterator it(A, j); it; ++it) {
+                        const double val = static_cast<double>(it.value());
+                        s_loc(it.row()) += val;
+                        q_loc(it.row()) += val * val;
+                    }
+                } else {
+                    for (int i = 0; i < m; ++i) {
+                        const double val = static_cast<double>(A(i, j));
+                        s_loc(i) += val;
+                        q_loc(i) += val * val;
+                    }
+                }
+            }
+        }
+        for (int t = 0; t < nt; ++t) {
+            sum += ls[static_cast<size_t>(t)];
+            sum_sq += lq[static_cast<size_t>(t)];
+        }
+        return;
+    }
+#else
+    (void)threads;
+#endif
+
+    if constexpr (is_sparse_matrix<MatrixType>::value) {
+        for (int j = 0; j < n; ++j) {
+            for (typename MatrixType::InnerIterator it(A, j); it; ++it) {
+                const double val = static_cast<double>(it.value());
+                sum(it.row()) += val;
+                sum_sq(it.row()) += val * val;
+            }
+        }
+    } else {
+        for (int j = 0; j < n; ++j) {
+            for (int i = 0; i < m; ++i) {
+                const double val = static_cast<double>(A(i, j));
+                sum(i) += val;
+                sum_sq(i) += val * val;
+            }
+        }
+    }
+}
+
+/**
+ * @brief Row means, sample SDs and the squared Frobenius norm of the
+ *        transformed matrix D^{-1}(A - mu 1') from ONE parallel pass over A.
+ *
+ * @param[out] means  filled when center is true
+ * @param[out] sds    filled when scale is true
+ * @return ||D^{-1}(A - mu 1')||_F^2 (double)
+ */
+template<typename MatrixType, typename Scalar>
+inline double row_stats_one_pass(const MatrixType& A, bool center, bool scale,
+                                 int threads,
+                                 DenseVector<Scalar>& means,
+                                 DenseVector<Scalar>& sds) {
+    Eigen::VectorXd sum, sum_sq;
+    row_sums_sumsq(A, sum, sum_sq, threads);
+    if (!center && !scale) return sum_sq.sum();
+
+    const int m = static_cast<int>(A.rows());
+    const double n = static_cast<double>(A.cols());
+    if (scale) {
+        Eigen::VectorXd nobs = Eigen::VectorXd::Constant(m, n);
+        sds = row_sds_from_moments<Scalar>(sum, sum_sq, nobs);
+    }
+    if (center) means.resize(m);
+    double total = 0.0;
+    for (int i = 0; i < m; ++i) {
+        const double mu = (n > 0.0) ? sum(i) / n : 0.0;
+        if (center) means(i) = static_cast<Scalar>(mu);
+        double css = sum_sq(i) - (center ? n * mu * mu : 0.0);
+        if (css < 0.0) css = 0.0;
+        if (scale) {
+            const double sd = static_cast<double>(sds(i));
+            css /= (sd * sd);
+        }
+        total += css;
+    }
+    return total;
+}
+
+/**
+ * @brief Squared Frobenius norm of the transformed matrix D^{-1}(A - mu 1'),
+ *        accumulated in double (single precision loses the centered norm when
+ *        row means are large compared with the spread).
+ *
+ * Uses the same row means and sample SDs as the solvers.
+ */
+template<typename MatrixType>
+inline double transformed_frobenius_sq(const MatrixType& A, bool center, bool scale) {
+    Eigen::VectorXd sum, sum_sq;
+    row_sums_sumsq(A, sum, sum_sq);
+    const int m = static_cast<int>(A.rows());
+    const double n = static_cast<double>(A.cols());
+    double total = 0.0;
+    for (int i = 0; i < m; ++i) {
+        const double mu = (n > 0.0) ? sum(i) / n : 0.0;
+        double css = sum_sq(i) - (center ? n * mu * mu : 0.0);
+        if (css < 0.0) css = 0.0;
+        if (scale) {
+            double sd = 1.0;
+            if (n > 1.0) {
+                const double var = (sum_sq(i) - n * mu * mu) / (n - 1.0);
+                if (var > 0.0 && var > 1e-12 * (sum_sq(i) / n)) sd = std::sqrt(var);
+            }
+            total += css / (sd * sd);
+        } else {
+            total += css;
+        }
+    }
+    return total;
+}
+
 }  // namespace svd
 }  // namespace FactorNet
-

@@ -465,20 +465,22 @@ FactorNet::NMFResult<Scalar> nmf_chunked(
                     H_panel = B_panel;
                 } else if (config.solver_mode == 1) {
                     stream_timer.begin("chunk_nnls");
-                    if (config.H.L1 > 0)
-                        B_panel.array() -= static_cast<Scalar>(config.H.L1);
-                    MatS G_solve = G_W;
-                    if (config.H.L2 > 0) G_solve.diagonal().array() += static_cast<Scalar>(config.H.L2);
+                    // G_W already contains L2; L1 and the bound are
+                    // handled by the solver.
                     FactorNet::primitives::cholesky_clip_batch(
-                        G_solve, B_panel, H_panel,
-                        config.H.nonneg, config.threads, false);
+                        G_W, B_panel, H_panel,
+                        config.H.nonneg, config.threads, false,
+                        static_cast<Scalar>(config.H.L1),
+                        static_cast<Scalar>(config.H.upper_bound),
+                        config.cd_max_iter);
                     stream_timer.end();
                 } else {
                     stream_timer.begin("chunk_nnls");
                     FactorNet::primitives::nnls_batch<FactorNet::primitives::CPU, Scalar>(
                         G_W, B_panel, H_panel,
                         config.cd_max_iter, static_cast<Scalar>(config.cd_tol),
-                        static_cast<Scalar>(config.H.L1), static_cast<Scalar>(config.H.L2),
+                        static_cast<Scalar>(config.H.L1),
+                        static_cast<Scalar>(0),  // L2 is already in G_W
                         config.H.nonneg, config.threads,
                         static_cast<Scalar>(config.H.upper_bound), false);
                     stream_timer.end();
@@ -701,18 +703,20 @@ FactorNet::NMFResult<Scalar> nmf_chunked(
             MatS W_T(k, m);
             W_T.setZero();
             if (config.solver_mode == 1) {
-                if (config.W.L1 > 0)
-                    B_W.array() -= static_cast<Scalar>(config.W.L1);
-                MatS G_solve = G_H;
-                if (config.W.L2 > 0) G_solve.diagonal().array() += static_cast<Scalar>(config.W.L2);
+                // G_H already contains L2; L1 and the bound are handled
+                // by the solver.
                 FactorNet::primitives::cholesky_clip_batch(
-                    G_solve, B_W, W_T,
-                    config.W.nonneg, config.threads, false);
+                    G_H, B_W, W_T,
+                    config.W.nonneg, config.threads, false,
+                    static_cast<Scalar>(config.W.L1),
+                    static_cast<Scalar>(config.W.upper_bound),
+                    config.cd_max_iter);
             } else {
                 FactorNet::primitives::nnls_batch<FactorNet::primitives::CPU, Scalar>(
                     G_H, B_W, W_T,
                     config.cd_max_iter, static_cast<Scalar>(config.cd_tol),
-                    static_cast<Scalar>(config.W.L1), static_cast<Scalar>(config.W.L2),
+                    static_cast<Scalar>(config.W.L1),
+                    static_cast<Scalar>(0),  // L2 is already in G_H
                     config.W.nonneg, config.threads,
                     static_cast<Scalar>(config.W.upper_bound), false);
             }

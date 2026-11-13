@@ -41,6 +41,9 @@ validate_data <- function(data) {
     if (class(data)[[1]] != "dgCMatrix") {
       data <- .to_dgCMatrix(data)
     }
+    if (any(is.infinite(data@x)))
+      stop("'data' contains infinite values (Inf/-Inf). Remove or replace them before fitting.",
+           call. = FALSE)
     # Check for NA in sparse data
     if (any(is.na(data@x))) {
       na_count <- sum(is.na(data@x))
@@ -66,6 +69,9 @@ validate_data <- function(data) {
         stop("'data' was not coercible to a numeric matrix")
       }
     }
+    if (any(is.infinite(data)))
+      stop("'data' contains infinite values (Inf/-Inf). Remove or replace them before fitting.",
+           call. = FALSE)
     # Check for NA in dense data
     if (any(is.na(data))) {
       na_count <- sum(is.na(data))
@@ -224,9 +230,20 @@ validate_graphs <- function(graph_W, graph_H, data_dims, graph_lambda) {
 #'
 #' @param mask NULL, character, matrix, or list
 #' @param has_na Logical; whether data contains NA values
+#' @param dims Optional \code{c(nrow, ncol)} of the data; when given, a custom
+#'   mask matrix must have exactly these dimensions.
 #' @return List with \code{mask_matrix} (dgCMatrix), \code{mask_zeros} (logical), and optionally \code{mask_na}
 #' @keywords internal
-validate_mask <- function(mask, has_na = FALSE) {
+validate_mask <- function(mask, has_na = FALSE, dims = NULL) {
+  check_mask <- function(m) {
+    if (!is.null(dims) && (nrow(m) != dims[1] || ncol(m) != dims[2]))
+      stop(sprintf("'mask' dimensions (%d x %d) must match 'data' (%d x %d)",
+                   nrow(m), ncol(m), dims[1], dims[2]), call. = FALSE)
+    if (any(is.na(m@x)))
+      stop("'mask' must not contain NA values", call. = FALSE)
+    Matrix::drop0(m)
+  }
+
   if (is.null(mask)) {
     if (has_na) {
       warning("NA values were detected in the data. Setting \"mask = 'NA'\"")
@@ -246,11 +263,13 @@ validate_mask <- function(mask, has_na = FALSE) {
       if (canCoerce(custom, "matrix")) custom <- as.matrix(custom)
       else stop("could not coerce mask matrix to dgCMatrix")
     }
-    mask_matrix <- .to_dgCMatrix(as(custom, "dMatrix"))
+    mask_matrix <- check_mask(.to_dgCMatrix(as(custom, "dMatrix")))
     return(list(mask_matrix = mask_matrix, mask_zeros = TRUE))
   }
   
   if (is.character(mask)) {
+    if (length(mask) != 1)
+      stop("'mask' must be NULL, 'zeros', 'NA', a matrix, or list(\"zeros\", <matrix>)")
     if (mask == "zeros") {
       return(list(mask_matrix = new("dgCMatrix"), mask_zeros = TRUE))
     } else if (mask == "NA") {
@@ -268,9 +287,140 @@ validate_mask <- function(mask, has_na = FALSE) {
       stop("could not coerce the value of 'mask' to a sparse pattern matrix (dgCMatrix)")
     }
   }
-  mask_matrix <- .to_dgCMatrix(as(mask, "dMatrix"))
-  
+  mask_matrix <- check_mask(.to_dgCMatrix(as(mask, "dMatrix")))
+
   list(mask_matrix = mask_matrix, mask_zeros = FALSE)
+}
+
+# Sparse 0/1 matrix marking the NA/NaN positions of `data` (dense matrix or
+# dgCMatrix). Non-zero entries mean "masked".
+.na_mask_matrix <- function(data) {
+  if (inherits(data, "dgCMatrix")) {
+    nz <- which(is.na(data@x))
+    cols <- rep.int(seq_len(ncol(data)), diff(data@p))[nz]
+    Matrix::sparseMatrix(i = data@i[nz] + 1L, j = cols, x = 1,
+                         dims = dim(data))
+  } else {
+    idx <- which(is.na(data), arr.ind = TRUE)
+    Matrix::sparseMatrix(i = idx[, 1], j = idx[, 2], x = 1, dims = dim(data))
+  }
+}
+
+# Replace NA/NaN by zero (their positions are carried by the mask instead).
+.zero_na <- function(data) {
+  if (inherits(data, "dgCMatrix")) {
+    data@x[is.na(data@x)] <- 0
+    Matrix::drop0(data)
+  } else {
+    data[is.na(data)] <- 0
+    data
+  }
+}
+
+# Union of two mask matrices (non-zero = masked). Either may be empty (0 x 0).
+.mask_union <- function(a, b) {
+  if (is.null(a) || length(a@x) == 0L) return(b)
+  if (is.null(b) || length(b@x) == 0L) return(a)
+  .to_dgCMatrix(as((a != 0) | (b != 0), "dMatrix"))
+}
+
+#' Validate data against the chosen loss
+#'
+#' Called after NA handling (NAs are already zero and recorded in the mask).
+#' @param data dense matrix or dgCMatrix
+#' @param loss loss name as accepted by \code{nmf()}
+#' @param mask_zeros logical; zeros are treated as missing
+#' @param tweedie_power Tweedie variance power
+#' @return \code{invisible(TRUE)}; called for its errors and warnings.
+#' @keywords internal
+validate_data_for_loss <- function(data, loss, mask_zeros = FALSE,
+                                   tweedie_power = 1.5) {
+  is_sparse <- inherits(data, "dgCMatrix")
+  x <- if (is_sparse) data@x else data
+
+  if (!any(x != 0))
+    stop("'data' contains no non-zero values; there is nothing to factorize.",
+         call. = FALSE)
+
+  if (loss != "mse" && any(x < 0))
+    stop("'data' contains negative values, which loss = \"", loss,
+         "\" does not support. Use loss = \"mse\" (with nonneg = FALSE for ",
+         "signed factors) or transform the data.", call. = FALSE)
+
+  if (loss == "tweedie") {
+    if (!is.numeric(tweedie_power) || length(tweedie_power) != 1 ||
+        is.na(tweedie_power) || tweedie_power < 1 || tweedie_power > 3)
+      stop("'tweedie_power' must be a single number in [1, 3] ",
+           "(1 = Poisson, 2 = Gamma, 3 = Inverse Gaussian).", call. = FALSE)
+  }
+
+  needs_positive <- loss %in% c("gamma", "inverse_gaussian") ||
+    (loss == "tweedie" && tweedie_power >= 2)
+  if (needs_positive && !isTRUE(mask_zeros)) {
+    has_zero <- if (is_sparse) {
+      length(x) < prod(dim(data)) || any(x == 0)
+    } else {
+      any(x == 0)
+    }
+    if (has_zero)
+      stop("'data' contains zeros, but loss = \"", loss, "\"",
+           if (loss == "tweedie") " with tweedie_power >= 2" else "",
+           " is defined for strictly positive values only. ",
+           "Choose another loss, or treat zeros as missing with mask = \"zeros\" ",
+           "(with a non-Gaussian loss a mask needs cross-validation, test_fraction > 0).",
+           call. = FALSE)
+  }
+
+  if (loss %in% c("gp", "nb") && length(x) > 0L && any(x != round(x)))
+    warning("'data' contains non-integer values, but loss = \"", loss,
+            "\" is a count model. Results may be unreliable; round the data ",
+            "or use a continuous loss.", call. = FALSE)
+
+  invisible(TRUE)
+}
+
+#' Validate the factorization rank against the data dimensions
+#' @param k integer vector of ranks
+#' @param dims \code{c(nrow, ncol)} of the data
+#' @return \code{invisible(TRUE)}
+#' @keywords internal
+validate_rank <- function(k, dims) {
+  if (length(k) == 0L || any(is.na(k)) || any(k < 1))
+    stop("'k' must be a positive integer (or a vector of positive integers)",
+         call. = FALSE)
+  if (max(k) > min(dims))
+    stop(sprintf("'k' (%d) cannot exceed min(nrow(data), ncol(data)) = %d",
+                 max(k), min(dims)), call. = FALSE)
+  invisible(TRUE)
+}
+
+#' Validate an initialization or target matrix
+#'
+#' @param x matrix supplied by the user (or \code{NULL})
+#' @param name argument name for messages
+#' @param nr,nc required number of rows and columns
+#' @param allow_transpose accept the transposed orientation and return it
+#'   in the required one
+#' @return The validated numeric matrix (or \code{NULL}).
+#' @keywords internal
+validate_factor_matrix <- function(x, name, nr, nc, allow_transpose = FALSE) {
+  if (is.null(x)) return(NULL)
+  if (inherits(x, "Matrix")) x <- as.matrix(x)
+  if (!is.matrix(x) || !is.numeric(x))
+    stop(sprintf("'%s' must be a numeric matrix", name), call. = FALSE)
+  if (nrow(x) != nr || ncol(x) != nc) {
+    if (allow_transpose && nrow(x) == nc && ncol(x) == nr) {
+      x <- t(x)
+    } else {
+      stop(sprintf("'%s' must be a %d x %d matrix, got %d x %d",
+                   name, nr, nc, nrow(x), ncol(x)), call. = FALSE)
+    }
+  }
+  if (any(!is.finite(x)))
+    stop(sprintf("'%s' must not contain NA, NaN or infinite values", name),
+         call. = FALSE)
+  storage.mode(x) <- "double"
+  x
 }
 
 #' Validate simple logical/numeric parameters
@@ -535,4 +685,28 @@ validate_simple_params <- function(sort_model, nonneg) {
   }
 
   .to_dgCMatrix(x)
+}
+
+
+# Rule behind solver = "auto".
+#
+# Current rule: coordinate descent for IRLS/robust fits and on the GPU;
+# otherwise Cholesky when k < 32 and there is no L1 penalty, else coordinate
+# descent.
+#
+# Active rule: Cholesky at every k for Gaussian CPU fits (measured faster than
+# coordinate descent at k = 8, 20 and 48 on sparse and dense input). The
+# Cholesky path is exact (Cholesky solve plus a KKT polish); switch by
+# FALSE restores the earlier rule (Cholesky only for k < 32 and L1 == 0).
+.SOLVER_AUTO_CHOLESKY_ALL_K <- TRUE
+
+.auto_solver <- function(needs_irls, use_gpu, k, L1,
+                         cholesky_all_k = .SOLVER_AUTO_CHOLESKY_ALL_K) {
+  # The GPU bridge always runs coordinate descent itself, so the rule must not
+  # depend on the resource: a request the gateway routes to CPU then gets the
+  # same solver as a plain CPU fit.
+  if (needs_irls) return("cd")
+  if (cholesky_all_k) return("cholesky")
+  k_max <- if (is.numeric(k)) max(k) else Inf   # k = "auto": rank unknown
+  if (k_max < 32 && all(L1 == 0)) "cholesky" else "cd"
 }

@@ -54,12 +54,9 @@ zeros may appear in the test set. Default FALSE.}
 \item{patience}{Number of iterations without test-loss improvement
 before early stopping during CV. Default 5.}
 
-\item{...}{Additional arguments applied network-wide. These are forwarded
-to the underlying \code{\link{nmf}} or \code{\link{svd}} call at fit
-time as lowest-priority defaults (layer-level \code{...} overrides
-these). Supports distribution tuning (\code{dispersion},
-\code{theta_init}, etc.), IRLS control, solver tuning, and more.
-See \code{?nmf} or \code{?svd} for the complete list.}
+\item{...}{Not implemented for factor networks: \code{\link{fit}} raises
+an error when additional arguments are supplied (they were silently
+ignored before).}
 }
 \value{
 An \code{fn_global_config} object.

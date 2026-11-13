@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 test_that("nmf() accepts .rds file path (sparse)", {
   skip_on_cran()
   skip_if_not_installed("Matrix")
@@ -39,7 +43,7 @@ test_that("nmf() accepts .mtx file path", {
 })
 
 test_that("nmf() accepts .spz file path", {
-  skip(".st_dispatch not yet re-implemented")
+  skip_streaming_dispatch()
   skip_if_not_installed("Matrix")
   data(movielens, package = "RcppML")
   tmp <- tempfile(fileext = ".spz")

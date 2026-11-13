@@ -1,3 +1,7 @@
+# Not part of the CRAN subset (CRAN allows about ten minutes and two cores
+# for the whole check). Runs when NOT_CRAN=true, as in CI and devtools::test().
+testthat::skip_on_cran()
+
 # Tests for GPU chunked NMF path (fit_chunked_gpu.cuh)
 # Exercises the DataLoader-based chunked streaming path that keeps W on GPU
 # and streams A in panels to handle matrices larger than GPU VRAM.
@@ -10,6 +14,12 @@ library(RcppML)
 library(Matrix)
 
 gpu_ok <- tryCatch(gpu_available(force_recheck = TRUE), error = function(e) FALSE)
+
+# Every test in this file selects the chunked path with `panel_cols`, which
+# nmf() never forwarded to C++ (the argument was parsed and dropped), so none
+# of them exercised chunking. `panel_cols` is now rejected; the file is
+# skipped until chunked GPU streaming is wired through nmf().
+skip("Chunked GPU streaming is not reachable from nmf() in this version (panel_cols is not an argument)")
 
 # gpu_chunked_nmf
 

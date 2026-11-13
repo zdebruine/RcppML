@@ -9,6 +9,7 @@ vignette: >
 
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(
+  dpi = 72, fig.retina = 1,   # keep the built vignettes small (CRAN size limit)
   collapse = TRUE,
   comment = "#>",
   fig.width = 7,
@@ -17,7 +18,17 @@ knitr::opts_chunk$set(
   warning = FALSE
 )
 library(RcppML)
-library(ggplot2)
+# CRAN allows at most two cores
+options(RcppML.threads = 2)
+# Chunks run only when NOT_CRAN is "true" (set when the package tarball and
+# the pkgdown site are built) and the suggested packages are installed.
+# CRAN's checks then rebuild the text without refitting the models.
+run_chunks <- identical(Sys.getenv("NOT_CRAN"), "true") &&
+  all(vapply(c("ggplot2"), requireNamespace, logical(1), quietly = TRUE))
+knitr::opts_chunk$set(eval = run_chunks)
+if (run_chunks) {
+  library(ggplot2)
+}
 ```
 
 ## Why NMF for Clustering?
@@ -108,7 +119,7 @@ conf <- table(Cluster = paste0("Cluster ", cons$clusters), Cancer = labels)
 knitr::kable(conf, caption = "Consensus cluster assignments vs. true cancer type (ALL/AML)")
 ```
 
-> **Reading the confusion matrix**: Each row is a consensus cluster, each column a true cancer type. A well-separated clustering aligns each row with predominantly one column. Here, Cluster 1 captures nearly all ALL samples and Cluster 2 captures most AML samples. The overall **purity** (fraction of samples assigned to their majority class) is `r round(sum(apply(conf, 1, max)) / sum(conf), 3)`.
+> **Reading the confusion matrix**: Each row is a consensus cluster, each column a true cancer type. A well-separated clustering aligns each row with predominantly one column. Here, Cluster 1 captures nearly all ALL samples and Cluster 2 captures most AML samples. The overall **purity** (fraction of samples assigned to their majority class) is `r if (run_chunks) round(sum(apply(conf, 1, max)) / sum(conf), 3) else "(not evaluated)"`.
 
 ```{r golub-metrics}
 summary_df <- data.frame(
@@ -140,7 +151,7 @@ conf5 <- table(Cluster = paste0("C", cons5$clusters), Cancer = labels)
 knitr::kable(conf5, caption = "k = 5 consensus clusters vs. cancer type: substructure within ALL and AML")
 ```
 
-At k = 5, the consensus matrix reveals that ALL and AML each contain subpopulations — ALL splits into 2–3 subgroups and AML into 2. A cophenetic correlation of `r round(cons5$cophenetic, 3)` confirms stable cluster boundaries even at this finer resolution. This substructure is biologically meaningful: ALL includes B-cell and T-cell subtypes, and AML harbors distinct genetic programs.
+At k = 5, the consensus matrix reveals that ALL and AML each contain subpopulations — ALL splits into 2–3 subgroups and AML into 2. A cophenetic correlation of `r if (run_chunks) round(cons5$cophenetic, 3) else "(not evaluated)"` confirms stable cluster boundaries even at this finer resolution. This substructure is biologically meaningful: ALL includes B-cell and T-cell subtypes, and AML harbors distinct genetic programs.
 
 ## Example 2: Hierarchical Clustering with dclust (AML Methylation)
 
@@ -228,7 +239,7 @@ Unlike the two-class Golub problem (where NMF achieves near-perfect separation w
 
 ### UMAP of Factor Embeddings
 
-```{r umap-classify, fig.height = 5, eval = requireNamespace("uwot", quietly = TRUE)}
+```{r umap-classify, fig.height = 5, eval = run_chunks && requireNamespace("uwot", quietly = TRUE)}
 library(uwot)
 set.seed(42)
 umap_coords <- umap(embedding, n_neighbors = 15, min_dist = 0.3, n_components = 2)

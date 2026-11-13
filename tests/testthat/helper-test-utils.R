@@ -46,12 +46,16 @@ align_nmf_factors <- function(W, H, W_true, H_true) {
   matching <- bipartiteMatch(cor_matrix)
   
   # bipartiteMatch returns 0-based indices in $assignment
-  # assignment[i] = j means row i matches to column j (0-based)
+  # assignment[i] = j means estimated factor i (row) matches true factor j
+  # (column, 0-based)
   perm <- matching$assignment + 1  # Convert to 1-based indexing
-  
-  # Permute estimated factors
-  W_aligned <- W[, perm, drop = FALSE]
-  H_aligned <- H[perm, , drop = FALSE]
+
+  # Put the estimated factor matched to true factor j into position j.
+  # That is the inverse permutation, order(perm). Indexing with `perm` itself
+  # is only right when the permutation is its own inverse.
+  inv <- order(perm)
+  W_aligned <- W[, inv, drop = FALSE]
+  H_aligned <- H[inv, , drop = FALSE]
   
   # Scale to match signs (correlation can be negative)
   for (i in 1:k) {
@@ -275,8 +279,18 @@ skip_if_no_gpu <- function() {
 skip_if_no_sp_gpu <- function() {
   skip_if_no_gpu()
   has_sym <- tryCatch({
-    getNativeSymbolInfo("rcppml_st_read_gpu", RcppML:::.gpu_env$dll)
+    getNativeSymbolInfo("rcppml_sp_read_gpu", RcppML:::.gpu_env$dll)
     TRUE
   }, error = function(e) FALSE)
   skip_if_not(has_sym, "st_read_gpu not compiled into GPU .so")
+}
+
+#' Skip tests that need the chunked .spz streaming dispatcher
+#'
+#' `.st_dispatch()` is a stub in this version: nmf() loads a .spz file into
+#' memory instead of streaming it in chunks. Tests of out-of-core behavior
+#' are skipped until the dispatcher is re-implemented.
+skip_streaming_dispatch <- function() {
+  skip(paste("Chunked .spz streaming is not available in this version",
+             "(.st_dispatch is a stub; nmf() loads the file into memory)"))
 }

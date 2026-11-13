@@ -109,7 +109,9 @@ testthat::test_file("tests/testthat/test_nmf.R")    # Single file
 ### Writing Tests
 - Place test files in `tests/testthat/` named `test_*.R`
 - Use `skip_if_not_installed()` for optional dependencies
-- Use `skip_if(Sys.getenv("RCPPML_SKIP_GPU") == "true")` for GPU tests
+- Use `skip_if_no_gpu()` (defined in `tests/testthat/helper-test-utils.R`) for GPU tests
+- Put `testthat::skip_on_cran()` at the top of any file that is not part of the fast CRAN subset; set `NOT_CRAN=true` to run everything
+- Tests run with `options(RcppML.threads = 2)` (see `tests/testthat/setup.R`)
 - Ground truth recovery tests should use multi-restart for robustness
 
 ### GPU Tests

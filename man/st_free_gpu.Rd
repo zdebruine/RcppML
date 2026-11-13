@@ -13,6 +13,10 @@ st_free_gpu(x)
 Invisibly returns \code{NULL}.
 }
 \description{
+\strong{Not available in this build} (see \code{\link{st_read_gpu}});
+no \code{gpu_sparse_matrix} object can be created, and this function stops
+with an error.
+
 Explicitly frees CUDA device memory held by a \code{gpu_sparse_matrix} object.
 This is optional — the memory will be freed automatically when the object
 is garbage-collected.
